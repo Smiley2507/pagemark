@@ -66,7 +66,23 @@ const AppRoutes = () => {
   );
 };
 
+import { useThemeStore, applyTheme } from './store/themeStore';
+
 function App() {
+  React.useEffect(() => {
+    const currentTheme = useThemeStore.getState().theme;
+    applyTheme(currentTheme);
+
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const listener = () => {
+      if (useThemeStore.getState().theme === 'system') {
+        applyTheme('system');
+      }
+    };
+    media.addEventListener('change', listener);
+    return () => media.removeEventListener('change', listener);
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
