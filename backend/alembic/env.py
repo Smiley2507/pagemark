@@ -1,8 +1,6 @@
 import asyncio
 from logging.config import fileConfig
 
-from sqlalchemy import pool
-from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine
 from alembic import context
 
@@ -10,49 +8,54 @@ from alembic import context
 from app.database import Base, engine
 from app.models.user import User, UserRole, UserSettings
 
-# this is the Alembic Config object, provided by initiate()
-# remember to set alembic.ini to point to this file, and to
-# make sure that the current working directory is the same as in alembic.ini
+# Alembic Config object
 config = context.config
 
-# Interpret the config file for SQLAlchemy
-section = config.config_ini_section
-config.set_section_option(section, "x.file_location", "app/database.py")
+# Interpret the config file for Python logging
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
 
-if config.config_file_name is None:
-    C_S_T = "config.ini" # Fallback
-else:
-    C_S_T = config.config_file_name
-
-fileConfig(C_S_T)
-
-# target_metadata should be set to the metadata of your Base class
+# target_metadata must point to your SQLAlchemy Base metadata
 target_metadata = Base.metadata
 
+
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode."""
+    """Run migrations in 'offline' mode (no live DB connection needed)."""
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
-        dialect_opts={"paramasize": "false"},
+        dialect_opts={"paramstyle": "named"},
     )
 
     with context.begin_transaction():
         context.run_migrations()
 
-def do_run_migrations(connection: Engine) -> None:
-    """Run migrations on the provided connection."""
-    context.configure(connection=connection, target_metadata=target_metadata)
 
+def do_run_migrations(connection) -> None:
+    """Configure Alembic and run migrations on the synchronous connection handle.
+
+    Alembic's internal migration runner is always synchronous. This function
+    receives a sync connection proxy from connection.run_sync() and must NOT
+    be awaited.
+    """
+    context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
         context.run_migrations()
 
+
 async def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
-    async with engine.connect() as connection:
-        await do_run_migrations(connection)
+    """Run migrations in 'online' mode using the async engine.
+
+    We use engine.begin() (which yields an AsyncConnection) and then call
+    connection.run_sync(do_run_migrations) to execute the synchronous
+    Alembic runner inside the async context. Do NOT await do_run_migrations
+    directly — it is a plain synchronous function.
+    """
+    async with engine.begin() as connection:
+        await connection.run_sync(do_run_migrations)
+
 
 if context.is_offline_mode():
     run_migrations_offline()

@@ -1,8 +1,9 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
+import { useAuthStore } from './store/authStore';
 
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
@@ -17,6 +18,12 @@ import { KnowledgeBase } from './pages/KnowledgeBase';
 import { useMe } from './hooks/useAuth';
 
 const queryClient = new QueryClient();
+
+/** Sends authenticated users to /dashboard, guests to /login. */
+const RootRedirect = () => {
+  const user = useAuthStore((state) => state.user);
+  return <Navigate to={user ? '/dashboard' : '/login'} replace />;
+};
 
 const AppRoutes = () => {
   const { isLoading } = useMe();
@@ -50,8 +57,11 @@ const AppRoutes = () => {
         <Route path="/knowledge-base" element={<KnowledgeBase />} />
       </Route>
 
-      {/* Redirect root to dashboard or login */}
-      <Route path="/" element={<LoginPage />} />
+      {/* Root: redirect based on auth state */}
+      <Route path="/" element={<RootRedirect />} />
+
+      {/* Catch-all: redirect unknown paths to root */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 };
