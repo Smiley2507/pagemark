@@ -4,10 +4,10 @@ import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-quer
 import { Toaster } from 'sonner';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 
-import { Login } from './pages/auth/LoginPage';
-import { Register } from './pages/auth/RegisterPage';
-import { ForgotPassword } from './pages/auth/ForgotPasswordPage';
-import { ResetPassword } from './pages/auth/ResetPasswordPage';
+import { LoginPage } from './pages/auth/LoginPage';
+import { RegisterPage } from './pages/auth/RegisterPage';
+import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
 import { Dashboard } from './pages/Dashboard';
 import { NewProject } from './pages/NewProject';
 import { Editor } from './pages/Editor';
@@ -35,10 +35,10 @@ const AppRoutes = () => {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       {/* Protected Routes */}
       <Route element={<ProtectedRoute />}>
@@ -51,7 +51,7 @@ const AppRoutes = () => {
       </Route>
 
       {/* Redirect root to dashboard or login */}
-      <Route path="/" element={<Login />} />
+      <Route path="/" element={<LoginPage />} />
     </Routes>
   );
 };

@@ -38,7 +38,7 @@ export const RegisterPage = () => {
         <form onSubmit={(e) => {
           e.preventDefault();
           const formData = new FormData(e.currentTarget);
-          register(Object.fromEntries(formData));
+          register(Object.fromEntries(formData) as any);
         }} className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="name">Full Name</Label>
