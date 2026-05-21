@@ -7,6 +7,9 @@ from alembic import context
 # Import our Base and engine
 from app.database import Base, engine
 from app.models.user import User, UserRole, UserSettings
+from app.models.template import Template
+from app.models.project import Project
+from app.models.document import Document, Section
 
 # Alembic Config object
 config = context.config
