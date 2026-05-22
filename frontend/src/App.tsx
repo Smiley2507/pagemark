@@ -15,6 +15,7 @@ import { Editor } from './pages/Editor';
 import { Analysis } from './pages/Analysis';
 import { Quality } from './pages/Quality';
 import { KnowledgeBase } from './pages/KnowledgeBase';
+import { GitConnectPage } from './pages/GitConnectPage';
 import { useMe } from './hooks/useAuth';
 
 const queryClient = new QueryClient();
@@ -55,6 +56,7 @@ const AppRoutes = () => {
         <Route path="/analysis/:id" element={<Analysis />} />
         <Route path="/quality/:id" element={<Quality />} />
         <Route path="/knowledge-base" element={<KnowledgeBase />} />
+        <Route path="/git-connect" element={<GitConnectPage />} />
       </Route>
 
       {/* Root: redirect based on auth state */}

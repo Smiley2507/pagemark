@@ -12,6 +12,12 @@ from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, MeRes
 from app.services import auth_service
 from app.dependencies import get_current_user
 
+
+from fastapi.responses import RedirectResponse
+from app.models.oauth_token import OAuthToken
+from app.services import github_service, gitlab_service, crypto_service
+from app.schemas.analysis import GitHubStatusResponse
+
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 # Mail configuration
@@ -162,3 +168,137 @@ async def reset_password(body: ResetPasswordRequest, db: AsyncSession = Depends(
 
     await db.commit()
     return {"message": "Password has been reset"}
+
+
+# ── GitHub OAuth ───────────────────────────────────────────────
+
+@router.get("/github/authorize")
+async def github_authorize(current_user: User = Depends(get_current_user)):
+    # Use user ID or token as state to prevent CSRF and correlate callback
+    state = auth_service.create_access_token(current_user.id)
+    url = github_service.get_authorize_url(state)
+    return RedirectResponse(url)
+
+
+@router.get("/github/callback")
+async def github_callback(code: str, state: str, db: AsyncSession = Depends(get_db)):
+    # Validate state (which is a JWT token containing user_id)
+    payload = auth_service.decode_token(state)
+    if not payload or payload.get("type") != "access":
+        raise HTTPException(status_code=400, detail="Invalid state token")
+    
+    user_id = int(payload.get("sub"))
+    
+    # Exchange code for token
+    access_token = await github_service.exchange_code_for_token(code)
+    
+    # Encrypt token
+    encrypted_token = crypto_service.encrypt_token(access_token)
+    
+    # Store token in DB
+    result = await db.execute(select(OAuthToken).where(OAuthToken.user_id == user_id, OAuthToken.provider == "github"))
+    existing_token = result.scalar_one_or_none()
+    
+    if existing_token:
+        existing_token.access_token_encrypted = encrypted_token
+    else:
+        new_token = OAuthToken(user_id=user_id, provider="github", access_token_encrypted=encrypted_token)
+        db.add(new_token)
+        
+    await db.commit()
+    
+    # Redirect to frontend
+    return RedirectResponse(f"{settings.FRONTEND_URL}/git-connect?connected=true&provider=github")
+
+
+@router.get("/github/status", response_model=GitHubStatusResponse)
+async def github_status(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(OAuthToken).where(OAuthToken.user_id == current_user.id, OAuthToken.provider == "github"))
+    token_obj = result.scalar_one_or_none()
+    
+    if not token_obj:
+        return {"connected": False}
+        
+    try:
+        decrypted_token = crypto_service.decrypt_token(token_obj.access_token_encrypted)
+        profile = await github_service.fetch_user_profile(decrypted_token)
+        return {
+            "connected": True,
+            "username": profile.get("login"),
+            "avatar": profile.get("avatar_url")
+        }
+    except Exception:
+        return {"connected": False}
+
+
+@router.delete("/github/disconnect", status_code=status.HTTP_204_NO_CONTENT)
+async def github_disconnect(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(OAuthToken).where(OAuthToken.user_id == current_user.id, OAuthToken.provider == "github"))
+    token_obj = result.scalar_one_or_none()
+    if token_obj:
+        await db.delete(token_obj)
+        await db.commit()
+    return None
+
+
+# ── GitLab OAuth ───────────────────────────────────────────────
+
+@router.get("/gitlab/authorize")
+async def gitlab_authorize(current_user: User = Depends(get_current_user)):
+    state = auth_service.create_access_token(current_user.id)
+    url = gitlab_service.get_authorize_url(state)
+    return RedirectResponse(url)
+
+
+@router.get("/gitlab/callback")
+async def gitlab_callback(code: str, state: str, db: AsyncSession = Depends(get_db)):
+    payload = auth_service.decode_token(state)
+    if not payload or payload.get("type") != "access":
+        raise HTTPException(status_code=400, detail="Invalid state token")
+    
+    user_id = int(payload.get("sub"))
+    access_token = await gitlab_service.exchange_code_for_token(code)
+    encrypted_token = crypto_service.encrypt_token(access_token)
+    
+    result = await db.execute(select(OAuthToken).where(OAuthToken.user_id == user_id, OAuthToken.provider == "gitlab"))
+    existing_token = result.scalar_one_or_none()
+    
+    if existing_token:
+        existing_token.access_token_encrypted = encrypted_token
+    else:
+        new_token = OAuthToken(user_id=user_id, provider="gitlab", access_token_encrypted=encrypted_token)
+        db.add(new_token)
+        
+    await db.commit()
+    
+    return RedirectResponse(f"{settings.FRONTEND_URL}/git-connect?connected=true&provider=gitlab")
+
+
+@router.get("/gitlab/status", response_model=GitHubStatusResponse)
+async def gitlab_status(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(OAuthToken).where(OAuthToken.user_id == current_user.id, OAuthToken.provider == "gitlab"))
+    token_obj = result.scalar_one_or_none()
+    
+    if not token_obj:
+        return {"connected": False}
+        
+    try:
+        decrypted_token = crypto_service.decrypt_token(token_obj.access_token_encrypted)
+        profile = await gitlab_service.fetch_user_profile(decrypted_token)
+        return {
+            "connected": True,
+            "username": profile.get("username"),
+            "avatar": profile.get("avatar_url")
+        }
+    except Exception:
+        return {"connected": False}
+
+
+@router.delete("/gitlab/disconnect", status_code=status.HTTP_204_NO_CONTENT)
+async def gitlab_disconnect(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(OAuthToken).where(OAuthToken.user_id == current_user.id, OAuthToken.provider == "gitlab"))
+    token_obj = result.scalar_one_or_none()
+    if token_obj:
+        await db.delete(token_obj)
+        await db.commit()
+    return None

@@ -19,6 +19,16 @@ from app.schemas.project import (
     ProjectListResponse,
 )
 
+from fastapi import UploadFile, File
+import os as std_os
+import shutil
+from app.models.analysis import Analysis, AnalysisStatus
+from app.schemas.analysis import AnalysisStatusResponse, GitConnectUrlRequest, GitConnectOAuthRequest
+from app.workers.analysis_worker import analyze_project_task, clone_and_analyze_task
+from app.services import git_service, github_service, gitlab_service, crypto_service
+from app.models.oauth_token import OAuthToken
+
+
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 DEFAULT_SECTIONS = [
@@ -326,3 +336,214 @@ async def duplicate_project(
     await db.refresh(new_project)
 
     return _project_to_response(new_project, all_new_sections)
+
+
+# ── POST /projects/{id}/upload ──────────────────────────────────
+
+@router.post("/{project_id}/upload", status_code=status.HTTP_202_ACCEPTED)
+async def upload_zip(
+    project_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not file.filename.endswith('.zip'):
+        raise HTTPException(status_code=400, detail="Only ZIP files are supported")
+
+    # verify project
+    result = await db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.owner_id == current_user.id,
+            Project.deleted_at.is_(None)
+        )
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project.source_type = SourceType.ZIP
+    
+    upload_dir = f"uploads/{project_id}"
+    std_os.makedirs(upload_dir, exist_ok=True)
+    file_path = f"{upload_dir}/{file.filename}"
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    # create analysis
+    analysis = Analysis(project_id=project.id, source_type="zip", source_path=file_path)
+    db.add(analysis)
+    await db.commit()
+    await db.refresh(analysis)
+
+    task = analyze_project_task.delay(project.id, analysis.id, file_path, "zip")
+    return {"job_id": task.id, "analysis_id": analysis.id}
+
+
+# ── POST /projects/{id}/git/connect-url ─────────────────────────
+
+@router.post("/{project_id}/git/connect-url", status_code=status.HTTP_202_ACCEPTED)
+async def connect_public_git(
+    project_id: int,
+    body: GitConnectUrlRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        provider, owner, repo = git_service.validate_git_url(body.repo_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # verify project
+    result = await db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.owner_id == current_user.id,
+            Project.deleted_at.is_(None)
+        )
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project.source_type = SourceType.GIT
+    project.git_repo_url = body.repo_url
+    project.git_branch = body.branch
+    project.git_provider = provider
+
+    analysis = Analysis(project_id=project.id, source_type="git", source_path=body.repo_url)
+    db.add(analysis)
+    await db.commit()
+    await db.refresh(analysis)
+
+    task = clone_and_analyze_task.delay(project.id, analysis.id, body.repo_url, body.branch)
+    return {"job_id": task.id, "analysis_id": analysis.id}
+
+
+# ── POST /projects/{id}/git/connect-oauth ───────────────────────
+
+@router.post("/{project_id}/git/connect-oauth", status_code=status.HTTP_202_ACCEPTED)
+async def connect_oauth_git(
+    project_id: int,
+    body: GitConnectOAuthRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Determine provider (try github first, fallback or parameterize later if needed)
+    result = await db.execute(select(OAuthToken).where(OAuthToken.user_id == current_user.id).order_by(OAuthToken.updated_at.desc()))
+    token_obj = result.scalars().first()
+    if not token_obj:
+        raise HTTPException(status_code=400, detail="No OAuth connection found. Please connect GitHub or GitLab first.")
+
+    provider = token_obj.provider
+    decrypted_token = crypto_service.decrypt_token(token_obj.access_token_encrypted)
+
+    # Build auth clone url based on provider
+    if provider == 'github':
+        clone_url = github_service.build_authenticated_clone_url(decrypted_token, body.owner, body.repo)
+        repo_url_display = f"https://github.com/{body.owner}/{body.repo}"
+    elif provider == 'gitlab':
+        clone_url = gitlab_service.build_authenticated_clone_url(decrypted_token, f"{body.owner}/{body.repo}")
+        repo_url_display = f"https://gitlab.com/{body.owner}/{body.repo}"
+    else:
+        raise HTTPException(status_code=400, detail="Unknown provider")
+
+    # verify project
+    proj_result = await db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.owner_id == current_user.id,
+            Project.deleted_at.is_(None)
+        )
+    )
+    project = proj_result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project.source_type = SourceType.GIT
+    project.git_repo_url = repo_url_display
+    project.git_branch = body.branch
+    project.git_provider = provider
+
+    analysis = Analysis(project_id=project.id, source_type="git", source_path=clone_url)
+    db.add(analysis)
+    await db.commit()
+    await db.refresh(analysis)
+
+    task = clone_and_analyze_task.delay(project.id, analysis.id, clone_url, body.branch)
+    return {"job_id": task.id, "analysis_id": analysis.id}
+
+
+# ── POST /projects/{id}/git/sync ────────────────────────────────
+
+@router.post("/{project_id}/git/sync", status_code=status.HTTP_202_ACCEPTED)
+async def sync_git_repo(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.owner_id == current_user.id,
+            Project.deleted_at.is_(None)
+        )
+    )
+    project = result.scalar_one_or_none()
+    if not project or project.source_type != SourceType.GIT or not project.git_repo_url:
+        raise HTTPException(status_code=400, detail="Project is not connected to a Git repository")
+
+    clone_url = project.git_repo_url
+    if project.git_provider:
+        token_res = await db.execute(select(OAuthToken).where(
+            OAuthToken.user_id == current_user.id,
+            OAuthToken.provider == project.git_provider
+        ))
+        token_obj = token_res.scalar_one_or_none()
+        if token_obj:
+            decrypted = crypto_service.decrypt_token(token_obj.access_token_encrypted)
+            try:
+                _, owner, repo = git_service.validate_git_url(project.git_repo_url)
+                if project.git_provider == 'github':
+                    clone_url = github_service.build_authenticated_clone_url(decrypted, owner, repo)
+                elif project.git_provider == 'gitlab':
+                    clone_url = gitlab_service.build_authenticated_clone_url(decrypted, f"{owner}/{repo}")
+            except Exception:
+                pass 
+
+    analysis = Analysis(project_id=project.id, source_type="git", source_path=clone_url)
+    db.add(analysis)
+    await db.commit()
+    await db.refresh(analysis)
+
+    task = clone_and_analyze_task.delay(project.id, analysis.id, clone_url, project.git_branch)
+    return {"job_id": task.id, "analysis_id": analysis.id}
+
+
+# ── GET /projects/{id}/analysis/status ──────────────────────────
+
+@router.get("/{project_id}/analysis/status", response_model=AnalysisStatusResponse)
+async def get_analysis_status(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.owner_id == current_user.id,
+            Project.deleted_at.is_(None)
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    analysis_result = await db.execute(
+        select(Analysis).where(Analysis.project_id == project_id).order_by(Analysis.created_at.desc()).limit(1)
+    )
+    analysis = analysis_result.scalar_one_or_none()
+    if not analysis:
+        raise HTTPException(status_code=404, detail="No analysis found for this project")
+
+    return analysis

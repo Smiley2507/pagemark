@@ -10,6 +10,8 @@ from app.models.user import User, UserRole, UserSettings
 from app.models.template import Template
 from app.models.project import Project
 from app.models.document import Document, Section
+from app.models.analysis import Analysis
+from app.models.oauth_token import OAuthToken
 
 # Alembic Config object
 config = context.config

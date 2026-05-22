@@ -14,9 +14,54 @@ export interface Project {
   completion_pct: number;
   language?: string;
   source_type: 'zip' | 'git' | 'scratch';
+  git_repo_url?: string;
+  git_branch?: string;
+  git_provider?: 'github' | 'gitlab' | 'bitbucket';
   starred: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface GitRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  description?: string;
+  private: boolean;
+  default_branch: string;
+  updated_at: string;
+  language?: string;
+  stars_count: number;
+  html_url: string;
+}
+
+export interface GitBranch {
+  name: string;
+  is_default: boolean;
+}
+
+export interface JobResponse {
+  job_id: string;
+  analysis_id: number;
+}
+
+export interface AnalysisStatus {
+  id: number;
+  project_id: number;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  current_step?: string;
+  step_number: number;
+  total_steps: number;
+  source_type: string;
+  error_message?: string;
+  started_at?: string;
+  completed_at?: string;
+}
+
+export interface GitProviderStatus {
+  connected: boolean;
+  username?: string;
+  avatar?: string;
 }
 
 export interface Template {

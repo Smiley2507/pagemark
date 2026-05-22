@@ -1,0 +1,38 @@
+import enum
+from datetime import datetime
+from sqlalchemy import (
+    Column, Integer, String, Float, Text, DateTime, ForeignKey, Enum, JSON,
+)
+from sqlalchemy.orm import relationship
+from app.database import Base
+
+
+class AnalysisStatus(enum.Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class Analysis(Base):
+    __tablename__ = "analyses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    status = Column(Enum(AnalysisStatus), nullable=False, default=AnalysisStatus.PENDING)
+    current_step = Column(String, nullable=True)
+    step_number = Column(Integer, default=0)
+    total_steps = Column(Integer, default=7)
+    source_type = Column(String, nullable=False)          # 'zip' or 'git'
+    source_path = Column(String, nullable=True)            # local path to source
+    file_tree_json = Column(JSON, nullable=True)
+    languages_json = Column(JSON, nullable=True)
+    endpoints_json = Column(JSON, nullable=True)
+    complexity_json = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    project = relationship("Project", backref="analyses")

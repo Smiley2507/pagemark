@@ -1,0 +1,118 @@
+import httpx
+from typing import Optional, Dict, Any, List
+from fastapi import HTTPException
+from app.config import settings
+
+GITHUB_API_URL = "https://api.github.com"
+
+
+def get_authorize_url(state: str) -> str:
+    """Returns the GitHub OAuth authorization URL."""
+    client_id = settings.GITHUB_CLIENT_ID
+    redirect_uri = settings.GITHUB_REDIRECT_URI
+    scope = "repo read:user"
+    return f"https://github.com/login/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&state={state}"
+
+
+async def exchange_code_for_token(code: str) -> str:
+    """Exchanges an OAuth code for an access token."""
+    url = "https://github.com/login/oauth/access_token"
+    payload = {
+        "client_id": settings.GITHUB_CLIENT_ID,
+        "client_secret": settings.GITHUB_CLIENT_SECRET,
+        "code": code,
+        "redirect_uri": settings.GITHUB_REDIRECT_URI
+    }
+    headers = {"Accept": "application/json"}
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json=payload, headers=headers)
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to exchange GitHub token")
+
+        data = response.json()
+        if "error" in data:
+            raise HTTPException(status_code=400, detail=data.get("error_description", "OAuth error"))
+
+        return data.get("access_token")
+
+
+async def fetch_user_profile(token: str) -> Dict[str, Any]:
+    """Fetches the authenticated user's GitHub profile."""
+    url = f"{GITHUB_API_URL}/user"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+        if response.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid or expired GitHub token")
+        return response.json()
+
+
+async def fetch_user_repos(token: str, page: int = 1, per_page: int = 50) -> List[Dict[str, Any]]:
+    """Fetches repositories accessible to the user."""
+    url = f"{GITHUB_API_URL}/user/repos?sort=updated&per_page={per_page}&page={page}&type=all"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+        if response.status_code != 200:
+            raise HTTPException(status_code=401, detail="Failed to fetch GitHub repositories")
+        
+        repos = response.json()
+        
+        # Map to standard response format
+        return [
+            {
+                "id": repo["id"],
+                "name": repo["name"],
+                "full_name": repo["full_name"],
+                "description": repo.get("description"),
+                "private": repo["private"],
+                "default_branch": repo.get("default_branch", "main"),
+                "updated_at": repo.get("updated_at"),
+                "language": repo.get("language"),
+                "stars_count": repo.get("stargazers_count", 0),
+                "html_url": repo["html_url"]
+            }
+            for repo in repos
+        ]
+
+
+async def fetch_repo_branches(token: str, owner: str, repo: str) -> List[Dict[str, Any]]:
+    """Fetches branches for a specific repository."""
+    url = f"{GITHUB_API_URL}/repos/{owner}/{repo}/branches"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+        if response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Repository not found")
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to fetch branches")
+            
+        branches = response.json()
+        
+        # We need to determine the default branch. This is normally found on the repo object.
+        # For simplicity in this endpoint, we'll mark 'main' or 'master' as default.
+        return [
+            {
+                "name": branch["name"],
+                "is_default": branch["name"] in ["main", "master"]
+            }
+            for branch in branches
+        ]
+
+
+def build_authenticated_clone_url(token: str, owner: str, repo: str) -> str:
+    """Builds a GitHub clone URL including the OAuth token for auth."""
+    return f"https://{token}@github.com/{owner}/{repo}.git"

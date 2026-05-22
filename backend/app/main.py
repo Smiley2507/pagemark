@@ -6,7 +6,7 @@ from sqlalchemy.future import select
 from app.config import settings
 from app.database import async_session
 from app.models.template import Template
-from app.routers import auth, projects, templates
+from app.routers import auth, projects, templates, git
 
 
 # ── Built-in template seed data ─────────────────────────────────
@@ -104,6 +104,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(templates.router)
+app.include_router(git.router)
 
 
 @app.get("/health")

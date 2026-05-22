@@ -32,6 +32,7 @@ class Project(Base):
     source_type = Column(Enum(SourceType), nullable=False, default=SourceType.SCRATCH)
     git_repo_url = Column(String, nullable=True)
     git_branch = Column(String, nullable=True)
+    git_provider = Column(String, nullable=True)  # 'github', 'gitlab', 'bitbucket'
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
     starred = Column(Boolean, default=False)
     deleted_at = Column(DateTime, nullable=True)

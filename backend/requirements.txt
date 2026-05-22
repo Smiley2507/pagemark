@@ -19,3 +19,5 @@ fastapi-mail
 python-docx
 weasyprint
 markdown
+gitpython==3.1.41
+cryptography==42.0.5
