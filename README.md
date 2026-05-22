@@ -31,7 +31,7 @@ pagemark/
 ├── frontend/           # React frontend application
 │   ├── src/            # React components, stores, and hooks
 │   └── package.json
-├── docker-compose.yml  # PostgreSQL & Redis containers
+├── docker-compose.yml  # PostgreSQL, Redis & Celery worker
 └── README.md           # Root project overview & setup guide
 ```
 
@@ -60,6 +60,9 @@ This starts:
 |------------|------------------|-----------|------------------------------------|
 | PostgreSQL | `pagemark_db`    | `5433`    | user: `pagemark` / pw: `pagemark_dev` / db: `pagemark` |
 | Redis      | `pagemark_redis` | `6379`    | No auth                            |
+| Celery     | `pagemark_worker`| —         | Runs codebase analysis tasks       |
+
+Ensure `backend/.env` exists (copy from `.env.example`). The worker container uses it for `ANTHROPIC_API_KEY` and other secrets.
 
 Wait for the containers to be healthy:
 
@@ -93,6 +96,15 @@ PYTHONPATH=. alembic upgrade head
 PYTHONPATH=. uvicorn app.main:app --reload --port 8000
 ```
 
+**Code analysis worker** (required for ZIP/Git project analysis):
+
+Either use Docker (started with `docker compose up -d` above), or run locally:
+
+```bash
+cd backend && source venv/bin/activate
+PYTHONPATH=. celery -A app.workers.celery_app worker --loglevel=info
+```
+
 The backend API will be available at **http://localhost:8000**.  
 Health check: `curl http://localhost:8000/health`
 
@@ -117,10 +129,10 @@ The frontend will be available at **http://localhost:5173**.
 
 ## Quick Start (after initial setup)
 
-Once everything is installed, starting the full stack only requires three commands in separate terminals:
+Once everything is installed, starting the full stack:
 
 ```bash
-# Terminal 1 — Database services
+# Terminal 1 — Database, Redis, Celery worker
 docker compose up -d
 
 # Terminal 2 — Backend API
@@ -129,6 +141,8 @@ cd backend && source venv/bin/activate && PYTHONPATH=. uvicorn app.main:app --re
 # Terminal 3 — Frontend
 cd frontend && npm run dev
 ```
+
+If not using the Docker worker, add a fourth terminal for local Celery (see above).
 
 ---
 
@@ -142,6 +156,7 @@ docker compose down        # Stop and remove containers
 docker compose ps          # Check container status
 docker compose logs db     # View PostgreSQL logs
 docker compose logs redis  # View Redis logs
+docker compose logs worker  # View Celery worker logs
 ```
 
 ### Alembic (Database Migrations)

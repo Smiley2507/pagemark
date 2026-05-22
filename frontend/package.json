@@ -23,6 +23,7 @@
     "date-fns": "^4.2.1",
     "framer-motion": "^12.40.0",
     "lucide-react": "^1.16.0",
+    "marked": "^18.0.4",
     "react": "^19.2.6",
     "react-diff-viewer-continued": "^4.2.2",
     "react-dom": "^19.2.6",
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/marked": "^5.0.2",
     "@types/node": "^24.12.4",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

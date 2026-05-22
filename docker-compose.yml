@@ -34,6 +34,27 @@ services:
       timeout: 3s
       retries: 5
 
+  # ── Celery worker (code analysis) ──────────────────────────────────────────
+  worker:
+    build:
+      context: ./backend
+    container_name: pagemark_worker
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://pagemark:pagemark_dev@db:5432/pagemark
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - pagemark_repos:/tmp/pagemark_repos
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   pgdata:
   redisdata:
+  pagemark_repos:

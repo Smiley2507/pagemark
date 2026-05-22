@@ -41,3 +41,8 @@ class Section(Base):
 
     document = relationship("Document", back_populates="sections")
     parent = relationship("Section", remote_side=[id], backref="children")
+    versions = relationship(
+        "SectionVersion",
+        back_populates="section",
+        cascade="all, delete-orphan",
+    )

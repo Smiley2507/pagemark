@@ -1,5 +1,12 @@
 import apiClient from './client';
-import type { GitBranch, GitRepo, JobResponse, AnalysisStatus } from '../types';
+import type {
+  GitBranch,
+  GitRepo,
+  JobResponse,
+  AnalysisStatus,
+  AnalysisResults,
+  OutlineDiff,
+} from '../types';
 
 export const analysisApi = {
   async connectGitUrl(
@@ -15,7 +22,7 @@ export const analysisApi = {
 
   async connectGitOAuth(
     projectId: number,
-    data: { owner: string; repo: string; branch: string }
+    data: { owner: string; repo: string; branch: string; provider: 'github' | 'gitlab' }
   ): Promise<JobResponse> {
     const { data: res } = await apiClient.post(
       `/projects/${projectId}/git/connect-oauth`,
@@ -50,6 +57,21 @@ export const analysisApi = {
 
   async getAnalysisStatus(projectId: number): Promise<AnalysisStatus> {
     const { data } = await apiClient.get(`/projects/${projectId}/analysis/status`);
+    return data;
+  },
+
+  async getAnalysisResults(projectId: number): Promise<AnalysisResults> {
+    const { data } = await apiClient.get(`/projects/${projectId}/analysis/results`);
+    return data;
+  },
+
+  async getOutlineDiff(projectId: number): Promise<OutlineDiff> {
+    const { data } = await apiClient.get(`/projects/${projectId}/analysis/outline-diff`);
+    return data;
+  },
+
+  async applyOutline(projectId: number): Promise<{ applied: boolean; section_count: number }> {
+    const { data } = await apiClient.post(`/projects/${projectId}/analysis/apply-outline`);
     return data;
   },
 

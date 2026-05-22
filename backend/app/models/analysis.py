@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Float, Text, DateTime, ForeignKey, Enum, JSON,
+    Column, Integer, String, Text, DateTime, ForeignKey, Enum, JSON, Boolean,
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -22,13 +22,16 @@ class Analysis(Base):
     status = Column(Enum(AnalysisStatus), nullable=False, default=AnalysisStatus.PENDING)
     current_step = Column(String, nullable=True)
     step_number = Column(Integer, default=0)
-    total_steps = Column(Integer, default=7)
+    step_detail = Column(String, nullable=True)
+    total_steps = Column(Integer, default=8)
     source_type = Column(String, nullable=False)          # 'zip' or 'git'
     source_path = Column(String, nullable=True)            # local path to source
     file_tree_json = Column(JSON, nullable=True)
     languages_json = Column(JSON, nullable=True)
     endpoints_json = Column(JSON, nullable=True)
     complexity_json = Column(JSON, nullable=True)
+    outline_json = Column(JSON, nullable=True)
+    outline_applied = Column(Boolean, nullable=False, default=False)
     error_message = Column(Text, nullable=True)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)

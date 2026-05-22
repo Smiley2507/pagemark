@@ -45,17 +45,91 @@ export interface JobResponse {
   analysis_id: number;
 }
 
+export type AnalysisStepState = 'pending' | 'running' | 'done' | 'failed';
+
+export interface AnalysisStepItem {
+  number: number;
+  name: string;
+  status: AnalysisStepState;
+}
+
 export interface AnalysisStatus {
   id: number;
   project_id: number;
   status: 'pending' | 'running' | 'completed' | 'failed';
   current_step?: string;
   step_number: number;
+  step_detail?: string;
   total_steps: number;
   source_type: string;
   error_message?: string;
   started_at?: string;
   completed_at?: string;
+  steps?: AnalysisStepItem[];
+  elapsed_seconds?: number;
+  outline_applied?: boolean;
+}
+
+export interface AnalysisResults extends AnalysisStatus {
+  file_tree_json?: FileTreeNode;
+  languages_json?: LanguagesJson;
+  endpoints_json?: EndpointsJson;
+  complexity_json?: ComplexityJson;
+  outline_json?: OutlineSection[];
+}
+
+export interface FileTreeNode {
+  name: string;
+  type: 'dir' | 'file';
+  children?: FileTreeNode[];
+}
+
+export interface LanguageBreakdown {
+  language: string;
+  files: number;
+  lines: number;
+  percent: number;
+  depth: 'primary' | 'shallow';
+}
+
+export interface LanguagesJson {
+  primary: string[];
+  breakdown: LanguageBreakdown[];
+  shallow: string[];
+}
+
+export interface EndpointItem {
+  method: string;
+  path: string;
+  file: string;
+  line: number;
+  framework: string;
+}
+
+export interface EndpointsJson {
+  count: number;
+  items: EndpointItem[];
+  frameworks: string[];
+}
+
+export interface ComplexityJson {
+  total_files: number;
+  total_lines: number;
+  largest_files: { path: string; lines: number; language?: string }[];
+  by_language: Record<string, { files: number; lines: number }>;
+  parse_stats?: { parsed_files: number; parse_errors: number; by_language: Record<string, number> };
+}
+
+export interface OutlineSection {
+  heading: string;
+  description?: string;
+  order_index: number;
+}
+
+export interface OutlineDiff {
+  current: string[];
+  proposed: string[];
+  has_changes: boolean;
 }
 
 export interface GitProviderStatus {
@@ -89,15 +163,37 @@ export interface Section {
   children?: Section[];
 }
 
+export interface SectionTreeResponse {
+  document_id: number;
+  sections: Section[];
+}
+
 export interface Version {
   id: number;
-  version_label: string;
+  section_id: number;
   author_type: 'user' | 'ai';
   summary?: string;
   added: number;
   removed: number;
   modified: number;
   created_at: string;
+}
+
+export interface DiffResponse {
+  version_id: number;
+  content_old: string;
+  content_new: string;
+  diff_lines: DiffLine[];
+}
+
+export interface AutosaveResponse {
+  saved: boolean;
+  updated_at: string;
+}
+
+export interface SectionStatusUpdateResponse {
+  status: Section['status'];
+  completion_pct: number;
 }
 
 export interface DiffLine {

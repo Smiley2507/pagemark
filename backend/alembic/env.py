@@ -1,5 +1,11 @@
 import asyncio
+import sys
 from logging.config import fileConfig
+from pathlib import Path
+
+# Ensure `backend/` is on sys.path so `import app` works when Alembic is invoked
+# from the backend directory (e.g. `alembic upgrade head`).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 from alembic import context
@@ -12,6 +18,7 @@ from app.models.project import Project
 from app.models.document import Document, Section
 from app.models.analysis import Analysis
 from app.models.oauth_token import OAuthToken
+from app.models.version import SectionVersion
 
 # Alembic Config object
 config = context.config

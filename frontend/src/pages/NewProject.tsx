@@ -22,6 +22,7 @@ import { GitProviderIcon } from '@/components/git/GitProviderIcon';
 import { projectsApi } from '@/api/projects';
 import { analysisApi } from '@/api/analysis';
 import { pollAnalysisUntilDone } from '@/hooks/useAnalysis';
+import { AnalysisProgress } from '@/components/analysis/AnalysisProgress';
 import {
   useGitHubStatus,
   useGitLabStatus,
@@ -158,6 +159,7 @@ export const NewProject: React.FC = () => {
           owner,
           repo,
           branch: oauthBranch,
+          provider: oauthProvider,
         });
       } else {
         throw new Error('Incomplete configuration');
@@ -356,7 +358,7 @@ export const NewProject: React.FC = () => {
 
         {step === 4 && (
           <ProcessingStep
-            progress={analysisProgress}
+            status={analysisProgress}
             projectId={createdProjectId}
           />
         )}
@@ -778,42 +780,20 @@ function ScratchStep({
 }
 
 function ProcessingStep({
-  progress,
+  status,
   projectId,
 }: {
-  progress: AnalysisStatus | null;
+  status: AnalysisStatus | null;
   projectId: number | null;
 }) {
-  const pct =
-    progress && progress.total_steps > 0
-      ? Math.round((progress.step_number / progress.total_steps) * 100)
-      : 0;
-
   return (
-    <div className="rounded-lg border border-border bg-card p-8 text-center">
-      <Loader2 className="mx-auto h-10 w-10 animate-spin text-muted-foreground" />
-      <h2 className="mt-4 text-lg font-bold">Analysing your codebase</h2>
-      <p className="mt-1 text-meta text-muted-foreground">
-        {progress?.current_step || 'Preparing analysis pipeline…'}
-      </p>
-      <div className="mx-auto mt-6 max-w-md">
-        <div className="mb-1 flex justify-between text-meta-sm font-medium text-muted-foreground">
-          <span>
-            {progress
-              ? `Step ${progress.step_number} of ${progress.total_steps}`
-              : 'Starting…'}
-          </span>
-          <span>{pct}%</span>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
+    <div>
+      <h2 className="mb-4 text-center text-lg font-bold">Analysing your codebase</h2>
+      <AnalysisProgress status={status} compact={false} />
       {projectId && (
-        <p className="mt-4 text-meta-sm text-muted-foreground">Project #{projectId}</p>
+        <p className="mt-4 text-center text-meta-sm text-muted-foreground">
+          Project #{projectId}
+        </p>
       )}
     </div>
   );

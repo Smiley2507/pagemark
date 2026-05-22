@@ -23,7 +23,17 @@ from fastapi import UploadFile, File
 import os as std_os
 import shutil
 from app.models.analysis import Analysis, AnalysisStatus
-from app.schemas.analysis import AnalysisStatusResponse, GitConnectUrlRequest, GitConnectOAuthRequest
+from app.schemas.analysis import (
+    AnalysisStatusResponse,
+    AnalysisResponse,
+    OutlineDiffResponse,
+    ApplyOutlineResponse,
+    GitConnectUrlRequest,
+    GitConnectOAuthRequest,
+    analysis_to_status_response,
+    analysis_to_full_response,
+)
+from app.services.analysis_service import apply_outline_to_document, get_outline_diff, get_latest_analysis
 from app.workers.analysis_worker import analyze_project_task, clone_and_analyze_task
 from app.services import git_service, github_service, gitlab_service, crypto_service
 from app.models.oauth_token import OAuthToken
@@ -372,7 +382,12 @@ async def upload_zip(
         shutil.copyfileobj(file.file, buffer)
 
     # create analysis
-    analysis = Analysis(project_id=project.id, source_type="zip", source_path=file_path)
+    analysis = Analysis(
+        project_id=project.id,
+        source_type="zip",
+        source_path=file_path,
+        total_steps=8,
+    )
     db.add(analysis)
     await db.commit()
     await db.refresh(analysis)
@@ -412,7 +427,12 @@ async def connect_public_git(
     project.git_branch = body.branch
     project.git_provider = provider
 
-    analysis = Analysis(project_id=project.id, source_type="git", source_path=body.repo_url)
+    analysis = Analysis(
+        project_id=project.id,
+        source_type="git",
+        source_path=body.repo_url,
+        total_steps=8,
+    )
     db.add(analysis)
     await db.commit()
     await db.refresh(analysis)
@@ -430,13 +450,19 @@ async def connect_oauth_git(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Determine provider (try github first, fallback or parameterize later if needed)
-    result = await db.execute(select(OAuthToken).where(OAuthToken.user_id == current_user.id).order_by(OAuthToken.updated_at.desc()))
-    token_obj = result.scalars().first()
+    provider = body.provider if body.provider in ("github", "gitlab") else "github"
+    result = await db.execute(
+        select(OAuthToken).where(
+            OAuthToken.user_id == current_user.id,
+            OAuthToken.provider == provider,
+        )
+    )
+    token_obj = result.scalar_one_or_none()
     if not token_obj:
-        raise HTTPException(status_code=400, detail="No OAuth connection found. Please connect GitHub or GitLab first.")
-
-    provider = token_obj.provider
+        raise HTTPException(
+            status_code=400,
+            detail=f"No {provider} connection found. Please connect {provider.title()} first.",
+        )
     decrypted_token = crypto_service.decrypt_token(token_obj.access_token_encrypted)
 
     # Build auth clone url based on provider
@@ -466,7 +492,12 @@ async def connect_oauth_git(
     project.git_branch = body.branch
     project.git_provider = provider
 
-    analysis = Analysis(project_id=project.id, source_type="git", source_path=clone_url)
+    analysis = Analysis(
+        project_id=project.id,
+        source_type="git",
+        source_path=clone_url,
+        total_steps=8,
+    )
     db.add(analysis)
     await db.commit()
     await db.refresh(analysis)
@@ -512,7 +543,12 @@ async def sync_git_repo(
             except Exception:
                 pass 
 
-    analysis = Analysis(project_id=project.id, source_type="git", source_path=clone_url)
+    analysis = Analysis(
+        project_id=project.id,
+        source_type="git",
+        source_path=clone_url,
+        total_steps=8,
+    )
     db.add(analysis)
     await db.commit()
     await db.refresh(analysis)
@@ -546,4 +582,85 @@ async def get_analysis_status(
     if not analysis:
         raise HTTPException(status_code=404, detail="No analysis found for this project")
 
-    return analysis
+    return analysis_to_status_response(analysis)
+
+
+@router.get("/{project_id}/analysis/results", response_model=AnalysisResponse)
+async def get_analysis_results(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.owner_id == current_user.id,
+            Project.deleted_at.is_(None),
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    analysis = await get_latest_analysis(project_id, db)
+    if not analysis:
+        raise HTTPException(status_code=404, detail="No analysis found for this project")
+
+    return analysis_to_full_response(analysis)
+
+
+@router.get("/{project_id}/analysis/outline-diff", response_model=OutlineDiffResponse)
+async def get_analysis_outline_diff(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.owner_id == current_user.id,
+            Project.deleted_at.is_(None),
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    diff = await get_outline_diff(project_id, db)
+    return OutlineDiffResponse(**diff)
+
+
+@router.post("/{project_id}/analysis/apply-outline", response_model=ApplyOutlineResponse)
+async def apply_analysis_outline(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.owner_id == current_user.id,
+            Project.deleted_at.is_(None),
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    analysis = await get_latest_analysis(project_id, db)
+    if not analysis or not analysis.outline_json:
+        raise HTTPException(status_code=400, detail="No proposed outline available")
+
+    if analysis.status != AnalysisStatus.COMPLETED:
+        raise HTTPException(status_code=400, detail="Analysis is not complete yet")
+
+    await apply_outline_to_document(project_id, analysis.outline_json, db=db)
+    analysis.outline_applied = True
+    await db.commit()
+
+    doc_result = await db.execute(
+        select(Document)
+        .where(Document.project_id == project_id)
+        .options(selectinload(Document.sections))
+    )
+    doc = doc_result.scalar_one_or_none()
+    count = len(doc.sections) if doc else 0
+
+    return ApplyOutlineResponse(applied=True, section_count=count)

@@ -5,6 +5,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 
+# Pydantic v2: forward refs on ConnectionConfig (SecretStr) must be resolved before use
+ConnectionConfig.model_rebuild()
+
 from app.database import get_db
 from app.config import settings
 from app.models.user import User, UserRole, UserSettings, RoleEnum
