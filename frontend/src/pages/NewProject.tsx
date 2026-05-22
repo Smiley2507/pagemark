@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { GitProviderIcon } from '@/components/git/GitProviderIcon';
 import { projectsApi } from '@/api/projects';
 import { analysisApi } from '@/api/analysis';
@@ -181,26 +182,26 @@ export const NewProject: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-950/80">
-        <div className="mx-auto flex h-16 max-w-3xl items-center gap-4 px-4 sm:px-6">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-sm">
+        <div className="mx-auto flex h-12 max-w-3xl items-center gap-4 px-6">
           <button
             type="button"
             onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+            className="flex items-center gap-2 text-meta text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
             Cancel
           </button>
-          <h1 className="text-lg font-bold">New Project</h1>
+          <h1 className="text-section font-semibold">New project</h1>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+      <main className="mx-auto max-w-3xl px-6 py-8">
         <StepIndicator current={step} />
 
         {step === 1 && (
-          <div className="space-y-4 rounded-2xl border border-slate-200/80 bg-white/60 p-6 dark:border-slate-800/80 dark:bg-slate-900/60">
+          <div className="space-y-4 rounded-lg border border-border bg-card p-6">
             <div>
               <Label htmlFor="project-name">Project name</Label>
               <Input
@@ -226,7 +227,6 @@ export const NewProject: React.FC = () => {
               <Button
                 disabled={!canNextStep1}
                 onClick={() => setStep(2)}
-                className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-700"
               >
                 Continue
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -237,7 +237,7 @@ export const NewProject: React.FC = () => {
 
         {step === 2 && (
           <div className="space-y-4">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-meta text-muted-foreground">
               How would you like to bring in your codebase?
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -255,14 +255,14 @@ export const NewProject: React.FC = () => {
                   className={cn(
                     'flex flex-col items-center gap-2 rounded-2xl border p-5 text-center transition-all',
                     sourceChoice === id
-                      ? 'border-indigo-500 bg-indigo-50/50 shadow-sm dark:bg-indigo-950/30'
-                      : 'border-slate-200 bg-white/60 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/60'
+                      ? 'border-primary bg-accent shadow-sm'
+                      : 'border-border bg-card hover:bg-surface-hover'
                   )}
                 >
                   <Icon
                     className={cn(
                       'h-8 w-8',
-                      sourceChoice === id ? 'text-indigo-500' : 'text-slate-400'
+                      sourceChoice === id ? 'text-foreground' : 'text-muted-foreground'
                     )}
                   />
                   <span className="text-sm font-bold">{label}</span>
@@ -276,7 +276,6 @@ export const NewProject: React.FC = () => {
               <Button
                 disabled={!canNextStep2}
                 onClick={() => setStep(3)}
-                className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-700"
               >
                 Continue
               </Button>
@@ -303,26 +302,16 @@ export const NewProject: React.FC = () => {
         )}
 
         {step === 3 && sourceChoice === 'git' && (
-          <div className="space-y-4">
-            <div className="flex rounded-xl border border-slate-200 bg-slate-100/80 p-1 dark:border-slate-800 dark:bg-slate-900/60">
-              {(['url', 'account'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setGitTab(tab)}
-                  className={cn(
-                    'flex-1 rounded-lg py-2 text-sm font-semibold transition-all',
-                    gitTab === tab
-                      ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-800 dark:text-indigo-400'
-                      : 'text-slate-500 hover:text-slate-700'
-                  )}
-                >
-                  {tab === 'url' ? 'Paste URL' : 'Connect Account'}
-                </button>
-              ))}
-            </div>
-
-            {gitTab === 'url' && (
+          <Tabs
+            value={gitTab}
+            onValueChange={(v) => setGitTab(v as GitTab)}
+            className="space-y-4"
+          >
+            <TabsList>
+              <TabsTrigger value="url">Paste URL</TabsTrigger>
+              <TabsTrigger value="account">Connect account</TabsTrigger>
+            </TabsList>
+            <TabsContent value="url" forceMount className="data-[state=inactive]:hidden">
               <GitUrlTab
                 repoUrl={repoUrl}
                 setRepoUrl={setRepoUrl}
@@ -333,9 +322,8 @@ export const NewProject: React.FC = () => {
                 onSubmit={handleConnectAndAnalyse}
                 submitting={submitting}
               />
-            )}
-
-            {gitTab === 'account' && (
+            </TabsContent>
+            <TabsContent value="account" forceMount className="data-[state=inactive]:hidden">
               <GitAccountTab
                 oauthProvider={oauthProvider}
                 setOauthProvider={setOauthProvider}
@@ -362,8 +350,8 @@ export const NewProject: React.FC = () => {
                 onSubmit={handleConnectAndAnalyse}
                 submitting={submitting}
               />
-            )}
-          </div>
+            </TabsContent>
+          </Tabs>
         )}
 
         {step === 4 && (
@@ -389,15 +377,15 @@ function StepIndicator({ current }: { current: number }) {
             key={label}
             className={cn(
               'flex flex-1 flex-col items-center gap-1 text-xs font-semibold',
-              active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'
+              active ? 'text-foreground' : 'text-muted-foreground'
             )}
           >
             <span
               className={cn(
                 'flex h-8 w-8 items-center justify-center rounded-full border-2',
-                done && 'border-indigo-500 bg-indigo-500 text-white',
-                active && !done && 'border-indigo-500 text-indigo-600',
-                !active && !done && 'border-slate-200 dark:border-slate-700'
+                done && 'border-primary bg-primary text-primary-foreground',
+                active && !done && 'border-primary text-foreground',
+                !active && !done && 'border-border'
               )}
             >
               {done ? <Check className="h-4 w-4" /> : n}
@@ -430,7 +418,7 @@ function GitUrlTab({
   submitting: boolean;
 }) {
   return (
-    <div className="space-y-4 rounded-2xl border border-slate-200/80 bg-white/60 p-6 dark:border-slate-800/80 dark:bg-slate-900/60">
+    <div className="space-y-4 rounded-lg border border-border bg-card p-6">
       <div>
         <Label htmlFor="git-url">GitHub / GitLab / Bitbucket URL</Label>
         <div className="relative mt-1.5">
@@ -465,7 +453,7 @@ function GitUrlTab({
         <Button
           disabled={!urlValid || submitting}
           onClick={onSubmit}
-          className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-700"
+          className=""
         >
           {submitting ? 'Starting…' : 'Connect & Analyse'}
         </Button>
@@ -519,8 +507,8 @@ function GitAccountTab({
 }) {
   if (!oauthConnected) {
     return (
-      <div className="space-y-4 rounded-2xl border border-slate-200/80 bg-white/60 p-6 dark:border-slate-800/80 dark:bg-slate-900/60">
-        <p className="text-sm text-slate-500">
+      <div className="space-y-4 rounded-lg border border-border bg-card p-6">
+        <p className="text-meta text-muted-foreground">
           Connect your account to access private repositories.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -529,7 +517,7 @@ function GitAccountTab({
             onClick={() => {
               window.location.href = getOAuthAuthorizeUrl('github');
             }}
-            className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-950"
+            className="w-full"
           >
             <GitProviderIcon provider="github" />
             Connect GitHub
@@ -539,7 +527,8 @@ function GitAccountTab({
             onClick={() => {
               window.location.href = getOAuthAuthorizeUrl('gitlab');
             }}
-            className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900"
+            variant="outline"
+            className="w-full"
           >
             <GitProviderIcon provider="gitlab" />
             Connect GitLab
@@ -555,7 +544,7 @@ function GitAccountTab({
   }
 
   return (
-    <div className="space-y-4 rounded-2xl border border-slate-200/80 bg-white/60 p-6 dark:border-slate-800/80 dark:bg-slate-900/60">
+    <div className="space-y-4 rounded-lg border border-border bg-card p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <img
@@ -581,8 +570,8 @@ function GitAccountTab({
               className={cn(
                 'rounded-lg px-2 py-1 text-xs font-semibold',
                 oauthProvider === 'github'
-                  ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40'
-                  : 'text-slate-500'
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground'
               )}
             >
               GitHub
@@ -595,8 +584,8 @@ function GitAccountTab({
               className={cn(
                 'rounded-lg px-2 py-1 text-xs font-semibold',
                 oauthProvider === 'gitlab'
-                  ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40'
-                  : 'text-slate-500'
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground'
               )}
             >
               GitLab
@@ -609,7 +598,7 @@ function GitAccountTab({
       </div>
 
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={repoSearch}
           onChange={(e) => setRepoSearch(e.target.value)}
@@ -621,10 +610,10 @@ function GitAccountTab({
       <div className="max-h-64 space-y-2 overflow-y-auto">
         {reposLoading ? (
           <div className="flex justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-indigo-500" />
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : filteredRepos.length === 0 ? (
-          <p className="py-4 text-center text-sm text-slate-500">No repositories found.</p>
+          <p className="py-4 text-center text-meta text-muted-foreground">No repositories found.</p>
         ) : (
           filteredRepos.map((repo) => (
             <button
@@ -634,8 +623,8 @@ function GitAccountTab({
               className={cn(
                 'w-full rounded-xl border p-3 text-left transition-all',
                 selectedRepo?.id === repo.id
-                  ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/30'
-                  : 'border-slate-200 hover:border-slate-300 dark:border-slate-700'
+                  ? 'border-primary bg-accent'
+                  : 'border-border hover:bg-surface-hover'
               )}
             >
               <div className="flex items-start justify-between gap-2">
@@ -645,18 +634,18 @@ function GitAccountTab({
                     'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
                     repo.private
                       ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
-                      : 'bg-slate-100 text-slate-600 dark:bg-slate-800'
+                      : 'bg-muted text-muted-foreground'
                   )}
                 >
                   {repo.private ? 'Private' : 'Public'}
                 </span>
               </div>
               {repo.description && (
-                <p className="mt-1 line-clamp-2 text-xs text-slate-500">{repo.description}</p>
+                <p className="mt-1 line-clamp-2 text-meta text-muted-foreground">{repo.description}</p>
               )}
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-meta text-muted-foreground">
                 {repo.language && (
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 dark:bg-slate-800">
+                  <span className="rounded-full bg-muted px-2 py-0.5">
                     {repo.language}
                   </span>
                 )}
@@ -677,13 +666,13 @@ function GitAccountTab({
         <div>
           <Label htmlFor="oauth-branch">Branch</Label>
           {branchesLoading ? (
-            <Loader2 className="mt-2 h-5 w-5 animate-spin text-indigo-500" />
+            <Loader2 className="mt-2 h-5 w-5 animate-spin text-muted-foreground" />
           ) : (
             <select
               id="oauth-branch"
               value={oauthBranch}
               onChange={(e) => setOauthBranch(e.target.value)}
-              className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-800 dark:bg-slate-900"
+              className="mt-1.5 flex h-9 w-full rounded-md border border-input bg-background px-3 text-body"
             >
               {(branches ?? [{ name: selectedRepo.default_branch, is_default: true }]).map(
                 (b) => (
@@ -705,7 +694,7 @@ function GitAccountTab({
         <Button
           disabled={!selectedRepo || submitting}
           onClick={onSubmit}
-          className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-700"
+          className=""
         >
           {submitting ? 'Starting…' : 'Connect & Analyse'}
         </Button>
@@ -728,7 +717,7 @@ function ZipStep({
   submitting: boolean;
 }) {
   return (
-    <div className="space-y-4 rounded-2xl border border-slate-200/80 bg-white/60 p-6 dark:border-slate-800/80 dark:bg-slate-900/60">
+    <div className="space-y-4 rounded-lg border border-border bg-card p-6">
       <Label htmlFor="zip-upload">ZIP archive</Label>
       <Input
         id="zip-upload"
@@ -738,7 +727,7 @@ function ZipStep({
         className="rounded-xl"
       />
       {zipFile && (
-        <p className="text-sm text-slate-500">
+        <p className="text-meta text-muted-foreground">
           Selected: {zipFile.name} ({(zipFile.size / 1024 / 1024).toFixed(2)} MB)
         </p>
       )}
@@ -749,7 +738,7 @@ function ZipStep({
         <Button
           disabled={!zipFile || submitting}
           onClick={onSubmit}
-          className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-700"
+          className=""
         >
           Upload & Analyse
         </Button>
@@ -768,8 +757,8 @@ function ScratchStep({
   submitting: boolean;
 }) {
   return (
-    <div className="space-y-4 rounded-2xl border border-slate-200/80 bg-white/60 p-6 dark:border-slate-800/80 dark:bg-slate-900/60">
-      <p className="text-sm text-slate-500">
+    <div className="space-y-4 rounded-lg border border-border bg-card p-6">
+      <p className="text-meta text-muted-foreground">
         Start with an empty documentation outline — no codebase analysis.
       </p>
       <div className="flex justify-between pt-2">
@@ -779,7 +768,7 @@ function ScratchStep({
         <Button
           disabled={submitting}
           onClick={onSubmit}
-          className="rounded-xl bg-indigo-600 text-white hover:bg-indigo-700"
+          className=""
         >
           Create Project
         </Button>
@@ -801,14 +790,14 @@ function ProcessingStep({
       : 0;
 
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white/60 p-8 text-center dark:border-slate-800/80 dark:bg-slate-900/60">
-      <Loader2 className="mx-auto h-10 w-10 animate-spin text-indigo-500" />
+    <div className="rounded-lg border border-border bg-card p-8 text-center">
+      <Loader2 className="mx-auto h-10 w-10 animate-spin text-muted-foreground" />
       <h2 className="mt-4 text-lg font-bold">Analysing your codebase</h2>
-      <p className="mt-1 text-sm text-slate-500">
+      <p className="mt-1 text-meta text-muted-foreground">
         {progress?.current_step || 'Preparing analysis pipeline…'}
       </p>
       <div className="mx-auto mt-6 max-w-md">
-        <div className="mb-1 flex justify-between text-xs font-semibold text-slate-500">
+        <div className="mb-1 flex justify-between text-meta-sm font-medium text-muted-foreground">
           <span>
             {progress
               ? `Step ${progress.step_number} of ${progress.total_steps}`
@@ -816,15 +805,15 @@ function ProcessingStep({
           </span>
           <span>{pct}%</span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
           <div
-            className="h-full rounded-full bg-indigo-500 transition-all"
+            className="h-full rounded-full bg-primary transition-all"
             style={{ width: `${pct}%` }}
           />
         </div>
       </div>
       {projectId && (
-        <p className="mt-4 text-xs text-slate-400">Project #{projectId}</p>
+        <p className="mt-4 text-meta-sm text-muted-foreground">Project #{projectId}</p>
       )}
     </div>
   );

@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Layout } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AuthLayout } from '@/components/layout/AuthLayout';
 import { authApi } from '@/api/auth';
 import { toast } from 'sonner';
 
@@ -14,7 +13,6 @@ export const ResetPasswordPage = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
   const token = searchParams.get('token');
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,64 +25,45 @@ export const ResetPasswordPage = () => {
       toast.error('Passwords do not match');
       return;
     }
-
     setIsLoading(true);
     try {
       await authApi.resetPassword(token, password);
-      toast.success('Password reset successfully!');
+      toast.success('Password reset successfully');
       navigate('/login');
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Password reset failed');
+    } catch {
+      toast.error('Password reset failed');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 transition-colors duration-300">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 border border-slate-200 dark:border-slate-800 transition-all"
-      >
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-indigo-600 dark:bg-indigo-500 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/20">
-            <Layout className="text-white w-6 h-6" />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Set New Password</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">Please enter your new password</p>
+    <AuthLayout subtitle="Choose a new password">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="password">New password</Label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">New Password</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword" className="text-slate-700 dark:text-slate-300">Confirm New Password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
-          </div>
-          <Button
-            type="submit"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 shadow-sm hover:shadow-indigo-500/10"
-            disabled={isLoading}
-          >
-            {isLoading ? 'Updating...' : 'Reset Password'}
-          </Button>
-        </form>
-      </motion.div>
-    </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirmPassword">Confirm password</Label>
+          <Input
+            id="confirmPassword"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+          />
+        </div>
+        <Button type="submit" className="h-10 w-full" disabled={isLoading}>
+          {isLoading ? 'Updating…' : 'Reset password'}
+        </Button>
+      </form>
+    </AuthLayout>
   );
 };

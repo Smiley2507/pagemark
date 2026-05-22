@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, Loader2 } from 'lucide-react';
@@ -11,7 +11,6 @@ import {
   useDisconnectGitLab,
 } from '@/hooks/useGit';
 import { getOAuthAuthorizeUrl } from '@/lib/git';
-import { cn } from '@/lib/utils';
 
 export const GitConnectPage: React.FC = () => {
   const navigate = useNavigate();
@@ -33,31 +32,23 @@ export const GitConnectPage: React.FC = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  const connectGithub = () => {
-    window.location.href = getOAuthAuthorizeUrl('github');
-  };
-
-  const connectGitlab = () => {
-    window.location.href = getOAuthAuthorizeUrl('gitlab');
-  };
-
   return (
-    <div className="min-h-screen bg-slate-50/50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-950/80">
-        <div className="mx-auto flex h-16 max-w-3xl items-center gap-4 px-4 sm:px-6">
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-sm">
+        <div className="mx-auto flex h-12 max-w-3xl items-center gap-4 px-6">
           <button
             type="button"
             onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+            className="flex items-center gap-2 text-meta text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
             Back
           </button>
-          <h1 className="text-lg font-bold">Connected Accounts</h1>
+          <h1 className="text-section font-semibold">Connected accounts</h1>
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6">
+      <main className="mx-auto max-w-3xl space-y-6 px-6 py-8">
         <ProviderSection
           title="GitHub"
           provider="github"
@@ -65,7 +56,9 @@ export const GitConnectPage: React.FC = () => {
           connected={githubStatus?.connected}
           username={githubStatus?.username}
           avatar={githubStatus?.avatar}
-          onConnect={connectGithub}
+          onConnect={() => {
+            window.location.href = getOAuthAuthorizeUrl('github');
+          }}
           onDisconnect={() => disconnectGithub.mutate()}
           disconnecting={disconnectGithub.isPending}
         />
@@ -77,24 +70,23 @@ export const GitConnectPage: React.FC = () => {
           connected={gitlabStatus?.connected}
           username={gitlabStatus?.username}
           avatar={gitlabStatus?.avatar}
-          onConnect={connectGitlab}
+          onConnect={() => {
+            window.location.href = getOAuthAuthorizeUrl('gitlab');
+          }}
           onDisconnect={() => disconnectGitlab.mutate()}
           disconnecting={disconnectGitlab.isPending}
         />
 
-        <section className="rounded-2xl border border-slate-200/80 bg-white/60 p-6 dark:border-slate-800/80 dark:bg-slate-900/60">
+        <section className="rounded-lg border border-border bg-card p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <GitProviderIcon provider="bitbucket" className="text-slate-400" />
-              <h2 className="text-lg font-bold">Bitbucket</h2>
+              <GitProviderIcon provider="bitbucket" className="text-muted-foreground" />
+              <h2 className="text-section font-semibold">Bitbucket</h2>
             </div>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            <span className="rounded-full bg-muted px-3 py-1 text-meta-sm font-medium text-muted-foreground">
               Coming soon
             </span>
           </div>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            Bitbucket integration is not available yet.
-          </p>
         </section>
       </main>
     </div>
@@ -123,14 +115,14 @@ function ProviderSection({
   disconnecting: boolean;
 }) {
   return (
-    <section className="rounded-2xl border border-slate-200/80 bg-white/60 p-6 dark:border-slate-800/80 dark:bg-slate-900/60">
+    <section className="rounded-lg border border-border bg-card p-6">
       <div className="flex items-center gap-3">
         <GitProviderIcon provider={provider} />
-        <h2 className="text-lg font-bold">{title}</h2>
+        <h2 className="text-section font-semibold">{title}</h2>
       </div>
 
       {loading ? (
-        <div className="mt-6 flex items-center gap-2 text-sm text-slate-500">
+        <div className="mt-6 flex items-center gap-2 text-meta text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Checking connection…
         </div>
@@ -140,31 +132,20 @@ function ProviderSection({
             <img
               src={avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${username}`}
               alt=""
-              className="h-12 w-12 rounded-xl object-cover ring-2 ring-indigo-500/10"
+              className="h-12 w-12 rounded-lg object-cover"
             />
             <div>
-              <p className="font-semibold text-slate-900 dark:text-white">{username}</p>
-              <p className="text-sm text-emerald-600 dark:text-emerald-400">Connected account</p>
+              <p className="font-semibold">{username}</p>
+              <p className="text-meta text-emerald-600 dark:text-emerald-400">Connected</p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={onDisconnect}
-            disabled={disconnecting}
-            className="rounded-xl border-slate-200 dark:border-slate-700"
-          >
+          <Button variant="outline" onClick={onDisconnect} disabled={disconnecting}>
             {disconnecting ? 'Disconnecting…' : 'Disconnect'}
           </Button>
         </div>
       ) : (
-        <Button
-          onClick={onConnect}
-          className={cn(
-            'mt-6 flex items-center gap-2 rounded-xl bg-slate-900 text-white hover:bg-indigo-600',
-            'dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-indigo-500 dark:hover:text-white'
-          )}
-        >
-          <GitProviderIcon provider={provider} className="text-current" />
+        <Button className="mt-6" onClick={onConnect}>
+          <GitProviderIcon provider={provider} className="mr-2" />
           Connect {title}
         </Button>
       )}
