@@ -170,24 +170,22 @@ export const EditorPage: React.FC = () => {
       <div
         className="grid min-h-0 flex-1"
         style={{
-          gridTemplateColumns: `${leftPanelOpen ? "240px" : "0px"} 1fr ${rightPanelOpen ? "320px" : "0px"}`,
+          // 220 px matches LeftPanel's internal motion.div width.
+          // The grid column transitions with the panel to prevent layout gaps.
+          gridTemplateColumns: `${leftPanelOpen ? "220px" : "0px"} 1fr ${rightPanelOpen ? "320px" : "0px"}`,
+          transition: "grid-template-columns 0.2s ease-in-out",
         }}
       >
-        <motion.div
-          className="overflow-hidden"
-          initial={false}
-          animate={{ opacity: leftPanelOpen ? 1 : 0 }}
-          transition={{ duration: 0.2, ease: "easeInOut" }}
-        >
-          {leftPanelOpen && (
-            <LeftPanel
-              sections={sections}
-              activeSectionId={activeSectionId}
-              onSectionClick={setActiveSection}
-              onCollapse={toggleLeftPanel}
-            />
-          )}
-        </motion.div>
+        {/* LeftPanel is always mounted so the fixed toggle button remains visible
+            even when the panel is collapsed. */}
+        <LeftPanel
+          sections={sections}
+          activeSectionId={activeSectionId}
+          onHeadingClick={(sectionId) => setActiveSection(sectionId)}
+          completionPercent={completionPct}
+          isOpen={leftPanelOpen}
+          onToggle={toggleLeftPanel}
+        />
 
         <div className="flex min-w-0 flex-col border-x border-border">
           {/* Mode toolbar */}
