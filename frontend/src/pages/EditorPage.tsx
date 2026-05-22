@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { formatDistanceToNow } from 'date-fns';
-import { motion } from 'framer-motion';
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { formatDistanceToNow } from "date-fns";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Download,
@@ -9,24 +9,24 @@ import {
   PanelRight,
   Share2,
   Sparkles,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { LeftPanel } from '@/components/editor/LeftPanel';
-import { RightPanel } from '@/components/editor/RightPanel';
-import { SectionEditor } from '@/components/editor/SectionEditor';
-import { DiffViewer } from '@/components/editor/DiffViewer';
-import { useProject } from '@/hooks/useProject';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { LeftPanel } from "@/components/editor/LeftPanel";
+import { RightPanel } from "@/components/editor/RightPanel";
+import { SectionEditor } from "@/components/editor/SectionEditor";
+import { DiffViewer } from "@/components/editor/DiffViewer";
+import { useProject } from "@/hooks/useProject";
 import {
   useAutosave,
   useDocument,
   useSection,
   useUpdateSection,
   useUpdateSectionStatus,
-} from '@/hooks/useSections';
-import { useEditorStore } from '@/store/editorStore';
-import { flattenSections } from '@/lib/sections';
-import type { Section } from '@/types';
-import { cn } from '@/lib/utils';
+} from "@/hooks/useSections";
+import { useEditorStore } from "@/store/editorStore";
+import { flattenSections } from "@/lib/sections";
+import type { Section } from "@/types";
+import { cn } from "@/lib/utils";
 
 export const EditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -48,10 +48,13 @@ export const EditorPage: React.FC = () => {
   const { data: documentTree, isLoading: docLoading } = useDocument(projectId);
   const { data: activeSection } = useSection(activeSectionId);
 
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState("");
   const [refineDraft, setRefineDraft] = useState<string | null>(null);
 
-  const { isSaving, lastSaved, markPersisted } = useAutosave(activeSectionId, content);
+  const { isSaving, lastSaved, markPersisted } = useAutosave(
+    activeSectionId,
+    content,
+  );
   const updateSection = useUpdateSection(projectId);
   const updateStatus = useUpdateSectionStatus(projectId);
 
@@ -70,7 +73,8 @@ export const EditorPage: React.FC = () => {
 
   useEffect(() => {
     if (!flatSections.length) return;
-    if (activeSectionId && flatSections.some((s) => s.id === activeSectionId)) return;
+    if (activeSectionId && flatSections.some((s) => s.id === activeSectionId))
+      return;
     setActiveSection(flatSections[0].id);
   }, [flatSections, activeSectionId, setActiveSection]);
 
@@ -88,18 +92,18 @@ export const EditorPage: React.FC = () => {
   const completionPct = project?.completion_pct ?? 0;
 
   const autosaveLabel = useMemo(() => {
-    if (isSaving) return 'Saving…';
+    if (isSaving) return "Saving…";
     if (lastSaved) {
       return `Saved ${formatDistanceToNow(lastSaved, { addSuffix: true })}`;
     }
-    return '';
+    return "";
   }, [isSaving, lastSaved]);
 
-  const handleStatusChange = (status: Section['status']) => {
+  const handleStatusChange = (status: Section["status"]) => {
     if (!activeSectionId) return;
     updateStatus.mutate(
       { id: activeSectionId, status },
-      { onSuccess: () => refetchProject() }
+      { onSuccess: () => refetchProject() },
     );
   };
 
@@ -107,9 +111,12 @@ export const EditorPage: React.FC = () => {
     if (refineDraft === null) return;
     setContent(refineDraft);
     setRefineDraft(null);
-    setEditorMode('edit');
+    setEditorMode("edit");
     if (activeSectionId) {
-      updateSection.mutate({ id: activeSectionId, data: { content_md: refineDraft } });
+      updateSection.mutate({
+        id: activeSectionId,
+        data: { content_md: refineDraft },
+      });
     }
   };
 
@@ -128,14 +135,14 @@ export const EditorPage: React.FC = () => {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate("/dashboard")}
           aria-label="Back to dashboard"
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-section font-semibold">
-            {project?.name ?? 'Editor'}
+            {project?.name ?? "Editor"}
           </h1>
           <div className="mt-0.5 flex items-center gap-2">
             <div className="h-1 w-32 overflow-hidden rounded-full bg-muted">
@@ -144,7 +151,9 @@ export const EditorPage: React.FC = () => {
                 style={{ width: `${completionPct}%` }}
               />
             </div>
-            <span className="text-meta-sm text-muted-foreground">{completionPct}% complete</span>
+            <span className="text-meta-sm text-muted-foreground">
+              {completionPct}% complete
+            </span>
           </div>
         </div>
         <Button variant="outline" size="sm" className="hidden sm:flex">
@@ -161,14 +170,14 @@ export const EditorPage: React.FC = () => {
       <div
         className="grid min-h-0 flex-1"
         style={{
-          gridTemplateColumns: `${leftPanelOpen ? '240px' : '0px'} 1fr ${rightPanelOpen ? '320px' : '0px'}`,
+          gridTemplateColumns: `${leftPanelOpen ? "240px" : "0px"} 1fr ${rightPanelOpen ? "320px" : "0px"}`,
         }}
       >
         <motion.div
           className="overflow-hidden"
           initial={false}
           animate={{ opacity: leftPanelOpen ? 1 : 0 }}
-          transition={{ duration: 0.2, ease: 'easeInOut' }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
         >
           {leftPanelOpen && (
             <LeftPanel
@@ -184,19 +193,19 @@ export const EditorPage: React.FC = () => {
           {/* Mode toolbar */}
           <div className="sticky top-0 z-10 flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-background/95 px-4 py-2 backdrop-blur-sm">
             <div className="flex rounded-lg bg-muted p-1">
-              {(['view', 'edit', 'refine'] as const).map((mode) => (
+              {(["view", "edit", "refine"] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => setEditorMode(mode)}
                   className={cn(
-                    'rounded-md px-3 py-1 text-meta-sm font-medium capitalize',
+                    "rounded-md px-3 py-1 text-meta-sm font-medium capitalize",
                     editorMode === mode
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground'
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground",
                   )}
                 >
-                  {mode === 'refine' ? (
+                  {mode === "refine" ? (
                     <span className="flex items-center gap-1">
                       <Sparkles className="h-3.5 w-3.5" />
                       AI Refine
@@ -212,7 +221,7 @@ export const EditorPage: React.FC = () => {
               <select
                 value={displaySection.status}
                 onChange={(e) =>
-                  handleStatusChange(e.target.value as Section['status'])
+                  handleStatusChange(e.target.value as Section["status"])
                 }
                 className="h-8 rounded-md border border-input bg-background px-2 text-meta-sm"
                 disabled={updateStatus.isPending}
@@ -223,7 +232,9 @@ export const EditorPage: React.FC = () => {
               </select>
             )}
 
-            <span className="text-meta-sm text-muted-foreground">{autosaveLabel}</span>
+            <span className="text-meta-sm text-muted-foreground">
+              {autosaveLabel}
+            </span>
 
             <div className="ml-auto flex gap-1">
               <Button
@@ -251,7 +262,7 @@ export const EditorPage: React.FC = () => {
               <p className="p-8 text-center text-meta text-muted-foreground">
                 Select a section from the contents panel.
               </p>
-            ) : editorMode === 'refine' && refineDraft !== null ? (
+            ) : editorMode === "refine" && refineDraft !== null ? (
               <div className="h-full min-h-[400px]">
                 <DiffViewer
                   original={content}
@@ -275,7 +286,7 @@ export const EditorPage: React.FC = () => {
           className="overflow-hidden"
           initial={false}
           animate={{ opacity: rightPanelOpen ? 1 : 0 }}
-          transition={{ duration: 0.2, ease: 'easeInOut' }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
         >
           {rightPanelOpen && (
             <RightPanel
