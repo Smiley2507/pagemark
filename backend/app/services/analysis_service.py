@@ -19,13 +19,16 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.config import settings
-from app.database import async_session
+from app.database import async_session, SessionLocal
+from app.models.ai_credential import UserAiCredential
+from app.services import crypto_service
 from app.models.analysis import Analysis, AnalysisStatus
 from app.models.document import Document, Section, SectionStatus
 from app.models.project import Project
 from app.models.template import Template
 from app.prompts.outline import OUTLINE_SYSTEM, build_outline_user_message
+from app.services import ai_service
+from app.services.ai_credential_service import get_active_credential
 
 DEFAULT_SECTION_HEADINGS = [
     "Project Overview",
@@ -446,6 +449,8 @@ async def update_analysis_step(
     artifacts: AnalysisArtifacts | None = None,
     outline_json: list | None = None,
     outline_applied: bool | None = None,
+    outline_skipped: bool | None = None,
+    outline_skip_reason: str | None = None,
 ) -> None:
     async with async_session() as db:
         result = await db.execute(select(Analysis).where(Analysis.id == analysis_id))
@@ -479,8 +484,216 @@ async def update_analysis_step(
             analysis.outline_json = outline_json
         if outline_applied is not None:
             analysis.outline_applied = outline_applied
+        if outline_skipped is not None:
+            analysis.outline_skipped = outline_skipped
+        if outline_skip_reason is not None:
+            analysis.outline_skip_reason = outline_skip_reason
 
         await db.commit()
+
+
+def update_analysis_step_sync(
+    analysis_id: int,
+    step_num: int,
+    step_name: str,
+    *,
+    status: AnalysisStatus | None = None,
+    step_detail: str | None = None,
+    error: str | None = None,
+    artifacts: AnalysisArtifacts | None = None,
+    outline_json: list | None = None,
+    outline_applied: bool | None = None,
+    outline_skipped: bool | None = None,
+    outline_skip_reason: str | None = None,
+) -> None:
+    """Synchronous version of update_analysis_step for use in Celery workers."""
+    with SessionLocal() as db:
+        analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
+        if not analysis:
+            return
+
+        analysis.step_number = step_num
+        analysis.current_step = step_name
+        analysis.total_steps = TOTAL_STEPS
+        if step_detail is not None:
+            analysis.step_detail = step_detail
+
+        if status:
+            analysis.status = status
+            if status == AnalysisStatus.RUNNING and not analysis.started_at:
+                analysis.started_at = datetime.utcnow()
+            elif status in (AnalysisStatus.COMPLETED, AnalysisStatus.FAILED):
+                analysis.completed_at = datetime.utcnow()
+
+        if error:
+            analysis.error_message = error
+
+        if artifacts:
+            analysis.file_tree_json = artifacts.file_tree_json
+            analysis.languages_json = artifacts.languages_json
+            analysis.endpoints_json = artifacts.endpoints_json
+            analysis.complexity_json = artifacts.complexity_json
+
+        if outline_json is not None:
+            analysis.outline_json = outline_json
+        if outline_applied is not None:
+            analysis.outline_applied = outline_applied
+        if outline_skipped is not None:
+            analysis.outline_skipped = outline_skipped
+        if outline_skip_reason is not None:
+            analysis.outline_skip_reason = outline_skip_reason
+
+        db.commit()
+
+
+def get_active_credential_sync(user_id: int):
+    """Synchronous version of get_active_credential for Celery workers."""
+    with SessionLocal() as db:
+        credential = db.query(UserAiCredential).filter(
+            UserAiCredential.user_id == user_id,
+            UserAiCredential.is_active == True,  # noqa: E712
+        ).first()
+        if not credential:
+            return None
+
+        from app.services.ai_credential_service import ActiveCredential
+        api_key = crypto_service.decrypt_token(credential.api_key_encrypted)
+        return ActiveCredential(
+            id=credential.id,
+            provider=credential.provider,
+            model_id=credential.model_id,
+            api_key=api_key,
+        )
+
+
+def get_template_sections_for_project_sync(project_id: int) -> list[dict]:
+    """Synchronous version of get_template_sections_for_project for Celery workers."""
+    with SessionLocal() as db:
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            return [{"heading": h} for h in DEFAULT_SECTION_HEADINGS]
+
+        if project.template_id:
+            tmpl = db.query(Template).filter(Template.id == project.template_id).first()
+            if tmpl and tmpl.sections_json:
+                out = []
+                for i, s in enumerate(tmpl.sections_json):
+                    if isinstance(s, dict):
+                        out.append(
+                            {
+                                "heading": s.get("heading", f"Section {i + 1}"),
+                                "description": s.get("description", ""),
+                                "order_index": i,
+                            }
+                        )
+                    else:
+                        out.append({"heading": str(s), "description": "", "order_index": i})
+                return out
+
+        return [
+            {"heading": h, "description": "", "order_index": i}
+            for i, h in enumerate(DEFAULT_SECTION_HEADINGS)
+        ]
+
+
+def sections_are_untouched_sync(project_id: int) -> bool:
+    """Synchronous version of sections_are_untouched for Celery workers."""
+    with SessionLocal() as db:
+        doc = db.query(Document).filter(Document.project_id == project_id).first()
+        if not doc:
+            return True
+        sections = db.query(Section).filter(Section.document_id == doc.id).all()
+        if not sections:
+            return True
+        for s in sections:
+            if s.status != SectionStatus.PENDING:
+                return False
+            if (s.content_md or "").strip():
+                return False
+        return True
+
+
+def apply_outline_to_document_sync(project_id: int, outline: list[dict]) -> None:
+    """Synchronous version of apply_outline_to_document for Celery workers."""
+    with SessionLocal() as db:
+        doc = db.query(Document).filter(Document.project_id == project_id).first()
+        if not doc:
+            doc = Document(project_id=project_id, title="Documentation")
+            db.add(doc)
+            db.flush()
+
+        db.query(Section).filter(Section.document_id == doc.id).delete()
+        for item in outline:
+            db.add(
+                Section(
+                    document_id=doc.id,
+                    order_index=int(item.get("order_index", 0)),
+                    heading=str(item["heading"]),
+                    content_md="",
+                    status=SectionStatus.PENDING,
+                )
+            )
+        db.commit()
+
+
+def run_outline_step_sync(
+    project_id: int,
+    analysis_id: int,
+    artifacts: AnalysisArtifacts,
+) -> list[dict]:
+    """Synchronous version of run_outline_step for Celery workers."""
+    with SessionLocal() as db:
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            raise ValueError(f"Project {project_id} not found")
+
+        owner_id = project.owner_id
+
+    credential = get_active_credential_sync(owner_id)
+    template_sections = get_template_sections_for_project_sync(project_id)
+
+    if not credential:
+        update_analysis_step_sync(
+            analysis_id,
+            8,
+            STEP_NAMES[8],
+            status=AnalysisStatus.COMPLETED,
+            step_detail="Add an API key in Settings to generate documentation outline",
+            outline_skipped=True,
+            outline_skip_reason="no_ai_credential",
+            outline_applied=False,
+        )
+        return []
+
+    outline = generate_outline_with_ai(
+        credential.provider,
+        credential.api_key,
+        credential.model_id,
+        template_sections,
+        artifacts,
+    )
+    update_analysis_step_sync(
+        analysis_id,
+        8,
+        STEP_NAMES[8],
+        outline_json=outline,
+    )
+
+    auto_apply = False
+    if sections_are_untouched_sync(project_id):
+        apply_outline_to_document_sync(project_id, outline)
+        auto_apply = True
+
+    update_analysis_step_sync(
+        analysis_id,
+        8,
+        STEP_NAMES[8],
+        status=AnalysisStatus.COMPLETED,
+        outline_applied=auto_apply,
+        outline_skipped=False,
+        outline_skip_reason=None,
+    )
+    return outline
 
 
 async def get_template_sections_for_project(project_id: int, db: AsyncSession) -> list[dict]:
@@ -512,12 +725,13 @@ async def get_template_sections_for_project(project_id: int, db: AsyncSession) -
     ]
 
 
-def generate_outline_with_claude(
+def generate_outline_with_ai(
+    credential_provider: str,
+    api_key: str,
+    model_id: str,
     template_sections: list[dict],
     artifacts: AnalysisArtifacts,
 ) -> list[dict]:
-    import anthropic
-
     langs = artifacts.languages_json.get("breakdown", [])
     languages_summary = ", ".join(
         f"{x['language']} ({x['percent']}%)" for x in langs[:8]
@@ -532,7 +746,6 @@ def generate_outline_with_claude(
         else ""
     )
 
-    client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
     user_msg = build_outline_user_message(
         template_sections,
         languages_summary,
@@ -541,13 +754,13 @@ def generate_outline_with_claude(
         file_count,
         complexity_notes,
     )
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=4096,
-        system=OUTLINE_SYSTEM,
-        messages=[{"role": "user", "content": user_msg}],
+    text = ai_service.complete_text(
+        OUTLINE_SYSTEM,
+        user_msg,
+        credential_provider,
+        api_key,
+        model_id,
     )
-    text = response.content[0].text.strip()
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\n?", "", text)
         text = re.sub(r"\n?```$", "", text)
@@ -628,8 +841,33 @@ async def run_outline_step(
     artifacts: AnalysisArtifacts,
 ) -> list[dict]:
     async with async_session() as db:
+        project = await db.get(Project, project_id)
+        if not project:
+            raise ValueError(f"Project {project_id} not found")
+
+        credential = await get_active_credential(db, project.owner_id)
         template_sections = await get_template_sections_for_project(project_id, db)
-    outline = generate_outline_with_claude(template_sections, artifacts)
+
+    if not credential:
+        await update_analysis_step(
+            analysis_id,
+            8,
+            STEP_NAMES[8],
+            status=AnalysisStatus.COMPLETED,
+            step_detail="Add an API key in Settings to generate documentation outline",
+            outline_skipped=True,
+            outline_skip_reason="no_ai_credential",
+            outline_applied=False,
+        )
+        return []
+
+    outline = generate_outline_with_ai(
+        credential.provider,
+        credential.api_key,
+        credential.model_id,
+        template_sections,
+        artifacts,
+    )
     await update_analysis_step(
         analysis_id,
         8,
@@ -649,6 +887,8 @@ async def run_outline_step(
         STEP_NAMES[8],
         status=AnalysisStatus.COMPLETED,
         outline_applied=auto_apply,
+        outline_skipped=False,
+        outline_skip_reason=None,
     )
     return outline
 
@@ -657,6 +897,7 @@ def build_steps_payload(
     step_number: int,
     status: AnalysisStatus,
     failed_step: int | None = None,
+    outline_skipped: bool = False,
 ) -> list[dict]:
     steps = []
     for num in range(1, TOTAL_STEPS + 1):
@@ -671,7 +912,10 @@ def build_steps_payload(
             else:
                 st = "pending"
         elif status == AnalysisStatus.COMPLETED:
-            st = "done"
+            if outline_skipped and num == 8:
+                st = "skipped"
+            else:
+                st = "done"
         elif num < step_number:
             st = "done"
         elif num == step_number:

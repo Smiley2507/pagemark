@@ -62,7 +62,7 @@ This starts:
 | Redis      | `pagemark_redis` | `6379`    | No auth                            |
 | Celery     | `pagemark_worker`| —         | Runs codebase analysis tasks       |
 
-Ensure `backend/.env` exists (copy from `.env.example`). The worker container uses it for `ANTHROPIC_API_KEY` and other secrets.
+Ensure `backend/.env` exists (copy from `.env.example`). The worker uses it for `ENCRYPTION_KEY`, database, and Redis. **AI features use BYOK**: each user adds their own Anthropic or Google AI Studio key in **Dashboard → Settings → AI providers**.
 
 Wait for the containers to be healthy:
 
@@ -197,7 +197,7 @@ npm run preview  # Preview production build locally
 | `REDIS_URL`                 | Redis connection string                | `redis://localhost:6379/0`       |
 | `SECRET_KEY`                | JWT signing key                        | *(must be changed)*              |
 | `FRONTEND_URL`              | Frontend URL (used for CORS & emails)  | `http://localhost:5173`          |
-| `ANTHROPIC_API_KEY`         | Claude API key for AI features         | *(required for AI features)*     |
+| `ENCRYPTION_KEY`            | Fernet key for OAuth + AI API keys     | *(required for Git + BYOK)*      |
 | `MAIL_USERNAME`             | SMTP username                          | *(required for email features)*  |
 | `MAIL_PASSWORD`             | SMTP password                          | *(required for email features)*  |
 | `MAIL_FROM`                 | Sender email address                   | `noreply@pagemark.dev`           |

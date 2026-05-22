@@ -10,13 +10,13 @@ export interface Project {
   id: number;
   name: string;
   description?: string;
-  status: 'pending' | 'draft' | 'finalized';
+  status: "pending" | "draft" | "finalized";
   completion_pct: number;
   language?: string;
-  source_type: 'zip' | 'git' | 'scratch';
+  source_type: "zip" | "git" | "scratch";
   git_repo_url?: string;
   git_branch?: string;
-  git_provider?: 'github' | 'gitlab' | 'bitbucket';
+  git_provider?: "github" | "gitlab" | "bitbucket";
   starred: boolean;
   created_at: string;
   updated_at: string;
@@ -45,7 +45,12 @@ export interface JobResponse {
   analysis_id: number;
 }
 
-export type AnalysisStepState = 'pending' | 'running' | 'done' | 'failed';
+export type AnalysisStepState =
+  | "pending"
+  | "running"
+  | "done"
+  | "failed"
+  | "skipped";
 
 export interface AnalysisStepItem {
   number: number;
@@ -56,7 +61,7 @@ export interface AnalysisStepItem {
 export interface AnalysisStatus {
   id: number;
   project_id: number;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: "pending" | "running" | "completed" | "failed";
   current_step?: string;
   step_number: number;
   step_detail?: string;
@@ -68,6 +73,34 @@ export interface AnalysisStatus {
   steps?: AnalysisStepItem[];
   elapsed_seconds?: number;
   outline_applied?: boolean;
+  outline_skipped?: boolean;
+  outline_skip_reason?: string;
+}
+
+export interface AiModelOption {
+  id: string;
+  label: string;
+}
+
+export interface AiProviderCatalogItem {
+  id: string;
+  label: string;
+  models: AiModelOption[];
+}
+
+export interface AiCredential {
+  id: number;
+  provider: string;
+  model_id: string;
+  key_hint: string;
+  is_active: boolean;
+  validated_at?: string;
+  created_at?: string;
+}
+
+export interface AiCredentialListResponse {
+  credentials: AiCredential[];
+  has_active: boolean;
 }
 
 export interface AnalysisResults extends AnalysisStatus {
@@ -80,7 +113,7 @@ export interface AnalysisResults extends AnalysisStatus {
 
 export interface FileTreeNode {
   name: string;
-  type: 'dir' | 'file';
+  type: "dir" | "file";
   children?: FileTreeNode[];
 }
 
@@ -89,7 +122,7 @@ export interface LanguageBreakdown {
   files: number;
   lines: number;
   percent: number;
-  depth: 'primary' | 'shallow';
+  depth: "primary" | "shallow";
 }
 
 export interface LanguagesJson {
@@ -117,7 +150,11 @@ export interface ComplexityJson {
   total_lines: number;
   largest_files: { path: string; lines: number; language?: string }[];
   by_language: Record<string, { files: number; lines: number }>;
-  parse_stats?: { parsed_files: number; parse_errors: number; by_language: Record<string, number> };
+  parse_stats?: {
+    parsed_files: number;
+    parse_errors: number;
+    by_language: Record<string, number>;
+  };
 }
 
 export interface OutlineSection {
@@ -159,7 +196,9 @@ export interface Section {
   order_index: number;
   heading: string;
   content_md: string;
-  status: 'pending' | 'draft' | 'finalized';
+  status: "pending" | "draft" | "finalized";
+  created_at?: string;
+  updated_at?: string;
   children?: Section[];
 }
 
@@ -171,7 +210,7 @@ export interface SectionTreeResponse {
 export interface Version {
   id: number;
   section_id: number;
-  author_type: 'user' | 'ai';
+  author_type: "user" | "ai";
   summary?: string;
   added: number;
   removed: number;
@@ -192,12 +231,12 @@ export interface AutosaveResponse {
 }
 
 export interface SectionStatusUpdateResponse {
-  status: Section['status'];
+  status: Section["status"];
   completion_pct: number;
 }
 
 export interface DiffLine {
-  type: 'added' | 'removed' | 'unchanged';
+  type: "added" | "removed" | "unchanged";
   content: string;
   line_number: number;
 }
@@ -205,7 +244,7 @@ export interface DiffLine {
 export interface Analysis {
   id: number;
   project_id: number;
-  status: 'pending' | 'running' | 'complete' | 'failed';
+  status: "pending" | "running" | "complete" | "failed";
   file_tree: FileNode[];
   language_stats: Record<string, number>;
   endpoints: Endpoint[];
@@ -222,7 +261,7 @@ export interface Endpoint {
 export interface FileNode {
   name: string;
   path: string;
-  type: 'file' | 'dir';
+  type: "file" | "dir";
   language?: string;
   loc?: number;
   children?: FileNode[];
@@ -240,7 +279,7 @@ export interface QualityReport {
 
 export interface ChatMessage {
   id: number;
-  role: 'user' | 'ai';
+  role: "user" | "ai";
   content: string;
   created_at: string;
 }

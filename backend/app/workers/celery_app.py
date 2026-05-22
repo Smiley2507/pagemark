@@ -2,6 +2,9 @@ import os
 from celery import Celery
 from app.config import settings
 
+# Register all SQLAlchemy mappers before tasks touch the DB (Celery does not import FastAPI routers).
+import app.models  # noqa: F401
+
 # Initialize Celery
 # If REDIS_URL isn't fully configured or isn't available, fallback to memory or 
 # another backend during dev, but typically Redis is required for Celery.

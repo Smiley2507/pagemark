@@ -48,6 +48,7 @@ services:
     volumes:
       - ./backend/uploads:/app/uploads
       - pagemark_repos:/tmp/pagemark_repos
+      - ./.cursor:/app/.cursor-debug
     depends_on:
       db:
         condition: service_healthy

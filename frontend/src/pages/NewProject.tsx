@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { formatDistanceToNow } from 'date-fns';
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { formatDistanceToNow } from "date-fns";
 import {
   ArrowLeft,
   ArrowRight,
@@ -12,17 +12,18 @@ import {
   Search,
   Star,
   X,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { GitProviderIcon } from '@/components/git/GitProviderIcon';
-import { projectsApi } from '@/api/projects';
-import { analysisApi } from '@/api/analysis';
-import { pollAnalysisUntilDone } from '@/hooks/useAnalysis';
-import { AnalysisProgress } from '@/components/analysis/AnalysisProgress';
+} from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GitProviderIcon } from "@/components/git/GitProviderIcon";
+import { projectsApi } from "@/api/projects";
+import { analysisApi } from "@/api/analysis";
+import { pollAnalysisUntilDone } from "@/hooks/useAnalysis";
+import { AnalysisProgress } from "@/components/analysis/AnalysisProgress";
+import { AiOutlineSkipBanner } from "@/components/analysis/AiOutlineSkipBanner";
 import {
   useGitHubStatus,
   useGitLabStatus,
@@ -30,37 +31,44 @@ import {
   useRepoBranches,
   useDisconnectGitHub,
   useDisconnectGitLab,
-} from '@/hooks/useGit';
-import { validateGitUrl, getOAuthAuthorizeUrl, parseOwnerRepo } from '@/lib/git';
-import type { GitRepo, AnalysisStatus } from '@/types';
-import { cn } from '@/lib/utils';
+} from "@/hooks/useGit";
+import {
+  validateGitUrl,
+  getOAuthAuthorizeUrl,
+  parseOwnerRepo,
+} from "@/lib/git";
+import type { GitRepo, AnalysisStatus } from "@/types";
+import { cn } from "@/lib/utils";
 
-type SourceChoice = 'zip' | 'git' | 'scratch';
-type GitTab = 'url' | 'account';
+type SourceChoice = "zip" | "git" | "scratch";
+type GitTab = "url" | "account";
 
-const STEPS = ['Details', 'Source', 'Configure', 'Analyse'];
+const STEPS = ["Details", "Source", "Configure", "Analyse"];
 
 export const NewProject: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const templateId = searchParams.get('template_id');
+  const templateId = searchParams.get("template_id");
 
   const [step, setStep] = useState(1);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [sourceChoice, setSourceChoice] = useState<SourceChoice | null>(null);
 
-  const [gitTab, setGitTab] = useState<GitTab>('url');
-  const [repoUrl, setRepoUrl] = useState('');
-  const [urlBranch, setUrlBranch] = useState('main');
-  const [oauthProvider, setOauthProvider] = useState<'github' | 'gitlab'>('github');
-  const [repoSearch, setRepoSearch] = useState('');
+  const [gitTab, setGitTab] = useState<GitTab>("url");
+  const [repoUrl, setRepoUrl] = useState("");
+  const [urlBranch, setUrlBranch] = useState("main");
+  const [oauthProvider, setOauthProvider] = useState<"github" | "gitlab">(
+    "github",
+  );
+  const [repoSearch, setRepoSearch] = useState("");
   const [selectedRepo, setSelectedRepo] = useState<GitRepo | null>(null);
-  const [oauthBranch, setOauthBranch] = useState('main');
+  const [oauthBranch, setOauthBranch] = useState("main");
   const [zipFile, setZipFile] = useState<File | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
-  const [analysisProgress, setAnalysisProgress] = useState<AnalysisStatus | null>(null);
+  const [analysisProgress, setAnalysisProgress] =
+    useState<AnalysisStatus | null>(null);
   const [createdProjectId, setCreatedProjectId] = useState<number | null>(null);
 
   const { data: githubStatus } = useGitHubStatus();
@@ -69,24 +77,26 @@ export const NewProject: React.FC = () => {
   const disconnectGitlab = useDisconnectGitLab();
 
   const oauthConnected =
-    oauthProvider === 'github' ? githubStatus?.connected : gitlabStatus?.connected;
-  const oauthProfile =
-    oauthProvider === 'github' ? githubStatus : gitlabStatus;
+    oauthProvider === "github"
+      ? githubStatus?.connected
+      : gitlabStatus?.connected;
+  const oauthProfile = oauthProvider === "github" ? githubStatus : gitlabStatus;
 
   useEffect(() => {
-    if (searchParams.get('connected') === 'true') {
-      const provider = (searchParams.get('provider') as 'github' | 'gitlab') || 'github';
+    if (searchParams.get("connected") === "true") {
+      const provider =
+        (searchParams.get("provider") as "github" | "gitlab") || "github";
       setOauthProvider(provider);
-      setGitTab('account');
-      toast.success(`${provider === 'gitlab' ? 'GitLab' : 'GitHub'} connected`);
+      setGitTab("account");
+      toast.success(`${provider === "gitlab" ? "GitLab" : "GitHub"} connected`);
     }
   }, [searchParams]);
 
   useEffect(() => {
     if (githubStatus?.connected && !gitlabStatus?.connected) {
-      setOauthProvider('github');
+      setOauthProvider("github");
     } else if (gitlabStatus?.connected && !githubStatus?.connected) {
-      setOauthProvider('gitlab');
+      setOauthProvider("gitlab");
     }
   }, [githubStatus?.connected, gitlabStatus?.connected]);
 
@@ -94,15 +104,17 @@ export const NewProject: React.FC = () => {
 
   const { data: repos, isLoading: reposLoading } = useGitRepos(
     oauthProvider,
-    gitTab === 'account' && !!oauthConnected
+    gitTab === "account" && !!oauthConnected,
   );
 
-  const selectedParts = selectedRepo ? parseOwnerRepo(selectedRepo.full_name) : null;
+  const selectedParts = selectedRepo
+    ? parseOwnerRepo(selectedRepo.full_name)
+    : null;
   const { data: branches, isLoading: branchesLoading } = useRepoBranches(
     selectedParts?.owner,
     selectedParts?.repo,
     oauthProvider,
-    !!selectedRepo
+    !!selectedRepo,
   );
 
   useEffect(() => {
@@ -119,7 +131,7 @@ export const NewProject: React.FC = () => {
       (r) =>
         r.name.toLowerCase().includes(q) ||
         r.full_name.toLowerCase().includes(q) ||
-        (r.description?.toLowerCase().includes(q) ?? false)
+        (r.description?.toLowerCase().includes(q) ?? false),
     );
   }, [repos, repoSearch]);
 
@@ -139,21 +151,25 @@ export const NewProject: React.FC = () => {
       });
       setCreatedProjectId(project.id);
 
-      if (sourceChoice === 'scratch') {
+      if (sourceChoice === "scratch") {
         navigate(`/editor/${project.id}`);
         return;
       }
 
       setStep(4);
 
-      if (sourceChoice === 'zip' && zipFile) {
+      if (sourceChoice === "zip" && zipFile) {
         await analysisApi.uploadZip(project.id, zipFile);
-      } else if (sourceChoice === 'git' && gitTab === 'url') {
+      } else if (sourceChoice === "git" && gitTab === "url") {
         await analysisApi.connectGitUrl(project.id, {
           repo_url: repoUrl.trim(),
-          branch: urlBranch.trim() || 'main',
+          branch: urlBranch.trim() || "main",
         });
-      } else if (sourceChoice === 'git' && gitTab === 'account' && selectedRepo) {
+      } else if (
+        sourceChoice === "git" &&
+        gitTab === "account" &&
+        selectedRepo
+      ) {
         const { owner, repo } = parseOwnerRepo(selectedRepo.full_name);
         await analysisApi.connectGitOAuth(project.id, {
           owner,
@@ -162,21 +178,35 @@ export const NewProject: React.FC = () => {
           provider: oauthProvider,
         });
       } else {
-        throw new Error('Incomplete configuration');
+        throw new Error("Incomplete configuration");
       }
 
-      const final = await pollAnalysisUntilDone(project.id, setAnalysisProgress);
-      if (final.status === 'completed') {
-        toast.success('Analysis complete');
+      const final = await pollAnalysisUntilDone(
+        project.id,
+        setAnalysisProgress,
+      );
+      if (final.status === "completed") {
+        toast.success("Analysis complete");
         navigate(`/analysis/${project.id}`);
       } else {
-        toast.error(final.error_message || 'Analysis failed');
+        toast.error(final.error_message || "Analysis failed");
       }
     } catch (err: unknown) {
+      const rawDetail = (err as { response?: { data?: { detail?: unknown } } })
+        ?.response?.data?.detail;
       const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail || 'Something went wrong';
-      toast.error(typeof detail === 'string' ? detail : 'Failed to start analysis');
+        typeof rawDetail === "string"
+          ? rawDetail
+          : Array.isArray(rawDetail)
+            ? rawDetail
+                .map((e) =>
+                  typeof e === "object" && e && "msg" in e
+                    ? String((e as { msg: string }).msg)
+                    : String(e),
+                )
+                .join("; ")
+            : (err as Error)?.message || "Something went wrong";
+      toast.error(detail || "Failed to start analysis");
       setStep(3);
     } finally {
       setSubmitting(false);
@@ -189,7 +219,7 @@ export const NewProject: React.FC = () => {
         <div className="mx-auto flex h-12 max-w-3xl items-center gap-4 px-6">
           <button
             type="button"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate("/dashboard")}
             className="flex items-center gap-2 text-meta text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -211,7 +241,7 @@ export const NewProject: React.FC = () => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="My API Docs"
-                className="mt-1.5 rounded-xl"
+                className="mt-1.5"
                 required
               />
             </div>
@@ -222,14 +252,11 @@ export const NewProject: React.FC = () => {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="What does this project document?"
-                className="mt-1.5 rounded-xl"
+                className="mt-1.5"
               />
             </div>
             <div className="flex justify-end pt-2">
-              <Button
-                disabled={!canNextStep1}
-                onClick={() => setStep(2)}
-              >
+              <Button disabled={!canNextStep1} onClick={() => setStep(2)}>
                 Continue
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -245,9 +272,17 @@ export const NewProject: React.FC = () => {
             <div className="grid gap-3 sm:grid-cols-3">
               {(
                 [
-                  { id: 'zip' as const, label: 'Upload ZIP', icon: FileArchive },
-                  { id: 'git' as const, label: 'Connect Git', icon: GitBranch },
-                  { id: 'scratch' as const, label: 'Start Empty', icon: CheckCircle2 },
+                  {
+                    id: "zip" as const,
+                    label: "Upload ZIP",
+                    icon: FileArchive,
+                  },
+                  { id: "git" as const, label: "Connect Git", icon: GitBranch },
+                  {
+                    id: "scratch" as const,
+                    label: "Start Empty",
+                    icon: CheckCircle2,
+                  },
                 ] as const
               ).map(({ id, label, icon: Icon }) => (
                 <button
@@ -255,16 +290,18 @@ export const NewProject: React.FC = () => {
                   type="button"
                   onClick={() => setSourceChoice(id)}
                   className={cn(
-                    'flex flex-col items-center gap-2 rounded-2xl border p-5 text-center transition-all',
+                    "flex flex-col items-center gap-2 rounded-lg border p-5 text-center transition-all",
                     sourceChoice === id
-                      ? 'border-primary bg-accent shadow-sm'
-                      : 'border-border bg-card hover:bg-surface-hover'
+                      ? "border-primary bg-accent shadow-sm"
+                      : "border-border bg-card hover:bg-surface-hover",
                   )}
                 >
                   <Icon
                     className={cn(
-                      'h-8 w-8',
-                      sourceChoice === id ? 'text-foreground' : 'text-muted-foreground'
+                      "h-8 w-8",
+                      sourceChoice === id
+                        ? "text-foreground"
+                        : "text-muted-foreground",
                     )}
                   />
                   <span className="text-sm font-bold">{label}</span>
@@ -272,20 +309,17 @@ export const NewProject: React.FC = () => {
               ))}
             </div>
             <div className="flex justify-between pt-4">
-              <Button variant="outline" onClick={() => setStep(1)} className="rounded-xl">
+              <Button variant="outline" onClick={() => setStep(1)}>
                 Back
               </Button>
-              <Button
-                disabled={!canNextStep2}
-                onClick={() => setStep(3)}
-              >
+              <Button disabled={!canNextStep2} onClick={() => setStep(3)}>
                 Continue
               </Button>
             </div>
           </div>
         )}
 
-        {step === 3 && sourceChoice === 'zip' && (
+        {step === 3 && sourceChoice === "zip" && (
           <ZipStep
             zipFile={zipFile}
             onFile={setZipFile}
@@ -295,7 +329,7 @@ export const NewProject: React.FC = () => {
           />
         )}
 
-        {step === 3 && sourceChoice === 'scratch' && (
+        {step === 3 && sourceChoice === "scratch" && (
           <ScratchStep
             onBack={() => setStep(2)}
             onSubmit={handleConnectAndAnalyse}
@@ -303,7 +337,7 @@ export const NewProject: React.FC = () => {
           />
         )}
 
-        {step === 3 && sourceChoice === 'git' && (
+        {step === 3 && sourceChoice === "git" && (
           <Tabs
             value={gitTab}
             onValueChange={(v) => setGitTab(v as GitTab)}
@@ -313,7 +347,11 @@ export const NewProject: React.FC = () => {
               <TabsTrigger value="url">Paste URL</TabsTrigger>
               <TabsTrigger value="account">Connect account</TabsTrigger>
             </TabsList>
-            <TabsContent value="url" forceMount className="data-[state=inactive]:hidden">
+            <TabsContent
+              value="url"
+              forceMount
+              className="data-[state=inactive]:hidden"
+            >
               <GitUrlTab
                 repoUrl={repoUrl}
                 setRepoUrl={setRepoUrl}
@@ -325,7 +363,11 @@ export const NewProject: React.FC = () => {
                 submitting={submitting}
               />
             </TabsContent>
-            <TabsContent value="account" forceMount className="data-[state=inactive]:hidden">
+            <TabsContent
+              value="account"
+              forceMount
+              className="data-[state=inactive]:hidden"
+            >
               <GitAccountTab
                 oauthProvider={oauthProvider}
                 setOauthProvider={setOauthProvider}
@@ -344,7 +386,7 @@ export const NewProject: React.FC = () => {
                 oauthBranch={oauthBranch}
                 setOauthBranch={setOauthBranch}
                 onDisconnect={() => {
-                  if (oauthProvider === 'github') disconnectGithub.mutate();
+                  if (oauthProvider === "github") disconnectGithub.mutate();
                   else disconnectGitlab.mutate();
                   setSelectedRepo(null);
                 }}
@@ -360,6 +402,7 @@ export const NewProject: React.FC = () => {
           <ProcessingStep
             status={analysisProgress}
             projectId={createdProjectId}
+            onOpenSettings={() => navigate("/dashboard?tab=settings")}
           />
         )}
       </main>
@@ -378,16 +421,16 @@ function StepIndicator({ current }: { current: number }) {
           <li
             key={label}
             className={cn(
-              'flex flex-1 flex-col items-center gap-1 text-xs font-semibold',
-              active ? 'text-foreground' : 'text-muted-foreground'
+              "flex flex-1 flex-col items-center gap-1 text-xs font-semibold",
+              active ? "text-foreground" : "text-muted-foreground",
             )}
           >
             <span
               className={cn(
-                'flex h-8 w-8 items-center justify-center rounded-full border-2',
-                done && 'border-primary bg-primary text-primary-foreground',
-                active && !done && 'border-primary text-foreground',
-                !active && !done && 'border-border'
+                "flex h-8 w-8 items-center justify-center rounded-full border-2",
+                done && "border-primary bg-primary text-primary-foreground",
+                active && !done && "border-primary text-foreground",
+                !active && !done && "border-border",
               )}
             >
               {done ? <Check className="h-4 w-4" /> : n}
@@ -429,7 +472,7 @@ function GitUrlTab({
             value={repoUrl}
             onChange={(e) => setRepoUrl(e.target.value)}
             placeholder="https://github.com/username/repo-name"
-            className="rounded-xl pr-10"
+            className="pr-10"
           />
           {urlValid === true && (
             <Check className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-emerald-500" />
@@ -445,11 +488,11 @@ function GitUrlTab({
           id="git-branch-url"
           value={branch}
           onChange={(e) => setBranch(e.target.value)}
-          className="mt-1.5 rounded-xl"
+          className="mt-1.5"
         />
       </div>
       <div className="flex justify-between pt-2">
-        <Button variant="outline" onClick={onBack} className="rounded-xl">
+        <Button variant="outline" onClick={onBack}>
           Back
         </Button>
         <Button
@@ -457,7 +500,7 @@ function GitUrlTab({
           onClick={onSubmit}
           className=""
         >
-          {submitting ? 'Starting…' : 'Connect & Analyse'}
+          {submitting ? "Starting…" : "Connect & Analyse"}
         </Button>
       </div>
     </div>
@@ -486,8 +529,8 @@ function GitAccountTab({
   onSubmit,
   submitting,
 }: {
-  oauthProvider: 'github' | 'gitlab';
-  setOauthProvider: (p: 'github' | 'gitlab') => void;
+  oauthProvider: "github" | "gitlab";
+  setOauthProvider: (p: "github" | "gitlab") => void;
   githubConnected: boolean;
   gitlabConnected: boolean;
   profile?: { username?: string; avatar?: string };
@@ -517,7 +560,7 @@ function GitAccountTab({
           <Button
             type="button"
             onClick={() => {
-              window.location.href = getOAuthAuthorizeUrl('github');
+              window.location.href = getOAuthAuthorizeUrl("github");
             }}
             className="w-full"
           >
@@ -527,7 +570,7 @@ function GitAccountTab({
           <Button
             type="button"
             onClick={() => {
-              window.location.href = getOAuthAuthorizeUrl('gitlab');
+              window.location.href = getOAuthAuthorizeUrl("gitlab");
             }}
             variant="outline"
             className="w-full"
@@ -537,7 +580,7 @@ function GitAccountTab({
           </Button>
         </div>
         <div className="flex justify-between pt-2">
-          <Button variant="outline" onClick={onBack} className="rounded-xl">
+          <Button variant="outline" onClick={onBack}>
             Back
           </Button>
         </div>
@@ -560,7 +603,7 @@ function GitAccountTab({
           <div>
             <p className="text-sm font-bold">{profile?.username}</p>
             <p className="text-xs text-emerald-600 dark:text-emerald-400">
-              {oauthProvider === 'github' ? 'GitHub' : 'GitLab'} connected
+              {oauthProvider === "github" ? "GitHub" : "GitLab"} connected
             </p>
           </div>
         </div>
@@ -568,12 +611,12 @@ function GitAccountTab({
           {githubConnected && (
             <button
               type="button"
-              onClick={() => setOauthProvider('github')}
+              onClick={() => setOauthProvider("github")}
               className={cn(
-                'rounded-lg px-2 py-1 text-xs font-semibold',
-                oauthProvider === 'github'
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground'
+                "rounded-lg px-2 py-1 text-xs font-semibold",
+                oauthProvider === "github"
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground",
               )}
             >
               GitHub
@@ -582,18 +625,23 @@ function GitAccountTab({
           {gitlabConnected && (
             <button
               type="button"
-              onClick={() => setOauthProvider('gitlab')}
+              onClick={() => setOauthProvider("gitlab")}
               className={cn(
-                'rounded-lg px-2 py-1 text-xs font-semibold',
-                oauthProvider === 'gitlab'
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground'
+                "rounded-lg px-2 py-1 text-xs font-semibold",
+                oauthProvider === "gitlab"
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground",
               )}
             >
               GitLab
             </button>
           )}
-          <Button variant="outline" size="sm" onClick={onDisconnect} className="rounded-lg">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onDisconnect}
+            className="rounded-lg"
+          >
             Disconnect
           </Button>
         </div>
@@ -605,7 +653,7 @@ function GitAccountTab({
           value={repoSearch}
           onChange={(e) => setRepoSearch(e.target.value)}
           placeholder="Search repositories…"
-          className="rounded-xl pl-9"
+          className="pl-9"
         />
       </div>
 
@@ -615,7 +663,9 @@ function GitAccountTab({
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : filteredRepos.length === 0 ? (
-          <p className="py-4 text-center text-meta text-muted-foreground">No repositories found.</p>
+          <p className="py-4 text-center text-meta text-muted-foreground">
+            No repositories found.
+          </p>
         ) : (
           filteredRepos.map((repo) => (
             <button
@@ -623,27 +673,29 @@ function GitAccountTab({
               type="button"
               onClick={() => setSelectedRepo(repo)}
               className={cn(
-                'w-full rounded-xl border p-3 text-left transition-all',
+                "w-full rounded-lg border p-3 text-left transition-all",
                 selectedRepo?.id === repo.id
-                  ? 'border-primary bg-accent'
-                  : 'border-border hover:bg-surface-hover'
+                  ? "border-primary bg-accent"
+                  : "border-border hover:bg-surface-hover",
               )}
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="font-semibold">{repo.full_name}</span>
                 <span
                   className={cn(
-                    'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
+                    "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold",
                     repo.private
-                      ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
-                      : 'bg-muted text-muted-foreground'
+                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                      : "bg-muted text-muted-foreground",
                   )}
                 >
-                  {repo.private ? 'Private' : 'Public'}
+                  {repo.private ? "Private" : "Public"}
                 </span>
               </div>
               {repo.description && (
-                <p className="mt-1 line-clamp-2 text-meta text-muted-foreground">{repo.description}</p>
+                <p className="mt-1 line-clamp-2 text-meta text-muted-foreground">
+                  {repo.description}
+                </p>
               )}
               <div className="mt-2 flex flex-wrap items-center gap-2 text-meta text-muted-foreground">
                 {repo.language && (
@@ -656,7 +708,10 @@ function GitAccountTab({
                   {repo.stars_count}
                 </span>
                 <span>
-                  Updated {formatDistanceToNow(new Date(repo.updated_at), { addSuffix: true })}
+                  Updated{" "}
+                  {formatDistanceToNow(new Date(repo.updated_at), {
+                    addSuffix: true,
+                  })}
                 </span>
               </div>
             </button>
@@ -676,21 +731,23 @@ function GitAccountTab({
               onChange={(e) => setOauthBranch(e.target.value)}
               className="mt-1.5 flex h-9 w-full rounded-md border border-input bg-background px-3 text-body"
             >
-              {(branches ?? [{ name: selectedRepo.default_branch, is_default: true }]).map(
-                (b) => (
-                  <option key={b.name} value={b.name}>
-                    {b.name}
-                    {b.is_default ? ' (default)' : ''}
-                  </option>
-                )
-              )}
+              {(
+                branches ?? [
+                  { name: selectedRepo.default_branch, is_default: true },
+                ]
+              ).map((b) => (
+                <option key={b.name} value={b.name}>
+                  {b.name}
+                  {b.is_default ? " (default)" : ""}
+                </option>
+              ))}
             </select>
           )}
         </div>
       )}
 
       <div className="flex justify-between pt-2">
-        <Button variant="outline" onClick={onBack} className="rounded-xl">
+        <Button variant="outline" onClick={onBack}>
           Back
         </Button>
         <Button
@@ -698,7 +755,7 @@ function GitAccountTab({
           onClick={onSubmit}
           className=""
         >
-          {submitting ? 'Starting…' : 'Connect & Analyse'}
+          {submitting ? "Starting…" : "Connect & Analyse"}
         </Button>
       </div>
     </div>
@@ -726,15 +783,15 @@ function ZipStep({
         type="file"
         accept=".zip"
         onChange={(e) => onFile(e.target.files?.[0] ?? null)}
-        className="rounded-xl"
       />
       {zipFile && (
         <p className="text-meta text-muted-foreground">
-          Selected: {zipFile.name} ({(zipFile.size / 1024 / 1024).toFixed(2)} MB)
+          Selected: {zipFile.name} ({(zipFile.size / 1024 / 1024).toFixed(2)}{" "}
+          MB)
         </p>
       )}
       <div className="flex justify-between pt-2">
-        <Button variant="outline" onClick={onBack} className="rounded-xl">
+        <Button variant="outline" onClick={onBack}>
           Back
         </Button>
         <Button
@@ -764,14 +821,10 @@ function ScratchStep({
         Start with an empty documentation outline — no codebase analysis.
       </p>
       <div className="flex justify-between pt-2">
-        <Button variant="outline" onClick={onBack} className="rounded-xl">
+        <Button variant="outline" onClick={onBack}>
           Back
         </Button>
-        <Button
-          disabled={submitting}
-          onClick={onSubmit}
-          className=""
-        >
+        <Button disabled={submitting} onClick={onSubmit} className="">
           Create Project
         </Button>
       </div>
@@ -782,14 +835,28 @@ function ScratchStep({
 function ProcessingStep({
   status,
   projectId,
+  onOpenSettings,
 }: {
   status: AnalysisStatus | null;
   projectId: number | null;
+  onOpenSettings?: () => void;
 }) {
+  const showSkip =
+    status?.status === "completed" &&
+    status?.outline_skipped &&
+    status?.outline_skip_reason === "no_ai_credential";
+
   return (
     <div>
-      <h2 className="mb-4 text-center text-lg font-bold">Analysing your codebase</h2>
+      <h2 className="mb-4 text-center text-lg font-bold">
+        Analysing your codebase
+      </h2>
       <AnalysisProgress status={status} compact={false} />
+      {showSkip && (
+        <div className="mt-4">
+          <AiOutlineSkipBanner onOpenSettings={onOpenSettings} />
+        </div>
+      )}
       {projectId && (
         <p className="mt-4 text-center text-meta-sm text-muted-foreground">
           Project #{projectId}

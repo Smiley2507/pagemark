@@ -18,7 +18,9 @@ import {
   useVersionDiff,
   useVersions,
 } from '@/hooks/useSections';
+import { useAiCredentials } from '@/hooks/useAiCredentials';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 const QUICK_CHIPS = ['Generate section', 'Improve clarity', 'Add examples'];
 
@@ -29,6 +31,10 @@ interface RightPanelProps {
 }
 
 export function RightPanel({ projectId, sectionId, onContentRestored }: RightPanelProps) {
+  const navigate = useNavigate();
+  const { data: aiCreds } = useAiCredentials();
+  const hasActiveAi = aiCreds?.has_active ?? false;
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -46,6 +52,7 @@ export function RightPanel({ projectId, sectionId, onContentRestored }: RightPan
 
   const sendMessage = (text: string) => {
     if (!text.trim()) return;
+    if (!hasActiveAi) return;
     const userMsg: ChatMessage = {
       id: Date.now(),
       role: 'user',
@@ -106,7 +113,22 @@ export function RightPanel({ projectId, sectionId, onContentRestored }: RightPan
             className="mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden"
           >
             <div className="flex-1 space-y-3 overflow-y-auto p-3">
-              {messages.length === 0 && (
+              {!hasActiveAi && (
+                <div className="rounded-lg border border-border bg-muted/50 p-3 text-center">
+                  <p className="text-meta text-muted-foreground">
+                    Add an API key in Settings to use the AI assistant.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => navigate('/dashboard?tab=settings')}
+                  >
+                    Open AI settings
+                  </Button>
+                </div>
+              )}
+              {hasActiveAi && messages.length === 0 && (
                 <p className="text-center text-meta text-muted-foreground">
                   Ask the assistant to help write or refine this section.
                 </p>
@@ -147,8 +169,9 @@ export function RightPanel({ projectId, sectionId, onContentRestored }: RightPan
                   <button
                     key={chip}
                     type="button"
+                    disabled={!hasActiveAi}
                     onClick={() => sendMessage(chip)}
-                    className="shrink-0 rounded-full border border-border bg-background px-3 py-1 text-meta hover:bg-accent"
+                    className="shrink-0 rounded-full border border-border bg-background px-3 py-1 text-meta hover:bg-accent disabled:opacity-50"
                   >
                     {chip}
                   </button>
@@ -158,13 +181,15 @@ export function RightPanel({ projectId, sectionId, onContentRestored }: RightPan
                 <Input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && sendMessage(input)}
-                  placeholder="Ask AI…"
+                  onKeyDown={(e) => e.key === 'Enter' && hasActiveAi && sendMessage(input)}
+                  placeholder={hasActiveAi ? 'Ask AI…' : 'Add API key in Settings'}
+                  disabled={!hasActiveAi}
                   className="rounded-full bg-muted"
                 />
                 <Button
                   size="icon"
                   className="shrink-0 rounded-full"
+                  disabled={!hasActiveAi}
                   onClick={() => sendMessage(input)}
                   aria-label="Send message"
                 >

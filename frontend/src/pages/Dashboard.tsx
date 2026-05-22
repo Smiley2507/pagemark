@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Folder,
   Layers,
@@ -33,11 +33,19 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import type { Template } from '@/types';
+import { AiProvidersSection } from '@/components/settings/AiProvidersSection';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
   const [activeTab, setActiveTab] = useState('projects');
+
+  useEffect(() => {
+    if (searchParams.get('tab') === 'settings') {
+      setActiveTab('settings');
+    }
+  }, [searchParams]);
   const [search, setSearch] = useState('');
   const [projectFilter, setProjectFilter] = useState<'all' | 'starred' | 'recent'>('all');
 
@@ -343,6 +351,8 @@ export const Dashboard: React.FC = () => {
                   Manage Git connections
                 </Button>
               </section>
+
+              <AiProvidersSection />
 
               <section className="rounded-lg border border-border bg-card p-6">
                 <h3 className="text-section font-semibold">Security</h3>

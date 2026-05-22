@@ -14,7 +14,7 @@ from app.services.analysis_service import (
 class AnalysisStepItem(BaseModel):
     number: int
     name: str
-    status: Literal["pending", "running", "done", "failed"]
+    status: Literal["pending", "running", "done", "failed", "skipped"]
 
 
 class AnalysisStatusResponse(BaseModel):
@@ -32,6 +32,8 @@ class AnalysisStatusResponse(BaseModel):
     steps: List[AnalysisStepItem] = []
     elapsed_seconds: Optional[int] = None
     outline_applied: bool = False
+    outline_skipped: bool = False
+    outline_skip_reason: Optional[str] = None
 
 
 class AnalysisResponse(AnalysisStatusResponse):
@@ -102,6 +104,7 @@ def analysis_to_status_response(analysis: Analysis) -> AnalysisStatusResponse:
         if isinstance(analysis.status, AnalysisStatus)
         else AnalysisStatus(status_val),
         failed_step=failed_step,
+        outline_skipped=bool(analysis.outline_skipped),
     )
     return AnalysisStatusResponse(
         id=analysis.id,
@@ -118,6 +121,8 @@ def analysis_to_status_response(analysis: Analysis) -> AnalysisStatusResponse:
         steps=steps,
         elapsed_seconds=elapsed_seconds(analysis),
         outline_applied=bool(analysis.outline_applied),
+        outline_skipped=bool(analysis.outline_skipped),
+        outline_skip_reason=analysis.outline_skip_reason,
     )
 
 

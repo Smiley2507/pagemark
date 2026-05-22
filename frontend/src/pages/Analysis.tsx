@@ -13,6 +13,7 @@ import { GitProviderIcon } from '@/components/git/GitProviderIcon';
 import { AnalysisProgress } from '@/components/analysis/AnalysisProgress';
 import { AnalysisResults } from '@/components/analysis/AnalysisResults';
 import { OutlineProposal } from '@/components/analysis/OutlineProposal';
+import { AiOutlineSkipBanner } from '@/components/analysis/AiOutlineSkipBanner';
 import { useProject } from '@/hooks/useProject';
 import {
   useAnalysisStatus,
@@ -74,6 +75,11 @@ export const Analysis: React.FC = () => {
     syncing ||
     analysisStatus?.status === 'pending' ||
     analysisStatus?.status === 'running';
+
+  const showOutlineSkipBanner =
+    analysisStatus?.status === 'completed' &&
+    analysisStatus?.outline_skipped &&
+    analysisStatus?.outline_skip_reason === 'no_ai_credential';
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -140,6 +146,12 @@ export const Analysis: React.FC = () => {
           syncing={syncing}
           workerUnavailable={workerUnavailable}
         />
+
+        {showOutlineSkipBanner && (
+          <AiOutlineSkipBanner
+            onOpenSettings={() => navigate('/dashboard?tab=settings')}
+          />
+        )}
 
         {isCompleted && (
           <>

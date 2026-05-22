@@ -32,6 +32,8 @@ class Analysis(Base):
     complexity_json = Column(JSON, nullable=True)
     outline_json = Column(JSON, nullable=True)
     outline_applied = Column(Boolean, nullable=False, default=False)
+    outline_skipped = Column(Boolean, nullable=False, default=False)
+    outline_skip_reason = Column(String, nullable=True)
     error_message = Column(Text, nullable=True)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)

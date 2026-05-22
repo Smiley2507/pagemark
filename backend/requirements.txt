@@ -3,6 +3,7 @@ uvicorn[standard]
 sqlalchemy[asyncio]
 alembic
 asyncpg
+psycopg2-binary
 python-jose[cryptography]
 passlib[bcrypt]
 python-dotenv
@@ -10,6 +11,7 @@ pydantic-settings
 celery
 redis
 anthropic
+google-genai
 python-multipart
 aiofiles
 httpx

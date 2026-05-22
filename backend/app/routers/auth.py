@@ -3,10 +3,8 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Response, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from pydantic import SecretStr
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
-
-# Pydantic v2: forward refs on ConnectionConfig (SecretStr) must be resolved before use
-ConnectionConfig.model_rebuild()
 
 from app.database import get_db
 from app.config import settings
@@ -20,20 +18,39 @@ from fastapi.responses import RedirectResponse
 from app.models.oauth_token import OAuthToken
 from app.services import github_service, gitlab_service, crypto_service
 from app.schemas.analysis import GitHubStatusResponse
+from app.ai_providers import PROVIDERS
+from app.schemas.ai_credential import (
+    AiProviderCatalogResponse,
+    AiProviderCatalogItem,
+    AiModelOption,
+    AiCredentialListResponse,
+    AiCredentialResponse,
+    AiCredentialUpsertRequest,
+)
+from app.services import ai_credential_service
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
-# Mail configuration
-mail_conf = ConnectionConfig(
-    MAIL_USERNAME=settings.MAIL_USERNAME,
-    MAIL_PASSWORD=settings.MAIL_PASSWORD,
-    MAIL_FROM=settings.MAIL_FROM,
-    MAIL_PORT=settings.MAIL_PORT,
-    MAIL_SERVER=settings.MAIL_SERVER,
-    MAIL_FROM_NAME="Pagemark AI",
-    MAIL_STARTTLS=True,
-    MAIL_SSL_TLS=False,
-)
+_mail_conf: ConnectionConfig | None = None
+
+
+def _get_mail_conf() -> ConnectionConfig:
+    """Lazy-init mail config (Pydantic v2 + Python 3.14 need SecretStr in rebuild namespace)."""
+    global _mail_conf
+    if _mail_conf is None:
+        ConnectionConfig.model_rebuild(_types_namespace={"SecretStr": SecretStr})
+        _mail_conf = ConnectionConfig(
+            MAIL_USERNAME=settings.MAIL_USERNAME,
+            MAIL_PASSWORD=settings.MAIL_PASSWORD,
+            MAIL_FROM=settings.MAIL_FROM,
+            MAIL_PORT=settings.MAIL_PORT,
+            MAIL_SERVER=settings.MAIL_SERVER,
+            MAIL_FROM_NAME="Pagemark AI",
+            MAIL_STARTTLS=True,
+            MAIL_SSL_TLS=False,
+        )
+    return _mail_conf
+
 
 async def send_reset_email(email: str, token: str):
     reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
@@ -43,7 +60,7 @@ async def send_reset_email(email: str, token: str):
         body=f"Click the link to reset your password: {reset_link}",
         subtype="html"
     )
-    fm = FastMail(mail_conf)
+    fm = FastMail(_get_mail_conf())
     await fm.send_message(message)
 
 @router.post("/register", status_code=status.HTTP_201_CREATED, response_model=MeResponse)
@@ -304,4 +321,65 @@ async def gitlab_disconnect(current_user: User = Depends(get_current_user), db: 
     if token_obj:
         await db.delete(token_obj)
         await db.commit()
+    return None
+
+
+# ── BYOK AI credentials ───────────────────────────────────────────
+
+@router.get("/me/ai-providers/catalog", response_model=AiProviderCatalogResponse)
+async def ai_providers_catalog(current_user: User = Depends(get_current_user)):
+    providers = [
+        AiProviderCatalogItem(
+            id=pid,
+            label=info["label"],
+            models=[AiModelOption(**m) for m in info["models"]],
+        )
+        for pid, info in PROVIDERS.items()
+    ]
+    return AiProviderCatalogResponse(providers=providers)
+
+
+@router.get("/me/ai-credentials", response_model=AiCredentialListResponse)
+async def list_ai_credentials(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = await ai_credential_service.list_credentials(db, current_user.id)
+    creds = [AiCredentialResponse.model_validate(r) for r in rows]
+    return AiCredentialListResponse(
+        credentials=creds,
+        has_active=any(c.is_active for c in creds),
+    )
+
+
+@router.put("/me/ai-credentials/{provider}", response_model=AiCredentialResponse)
+async def upsert_ai_credential(
+    provider: str,
+    body: AiCredentialUpsertRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await ai_credential_service.upsert_credential(
+        db, current_user.id, provider, body.api_key, body.model_id
+    )
+    return AiCredentialResponse.model_validate(row)
+
+
+@router.post("/me/ai-credentials/{credential_id}/activate", response_model=AiCredentialResponse)
+async def activate_ai_credential(
+    credential_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    row = await ai_credential_service.set_active(db, current_user.id, credential_id)
+    return AiCredentialResponse.model_validate(row)
+
+
+@router.delete("/me/ai-credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_ai_credential(
+    credential_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await ai_credential_service.delete_credential(db, current_user.id, credential_id)
     return None

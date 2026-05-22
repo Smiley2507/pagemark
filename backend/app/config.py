@@ -1,11 +1,12 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from typing import Optional
 
 class Settings(BaseSettings):
     DATABASE_URL: str
     REDIS_URL: str
-    ANTHROPIC_API_KEY: str
     SECRET_KEY: str
+    # Deprecated: AI uses BYOK user credentials in Settings. Optional legacy fallback only.
+    ANTHROPIC_API_KEY: Optional[str] = None
     FRONTEND_URL: str
 
     MAIL_USERNAME: str

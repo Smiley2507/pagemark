@@ -1,4 +1,4 @@
-import { Loader2, Check, Circle, AlertCircle } from 'lucide-react';
+import { Loader2, Check, Circle, AlertCircle, MinusCircle } from 'lucide-react';
 import type { AnalysisStatus, AnalysisStepItem } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +22,9 @@ function StepIcon({ status }: { status: AnalysisStepItem['status'] }) {
   }
   if (status === 'failed') {
     return <AlertCircle className="h-4 w-4 text-destructive" />;
+  }
+  if (status === 'skipped') {
+    return <MinusCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />;
   }
   return <Circle className="h-4 w-4 text-muted-foreground/40" />;
 }
@@ -130,7 +133,8 @@ export function AnalysisProgress({
                 className={cn(
                   step.status === 'running' && 'font-medium text-foreground',
                   step.status === 'done' && 'text-muted-foreground',
-                  step.status === 'pending' && 'text-muted-foreground/60'
+                  step.status === 'pending' && 'text-muted-foreground/60',
+                  step.status === 'skipped' && 'text-amber-700 dark:text-amber-300'
                 )}
               >
                 {step.name}

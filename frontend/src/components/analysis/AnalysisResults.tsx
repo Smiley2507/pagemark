@@ -1,17 +1,14 @@
-import { Code2, Globe, FolderTree, BarChart3 } from 'lucide-react';
-import type { AnalysisResults as AnalysisResultsType } from '@/types';
-import { cn } from '@/lib/utils';
+import { Code2, Globe, FolderTree, BarChart3 } from "lucide-react";
+import type { AnalysisResults as AnalysisResultsType } from "@/types";
+import { cn } from "@/lib/utils";
 
-function FileTreeNodeView({
-  node,
-  depth = 0,
-}: {
-  node: { name: string; type: string; children?: { name: string; type: string; children?: unknown[] }[] };
-  depth?: number;
-}) {
-  if (node.type === 'file') {
+function FileTreeNodeView({ node, depth = 0 }: { node: any; depth?: number }) {
+  if (node.type === "file") {
     return (
-      <div className="truncate pl-4 text-meta-sm text-muted-foreground" style={{ paddingLeft: depth * 12 + 8 }}>
+      <div
+        className="truncate pl-4 text-meta-sm text-muted-foreground"
+        style={{ paddingLeft: depth * 12 + 8 }}
+      >
         {node.name}
       </div>
     );
@@ -22,10 +19,14 @@ function FileTreeNodeView({
         className="text-meta-sm font-medium text-foreground"
         style={{ paddingLeft: depth * 12 }}
       >
-        {node.name === '/' ? 'root' : node.name}
+        {node.name === "/" ? "root" : node.name}
       </div>
-      {node.children?.map((child, i) => (
-        <FileTreeNodeView key={`${child.name}-${i}`} node={child} depth={depth + 1} />
+      {node.children?.map((child: any, i: number) => (
+        <FileTreeNodeView
+          key={`${child.name}-${i}`}
+          node={child}
+          depth={depth + 1}
+        />
       ))}
     </div>
   );
@@ -43,7 +44,7 @@ export function AnalysisResults({ results, className }: AnalysisResultsProps) {
   const tree = results.file_tree_json;
 
   return (
-    <div className={cn('grid gap-4 sm:grid-cols-2', className)}>
+    <div className={cn("grid gap-4 sm:grid-cols-2", className)}>
       <div className="rounded-lg border border-border bg-card p-4 sm:col-span-2">
         <div className="mb-3 flex items-center gap-2">
           <Code2 className="h-4 w-4 text-primary" />
@@ -52,15 +53,22 @@ export function AnalysisResults({ results, className }: AnalysisResultsProps) {
           </h3>
         </div>
         {langs.length === 0 ? (
-          <p className="text-meta text-muted-foreground">No languages detected.</p>
+          <p className="text-meta text-muted-foreground">
+            No languages detected.
+          </p>
         ) : (
           <ul className="space-y-2">
             {langs.map((l) => (
-              <li key={l.language} className="flex items-center justify-between text-body-sm">
+              <li
+                key={l.language}
+                className="flex items-center justify-between text-body-sm"
+              >
                 <span className="capitalize">
                   {l.language}
-                  {l.depth === 'shallow' && (
-                    <span className="ml-2 text-meta-sm text-muted-foreground">(shallow)</span>
+                  {l.depth === "shallow" && (
+                    <span className="ml-2 text-meta-sm text-muted-foreground">
+                      (shallow)
+                    </span>
                   )}
                 </span>
                 <span className="text-meta text-muted-foreground">
@@ -83,7 +91,7 @@ export function AnalysisResults({ results, className }: AnalysisResultsProps) {
         <p className="text-meta text-muted-foreground">HTTP routes detected</p>
         {endpoints?.frameworks?.length ? (
           <p className="mt-2 text-meta-sm text-muted-foreground">
-            Frameworks: {endpoints.frameworks.join(', ')}
+            Frameworks: {endpoints.frameworks.join(", ")}
           </p>
         ) : null}
         {endpoints?.items?.length ? (
@@ -105,7 +113,8 @@ export function AnalysisResults({ results, className }: AnalysisResultsProps) {
           </h3>
         </div>
         <p className="text-meta text-muted-foreground">
-          {complexity?.total_files ?? 0} files · {complexity?.total_lines ?? 0} lines
+          {complexity?.total_files ?? 0} files · {complexity?.total_lines ?? 0}{" "}
+          lines
         </p>
         {complexity?.parse_stats && (
           <p className="mt-1 text-meta-sm text-muted-foreground">
@@ -114,8 +123,11 @@ export function AnalysisResults({ results, className }: AnalysisResultsProps) {
         )}
         {complexity?.largest_files?.[0] && (
           <p className="mt-2 text-meta-sm">
-            Largest: <span className="font-mono">{complexity.largest_files[0].path}</span> (
-            {complexity.largest_files[0].lines} lines)
+            Largest:{" "}
+            <span className="font-mono">
+              {complexity.largest_files[0].path}
+            </span>{" "}
+            ({complexity.largest_files[0].lines} lines)
           </p>
         )}
       </div>

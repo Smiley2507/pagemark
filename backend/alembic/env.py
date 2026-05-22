@@ -19,6 +19,7 @@ from app.models.document import Document, Section
 from app.models.analysis import Analysis
 from app.models.oauth_token import OAuthToken
 from app.models.version import SectionVersion
+from app.models.ai_credential import UserAiCredential
 
 # Alembic Config object
 config = context.config
