@@ -21,18 +21,18 @@ export const RegisterPage = () => {
   const strength = getPasswordStrength(password);
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 p-4">
+    <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 transition-colors duration-300">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-slate-200"
+        className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 border border-slate-200 dark:border-slate-800 transition-all"
       >
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-primary/20">
+          <div className="w-12 h-12 bg-indigo-600 dark:bg-indigo-500 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/20">
             <Layout className="text-white w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Create Account</h1>
-          <p className="text-slate-500 text-sm mt-2">Start documenting your project today</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Create Account</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">Start documenting your project today</p>
         </div>
 
         <form onSubmit={(e) => {
@@ -41,15 +41,15 @@ export const RegisterPage = () => {
           register(Object.fromEntries(formData) as any);
         }} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="name">Full Name</Label>
+            <Label htmlFor="name" className="text-slate-700 dark:text-slate-300">Full Name</Label>
             <Input id="name" name="name" placeholder="John Doe" required />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-slate-700 dark:text-slate-300">Email</Label>
             <Input id="email" type="email" name="email" placeholder="name@example.com" required />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">Password</Label>
             <Input
               id="password"
               type="password"
@@ -62,7 +62,7 @@ export const RegisterPage = () => {
               <div className="flex justify-between text-xs text-slate-500">
                 <span>Strength: {strength.label}</span>
               </div>
-              <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                 <div
                   className={`h-full transition-all duration-300 ${strength.color}`}
                   style={{ width: strength.width }}
@@ -71,19 +71,23 @@ export const RegisterPage = () => {
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Label htmlFor="confirmPassword" className="text-slate-700 dark:text-slate-300">Confirm Password</Label>
             <Input id="confirmPassword" type="password" name="confirmPassword" required />
           </div>
 
-          <Button type="submit" className="w-full" disabled={isPending}>
+          <Button
+            type="submit"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 shadow-sm hover:shadow-indigo-500/10"
+            disabled={isPending}
+          >
             {isPending ? 'Creating account...' : 'Sign up'}
           </Button>
         </form>
 
         <div className="mt-6 text-center">
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-slate-600 dark:text-slate-400">
             Already have an account?{' '}
-            <Link to="/login" className="text-primary font-medium hover:underline">
+            <Link to="/login" className="text-indigo-600 dark:text-indigo-400 font-medium hover:underline">
               Sign in
             </Link>
           </p>

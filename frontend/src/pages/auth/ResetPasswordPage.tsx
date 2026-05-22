@@ -41,23 +41,23 @@ export const ResetPasswordPage = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 p-4">
+    <div className="min-h-screen w-full flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4 transition-colors duration-300">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 border border-slate-200"
+        className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 border border-slate-200 dark:border-slate-800 transition-all"
       >
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-primary/20">
+          <div className="w-12 h-12 bg-indigo-600 dark:bg-indigo-500 rounded-xl flex items-center justify-center mb-4 shadow-lg shadow-indigo-500/20">
             <Layout className="text-white w-6 h-6" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Set New Password</h1>
-          <p className="text-slate-500 text-sm mt-2">Please enter your new password</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Set New Password</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">Please enter your new password</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="password">New Password</Label>
+            <Label htmlFor="password" className="text-slate-700 dark:text-slate-300">New Password</Label>
             <Input
               id="password"
               type="password"
@@ -67,7 +67,7 @@ export const ResetPasswordPage = () => {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm New Password</Label>
+            <Label htmlFor="confirmPassword" className="text-slate-700 dark:text-slate-300">Confirm New Password</Label>
             <Input
               id="confirmPassword"
               type="password"
@@ -76,7 +76,11 @@ export const ResetPasswordPage = () => {
               required
             />
           </div>
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button
+            type="submit"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl py-2.5 shadow-sm hover:shadow-indigo-500/10"
+            disabled={isLoading}
+          >
             {isLoading ? 'Updating...' : 'Reset Password'}
           </Button>
         </form>
