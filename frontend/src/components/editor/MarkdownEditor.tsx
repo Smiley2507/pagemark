@@ -16,11 +16,9 @@ import { cn } from '@/lib/utils';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { BubbleMenu } from './BubbleMenu';
 import { TableAssistant } from './TableAssistant';
-import { TableHandles } from './TableHandles';
-import { BlockHandle } from './BlockHandle';
-import { ImageHandle } from './ImageHandle';
 import { findTableAtCursor, type TableContext } from './tableUtils';
 import { findBlockAtCursor, type BlockContext } from './blockUtils';
+import { pairingExtension } from './markdownPairing';
 import { livePreviewExtension } from './livePreview';
 import { tableKeymap } from './tableKeymap';
 import { wikiLinkAutocomplete } from './wikiLinkAutocomplete';
@@ -327,18 +325,6 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const [menuState, setMenuState] = useState<MenuState | null>(null);
     const [bubbleMenuState, setBubbleMenuState] = useState<BubbleMenuState | null>(null);
     const [tableAssistantState, setTableAssistantState] = useState<TableAssistantState | null>(null);
-    const [tableHandlesState, setTableHandlesState] = useState<{
-      context: TableContext;
-      bounds: { top: number; left: number; width: number; height: number };
-    } | null>(null);
-    const [blockHandleState, setBlockHandleState] = useState<{
-      position: { top: number; left: number };
-      context: BlockContext;
-    } | null>(null);
-    const [imageHandleState, setImageHandleState] = useState<{
-      position: { top: number; left: number };
-      context: BlockContext;
-    } | null>(null);
 
     const onChangeRef = useRef(onChange);
     useEffect(() => { onChangeRef.current = onChange; });
@@ -421,51 +407,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
                 position: { top: coords.top, left: coords.left },
                 context: tableCtx,
               });
-
-              const startCoords = update.view.coordsAtPos(tableCtx.from);
-              const endCoords = update.view.coordsAtPos(tableCtx.to);
-              if (startCoords && endCoords) {
-                setTableHandlesState({
-                  context: tableCtx,
-                  bounds: {
-                    top: startCoords.top,
-                    left: startCoords.left,
-                    width: Math.max(0, endCoords.left - startCoords.left),
-                    height: endCoords.bottom - startCoords.top,
-                  },
-                });
-              }
             }
           } else {
             setTableAssistantState(null);
-            setTableHandlesState(null);
-          }
-
-          // Block Handle detection
-          const blockCtx = findBlockAtCursor(update.state.doc, main.from);
-          if (blockCtx) {
-            const coords = update.view.coordsAtPos(main.from);
-            if (coords) {
-              setBlockHandleState({
-                position: { top: coords.top, left: coords.left },
-                context: blockCtx,
-              });
-            }
-          } else {
-            setBlockHandleState(null);
-          }
-
-          // Image Handle detection
-          if (blockCtx && blockCtx.type === 'image') {
-            const coords = update.view.coordsAtPos(main.from);
-            if (coords) {
-              setImageHandleState({
-                position: { top: coords.top, left: coords.left },
-                context: blockCtx,
-              });
-            }
-          } else {
-            setImageHandleState(null);
           }
         }
       });
@@ -477,6 +421,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           EditorView.lineWrapping,
           editorTheme,
           livePreviewExtension,          // ← Obsidian-style live preview
+          pairingExtension,               // ← Advanced Auto-pairing
           closeBrackets(),
           wikiLinkAutocomplete,
           placeholder("Type '/' for commands"),
@@ -585,38 +530,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             document.body,
           )
         }
-        {tableHandlesState && viewRef.current &&
-          createPortal(
-            <TableHandles
-              context={tableHandlesState.context}
-              editor={viewRef.current}
-              bounds={tableHandlesState.bounds}
-            />,
-            document.body,
-          )
-        }
-        {blockHandleState && viewRef.current &&
-          createPortal(
-            <BlockHandle
-              position={blockHandleState.position}
-              context={blockHandleState.context}
-              editor={viewRef.current}
-            />,
-            document.body,
-          )
-        }
-        {imageHandleState && viewRef.current &&
-          createPortal(
-            <ImageHandle
-              position={imageHandleState.position}
-              context={imageHandleState.context}
-              editor={viewRef.current}
-            />,
-            document.body,
-          )
-        }
       </div>
-
     );
-  },
+  }
 );
