@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, Loader2, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MarkdownEditor } from '@/components/editor/MarkdownEditor';
 import { sectionsApi } from '@/api/sections';
@@ -36,6 +36,24 @@ type LineKind = 'added' | 'removed' | 'unchanged';
 interface DiffLine {
   kind: LineKind;
   content: string;
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button 
+      onClick={handleCopy}
+      className="absolute right-2 top-2 p-1.5 bg-background/80 text-muted-foreground hover:text-foreground hover:bg-surface rounded opacity-0 group-hover:opacity-100 transition-all focus:opacity-100 border border-border"
+      aria-label="Copy code"
+    >
+      {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+    </button>
+  );
 }
 
 /**
@@ -243,7 +261,7 @@ export function MiddlePanel({
     <div ref={scrollRef} className="h-full overflow-y-auto">
       {/* ── Floating toolbar ── */}
       <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm">
-        <div className="mx-auto flex h-10 max-w-2xl items-center justify-between px-16">
+        <div className="mx-auto flex h-10 max-w-3xl items-center justify-between px-8">
           {/* Segmented mode control */}
           <div className="inline-flex rounded-lg bg-muted p-1">
             {(['write', 'preview', 'diff'] as const).map((m) => (
@@ -287,7 +305,7 @@ export function MiddlePanel({
       </div>
 
       {/* ── Content column ── */}
-      <div className="mx-auto max-w-2xl px-16 py-12">
+      <div className="mx-auto max-w-3xl px-8 py-8">
         {/* ── Write mode ──────────────────────────────────────────────── */}
         {mode === 'write' && (
           <div>
@@ -341,14 +359,22 @@ export function MiddlePanel({
                     remarkPlugins={[remarkGfm]}
                     components={{
                       // Code blocks follow the spec: bg-muted rounded-md px-4 py-3 font-mono text-sm
-                      pre: ({ children, ...props }) => (
-                        <pre
-                          {...props}
-                          className="rounded-md bg-muted px-4 py-3 font-mono text-sm overflow-x-auto"
-                        >
-                          {children}
-                        </pre>
-                      ),
+                      pre: ({ children, ...props }: any) => {
+                        const codeElement = Array.isArray(children) ? children[0] : children;
+                        const codeText = codeElement?.props?.children?.toString() || '';
+                        
+                        return (
+                          <div className="relative group mb-4">
+                            <CopyButton text={codeText} />
+                            <pre
+                              {...props}
+                              className="rounded-md bg-muted px-4 py-3 font-mono text-sm overflow-x-auto m-0"
+                            >
+                              {children}
+                            </pre>
+                          </div>
+                        );
+                      },
                       code: ({ children, className, ...props }) => (
                         <code
                           {...props}

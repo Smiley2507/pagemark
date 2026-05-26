@@ -35,6 +35,7 @@
     "react-diff-viewer-continued": "^4.2.2",
     "react-dom": "^19.2.6",
     "react-markdown": "^10.1.0",
+    "react-resizable-panels": "^4.11.2",
     "react-router-dom": "^7.15.1",
     "remark-gfm": "^4.0.1",
     "sonner": "^2.0.7",

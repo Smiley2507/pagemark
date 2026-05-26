@@ -54,4 +54,14 @@ export const sectionsApi = {
     const { data } = await apiClient.post(`/versions/${versionId}/restore`);
     return data;
   },
+
+  async generateAI(sectionId: number): Promise<{ content: string }> {
+    const { data } = await apiClient.post(`/sections/${sectionId}/ai/generate`);
+    return data;
+  },
+
+  async refineAI(sectionId: number, instruction: string): Promise<{ refined: string }> {
+    const { data } = await apiClient.post(`/sections/${sectionId}/ai/refine`, { instruction });
+    return data;
+  },
 };
