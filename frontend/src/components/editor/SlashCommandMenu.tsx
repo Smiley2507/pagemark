@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Sparkles, Table, ListCheck, AlertCircle, Wand2, 
-  Heading1, Heading2, Heading3, List, ListOrdered, 
+import {
+  Sparkles, Table, ListCheck, AlertCircle, Wand2,
+  Heading1, Heading2, Heading3, List, ListOrdered,
   Quote, Code, Minus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { findBlockAtCursor } from './blockUtils';
 
 // ── Command definitions ───────────────────────────────────────────────────────
 
@@ -185,10 +186,30 @@ export function SlashCommandMenu({ position, slashPos, searchTerm, onClose, edit
 
   // Execute the selected action
   const executeAction = (action: CommandAction) => {
-    // Determine where to place the cursor. 
-    // For things like code blocks, we might want the cursor inside the block.
+    const { state } = editor;
+    const pos = state.selection.main.from;
+    const block = findBlockAtCursor(state.doc, pos);
+
+    if (block && block.type !== 'paragraph') {
+      let transformationText = '';
+      if (action.id === 'insert-h1') transformationText = '# ' + state.doc.sliceString(block.from + 1, block.to).trim();
+      else if (action.id === 'insert-h2') transformationText = '## ' + state.doc.sliceString(block.from + 1, block.to).trim();
+      else if (action.id === 'insert-h3') transformationText = '### ' + state.doc.sliceString(block.from + 1, block.to).trim();
+      else if (action.id === 'insert-quote') transformationText = '> ' + state.doc.sliceString(block.from, block.to);
+      else if (action.id === 'insert-divider') transformationText = '---';
+
+      if (transformationText) {
+        editor.dispatch({
+          changes: { from: block.from, to: block.to, insert: transformationText + '\n' },
+          selections: [{ anchor: block.from, head: block.from }],
+        });
+        onClose();
+        return;
+      }
+    }
+
     let cursorOffset = action.content.length;
-    if (action.id === 'insert-code') cursorOffset -= 4; // place inside backticks
+    if (action.id === 'insert-code') cursorOffset -= 4;
 
     editor.dispatch({
       changes: { from: slashPos, to: slashPos + 1 + searchTerm.length, insert: action.content },

@@ -15,6 +15,59 @@ import { EditorState, RangeSetBuilder, StateField } from '@codemirror/state';
 // Widgets
 // ─────────────────────────────────────────────────────────────────────────────
 
+class WikiLinkWidget extends WidgetType {
+  readonly text: string;
+  constructor(text: string) {
+    super();
+    this.text = text;
+  }
+  eq(o: WidgetType) { return o instanceof WikiLinkWidget && o.text === this.text; }
+
+  toDOM(): HTMLElement {
+    const link = document.createElement('a');
+    link.className = 'cm-lp-wikilink';
+    link.textContent = `[[${this.text}]]`;
+    link.href = '#';
+    link.onclick = (e) => { e.preventDefault(); };
+    return link;
+  }
+  ignoreEvent() { return false; }
+}
+
+class CalloutWidget extends WidgetType {
+  readonly type: string;
+  readonly title: string;
+  readonly content: string;
+
+  constructor(type: string, title: string, content: string) {
+    super();
+    this.type = type.toLowerCase();
+    this.title = title;
+    this.content = content;
+  }
+  eq(o: WidgetType) {
+    return o instanceof CalloutWidget && o.type === this.type && o.title === this.title && o.content === this.content;
+  }
+
+  toDOM(): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = `cm-lp-callout cm-lp-callout-${this.type}`;
+
+    const header = document.createElement('div');
+    header.className = 'cm-lp-callout-header';
+    header.innerHTML = `<span class="cm-lp-callout-title">${this.title || this.type}</span>`;
+
+    const body = document.createElement('div');
+    body.className = 'cm-lp-callout-body';
+    body.textContent = this.content;
+
+    wrap.appendChild(header);
+    wrap.appendChild(body);
+    return wrap;
+  }
+  ignoreEvent() { return false; }
+}
+
 class HRWidget extends WidgetType {
   toDOM(): HTMLElement {
     const el = document.createElement('div');
@@ -28,12 +81,14 @@ class HRWidget extends WidgetType {
 class ImageWidget extends WidgetType {
   readonly src: string;
   readonly alt: string;
-  constructor(src: string, alt: string) { 
-    super(); 
+  readonly width: number | undefined;
+  constructor(src: string, alt: string, width?: number) {
+    super();
     this.src = src;
     this.alt = alt;
+    this.width = width;
   }
-  eq(o: WidgetType) { return o instanceof ImageWidget && o.src === this.src && o.alt === this.alt; }
+  eq(o: WidgetType) { return o instanceof ImageWidget && o.src === this.src && o.alt === this.alt && o.width === this.width; }
 
   toDOM(): HTMLElement {
     const wrap = document.createElement('div');
@@ -42,6 +97,9 @@ class ImageWidget extends WidgetType {
     img.src = this.src;
     img.alt = this.alt;
     img.className = 'cm-lp-img';
+    if (this.width) {
+      img.style.width = `${this.width}px`;
+    }
     img.onerror = () => { img.style.display = 'none'; };
     wrap.appendChild(img);
     return wrap;
@@ -52,8 +110,8 @@ class ImageWidget extends WidgetType {
 class CheckboxWidget extends WidgetType {
   readonly checked: boolean;
   readonly pos: number;
-  constructor(checked: boolean, pos: number) { 
-    super(); 
+  constructor(checked: boolean, pos: number) {
+    super();
     this.checked = checked;
     this.pos = pos;
   }
@@ -66,7 +124,6 @@ class CheckboxWidget extends WidgetType {
     box.className = 'cm-lp-checkbox';
     box.setAttribute('tabindex', '-1');
 
-    // Interactive: toggle the markdown [ ] / [x] on click
     box.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       const replacement = this.checked ? '[ ]' : '[x]';
@@ -81,8 +138,8 @@ class CheckboxWidget extends WidgetType {
 class CodeBlockWidget extends WidgetType {
   readonly code: string;
   readonly lang: string;
-  constructor(code: string, lang: string) { 
-    super(); 
+  constructor(code: string, lang: string) {
+    super();
     this.code = code;
     this.lang = lang;
   }
@@ -92,7 +149,6 @@ class CodeBlockWidget extends WidgetType {
     const wrap = document.createElement('div');
     wrap.className = 'cm-lp-codeblock';
 
-    // Header bar
     const header = document.createElement('div');
     header.className = 'cm-lp-codeblock-header';
 
@@ -115,7 +171,6 @@ class CodeBlockWidget extends WidgetType {
     header.appendChild(copyBtn);
     wrap.appendChild(header);
 
-    // Code body
     const pre = document.createElement('pre');
     pre.className = 'cm-lp-codeblock-body';
     const codeEl = document.createElement('code');
@@ -130,8 +185,8 @@ class CodeBlockWidget extends WidgetType {
 
 class TableWidget extends WidgetType {
   readonly raw: string;
-  constructor(raw: string) { 
-    super(); 
+  constructor(raw: string) {
+    super();
     this.raw = raw;
   }
   eq(o: WidgetType) { return o instanceof TableWidget && o.raw === this.raw; }
@@ -157,7 +212,6 @@ class TableWidget extends WidgetType {
     const table = document.createElement('table');
     table.className = 'cm-lp-table';
 
-    // Header
     const thead = document.createElement('thead');
     const headerRow = document.createElement('tr');
     const headerCells = parseRow(lines[0]);
@@ -169,7 +223,6 @@ class TableWidget extends WidgetType {
     thead.appendChild(headerRow);
     table.appendChild(thead);
 
-    // Body (skip separator row at index 1)
     const tbody = document.createElement('tbody');
     for (let i = 2; i < lines.length; i++) {
       const row = document.createElement('tr');
@@ -193,7 +246,6 @@ class TableWidget extends WidgetType {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** 1-based line numbers covered by any selection range. */
 function cursorLines(state: EditorState): Set<number> {
   const s = new Set<number>();
   for (const { from, to } of state.selection.ranges) {
@@ -204,7 +256,6 @@ function cursorLines(state: EditorState): Set<number> {
   return s;
 }
 
-/** Check if cursor is anywhere within a range (not just same line). */
 function cursorInRange(state: EditorState, from: number, to: number): boolean {
   for (const { from: sf, to: st } of state.selection.ranges) {
     if (sf <= to && st >= from) return true;
@@ -230,9 +281,54 @@ function buildDecorations(state: EditorState): DecorationSet {
   const add    = (from: number, to: number, deco: Decoration) =>
     pending.push({ from, to, deco });
 
-  // Track fenced code blocks and tables we've already handled as widgets
-  // so we don't also apply inner decorations to them.
   const handledRanges: Array<{ from: number; to: number }> = [];
+
+  // ── WikiLinks ───────────────────────────────────────────────────────────
+  const fullText = doc.toString();
+  const wikiLinkRegex = /\[\[([^\]\n]+)\]\]/g;
+  let match;
+  while ((match = wikiLinkRegex.exec(fullText)) !== null) {
+    const from = match.index;
+    const to = from + match[0].length;
+    if (!onCursor(from)) {
+      add(from, to, Decoration.replace({
+        widget: new WikiLinkWidget(match[1]),
+        block: false
+      }));
+    }
+  }
+
+  // ── Callouts ───────────────────────────────────────────────────────────
+  const calloutRegex = /^>\s*\[!([^\]\n]+)\]/gm;
+  let calloutMatch;
+  while ((calloutMatch = calloutRegex.exec(fullText)) !== null) {
+    const from = calloutMatch.index;
+    const type = calloutMatch[1];
+
+    let to = from;
+    const lines = fullText.split('\n');
+    const startLineNum = doc.lineAt(from).number;
+    let currentLineNum = startLineNum;
+
+    while (currentLineNum <= doc.lines) {
+      const line = doc.line(currentLineNum);
+      if (!line.text.startsWith('>')) break;
+      currentLineNum++;
+    }
+    to = doc.line(currentLineNum - 1).to;
+
+    if (!onCursor(from)) {
+      const rawContent = doc.sliceString(from, to);
+      const linesContent = rawContent.split('\n').map(l => l.replace(/^>\s?/, '').trim());
+      const title = linesContent[0].replace(/^\[!([^\]]+)\]\s*(.*)/, '$2').trim();
+      const body = linesContent.slice(1).join('\n').trim();
+
+      add(from, to, Decoration.replace({
+        widget: new CalloutWidget(type, title, body),
+        block: true
+      }));
+    }
+  }
 
   syntaxTree(state).iterate({
     from: 0, to: doc.length,
@@ -240,14 +336,11 @@ function buildDecorations(state: EditorState): DecorationSet {
       const f = node.from;
       const t = node.to;
 
-      // Skip nodes inside a range we've already replaced with a widget
       for (const hr of handledRanges) {
         if (f >= hr.from && t <= hr.to) return;
       }
 
       switch (node.name) {
-
-        // ── Headings ──────────────────────────────────────────────────────
         case 'ATXHeading1':
         case 'ATXHeading2':
         case 'ATXHeading3':
@@ -259,44 +352,30 @@ function buildDecorations(state: EditorState): DecorationSet {
           add(line.from, line.from, Decoration.line({ class: `cm-lp-h${lvl}` }));
           break;
         }
-
-        // HeaderMark = the '#' characters (+ trailing space)
         case 'HeaderMark': {
           if (!onCursor(f)) {
             add(f, Math.min(t + 1, doc.lineAt(f).to), Decoration.replace({}));
           }
           break;
         }
-
-        // ── Bold ──────────────────────────────────────────────────────────
         case 'StrongEmphasis':
           add(f, t, Decoration.mark({ class: 'cm-lp-strong' }));
           break;
-
-        // ── Italic ────────────────────────────────────────────────────────
         case 'Emphasis':
           add(f, t, Decoration.mark({ class: 'cm-lp-em' }));
           break;
-
-        // Bold / italic markers (**  *  _  __)
         case 'EmphasisMark':
           if (!onCursor(f)) add(f, t, Decoration.replace({}));
           break;
-
-        // ── Strikethrough ─────────────────────────────────────────────────
         case 'Strikethrough':
           add(f, t, Decoration.mark({ class: 'cm-lp-strike' }));
           break;
-
-        case 'StrikethroughMark':
+        case 'Strikethrough la':
           if (!onCursor(f)) add(f, t, Decoration.replace({}));
           break;
-
-        // ── Inline code ───────────────────────────────────────────────────
         case 'InlineCode':
           add(f, t, Decoration.mark({ class: 'cm-lp-inline-code' }));
           break;
-
         case 'CodeMark':
           if (node.node.parent?.name === 'FencedCode') {
             add(f, t, Decoration.mark({ class: 'cm-lp-code-mark text-muted-foreground' }));
@@ -304,30 +383,22 @@ function buildDecorations(state: EditorState): DecorationSet {
             if (!onCursor(f)) add(f, t, Decoration.replace({}));
           }
           break;
-
-        // ── Fenced code blocks ────────────────────────────────────────────
         case 'FencedCode': {
           if (!cursorInRange(state, f, t)) {
             const raw = doc.sliceString(f, t);
-            // Extract language from first line
             const firstLine = raw.split('\n')[0];
             const langMatch = firstLine.match(/^```\s*(\S*)/);
             const lang = langMatch ? langMatch[1] : '';
-
-            // Extract code body (strip first and last lines which are fences)
             const allLines = raw.split('\n');
             const codeBody = allLines.slice(1, allLines.length - 1).join('\n');
-
             const startLine = doc.lineAt(f);
             const endLine = doc.lineAt(t);
             add(startLine.from, endLine.to, Decoration.replace({
               widget: new CodeBlockWidget(codeBody, lang),
               block: true
             }));
-
             handledRanges.push({ from: f, to: t });
           } else {
-            // Add a subtle background to the active fenced code block lines
             const startL = doc.lineAt(f).number;
             const endL = doc.lineAt(t).number;
             for (let n = startL; n <= endL; n++) {
@@ -337,8 +408,6 @@ function buildDecorations(state: EditorState): DecorationSet {
           }
           break;
         }
-
-        // ── Blockquote ────────────────────────────────────────────────────
         case 'Blockquote': {
           const startL = doc.lineAt(f).number;
           const endL   = doc.lineAt(t).number;
@@ -348,12 +417,9 @@ function buildDecorations(state: EditorState): DecorationSet {
           }
           break;
         }
-
         case 'QuoteMark':
           if (!onCursor(f)) add(f, Math.min(t + 1, doc.lineAt(f).to), Decoration.replace({}));
           break;
-
-        // ── Horizontal rule ───────────────────────────────────────────────
         case 'HorizontalRule': {
           if (!onCursor(f)) {
             const line = doc.lineAt(f);
@@ -361,22 +427,18 @@ function buildDecorations(state: EditorState): DecorationSet {
           }
           break;
         }
-
-        // ── Images ────────────────────────────────────────────────────────
         case 'Image': {
           if (!onCursor(f)) {
             const raw = doc.sliceString(f, t);
-            const m   = raw.match(/^!\[([^\]]*)\]\(([^)]+)\)/);
+            const m   = raw.match(/^!\[([^\]|]*)(?:\|(\d+))?\]\(([^)]+)\)/);
             if (m) {
-              const [, alt, src] = m;
+              const [, alt, width, src] = m;
               const line = doc.lineAt(f);
-              add(line.from, line.to, Decoration.replace({ widget: new ImageWidget(src, alt), block: true }));
+              add(line.from, line.to, Decoration.replace({ widget: new ImageWidget(src, alt, width ? parseInt(width) : undefined), block: true }));
             }
           }
           break;
         }
-
-        // ── Tables ────────────────────────────────────────────────────────
         case 'Table': {
           if (!cursorInRange(state, f, t)) {
             const raw = doc.sliceString(f, t);
@@ -387,45 +449,35 @@ function buildDecorations(state: EditorState): DecorationSet {
               block: true
             }));
             handledRanges.push({ from: f, to: t });
-          } else {
-            // Cursor is in the table — apply subtle pipe styling instead
-            // (handled by TableDelimiter below)
           }
           break;
         }
-
         case 'TableDelimiter':
-          if (!onCursor(f)) add(f, t, Decoration.mark({ class: 'cm-lp-pipe' }));
+          if (onCursor(f)) {
+            add(f, t, Decoration.mark({ class: 'cm-lp-pipe-active' }));
+          } else {
+            add(f, t, Decoration.mark({ class: 'cm-lp-pipe' }));
+          }
           break;
-
-        // ── Lists ─────────────────────────────────────────────────────────
         case 'ListMark':
           add(f, t, Decoration.mark({ class: 'cm-lp-list-mark' }));
           break;
-
-        // ── Task-list checkboxes ──────────────────────────────────────────
         case 'TaskMarker': {
           if (!onCursor(f)) {
             const text    = doc.sliceString(f, t);
             const checked = /\[[xX]\]/.test(text);
-            // Find the exact position of the [ in the document for toggling
             const bracketPos = f + text.indexOf('[');
             add(f, t, Decoration.replace({ widget: new CheckboxWidget(checked, bracketPos) }));
           }
           break;
         }
-
-        // ── Links ─────────────────────────────────────────────────────────
         case 'Link': {
           add(f, t, Decoration.mark({ class: 'cm-lp-link' }));
           break;
         }
-
-        // Link syntax: hide []() markers but keep visible text
         case 'LinkMark':
           if (!onCursor(f)) add(f, t, Decoration.replace({}));
           break;
-
         case 'URL':
           if (!onCursor(f)) add(f, t, Decoration.replace({}));
           break;
@@ -433,23 +485,16 @@ function buildDecorations(state: EditorState): DecorationSet {
     },
   });
 
-  // Sort by from (required by RangeSetBuilder)
   pending.sort((a, b) => a.from !== b.from ? a.from - b.from : a.to - b.to);
-
-  // Deduplicate overlapping ranges — keep earliest start; skip if it overlaps prior
   const builder = new RangeSetBuilder<Decoration>();
   let lastTo = -1;
   for (const { from, to: dTo, deco } of pending) {
-    if (from < lastTo) continue; // overlapping — skip
+    if (from < lastTo) continue;
     builder.add(from, dTo, deco);
     lastTo = dTo;
   }
   return builder.finish();
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// StateField
-// ─────────────────────────────────────────────────────────────────────────────
 
 export const livePreviewExtension = StateField.define<DecorationSet>({
   create(state) {

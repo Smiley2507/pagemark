@@ -1,11 +1,11 @@
 import React from 'react';
-import { 
-  ArrowUpToLine, ArrowDownToLine, 
-  ArrowLeftToLine, ArrowRightToLine, 
-  Trash2
+import {
+  ArrowUpToLine, ArrowDownToLine,
+  ArrowLeftToLine, ArrowRightToLine,
+  Trash2, AlignLeft, AlignCenter, AlignRight
 } from 'lucide-react';
 import { EditorView } from '@codemirror/view';
-import { type TableContext, addRow, addCol, deleteRow, deleteCol } from './tableUtils';
+import { type TableContext, addRow, addCol, deleteRow, deleteCol, getTableAlignments, formatTable } from './tableUtils';
 
 interface TableAssistantProps {
   position: { top: number; left: number };
@@ -16,11 +16,25 @@ interface TableAssistantProps {
 export function TableAssistant({ position, context, editor }: TableAssistantProps) {
   const dispatchUpdate = (newText: string | null) => {
     if (!newText) return; // Action invalid (e.g., deleting last row)
-    
+
     editor.dispatch({
       changes: { from: context.from, to: context.to, insert: newText },
     });
     editor.focus();
+  };
+
+  const cycleAlignment = () => {
+    const currentAligns = getTableAlignments(editor.state.doc, context);
+    const alignCycle: ('left' | 'center' | 'right')[] = ['left', 'center', 'right'];
+    const currentAlign = currentAligns[context.cursorCol] || 'left';
+    const nextIdx = (alignCycle.indexOf(currentAlign) + 1) % 3;
+    const nextAlign = alignCycle[nextIdx];
+
+    const newAligns = [...currentAligns];
+    newAligns[context.cursorCol] = nextAlign;
+
+    const newText = formatTable(context.rows, newAligns);
+    dispatchUpdate(newText);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => e.preventDefault();
@@ -61,23 +75,30 @@ export function TableAssistant({ position, context, editor }: TableAssistantProp
       </div>
       
       <div className="flex items-center gap-0.5 pl-1.5">
-        <button 
-          onClick={() => dispatchUpdate(addCol(context, true))} 
-          className="p-1.5 text-text-2 hover:text-foreground hover:bg-accent rounded transition-colors" 
+        <button
+          onClick={() => dispatchUpdate(addCol(context, true))}
+          className="p-1.5 text-text-2 hover:text-foreground hover:bg-accent rounded transition-colors"
           title="Add Column Left"
         >
           <ArrowLeftToLine className="w-4 h-4" />
         </button>
-        <button 
-          onClick={() => dispatchUpdate(addCol(context, false))} 
-          className="p-1.5 text-text-2 hover:text-foreground hover:bg-accent rounded transition-colors" 
+        <button
+          onClick={() => dispatchUpdate(addCol(context, false))}
+          className="p-1.5 text-text-2 hover:text-foreground hover:bg-accent rounded transition-colors"
           title="Add Column Right"
         >
           <ArrowRightToLine className="w-4 h-4" />
         </button>
-        <button 
-          onClick={() => dispatchUpdate(deleteCol(context))} 
-          className="p-1.5 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors disabled:opacity-30 disabled:hover:bg-transparent" 
+        <button
+          onClick={cycleAlignment}
+          className="p-1.5 text-text-2 hover:text-foreground hover:bg-accent rounded transition-colors"
+          title="Cycle Column Alignment"
+        >
+          <AlignCenter className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => dispatchUpdate(deleteCol(context))}
+          className="p-1.5 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
           title="Delete Column"
           disabled={context.rows[0].length <= 1}
         >

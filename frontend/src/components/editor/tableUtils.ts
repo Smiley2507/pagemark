@@ -33,13 +33,14 @@ function parseRow(line: string): string[] {
 
 /**
  * Converts a 2D array of cells back into a markdown table string.
+ * @param rows 2D array of cell contents.
+ * @param alignments Optional array of 'left' | 'center' | 'right' for each column.
  */
-export function formatTable(rows: string[][]): string {
+export function formatTable(rows: string[][], alignments: ('left' | 'center' | 'right')[] = []): string {
   if (rows.length === 0) return '';
-  
-  // Calculate max width for each column to align it visually
+
   const colCount = Math.max(...rows.map(r => r.length));
-  const colWidths = new Array(colCount).fill(3); // minimum 3 for '---'
+  const colWidths = new Array(colCount).fill(3);
 
   for (let r = 0; r < rows.length; r++) {
     for (let c = 0; c < rows[r].length; c++) {
@@ -51,20 +52,70 @@ export function formatTable(rows: string[][]): string {
   }
 
   return rows.map((row, rIdx) => {
-    // Row 1 is the separator row: |---|---|
     if (rIdx === 1) {
-      const sepCells = new Array(colCount).fill('').map((_, c) => '-'.repeat(colWidths[c] || 3));
+      const sepCells = new Array(colCount).fill('').map((_, c) => {
+        const width = colWidths[c] || 3;
+        const align = alignments[c] || 'left';
+        if (align === 'center') return ':' + '-'.repeat(width - 2) + ':';
+        if (align === 'right') return '-'.repeat(width - 1) + ':';
+        return ':' + '-'.repeat(width - 1);
+      });
       return '| ' + sepCells.join(' | ') + ' |';
     }
-    
-    // Data rows
+
     const formattedCells = new Array(colCount).fill('').map((_, c) => {
       const cell = row[c] || '';
       return cell.padEnd(colWidths[c], ' ');
     });
-    
+
     return '| ' + formattedCells.join(' | ') + ' |';
   }).join('\\n');
+}
+
+export function getCellPos(doc: Text, ctx: TableContext, row: number, col: number): number {
+  const startLineNum = doc.lineAt(ctx.from).number;
+  const line = doc.line(startLineNum + row);
+  const text = line.text;
+
+  let pipeCount = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '|') {
+      let backslashes = 0;
+      for (let j = i - 1; j >= 0 && text[j] === '\\'; j--) {
+        backslashes++;
+      }
+
+      if (backslashes % 2 === 0) {
+        pipeCount++;
+        if (pipeCount === col + 1) {
+          let contentStart = i + 1;
+          if (contentStart < text.length && text[contentStart] === ' ') {
+            contentStart++;
+          }
+          return line.from + contentStart;
+        }
+      }
+    }
+  }
+
+  return line.to;
+}
+
+/**
+ * Extracts the alignment of each column from the separator row of a table.
+ */
+export function getTableAlignments(doc: Text, ctx: TableContext): ('left' | 'center' | 'right')[] {
+  const startLineNum = doc.lineAt(ctx.from).number;
+  const separatorLine = doc.line(startLineNum + 1).text;
+
+  const cells = parseRow(separatorLine);
+  return cells.map(cell => {
+    const left = cell.startsWith(':');
+    const right = cell.endsWith(':');
+    if (left && right) return 'center';
+    if (right) return 'right';
+    return 'left';
+  });
 }
 
 /**
@@ -89,22 +140,19 @@ export function findTableAtCursor(doc: Text, pos: number): TableContext | null {
   const rows: string[][] = [];
   const cursorRow = currentLine.number - startLineNum;
   let cursorCol = 0;
-  
+
   for (let n = startLineNum; n <= endLineNum; n++) {
     const text = doc.line(n).text;
     const cells = parseRow(text);
     rows.push(cells);
-    
+
     if (n === currentLine.number) {
-      // Very rough estimation of cursor column
       const prefix = text.slice(0, pos - doc.line(n).from);
-      // Count unescaped pipes in the prefix
       const pipes = (prefix.match(/(?<!\\\\)\\|/g) || []).length;
       cursorCol = Math.max(0, pipes - 1);
     }
   }
 
-  // A valid table needs at least a header and a separator
   if (rows.length < 2) return null;
 
   return {
@@ -122,20 +170,17 @@ export function addRow(ctx: TableContext, above: boolean): string {
   const newRows = [...ctx.rows];
   const colCount = Math.max(...newRows.map(r => r.length));
   const emptyRow = new Array(colCount).fill('');
-  
-  // Never insert above the separator
+
   let targetIdx = ctx.cursorRow;
   if (!above) targetIdx++;
-  if (targetIdx <= 1) targetIdx = 2; 
-  
+  if (targetIdx <= 1) targetIdx = 2;
+
   newRows.splice(targetIdx, 0, emptyRow);
   return formatTable(newRows);
 }
 
 export function deleteRow(ctx: TableContext): string | null {
-  // Cannot delete header or separator
-  if (ctx.cursorRow <= 1) return null; 
-  // Cannot delete the only data row
+  if (ctx.cursorRow <= 1) return null;
   if (ctx.rows.length <= 3) return null;
 
   const newRows = [...ctx.rows];
@@ -147,7 +192,7 @@ export function addCol(ctx: TableContext, left: boolean): string {
   const newRows = [...ctx.rows];
   let targetIdx = ctx.cursorCol;
   if (!left) targetIdx++;
-  
+
   for (let r = 0; r < newRows.length; r++) {
     if (r === 1) {
       newRows[r].splice(targetIdx, 0, '---');
@@ -159,7 +204,6 @@ export function addCol(ctx: TableContext, left: boolean): string {
 }
 
 export function deleteCol(ctx: TableContext): string | null {
-  // Cannot delete the only column
   if (ctx.rows[0].length <= 1) return null;
 
   const newRows = [...ctx.rows];

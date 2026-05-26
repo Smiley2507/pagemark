@@ -16,8 +16,14 @@ import { cn } from '@/lib/utils';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { BubbleMenu } from './BubbleMenu';
 import { TableAssistant } from './TableAssistant';
+import { TableHandles } from './TableHandles';
+import { BlockHandle } from './BlockHandle';
+import { ImageHandle } from './ImageHandle';
 import { findTableAtCursor, type TableContext } from './tableUtils';
+import { findBlockAtCursor, type BlockContext } from './blockUtils';
 import { livePreviewExtension } from './livePreview';
+import { tableKeymap } from './tableKeymap';
+import { wikiLinkAutocomplete } from './wikiLinkAutocomplete';
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 // Base CodeMirror theme — keeps transparent background, hides gutters, etc.
@@ -98,6 +104,50 @@ function ensureLivePreviewStyles() {
       transition: text-decoration-color 0.15s;
     }
     .cm-lp-link:hover { text-decoration-color: var(--primary); }
+    .cm-lp-wikilink {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 500;
+      background: color-mix(in oklch, var(--primary), transparent 90%);
+      border-radius: 3px;
+      padding: 0 2px;
+      transition: all 0.15s;
+    }
+    .cm-lp-wikilink:hover {
+      background: color-mix(in oklch, var(--primary), transparent 75%);
+      text-decoration: underline;
+    }
+
+    /* ── Callouts ────────────────────────────────────────────────────── */
+    .cm-lp-callout {
+      margin: 0.75em 0;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      background: var(--muted);
+    }
+    .cm-lp-callout-header {
+      padding: 6px 12px;
+      background: color-mix(in oklch, var(--primary), transparent 80%);
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 0.85rem;
+    }
+    .cm-lp-callout-title {
+      text-transform: capitalize;
+    }
+    .cm-lp-callout-body {
+      padding: 8px 12px;
+      font-size: 0.9rem;
+      color: var(--foreground);
+      white-space: pre-wrap;
+    }
+
+    /* Callout Types */
+    .cm-lp-callout-info { border-left: 4px solid #3b82f6; }
+    .cm-lp-callout-warning { border-left: 4px solid #f59e0b; }
+    .cm-lp-callout-danger { border-left: 4px solid #ef4444; }
+    .cm-lp-callout-success { border-left: 4px solid #10b981; }
 
     /* ── Blockquote ───────────────────────────────────────────────────────── */
     .cm-line.cm-lp-blockquote {
@@ -143,10 +193,14 @@ function ensureLivePreviewStyles() {
       border-radius: 3px;
     }
 
-    /* ── Table pipes (when cursor is inside, subtle) ──────────────────────── */
+    /* ── Table pipes (when cursor is inside, very subtle) ──────────────────────── */
     .cm-lp-pipe {
       color: color-mix(in oklch, var(--muted-foreground), transparent 75%);
       font-size: 0.85em;
+    }
+    .cm-lp-pipe-active {
+      color: transparent;
+      /* We keep the width by not using display: none */
     }
 
     /* ── Rendered table (when cursor is outside) ─────────────────────────── */
@@ -273,6 +327,18 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     const [menuState, setMenuState] = useState<MenuState | null>(null);
     const [bubbleMenuState, setBubbleMenuState] = useState<BubbleMenuState | null>(null);
     const [tableAssistantState, setTableAssistantState] = useState<TableAssistantState | null>(null);
+    const [tableHandlesState, setTableHandlesState] = useState<{
+      context: TableContext;
+      bounds: { top: number; left: number; width: number; height: number };
+    } | null>(null);
+    const [blockHandleState, setBlockHandleState] = useState<{
+      position: { top: number; left: number };
+      context: BlockContext;
+    } | null>(null);
+    const [imageHandleState, setImageHandleState] = useState<{
+      position: { top: number; left: number };
+      context: BlockContext;
+    } | null>(null);
 
     const onChangeRef = useRef(onChange);
     useEffect(() => { onChangeRef.current = onChange; });
@@ -345,20 +411,61 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           setTableAssistantState(null);
         } else {
           setBubbleMenuState(null);
-          
+
           // Table Assistant detection
           const tableCtx = findTableAtCursor(update.state.doc, main.from);
           if (tableCtx) {
-            // We can place it slightly to the right or just above the cursor
             const coords = update.view.coordsAtPos(main.from);
             if (coords) {
               setTableAssistantState({
                 position: { top: coords.top, left: coords.left },
                 context: tableCtx,
               });
+
+              const startCoords = update.view.coordsAtPos(tableCtx.from);
+              const endCoords = update.view.coordsAtPos(tableCtx.to);
+              if (startCoords && endCoords) {
+                setTableHandlesState({
+                  context: tableCtx,
+                  bounds: {
+                    top: startCoords.top,
+                    left: startCoords.left,
+                    width: Math.max(0, endCoords.left - startCoords.left),
+                    height: endCoords.bottom - startCoords.top,
+                  },
+                });
+              }
             }
           } else {
             setTableAssistantState(null);
+            setTableHandlesState(null);
+          }
+
+          // Block Handle detection
+          const blockCtx = findBlockAtCursor(update.state.doc, main.from);
+          if (blockCtx) {
+            const coords = update.view.coordsAtPos(main.from);
+            if (coords) {
+              setBlockHandleState({
+                position: { top: coords.top, left: coords.left },
+                context: blockCtx,
+              });
+            }
+          } else {
+            setBlockHandleState(null);
+          }
+
+          // Image Handle detection
+          if (blockCtx && blockCtx.type === 'image') {
+            const coords = update.view.coordsAtPos(main.from);
+            if (coords) {
+              setImageHandleState({
+                position: { top: coords.top, left: coords.left },
+                context: blockCtx,
+              });
+            }
+          } else {
+            setImageHandleState(null);
           }
         }
       });
@@ -371,8 +478,9 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           editorTheme,
           livePreviewExtension,          // ← Obsidian-style live preview
           closeBrackets(),
+          wikiLinkAutocomplete,
           placeholder("Type '/' for commands"),
-          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+          keymap.of([tableKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
           history(),
           updateListener,
           selectionListener,
@@ -390,11 +498,40 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         setBubbleMenuState(null);
         setTableAssistantState(null);
       };
-      
+
+      const handleDrop = (e: DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const files = Array.from(e.dataTransfer.files);
+        const images = files.filter(f => f.type.startsWith('image/'));
+
+        if (images.length > 0) {
+          const { state } = view;
+          const pos = state.selection.main.head;
+
+          images.forEach((file, idx) => {
+            // In a real app, this would be an upload call.
+            // For now, we'll use a local object URL for immediate feedback.
+            const url = URL.createObjectURL(file);
+            const markdown = `![${file.name}|300](${url})\n`;
+
+            view.dispatch({
+              changes: { from: pos + (idx * markdown.length), insert: markdown },
+            });
+          });
+
+          view.focus();
+        }
+      };
+
       view.contentDOM.addEventListener('blur', handleBlur);
+      view.contentDOM.addEventListener('drop', handleDrop);
+      view.contentDOM.addEventListener('dragover', (e) => e.preventDefault());
 
       return () => {
         view.contentDOM.removeEventListener('blur', handleBlur);
+        view.contentDOM.removeEventListener('drop', handleDrop);
         view.destroy();
         viewRef.current = null;
       };
@@ -448,7 +585,38 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             document.body,
           )
         }
+        {tableHandlesState && viewRef.current &&
+          createPortal(
+            <TableHandles
+              context={tableHandlesState.context}
+              editor={viewRef.current}
+              bounds={tableHandlesState.bounds}
+            />,
+            document.body,
+          )
+        }
+        {blockHandleState && viewRef.current &&
+          createPortal(
+            <BlockHandle
+              position={blockHandleState.position}
+              context={blockHandleState.context}
+              editor={viewRef.current}
+            />,
+            document.body,
+          )
+        }
+        {imageHandleState && viewRef.current &&
+          createPortal(
+            <ImageHandle
+              position={imageHandleState.position}
+              context={imageHandleState.context}
+              editor={viewRef.current}
+            />,
+            document.body,
+          )
+        }
       </div>
+
     );
   },
 );
