@@ -36,24 +36,24 @@ const editorTheme = EditorView.theme({
   },
   '.cm-content': {
     padding: '0',
-    caretColor: 'hsl(var(--foreground))',
+    caretColor: 'var(--foreground)',
   },
   '.cm-line': { padding: '0' },
   '.cm-focused': { outline: 'none' },
   '&.cm-focused': { outline: 'none' },
-  '.cm-activeLine': { backgroundColor: 'hsl(var(--muted) / 0.3)' },
-  '.cm-selectionBackground': { backgroundColor: 'hsl(var(--accent) / 0.35)' },
-  '&.cm-focused .cm-selectionBackground': { backgroundColor: 'hsl(var(--accent) / 0.35)' },
+  '.cm-activeLine': { backgroundColor: 'color-mix(in oklch, var(--muted), transparent 70%)' },
+  '.cm-selectionBackground': { backgroundColor: 'color-mix(in oklch, var(--accent), transparent 65%)' },
+  '&.cm-focused .cm-selectionBackground': { backgroundColor: 'color-mix(in oklch, var(--accent), transparent 65%)' },
   '.cm-gutters': { display: 'none' },
 
   // ── Syntax highlighting (visible on cursor line / raw mode) ─────────────
   '.cm-formatting': {
-    color: 'hsl(var(--muted-foreground))',
+    color: 'var(--muted-foreground)',
     fontSize: '0.85em',
   },
   '.cm-strong': { fontWeight: '700' },
   '.cm-em':     { fontStyle: 'italic' },
-  '.cm-url':    { color: 'hsl(var(--primary))' },
+  '.cm-url':    { color: 'var(--primary)' },
 });
 
 // ── Live-preview CSS injected once into <head> ────────────────────────────────
@@ -68,12 +68,12 @@ function ensureLivePreviewStyles() {
   style.id = LP_STYLE_ID;
   style.textContent = `
     /* ── Headings ─────────────────────────────────────────────────────────── */
-    .cm-line.cm-lp-h1 { font-size: 1.85rem; font-weight: 700; line-height: 1.2; color: hsl(var(--foreground)); margin: 0.6em 0 0.1em; }
-    .cm-line.cm-lp-h2 { font-size: 1.5rem;  font-weight: 650; line-height: 1.3; color: hsl(var(--foreground)); margin: 0.5em 0 0.1em; }
-    .cm-line.cm-lp-h3 { font-size: 1.25rem; font-weight: 600; line-height: 1.4; color: hsl(var(--foreground)); margin: 0.4em 0 0.05em; }
-    .cm-line.cm-lp-h4 { font-size: 1.1rem;  font-weight: 600; line-height: 1.4; color: hsl(var(--foreground)); margin: 0.3em 0 0.05em; }
-    .cm-line.cm-lp-h5 { font-size: 1.0rem;  font-weight: 600; line-height: 1.5; color: hsl(var(--muted-foreground)); margin: 0.2em 0 0; }
-    .cm-line.cm-lp-h6 { font-size: 0.9rem;  font-weight: 600; line-height: 1.5; color: hsl(var(--muted-foreground)); margin: 0.2em 0 0; }
+    .cm-line.cm-lp-h1 { font-size: 1.85rem; font-weight: 700; line-height: 1.2; color: var(--foreground); margin: 0.6em 0 0.1em; }
+    .cm-line.cm-lp-h2 { font-size: 1.5rem;  font-weight: 650; line-height: 1.3; color: var(--foreground); margin: 0.5em 0 0.1em; }
+    .cm-line.cm-lp-h3 { font-size: 1.25rem; font-weight: 600; line-height: 1.4; color: var(--foreground); margin: 0.4em 0 0.05em; }
+    .cm-line.cm-lp-h4 { font-size: 1.1rem;  font-weight: 600; line-height: 1.4; color: var(--foreground); margin: 0.3em 0 0.05em; }
+    .cm-line.cm-lp-h5 { font-size: 1.0rem;  font-weight: 600; line-height: 1.5; color: var(--muted-foreground); margin: 0.2em 0 0; }
+    .cm-line.cm-lp-h6 { font-size: 0.9rem;  font-weight: 600; line-height: 1.5; color: var(--muted-foreground); margin: 0.2em 0 0; }
 
     /* ── Inline formatting ────────────────────────────────────────────────── */
     .cm-lp-strong      { font-weight: 700; }
@@ -83,34 +83,34 @@ function ensureLivePreviewStyles() {
     .cm-lp-inline-code {
       font-family: 'JetBrains Mono', 'Fira Code', monospace;
       font-size: 0.85em;
-      background: hsl(var(--muted));
-      color: hsl(var(--primary));
+      background: var(--muted);
+      color: var(--primary);
       border-radius: 4px;
       padding: 2px 6px;
     }
 
     /* ── Links ────────────────────────────────────────────────────────────── */
     .cm-lp-link {
-      color: hsl(var(--primary));
+      color: var(--primary);
       text-decoration: underline;
-      text-decoration-color: hsl(var(--primary) / 0.4);
+      text-decoration-color: color-mix(in oklch, var(--primary), transparent 60%);
       text-underline-offset: 2px;
       transition: text-decoration-color 0.15s;
     }
-    .cm-lp-link:hover { text-decoration-color: hsl(var(--primary)); }
+    .cm-lp-link:hover { text-decoration-color: var(--primary); }
 
     /* ── Blockquote ───────────────────────────────────────────────────────── */
     .cm-line.cm-lp-blockquote {
-      border-left: 3px solid hsl(var(--primary) / 0.5);
+      border-left: 3px solid color-mix(in oklch, var(--primary), transparent 50%);
       padding-left: 1rem;
-      color: hsl(var(--muted-foreground));
+      color: var(--muted-foreground);
       font-style: italic;
     }
 
     /* ── Horizontal rule ──────────────────────────────────────────────────── */
     .cm-lp-hr {
       border: none;
-      border-top: 1px solid hsl(var(--border));
+      border-top: 1px solid var(--border);
       width: 100%;
       height: 1px;
       margin: 0.75em 0;
@@ -122,13 +122,13 @@ function ensureLivePreviewStyles() {
       max-width: 100%;
       max-height: 480px;
       border-radius: 8px;
-      border: 1px solid hsl(var(--border));
+      border: 1px solid var(--border);
       object-fit: contain;
     }
 
     /* ── List markers ────────────────────────────────────────────────────── */
     .cm-lp-list-mark {
-      color: hsl(var(--primary));
+      color: var(--primary);
       font-weight: 600;
     }
 
@@ -137,7 +137,7 @@ function ensureLivePreviewStyles() {
       width: 16px;
       height: 16px;
       vertical-align: middle;
-      accent-color: hsl(var(--primary));
+      accent-color: var(--primary);
       cursor: pointer;
       margin-right: 6px;
       border-radius: 3px;
@@ -145,7 +145,7 @@ function ensureLivePreviewStyles() {
 
     /* ── Table pipes (when cursor is inside, subtle) ──────────────────────── */
     .cm-lp-pipe {
-      color: hsl(var(--muted-foreground) / 0.25);
+      color: color-mix(in oklch, var(--muted-foreground), transparent 75%);
       font-size: 0.85em;
     }
 
@@ -164,17 +164,17 @@ function ensureLivePreviewStyles() {
       text-align: left;
       font-weight: 600;
       padding: 6px 12px;
-      border-bottom: 2px solid hsl(var(--border));
-      color: hsl(var(--foreground));
-      background: hsl(var(--muted) / 0.5);
+      border-bottom: 2px solid var(--border);
+      color: var(--foreground);
+      background: color-mix(in oklch, var(--muted), transparent 50%);
     }
     .cm-lp-table td {
       padding: 5px 12px;
-      border-bottom: 1px solid hsl(var(--border) / 0.6);
-      color: hsl(var(--foreground));
+      border-bottom: 1px solid color-mix(in oklch, var(--border), transparent 40%);
+      color: var(--foreground);
     }
     .cm-lp-table tbody tr:hover {
-      background: hsl(var(--muted) / 0.3);
+      background: color-mix(in oklch, var(--muted), transparent 70%);
     }
 
     /* ── Fenced code block ───────────────────────────────────────────────── */
@@ -182,41 +182,41 @@ function ensureLivePreviewStyles() {
       margin: 0.5em 0;
       border-radius: 8px;
       overflow: hidden;
-      border: 1px solid hsl(var(--border));
-      background: hsl(var(--muted));
+      border: 1px solid var(--border);
+      background: var(--muted);
     }
     .cm-lp-active-fenced {
-      background-color: hsl(var(--surface) / 0.5);
+      background-color: color-mix(in oklch, var(--background), transparent 50%);
     }
     .cm-lp-codeblock-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 4px 12px;
-      background: hsl(var(--muted));
-      border-bottom: 1px solid hsl(var(--border) / 0.5);
+      background: var(--muted);
+      border-bottom: 1px solid color-mix(in oklch, var(--border), transparent 50%);
     }
     .cm-lp-codeblock-lang {
       font-family: 'JetBrains Mono', 'Fira Code', monospace;
       font-size: 0.7rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: hsl(var(--muted-foreground));
+      color: var(--muted-foreground);
       font-weight: 500;
     }
     .cm-lp-codeblock-copy {
       font-size: 0.7rem;
       padding: 2px 8px;
       border-radius: 4px;
-      border: 1px solid hsl(var(--border));
+      border: 1px solid var(--border);
       background: transparent;
-      color: hsl(var(--muted-foreground));
+      color: var(--muted-foreground);
       cursor: pointer;
       transition: all 0.15s;
     }
     .cm-lp-codeblock-copy:hover {
-      background: hsl(var(--accent));
-      color: hsl(var(--foreground));
+      background: var(--accent);
+      color: var(--foreground);
     }
     .cm-lp-codeblock-body {
       margin: 0;
@@ -225,7 +225,7 @@ function ensureLivePreviewStyles() {
       font-size: 0.85em;
       line-height: 1.6;
       overflow-x: auto;
-      color: hsl(var(--foreground));
+      color: var(--foreground);
       background: transparent;
     }
     .cm-lp-codeblock-body code {

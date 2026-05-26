@@ -46,12 +46,12 @@ function CopyButton({ text }: { text: string }) {
     setTimeout(() => setCopied(false), 2000);
   };
   return (
-    <button 
+    <button
       onClick={handleCopy}
-      className="absolute right-2 top-2 p-1.5 bg-background/80 text-muted-foreground hover:text-foreground hover:bg-surface rounded opacity-0 group-hover:opacity-100 transition-all focus:opacity-100 border border-border"
+      className="absolute right-2 top-2 p-1.5 bg-background/80 text-muted-foreground hover:text-foreground hover:bg-accent rounded opacity-0 group-hover:opacity-100 transition-all focus:opacity-100 border border-border"
       aria-label="Copy code"
     >
-      {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+      {copied ? <Check className="w-3.5 h-3.5 text-status-finalized-foreground" /> : <Copy className="w-3.5 h-3.5" />}
     </button>
   );
 }
@@ -412,7 +412,7 @@ export function MiddlePanel({
               </Button>
               <Button
                 size="sm"
-                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                className="bg-status-finalized-foreground text-white hover:opacity-90"
                 onClick={onDiffAccept}
               >
                 Accept
@@ -432,7 +432,7 @@ export function MiddlePanel({
                       className={cn(
                         'border-l-2 px-3 py-0.5 font-mono text-sm leading-relaxed',
                         line.kind === 'removed'
-                          ? 'border-red-500 bg-red-50 text-foreground dark:bg-red-950/20'
+                          ? 'border-destructive bg-destructive/10 text-foreground'
                           : 'border-transparent',
                       )}
                     >
@@ -454,7 +454,7 @@ export function MiddlePanel({
                       className={cn(
                         'border-l-2 px-3 py-0.5 font-mono text-sm leading-relaxed',
                         line.kind === 'added'
-                          ? 'border-emerald-500 bg-emerald-50 text-foreground dark:bg-emerald-950/20'
+                          ? 'border-status-finalized-foreground bg-status-finalized/20 text-foreground'
                           : 'border-transparent',
                       )}
                     >

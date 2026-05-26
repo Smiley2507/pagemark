@@ -33,14 +33,14 @@ const statusConfig = {
   },
   draft: {
     label: 'Draft',
-    dot: 'bg-amber-500',
-    pill: 'bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400',
+    dot: 'bg-status-draft-foreground',
+    pill: 'bg-status-draft text-status-draft-foreground',
     icon: AlertCircle,
   },
   finalized: {
     label: 'Finalized',
-    dot: 'bg-emerald-500',
-    pill: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400',
+    dot: 'bg-status-finalized-foreground',
+    pill: 'bg-status-finalized text-status-finalized-foreground',
     icon: Check,
   },
 } as const;
@@ -92,11 +92,11 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
         }}
         className={cn(
           'absolute right-10 top-3 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent',
-          project.starred && 'text-amber-500'
+          project.starred && 'text-status-draft-foreground'
         )}
         aria-label={project.starred ? 'Unstar project' : 'Star project'}
       >
-        <Star className={cn('h-4 w-4', project.starred && 'fill-amber-500')} />
+        <Star className={cn('h-4 w-4', project.starred && 'fill-status-draft-foreground')} />
       </button>
 
       <div className="flex items-start justify-between gap-2 pr-16">
@@ -115,7 +115,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
           </button>
           {dropdownOpen && (
             <div
-              className="absolute right-0 z-20 mt-1 w-44 rounded-lg border border-border bg-surface-elevated p-1 shadow-sm"
+              className="absolute right-0 z-20 mt-1 w-44 rounded-lg border border-border bg-card p-1 shadow-sm"
               onClick={(e) => e.stopPropagation()}
             >
               <MenuItem icon={Edit3} label="Open editor" onClick={() => { setDropdownOpen(false); onOpen(project.id); }} />

@@ -293,7 +293,7 @@ export const NewProject: React.FC = () => {
                     "flex flex-col items-center gap-2 rounded-lg border p-5 text-center transition-all",
                     sourceChoice === id
                       ? "border-primary bg-accent shadow-sm"
-                      : "border-border bg-card hover:bg-surface-hover",
+                      : "border-border bg-card hover:bg-accent",
                   )}
                 >
                   <Icon
@@ -602,7 +602,7 @@ function GitAccountTab({
           />
           <div>
             <p className="text-sm font-bold">{profile?.username}</p>
-            <p className="text-xs text-emerald-600 dark:text-emerald-400">
+            <p className="text-xs text-status-finalized-foreground">
               {oauthProvider === "github" ? "GitHub" : "GitLab"} connected
             </p>
           </div>
@@ -676,7 +676,7 @@ function GitAccountTab({
                 "w-full rounded-lg border p-3 text-left transition-all",
                 selectedRepo?.id === repo.id
                   ? "border-primary bg-accent"
-                  : "border-border hover:bg-surface-hover",
+                  : "border-border hover:bg-accent",
               )}
             >
               <div className="flex items-start justify-between gap-2">

@@ -85,10 +85,10 @@ export function BubbleMenu({ position, editor }: BubbleMenuProps) {
 
   return (
     <div
-      className="fixed z-50 flex items-center gap-0.5 px-1 py-1 bg-surface-elevated border border-border-default rounded-md shadow-lg animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-50 flex items-center gap-0.5 px-1 py-1 bg-card border border-border-default rounded-md shadow-lg animate-in fade-in zoom-in-95 duration-100"
       style={{
         // Position slightly above the selection, centered
-        top: position.top - 40, 
+        top: position.top - 40,
         left: position.left,
         transform: 'translateX(-50%)',
       }}
@@ -96,28 +96,28 @@ export function BubbleMenu({ position, editor }: BubbleMenuProps) {
     >
       <button
         onClick={() => toggleFormat('**')}
-        className="p-1.5 text-text-2 hover:text-foreground hover:bg-surface-hover rounded transition-colors"
+        className="p-1.5 text-text-2 hover:text-foreground hover:bg-accent rounded transition-colors"
         title="Bold (Ctrl+B)"
       >
         <Bold className="w-4 h-4" />
       </button>
       <button
         onClick={() => toggleFormat('_')}
-        className="p-1.5 text-text-2 hover:text-foreground hover:bg-surface-hover rounded transition-colors"
+        className="p-1.5 text-text-2 hover:text-foreground hover:bg-accent rounded transition-colors"
         title="Italic (Ctrl+I)"
       >
         <Italic className="w-4 h-4" />
       </button>
       <button
         onClick={() => toggleFormat('~~')}
-        className="p-1.5 text-text-2 hover:text-foreground hover:bg-surface-hover rounded transition-colors"
+        className="p-1.5 text-text-2 hover:text-foreground hover:bg-accent rounded transition-colors"
         title="Strikethrough"
       >
         <Strikethrough className="w-4 h-4" />
       </button>
       <button
         onClick={() => toggleFormat('\`')}
-        className="p-1.5 text-text-2 hover:text-foreground hover:bg-surface-hover rounded transition-colors"
+        className="p-1.5 text-text-2 hover:text-foreground hover:bg-accent rounded transition-colors"
         title="Inline Code"
       >
         <Code className="w-4 h-4" />
@@ -125,7 +125,7 @@ export function BubbleMenu({ position, editor }: BubbleMenuProps) {
       <div className="w-[1px] h-4 bg-border-default mx-1" />
       <button
         onClick={toggleLink}
-        className="p-1.5 text-text-2 hover:text-foreground hover:bg-surface-hover rounded transition-colors"
+        className="p-1.5 text-text-2 hover:text-foreground hover:bg-accent rounded transition-colors"
         title="Link"
       >
         <Link className="w-4 h-4" />

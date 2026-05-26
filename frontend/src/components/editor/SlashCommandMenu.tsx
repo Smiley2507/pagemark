@@ -249,10 +249,10 @@ export function SlashCommandMenu({ position, slashPos, searchTerm, onClose, edit
 
   return (
     <div
-      className="fixed z-50 w-[320px] max-h-[360px] flex flex-col bg-surface-elevated border border-border-default rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-50 w-[320px] max-h-[360px] flex flex-col bg-card border border-border-default rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
       style={{ top: position.top, left: position.left }}
     >
-      <div className="p-2 border-b border-border-default bg-surface-subtle">
+      <div className="p-2 border-b border-border-default bg-muted">
         <div className="text-xs font-medium text-muted-foreground px-1">
           Type to filter or arrow keys to navigate
         </div>
@@ -288,7 +288,7 @@ export function SlashCommandMenu({ position, slashPos, searchTerm, onClose, edit
                         'w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left transition-colors',
                         selectedIndex === globalIdx
                           ? 'bg-accent/15 text-accent-foreground'
-                          : 'text-text-2 hover:bg-surface-hover hover:text-foreground',
+                          : 'text-text-2 hover:bg-accent hover:text-foreground',
                       )}
                     >
                       <div className="flex items-center gap-3 overflow-hidden">
@@ -296,7 +296,7 @@ export function SlashCommandMenu({ position, slashPos, searchTerm, onClose, edit
                           "shrink-0 flex items-center justify-center w-8 h-8 rounded border",
                           selectedIndex === globalIdx
                             ? 'bg-background border-border-default'
-                            : 'bg-surface border-transparent'
+                            : 'bg-background border-transparent'
                         )}>
                           <action.icon className={cn(
                             "h-4 w-4",
@@ -313,7 +313,7 @@ export function SlashCommandMenu({ position, slashPos, searchTerm, onClose, edit
                       </div>
                       {action.shortcut && (
                         <div className="shrink-0 pl-2">
-                          <kbd className="inline-flex items-center rounded border border-border-default bg-surface px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                          <kbd className="inline-flex items-center rounded border border-border-default bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
                             {action.shortcut}
                           </kbd>
                         </div>

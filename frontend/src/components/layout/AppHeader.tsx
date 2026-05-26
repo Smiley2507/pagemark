@@ -92,7 +92,7 @@ export function AppHeader({
             {profileMenuOpen && (
               <div
                 role="menu"
-                className="absolute right-0 mt-2 w-56 origin-top-right rounded-lg border border-border bg-surface-elevated p-1.5 shadow-sm"
+                className="absolute right-0 mt-2 w-56 origin-top-right rounded-lg border border-border bg-card p-1.5 shadow-sm"
               >
                 <div className="px-2.5 py-2">
                   <p className="text-meta-sm text-muted-foreground">Signed in as</p>
