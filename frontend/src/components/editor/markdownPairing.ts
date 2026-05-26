@@ -5,27 +5,37 @@ export function createPairingHandler(char: string, closing: string) {
     key: char,
     run: (view: EditorView) => {
       const { state } = view;
-      const pos = state.selection.main.head;
+      const selection = state.selection.main;
+      const from = selection.from;
+      const to = selection.to;
 
-      // Insert opening and closing markers
-      const insertText = char + closing;
+      if (!selection.empty) {
+        // Wrap selection
+        const selectedText = state.doc.sliceString(from, to);
+        const replacement = char + selectedText + closing;
 
-      view.dispatch({
-        changes: {
-          from: pos,
-          to: pos,
-          insert: insertText
-        },
-        selections: [{ anchor: pos + 1, head: pos + 1 }],
-        userEvent: 'input.text',
-      });
-      return true;
+        view.dispatch({
+          changes: { from, to, insert: replacement },
+          selection: { anchor: from + 1, head: from + selectedText.length + 1 },
+          userEvent: 'input.text',
+        });
+        return true;
+      } else {
+        // Empty pair
+        const insertText = char + closing;
+        view.dispatch({
+          changes: { from: from, to: from, insert: insertText },
+          selection: { anchor: from + 1, head: from + 1 },
+          userEvent: 'input.text',
+        });
+        return true;
+      }
     }
   };
 }
 
 export const pairingExtension = keymap.of([
-  createPairingHandler('*', '**'),
-  createPairingHandler('_', '__'),
+  createPairingHandler('*', '*'),
+  createPairingHandler('_', '_'),
   createPairingHandler('`', '`'),
 ]);

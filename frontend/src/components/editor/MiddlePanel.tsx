@@ -390,7 +390,7 @@ export function MiddlePanel({
                       ),
                     }}
                   >
-                    {localContent[section.id] ?? section.content_md}
+                    {(localContent[section.id] ?? section.content_md).replace(/\n([^\n])/g, '  \n$1')}
                   </ReactMarkdown>
                 </div>
               </div>
