@@ -16,6 +16,7 @@ import { formatDistanceToNow } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
+import { sectionsApi } from '@/api/sections';
 
 interface RightPanelProps {
   projectId: number;
@@ -42,7 +43,7 @@ interface VersionEntry {
   id: number;
   author_type: 'ai' | 'user';
   created_at: string;
-  summary: string;
+  summary?: string;
   added: number;
   removed: number;
 }
@@ -236,7 +237,7 @@ export function RightPanel({
               <button
                 disabled={!activeSectionId || isGenerating}
                 onClick={() => handleAction('generate')}
-                className="w-full text-left bg-card border border-border rounded-lg px-3 py-3 cursor-pointer hover:border-border/80 shadow-sm bg-card/80 transition-all duration-150 flex items-start gap-3 group disabled:opacity-50"
+                className="w-full text-left border border-border rounded-lg px-3 py-3 cursor-pointer hover:border-border/80 shadow-sm bg-card/80 transition-all duration-150 flex items-start gap-3 group disabled:opacity-50"
               >
                 <Sparkles className={cn("h-4 w-4 text-violet-500 mt-0.5 transition-transform", isGenerating && "animate-spin")} />
                 <div>
@@ -248,7 +249,7 @@ export function RightPanel({
               <button
                 disabled={!activeSectionId || isRefining}
                 onClick={() => handleAction('refine')}
-                className="w-full text-left bg-card border border-border rounded-lg px-3 py-3 cursor-pointer hover:border-border/80 shadow-sm bg-card/80 transition-all duration-150 flex items-start gap-3 group disabled:opacity-50"
+                className="w-full text-left border border-border rounded-lg px-3 py-3 cursor-pointer hover:border-border/80 shadow-sm bg-card/80 transition-all duration-150 flex items-start gap-3 group disabled:opacity-50"
               >
                 <Wand2 className="h-4 w-4 text-blue-500 mt-0.5" />
                 <div>
@@ -260,7 +261,7 @@ export function RightPanel({
               <button
                 disabled={!activeSectionId || isExpanding}
                 onClick={() => handleAction('expand')}
-                className="w-full text-left bg-card border border-border rounded-lg px-3 py-3 cursor-pointer hover:border-border/80 shadow-sm bg-card/80 transition-all duration-150 flex items-start gap-3 group disabled:opacity-50"
+                className="w-full text-left border border-border rounded-lg px-3 py-3 cursor-pointer hover:border-border/80 shadow-sm bg-card/80 transition-all duration-150 flex items-start gap-3 group disabled:opacity-50"
               >
                 <ArrowsUpFromLine className="h-4 w-4 text-emerald-500 mt-0.5" />
                 <div>
@@ -335,7 +336,7 @@ export function RightPanel({
                     <span className="text-xs font-medium">{v.author_type === 'ai' ? 'AI' : 'You'}</span>
                     <span className="text-xs text-muted-foreground">·</span>
                     <span className="text-xs text-muted-foreground font-mono">
-                      {formatDistanceToNow(new Date(v.created_at), { addFirstCanned: true })} ago
+                      {formatDistanceToNow(new Date(v.created_at), { addSuffix: true })}
                     </span>
                   </div>
                   <div className="text-sm text-foreground font-medium line-clamp-1 mt-1">
