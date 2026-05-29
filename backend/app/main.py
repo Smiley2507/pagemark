@@ -7,6 +7,7 @@ from app.config import settings
 from app.database import async_session
 from app.models.template import Template
 from app.routers import auth, projects, templates, git, documents, sections, versions
+from app.routers import ai as ai_router
 
 
 # ── Built-in template seed data ─────────────────────────────────
@@ -95,7 +96,7 @@ app = FastAPI(title="Pagemark API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=[settings.FRONTEND_URL, "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -108,6 +109,7 @@ app.include_router(git.router)
 app.include_router(documents.router)
 app.include_router(sections.router)
 app.include_router(versions.router)
+app.include_router(ai_router.router)
 
 
 @app.get("/health")

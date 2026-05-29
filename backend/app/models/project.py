@@ -35,6 +35,7 @@ class Project(Base):
     git_provider = Column(String, nullable=True)  # 'github', 'gitlab', 'bitbucket'
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
     starred = Column(Boolean, default=False)
+    context_md = Column(Text, nullable=True)  # user-defined AI context (JSON or free text)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

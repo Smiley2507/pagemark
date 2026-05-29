@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -272,6 +273,44 @@ async def delete_project(
 
     project.deleted_at = datetime.utcnow()
     await db.commit()
+
+
+# ── PATCH /projects/{id}/context ────────────────────────────────
+
+class ProjectContextRequest(BaseModel):
+    context_md: Optional[str] = None
+
+
+@router.patch("/{project_id}/context", response_model=ProjectResponse)
+async def update_project_context(
+    project_id: int,
+    body: "ProjectContextRequest",
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update the AI context field for a project (tone, audience, instructions, etc.)."""
+    result = await db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.owner_id == current_user.id,
+            Project.deleted_at.is_(None),
+        )
+    )
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    project.context_md = body.context_md
+    project.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(project)
+
+    sec_result = await db.execute(
+        select(Section).join(Document).where(Document.project_id == project.id)
+    )
+    sections = sec_result.scalars().all()
+
+    return _project_to_response(project, sections)
 
 
 # ── POST /projects/{id}/duplicate ────────────────────────────────

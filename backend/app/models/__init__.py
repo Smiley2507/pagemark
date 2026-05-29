@@ -8,6 +8,7 @@ from app.models.version import SectionVersion
 from app.models.analysis import Analysis
 from app.models.oauth_token import OAuthToken
 from app.models.ai_credential import UserAiCredential
+from app.models.chat import ChatThread, ChatMessage
 
 __all__ = [
     "User",
@@ -21,4 +22,6 @@ __all__ = [
     "Analysis",
     "OAuthToken",
     "UserAiCredential",
+    "ChatThread",
+    "ChatMessage",
 ]
