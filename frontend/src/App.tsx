@@ -13,7 +13,6 @@ import { Dashboard } from './pages/Dashboard';
 import { NewProject } from './pages/NewProject';
 import { Editor } from './pages/Editor';
 import { Analysis } from './pages/Analysis';
-import { Quality } from './pages/Quality';
 import { KnowledgeBase } from './pages/KnowledgeBase';
 import { GitConnectPage } from './pages/GitConnectPage';
 import { useMe } from './hooks/useAuth';
@@ -54,7 +53,6 @@ const AppRoutes = () => {
         <Route path="/new-project" element={<NewProject />} />
         <Route path="/editor/:id" element={<Editor />} />
         <Route path="/analysis/:id" element={<Analysis />} />
-        <Route path="/quality/:id" element={<Quality />} />
         <Route path="/knowledge-base" element={<KnowledgeBase />} />
         <Route path="/git-connect" element={<GitConnectPage />} />
       </Route>

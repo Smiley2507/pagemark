@@ -145,32 +145,59 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export const Quality: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const projectId = Number(id);
+export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projectId: number }> = ({ open, onClose, projectId }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
+  const [progress, setProgress] = useState(0);
 
-  const { data: report, isLoading, error } = useQuery({
+  const { data: report, isLoading, error, refetch } = useQuery({
     queryKey: ['quality', projectId],
     queryFn: () => qualityApi.getQuality(projectId),
     retry: false,
+    enabled: open,
   });
 
   const runMutation = useMutation({
     mutationFn: () => qualityApi.runQuality(projectId),
     onSuccess: () => {
       toast.success('Quality analysis started. Results will appear shortly.');
-      // Poll for results after a delay
+      setProgress(5);
+      
+      // Fake progress bar that fills up over 5-10 seconds
+      const interval = setInterval(() => {
+        setProgress(p => {
+          if (p >= 90) return p;
+          return p + Math.random() * 15;
+        });
+      }, 500);
+
+      // Poll until success
+      const poll = setInterval(async () => {
+        try {
+          await refetch();
+          clearInterval(poll);
+          clearInterval(interval);
+          setProgress(100);
+          setTimeout(() => setProgress(0), 500);
+        } catch (e) {
+          // keep polling
+        }
+      }, 2000);
+
+      // Cleanup if modal closes or after 30s
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['quality', projectId] });
-      }, 4000);
+        clearInterval(poll);
+        clearInterval(interval);
+        setProgress(0);
+      }, 30000);
     },
     onError: () => toast.error('Failed to start quality analysis'),
   });
+
+  if (!open) return null;
 
   // ── Derived data ────────────────────────────────────────────────
   const issues = report?.issues ?? [];
@@ -189,7 +216,10 @@ export const Quality: React.FC = () => {
   const warningCount = issues.filter(i => i.severity === 'warning').length;
   const infoCount = issues.filter(i => i.severity === 'info').length;
 
+  const isRunning = runMutation.isPending || progress > 0;
+
   // ── Render helpers ──────────────────────────────────────────────
+
 
   const renderOverview = () => (
     <div className="space-y-6">
@@ -438,140 +468,142 @@ export const Quality: React.FC = () => {
     </div>
   );
 
-  // ── Page layout ─────────────────────────────────────────────────
-
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Top bar */}
-      <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b border-border bg-background/80 backdrop-blur-sm px-6">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 md:p-12">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      
+      <div className="relative z-10 flex flex-col h-full max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
+        {/* Top bar */}
+        <header className="shrink-0 flex h-14 items-center justify-between border-b border-border bg-muted/30 px-6">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-primary" />
             <span className="font-semibold text-foreground">Quality Dashboard</span>
           </div>
-        </div>
 
-        <button
-          onClick={() => runMutation.mutate()}
-          disabled={runMutation.isPending}
-          className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition-all"
-        >
-          {runMutation.isPending ? (
-            <><Loader2 className="h-4 w-4 animate-spin" /> Running…</>
-          ) : (
-            <><RefreshCw className="h-4 w-4" /> Run Analysis</>
-          )}
-        </button>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-6 py-8">
-        {/* Loading */}
-        {isLoading && (
-          <div className="flex flex-col items-center gap-4 py-24">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-muted-foreground">Loading quality report…</p>
-          </div>
-        )}
-
-        {/* No report yet */}
-        {!isLoading && (error || !report) && (
-          <div className="flex flex-col items-center gap-6 py-24 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-              <ShieldCheck className="h-8 w-8 text-muted-foreground" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-foreground">No quality report yet</h2>
-              <p className="mt-2 text-sm text-muted-foreground max-w-sm">
-                Run an analysis to score your documentation on completeness, readability, consistency, and link accuracy.
-              </p>
-            </div>
+          <div className="flex items-center gap-3">
             <button
               onClick={() => runMutation.mutate()}
-              disabled={runMutation.isPending}
-              className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition-all"
+              disabled={isRunning}
+              className="flex items-center gap-2 rounded-xl bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition-all"
             >
-              {runMutation.isPending ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Starting…</>
+              {isRunning ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> {progress > 0 ? `${Math.round(progress)}%` : 'Running…'}</>
               ) : (
-                <><RefreshCw className="h-4 w-4" /> Run Quality Analysis</>
+                <><RefreshCw className="h-4 w-4" /> Run Analysis</>
               )}
             </button>
+            <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
+              <ArrowLeft className="h-5 w-5 rotate-180" /> {/* using ArrowLeft rotated as close button or X */}
+            </button>
+          </div>
+        </header>
+
+        {/* Fake Progress Bar */}
+        {progress > 0 && (
+          <div className="h-1 w-full bg-muted">
+            <div className="h-full bg-primary transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
           </div>
         )}
 
-        {/* Report loaded */}
-        {!isLoading && report && (
-          <>
-            {/* Tab navigation */}
-            <div className="flex items-center gap-1 border-b border-border mb-8">
-              {TABS.map(tab => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.id;
-                // Badge counts
-                let badge: number | null = null;
-                if (tab.id === 'issues') badge = issues.length;
-                if (tab.id === 'links') badge = brokenLinks.length;
-                if (tab.id === 'terminology') badge = terminologyIssues.length;
-
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={cn(
-                      'relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors',
-                      isActive
-                        ? 'text-foreground'
-                        : 'text-muted-foreground hover:text-foreground',
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {tab.label}
-                    {badge !== null && badge > 0 && (
-                      <span className={cn(
-                        'rounded-full px-1.5 py-0.5 text-xs font-bold',
-                        tab.id === 'issues' && errorCount > 0 ? 'bg-red-500 text-white' :
-                        tab.id === 'links' ? 'bg-red-500 text-white' :
-                        'bg-amber-500 text-white',
-                      )}>
-                        {badge}
-                      </span>
-                    )}
-                    {/* Active indicator */}
-                    {isActive && (
-                      <motion.div
-                        layoutId="quality-tab-indicator"
-                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"
-                      />
-                    )}
-                  </button>
-                );
-              })}
+        <main className="flex-1 overflow-y-auto px-6 py-6">
+          {/* Loading */}
+          {(isLoading && !report) && (
+            <div className="flex flex-col items-center justify-center h-full gap-4 py-24">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-muted-foreground">Loading quality report…</p>
             </div>
+          )}
 
-            {/* Tab content */}
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeTab}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.15 }}
+          {/* No report yet */}
+          {(!isLoading && !report && !isRunning) && (
+            <div className="flex flex-col items-center justify-center h-full gap-6 py-24 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
+                <ShieldCheck className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">No quality report yet</h2>
+                <p className="mt-2 text-sm text-muted-foreground max-w-sm">
+                  Run an analysis to score your documentation on completeness, readability, consistency, and link accuracy.
+                </p>
+              </div>
+              <button
+                onClick={() => runMutation.mutate()}
+                disabled={runMutation.isPending}
+                className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition-all"
               >
-                {activeTab === 'overview' && renderOverview()}
-                {activeTab === 'issues' && renderIssues()}
-                {activeTab === 'links' && renderLinks()}
-                {activeTab === 'terminology' && renderTerminology()}
-              </motion.div>
-            </AnimatePresence>
-          </>
-        )}
-      </main>
+                <RefreshCw className="h-4 w-4" /> Run Quality Analysis
+              </button>
+            </div>
+          )}
+
+          {/* Report loaded */}
+          {(!isLoading && report) && (
+            <>
+              {/* Tab navigation */}
+              <div className="flex items-center gap-1 border-b border-border mb-8 sticky top-0 bg-background/95 backdrop-blur-sm z-10 pt-2">
+                {TABS.map(tab => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  // Badge counts
+                  let badge: number | null = null;
+                  if (tab.id === 'issues') badge = issues.length;
+                  if (tab.id === 'links') badge = brokenLinks.length;
+                  if (tab.id === 'terminology') badge = terminologyIssues.length;
+
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={cn(
+                        'relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors',
+                        isActive
+                          ? 'text-foreground'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {tab.label}
+                      {badge !== null && badge > 0 && (
+                        <span className={cn(
+                          'rounded-full px-1.5 py-0.5 text-xs font-bold',
+                          tab.id === 'issues' && errorCount > 0 ? 'bg-red-500 text-white' :
+                          tab.id === 'links' ? 'bg-red-500 text-white' :
+                          'bg-amber-500 text-white',
+                        )}>
+                          {badge}
+                        </span>
+                      )}
+                      {/* Active indicator */}
+                      {isActive && (
+                        <motion.div
+                          layoutId="quality-tab-indicator"
+                          className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Tab content */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.15 }}
+                >
+                  {activeTab === 'overview' && renderOverview()}
+                  {activeTab === 'issues' && renderIssues()}
+                  {activeTab === 'links' && renderLinks()}
+                  {activeTab === 'terminology' && renderTerminology()}
+                </motion.div>
+              </AnimatePresence>
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
 };

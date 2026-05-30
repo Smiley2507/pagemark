@@ -25,6 +25,7 @@ import {
 import { ProjectCard } from '@/components/dashboard/ProjectCard';
 import { TemplateCard } from '@/components/dashboard/TemplateCard';
 import { SearchBar } from '@/components/dashboard/SearchBar';
+import { QualityModal } from '@/components/editor/QualityModal';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -48,6 +49,8 @@ export const Dashboard: React.FC = () => {
   }, [searchParams]);
   const [search, setSearch] = useState('');
   const [projectFilter, setProjectFilter] = useState<'all' | 'starred' | 'recent'>('all');
+  
+  const [qualityProjectId, setQualityProjectId] = useState<number | null>(null);
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editName, setEditName] = useState(user?.name || '');
@@ -217,6 +220,7 @@ export const Dashboard: React.FC = () => {
                       }}
                       onDuplicate={(id) => duplicateProjectMutation.mutate(id)}
                       onStar={(id, starred) => starProjectMutation.mutate({ id, starred })}
+                      onQuality={(id) => setQualityProjectId(id)}
                     />
                   ))}
                 </div>
@@ -459,6 +463,14 @@ export const Dashboard: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {qualityProjectId !== null && (
+        <QualityModal
+          projectId={qualityProjectId}
+          open={true}
+          onClose={() => setQualityProjectId(null)}
+        />
       )}
     </div>
   );

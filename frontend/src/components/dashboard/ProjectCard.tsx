@@ -22,6 +22,7 @@ interface ProjectCardProps {
   onDelete: (id: number) => void;
   onDuplicate: (id: number) => void;
   onStar: (id: number, starred: boolean) => void;
+  onQuality?: (id: number) => void;
 }
 
 const statusConfig = {
@@ -51,6 +52,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   onDelete,
   onDuplicate,
   onStar,
+  onQuality,
 }) => {
   const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -120,7 +122,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
             >
               <MenuItem icon={Edit3} label="Open editor" onClick={() => { setDropdownOpen(false); onOpen(project.id); }} />
               <MenuItem icon={BarChart2} label="Analysis" onClick={() => { setDropdownOpen(false); navigate(`/analysis/${project.id}`); }} />
-              <MenuItem icon={ShieldCheck} label="Quality" onClick={() => { setDropdownOpen(false); navigate(`/quality/${project.id}`); }} />
+              {onQuality && <MenuItem icon={ShieldCheck} label="Quality" onClick={() => { setDropdownOpen(false); onQuality(project.id); }} />}
               <MenuItem icon={Copy} label="Duplicate" onClick={() => { setDropdownOpen(false); onDuplicate(project.id); }} />
               <div className="my-1 h-px bg-border" />
               <MenuItem icon={Trash2} label="Delete" destructive onClick={() => { setDropdownOpen(false); onDelete(project.id); }} />

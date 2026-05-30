@@ -16,6 +16,7 @@ import { LeftPanel } from "@/components/editor/LeftPanel";
 import { MiddlePanel } from "@/components/editor/MiddlePanel";
 import { RightPanel } from "@/components/editor/RightPanel";
 import { ExportModal } from "@/components/editor/ExportModal";
+import { QualityModal } from "@/components/editor/QualityModal";
 import {
   useAutosave,
   useDocument,
@@ -38,6 +39,7 @@ export const EditorPage: React.FC = () => {
   const [rightOpen, setRightOpen] = useState(true);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [qualityOpen, setQualityOpen] = useState(false);
 
   const middlePanelRef = useRef<{ scrollToSection: (id: number) => void }>(null);
   const leftPanelRef = useRef<any>(null);
@@ -167,7 +169,7 @@ export const EditorPage: React.FC = () => {
             variant="ghost"
             size="sm"
             className="flex items-center gap-2"
-            onClick={() => navigate(`/quality/${projectId}`)}
+            onClick={() => setQualityOpen(true)}
           >
             <ShieldCheck className="h-4 w-4" />
             <span>Quality</span>
@@ -283,6 +285,13 @@ export const EditorPage: React.FC = () => {
         projectName={project?.name ?? 'Documentation'}
         open={exportOpen}
         onClose={() => setExportOpen(false)}
+      />
+
+      {/* Quality modal */}
+      <QualityModal
+        projectId={projectId}
+        open={qualityOpen}
+        onClose={() => setQualityOpen(false)}
       />
     </div>
   );
