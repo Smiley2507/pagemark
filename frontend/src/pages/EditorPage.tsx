@@ -9,11 +9,13 @@ import {
   PanelRight,
   Sparkles,
   Loader2,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LeftPanel } from "@/components/editor/LeftPanel";
 import { MiddlePanel } from "@/components/editor/MiddlePanel";
 import { RightPanel } from "@/components/editor/RightPanel";
+import { ExportModal } from "@/components/editor/ExportModal";
 import {
   useAutosave,
   useDocument,
@@ -35,6 +37,7 @@ export const EditorPage: React.FC = () => {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const middlePanelRef = useRef<{ scrollToSection: (id: number) => void }>(null);
   const leftPanelRef = useRef<any>(null);
@@ -160,7 +163,21 @@ export const EditorPage: React.FC = () => {
             </Button>
           )}
 
-          <Button variant="ghost" size="sm" className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={() => navigate(`/quality/${projectId}`)}
+          >
+            <ShieldCheck className="h-4 w-4" />
+            <span>Quality</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={() => setExportOpen(true)}
+          >
             <Download className="h-4 w-4" />
             <span>Export</span>
           </Button>
@@ -259,6 +276,14 @@ export const EditorPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Export modal */}
+      <ExportModal
+        projectId={projectId}
+        projectName={project?.name ?? 'Documentation'}
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+      />
     </div>
   );
 };

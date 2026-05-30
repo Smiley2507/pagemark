@@ -270,6 +270,7 @@ export interface FileNode {
 
 export interface QualityReport {
   id: number;
+  project_id: number;
   overall_score: number;
   completeness: number;
   consistency: number;
@@ -278,9 +279,31 @@ export interface QualityReport {
   generated_at: string;
 }
 
+export interface QualityIssue {
+  id: number;
+  report_id: number;
+  severity: 'error' | 'warning' | 'info';
+  section_ref?: string;
+  message: string;
+  suggestion?: string;
+}
+
+export interface BrokenLink {
+  id: number;
+  report_id: number;
+  url: string;
+  status_code?: number;
+  section_ref?: string;
+}
+
+export interface QualityReportFull extends QualityReport {
+  issues: QualityIssue[];
+  broken_links: BrokenLink[];
+}
+
 export interface ChatMessage {
   id: number;
-  role: "user" | "ai";
+  role: 'user' | 'ai';
   content: string;
   created_at: string;
 }
