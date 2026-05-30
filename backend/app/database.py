@@ -19,3 +19,6 @@ class Base(DeclarativeBase):
 async def get_db():
     async with async_session() as session:
         yield session
+
+# Alias used by Celery workers so they can import `sync_session_factory`
+sync_session_factory = SessionLocal

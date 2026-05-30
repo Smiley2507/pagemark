@@ -9,6 +9,7 @@ from app.models.analysis import Analysis
 from app.models.oauth_token import OAuthToken
 from app.models.ai_credential import UserAiCredential
 from app.models.chat import ChatThread, ChatMessage
+from app.models.quality import QualityReport, QualityIssue, BrokenLink
 
 __all__ = [
     "User",
@@ -24,4 +25,7 @@ __all__ = [
     "UserAiCredential",
     "ChatThread",
     "ChatMessage",
+    "QualityReport",
+    "QualityIssue",
+    "BrokenLink",
 ]

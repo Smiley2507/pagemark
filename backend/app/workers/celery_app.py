@@ -25,4 +25,4 @@ celery_app.conf.update(
 )
 
 # Auto-discover tasks in the workers module
-celery_app.autodiscover_tasks(["app.workers.analysis_worker"])
+celery_app.autodiscover_tasks(["app.workers.analysis_worker", "app.workers.quality_worker"])
