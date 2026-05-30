@@ -10,6 +10,8 @@ from app.routers import auth, projects, templates, git, documents, sections, ver
 from app.routers import ai as ai_router
 from app.routers import quality as quality_router
 from app.routers import export as export_router
+from app.routers import organizations as org_router
+from app.routers import keys as keys_router
 
 
 # ── Built-in template seed data ─────────────────────────────────
@@ -114,6 +116,8 @@ app.include_router(versions.router)
 app.include_router(ai_router.router)
 app.include_router(quality_router.router)
 app.include_router(export_router.router)
+app.include_router(org_router.router)
+app.include_router(keys_router.router)
 
 
 @app.get("/health")

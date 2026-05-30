@@ -3,11 +3,14 @@ export interface User {
   email: string;
   name: string;
   avatar_url?: string;
+  is_verified: boolean;
   created_at: string;
 }
 
 export interface Project {
   id: number;
+  org_id: number;
+  created_by: number;
   name: string;
   description?: string;
   status: "pending" | "draft" | "finalized";
@@ -306,4 +309,46 @@ export interface ChatMessage {
   role: 'user' | 'ai';
   content: string;
   created_at: string;
+}
+
+export interface Organization {
+  id: number;
+  name: string;
+  slug: string;
+  avatar_url?: string;
+  personal: boolean;
+  created_at: string;
+}
+
+export type OrgMemberRole = 'ADMIN' | 'PROJECT_MANAGER' | 'DEVELOPER' | 'TECHNICAL_WRITER' | 'VIEWER';
+
+export interface OrgMember {
+  id: number;
+  user_id: number;
+  org_id: number;
+  role: OrgMemberRole;
+  status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
+  joined_at: string;
+  user_name?: string;
+  user_email?: string;
+  user_avatar?: string;
+}
+
+export interface AuditLog {
+  id: number;
+  user_id: number;
+  org_id: number;
+  action: string;
+  resource?: string;
+  created_at: string;
+  user_name?: string;
+  user_email?: string;
+}
+
+export interface APIKey {
+  id: number;
+  name: string;
+  created_at: string;
+  expires_at?: string;
+  raw_key?: string;
 }

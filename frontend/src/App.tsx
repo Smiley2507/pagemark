@@ -19,14 +19,28 @@ import { useMe } from './hooks/useAuth';
 
 const queryClient = new QueryClient();
 
-/** Sends authenticated users to /dashboard, guests to /login. */
+import { VerifyEmailPendingPage } from './pages/auth/VerifyEmailPendingPage';
+import { VerifyEmailPage } from './pages/auth/VerifyEmailPage';
+import { useOrgStore } from './store/orgStore';
+import { orgApi } from './api/org';
+
 const RootRedirect = () => {
   const user = useAuthStore((state) => state.user);
-  return <Navigate to={user ? '/dashboard' : '/login'} replace />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!user.is_verified) return <Navigate to="/verify-email-pending" replace />;
+  return <Navigate to="/dashboard" replace />;
 };
 
 const AppRoutes = () => {
   const { isLoading } = useMe();
+  const user = useAuthStore((state) => state.user);
+  const setOrganizations = useOrgStore((state) => state.setOrganizations);
+
+  React.useEffect(() => {
+    if (user && user.is_verified) {
+      orgApi.listOrganizations().then(setOrganizations).catch(console.error);
+    }
+  }, [user, setOrganizations]);
 
   if (isLoading) {
     return (
@@ -46,6 +60,8 @@ const AppRoutes = () => {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/verify-email-pending" element={<VerifyEmailPendingPage />} />
 
       {/* Protected Routes */}
       <Route element={<ProtectedRoute />}>

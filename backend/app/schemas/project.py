@@ -38,7 +38,8 @@ class ProjectUpdateRequest(BaseModel):
 
 class ProjectResponse(BaseModel):
     id: int
-    owner_id: int
+    org_id: int
+    created_by: int
     name: str
     description: Optional[str]
     status: ProjectStatusEnum

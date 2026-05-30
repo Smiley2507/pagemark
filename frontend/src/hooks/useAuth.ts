@@ -27,8 +27,12 @@ export const useLogin = () => {
     mutationFn: authApi.login,
     onSuccess: (user) => {
       useAuthStore.getState().setUser(user);
-      toast.success('Welcome back!');
-      navigate('/dashboard');
+      if (!user.is_verified) {
+        navigate('/verify-email-pending');
+      } else {
+        toast.success('Welcome back!');
+        navigate('/dashboard');
+      }
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Login failed');
@@ -42,8 +46,12 @@ export const useRegister = () => {
     mutationFn: authApi.register,
     onSuccess: (user) => {
       useAuthStore.getState().setUser(user);
-      toast.success('Account created successfully!');
-      navigate('/dashboard');
+      if (!user.is_verified) {
+        navigate('/verify-email-pending');
+      } else {
+        toast.success('Account created successfully!');
+        navigate('/dashboard');
+      }
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || 'Registration failed');

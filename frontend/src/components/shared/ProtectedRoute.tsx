@@ -8,5 +8,9 @@ export const ProtectedRoute = () => {
     return <Navigate to="/login" replace />;
   }
 
+  if (!user.is_verified) {
+    return <Navigate to="/verify-email-pending" replace />;
+  }
+
   return <Outlet />;
 };

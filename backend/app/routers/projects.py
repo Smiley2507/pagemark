@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
@@ -10,6 +10,7 @@ from sqlalchemy import func
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
+from app.models.organization import Organization, OrganizationMember, OrgMemberStatus
 from app.models.project import Project, ProjectStatus, SourceType
 from app.models.template import Template
 from app.models.document import Document, Section, SectionStatus
@@ -52,8 +53,10 @@ DEFAULT_SECTIONS = [
 ]
 
 
+# ── Helpers ───────────────────────────────────────────────────────
+
+
 def _compute_completion_pct(sections: list[Section]) -> float:
-    """Completion % = finalized sections / total sections * 100."""
     if not sections:
         return 0.0
     finalized = sum(1 for s in sections if s.status == SectionStatus.FINALIZED)
@@ -61,14 +64,14 @@ def _compute_completion_pct(sections: list[Section]) -> float:
 
 
 def _project_to_response(project: Project, sections: list[Section]) -> ProjectResponse:
-    completion = _compute_completion_pct(sections)
     return ProjectResponse(
         id=project.id,
-        owner_id=project.owner_id,
+        org_id=project.org_id,
+        created_by=project.created_by,
         name=project.name,
         description=project.description,
         status=project.status.value,
-        completion_pct=completion,
+        completion_pct=_compute_completion_pct(sections),
         source_type=project.source_type.value,
         git_repo_url=project.git_repo_url,
         git_branch=project.git_branch,
@@ -80,30 +83,95 @@ def _project_to_response(project: Project, sections: list[Section]) -> ProjectRe
     )
 
 
-# ── GET /projects ────────────────────────────────────────────────
+async def _resolve_org_id(request: Request, current_user: User, db: AsyncSession) -> int:
+    """
+    Reads org_id from X-Organization-ID header.
+    Falls back to the user's personal organization.
+    """
+    header_val = request.headers.get("X-Organization-ID")
+    if header_val:
+        try:
+            return int(header_val)
+        except ValueError:
+            pass
+
+    # Fall back to personal org
+    res = await db.execute(
+        select(Organization)
+        .join(OrganizationMember, OrganizationMember.org_id == Organization.id)
+        .where(
+            OrganizationMember.user_id == current_user.id,
+            OrganizationMember.status == OrgMemberStatus.ACTIVE,
+            Organization.personal == True,
+        )
+        .limit(1)
+    )
+    org = res.scalar_one_or_none()
+    if not org:
+        # Fallback: any org the user belongs to
+        res2 = await db.execute(
+            select(OrganizationMember).where(
+                OrganizationMember.user_id == current_user.id,
+                OrganizationMember.status == OrgMemberStatus.ACTIVE,
+            ).limit(1)
+        )
+        member = res2.scalar_one_or_none()
+        if not member:
+            raise HTTPException(status_code=400, detail="User has no organization")
+        return member.org_id
+    return org.id
+
+
+async def _get_project(project_id: int, current_user: User, db: AsyncSession) -> Project:
+    """
+    Fetch a project and verify the current user belongs to its org.
+    Raises 404 to prevent IDOR leaks.
+    """
+    res = await db.execute(
+        select(Project).where(Project.id == project_id, Project.deleted_at.is_(None))
+    )
+    project = res.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    member_res = await db.execute(
+        select(OrganizationMember).where(
+            OrganizationMember.org_id == project.org_id,
+            OrganizationMember.user_id == current_user.id,
+            OrganizationMember.status == OrgMemberStatus.ACTIVE,
+        )
+    )
+    if not member_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    return project
+
+
+# ── GET /projects ─────────────────────────────────────────────────
 
 @router.get("", response_model=ProjectListResponse)
 async def list_projects(
+    request: Request,
     search: Optional[str] = Query(None),
     project_status: Optional[str] = Query(None, alias="status"),
     starred: Optional[bool] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    org_id = await _resolve_org_id(request, current_user, db)
+
     query = (
         select(Project)
-        .where(Project.owner_id == current_user.id)
-        .where(Project.deleted_at.is_(None))
+        .where(Project.org_id == org_id, Project.deleted_at.is_(None))
     )
 
     if search:
         query = query.where(Project.name.ilike(f"%{search}%"))
     if project_status:
         try:
-            status_enum = ProjectStatus(project_status)
-            query = query.where(Project.status == status_enum)
+            query = query.where(Project.status == ProjectStatus(project_status))
         except ValueError:
-            pass  # ignore invalid status filter
+            pass
     if starred is not None:
         query = query.where(Project.starred == starred)
 
@@ -111,30 +179,30 @@ async def list_projects(
     result = await db.execute(query)
     projects = result.scalars().all()
 
-    # Fetch sections for each project to compute completion %
     responses = []
     for proj in projects:
         sec_result = await db.execute(
-            select(Section)
-            .join(Document)
-            .where(Document.project_id == proj.id)
+            select(Section).join(Document).where(Document.project_id == proj.id)
         )
-        sections = sec_result.scalars().all()
-        responses.append(_project_to_response(proj, sections))
+        responses.append(_project_to_response(proj, sec_result.scalars().all()))
 
     return ProjectListResponse(projects=responses, total=len(responses))
 
 
-# ── POST /projects ───────────────────────────────────────────────
+# ── POST /projects ────────────────────────────────────────────────
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=ProjectResponse)
 async def create_project(
+    request: Request,
     body: ProjectCreateRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    org_id = await _resolve_org_id(request, current_user, db)
+
     project = Project(
-        owner_id=current_user.id,
+        org_id=org_id,
+        created_by=current_user.id,
         name=body.name,
         description=body.description,
         source_type=SourceType(body.source_type.value),
@@ -145,19 +213,13 @@ async def create_project(
     db.add(project)
     await db.flush()
 
-    # Create Document
     document = Document(project_id=project.id, title="Documentation")
     db.add(document)
     await db.flush()
 
-    # Decide which sections to create
     section_headings = DEFAULT_SECTIONS
-
-    # If a template is specified, use its sections instead
     if body.template_id:
-        tmpl_result = await db.execute(
-            select(Template).where(Template.id == body.template_id)
-        )
+        tmpl_result = await db.execute(select(Template).where(Template.id == body.template_id))
         template = tmpl_result.scalar_one_or_none()
         if template and template.sections_json:
             section_headings = [
@@ -165,7 +227,6 @@ async def create_project(
                 for s in template.sections_json
             ]
 
-    # Create Section rows
     sections = []
     for idx, heading in enumerate(section_headings):
         section = Section(
@@ -180,11 +241,10 @@ async def create_project(
 
     await db.commit()
     await db.refresh(project)
-
     return _project_to_response(project, sections)
 
 
-# ── GET /projects/{id} ──────────────────────────────────────────
+# ── GET /projects/{id} ───────────────────────────────────────────
 
 @router.get("/{project_id}", response_model=ProjectResponse)
 async def get_project(
@@ -192,26 +252,14 @@ async def get_project(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None),
-        )
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
+    project = await _get_project(project_id, current_user, db)
     sec_result = await db.execute(
         select(Section).join(Document).where(Document.project_id == project.id)
     )
-    sections = sec_result.scalars().all()
-
-    return _project_to_response(project, sections)
+    return _project_to_response(project, sec_result.scalars().all())
 
 
-# ── PATCH /projects/{id} ────────────────────────────────────────
+# ── PATCH /projects/{id} ─────────────────────────────────────────
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
 async def update_project(
@@ -220,16 +268,7 @@ async def update_project(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None),
-        )
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = await _get_project(project_id, current_user, db)
 
     if body.name is not None:
         project.name = body.name
@@ -247,12 +286,10 @@ async def update_project(
     sec_result = await db.execute(
         select(Section).join(Document).where(Document.project_id == project.id)
     )
-    sections = sec_result.scalars().all()
-
-    return _project_to_response(project, sections)
+    return _project_to_response(project, sec_result.scalars().all())
 
 
-# ── DELETE /projects/{id} ───────────────────────────────────────
+# ── DELETE /projects/{id} ────────────────────────────────────────
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(
@@ -260,22 +297,12 @@ async def delete_project(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None),
-        )
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
+    project = await _get_project(project_id, current_user, db)
     project.deleted_at = datetime.utcnow()
     await db.commit()
 
 
-# ── PATCH /projects/{id}/context ────────────────────────────────
+# ── PATCH /projects/{id}/context ─────────────────────────────────
 
 class ProjectContextRequest(BaseModel):
     context_md: Optional[str] = None
@@ -288,18 +315,7 @@ async def update_project_context(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update the AI context field for a project (tone, audience, instructions, etc.)."""
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None),
-        )
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
+    project = await _get_project(project_id, current_user, db)
     project.context_md = body.context_md
     project.updated_at = datetime.utcnow()
     await db.commit()
@@ -308,9 +324,7 @@ async def update_project_context(
     sec_result = await db.execute(
         select(Section).join(Document).where(Document.project_id == project.id)
     )
-    sections = sec_result.scalars().all()
-
-    return _project_to_response(project, sections)
+    return _project_to_response(project, sec_result.scalars().all())
 
 
 # ── POST /projects/{id}/duplicate ────────────────────────────────
@@ -321,21 +335,11 @@ async def duplicate_project(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Fetch the original project
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None),
-        )
-    )
-    original = result.scalar_one_or_none()
-    if not original:
-        raise HTTPException(status_code=404, detail="Project not found")
+    original = await _get_project(project_id, current_user, db)
 
-    # Create new project
     new_project = Project(
-        owner_id=current_user.id,
+        org_id=original.org_id,
+        created_by=current_user.id,
         name=f"{original.name} (copy)",
         description=original.description,
         source_type=original.source_type,
@@ -347,30 +351,17 @@ async def duplicate_project(
     db.add(new_project)
     await db.flush()
 
-    # Deep copy documents and sections
-    doc_result = await db.execute(
-        select(Document).where(Document.project_id == original.id)
-    )
-    original_docs = doc_result.scalars().all()
-
+    doc_result = await db.execute(select(Document).where(Document.project_id == original.id))
     all_new_sections = []
-    for orig_doc in original_docs:
-        new_doc = Document(
-            project_id=new_project.id,
-            title=orig_doc.title,
-        )
+    for orig_doc in doc_result.scalars().all():
+        new_doc = Document(project_id=new_project.id, title=orig_doc.title)
         db.add(new_doc)
         await db.flush()
 
-        # Copy sections
         sec_result = await db.execute(
-            select(Section)
-            .where(Section.document_id == orig_doc.id)
-            .order_by(Section.order_index)
+            select(Section).where(Section.document_id == orig_doc.id).order_by(Section.order_index)
         )
-        original_sections = sec_result.scalars().all()
-
-        for orig_sec in original_sections:
+        for orig_sec in sec_result.scalars().all():
             new_section = Section(
                 document_id=new_doc.id,
                 order_index=orig_sec.order_index,
@@ -383,11 +374,10 @@ async def duplicate_project(
 
     await db.commit()
     await db.refresh(new_project)
-
     return _project_to_response(new_project, all_new_sections)
 
 
-# ── POST /projects/{id}/upload ──────────────────────────────────
+# ── POST /projects/{id}/upload ────────────────────────────────────
 
 @router.post("/{project_id}/upload", status_code=status.HTTP_202_ACCEPTED)
 async def upload_zip(
@@ -399,34 +389,16 @@ async def upload_zip(
     if not file.filename.endswith('.zip'):
         raise HTTPException(status_code=400, detail="Only ZIP files are supported")
 
-    # verify project
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None)
-        )
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
+    project = await _get_project(project_id, current_user, db)
     project.source_type = SourceType.ZIP
-    
+
     upload_dir = f"uploads/{project_id}"
     std_os.makedirs(upload_dir, exist_ok=True)
     file_path = f"{upload_dir}/{file.filename}"
-    
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # create analysis
-    analysis = Analysis(
-        project_id=project.id,
-        source_type="zip",
-        source_path=file_path,
-        total_steps=8,
-    )
+    analysis = Analysis(project_id=project.id, source_type="zip", source_path=file_path, total_steps=8)
     db.add(analysis)
     await db.commit()
     await db.refresh(analysis)
@@ -435,7 +407,7 @@ async def upload_zip(
     return {"job_id": task.id, "analysis_id": analysis.id}
 
 
-# ── POST /projects/{id}/git/connect-url ─────────────────────────
+# ── POST /projects/{id}/git/connect-url ──────────────────────────
 
 @router.post("/{project_id}/git/connect-url", status_code=status.HTTP_202_ACCEPTED)
 async def connect_public_git(
@@ -449,29 +421,13 @@ async def connect_public_git(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # verify project
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None)
-        )
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
+    project = await _get_project(project_id, current_user, db)
     project.source_type = SourceType.GIT
     project.git_repo_url = body.repo_url
     project.git_branch = body.branch
     project.git_provider = provider
 
-    analysis = Analysis(
-        project_id=project.id,
-        source_type="git",
-        source_path=body.repo_url,
-        total_steps=8,
-    )
+    analysis = Analysis(project_id=project.id, source_type="git", source_path=body.repo_url, total_steps=8)
     db.add(analysis)
     await db.commit()
     await db.refresh(analysis)
@@ -480,7 +436,7 @@ async def connect_public_git(
     return {"job_id": task.id, "analysis_id": analysis.id}
 
 
-# ── POST /projects/{id}/git/connect-oauth ───────────────────────
+# ── POST /projects/{id}/git/connect-oauth ────────────────────────
 
 @router.post("/{project_id}/git/connect-oauth", status_code=status.HTTP_202_ACCEPTED)
 async def connect_oauth_git(
@@ -491,20 +447,13 @@ async def connect_oauth_git(
 ):
     provider = body.provider if body.provider in ("github", "gitlab") else "github"
     result = await db.execute(
-        select(OAuthToken).where(
-            OAuthToken.user_id == current_user.id,
-            OAuthToken.provider == provider,
-        )
+        select(OAuthToken).where(OAuthToken.user_id == current_user.id, OAuthToken.provider == provider)
     )
     token_obj = result.scalar_one_or_none()
     if not token_obj:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No {provider} connection found. Please connect {provider.title()} first.",
-        )
+        raise HTTPException(status_code=400, detail=f"No {provider} connection found.")
     decrypted_token = crypto_service.decrypt_token(token_obj.access_token_encrypted)
 
-    # Build auth clone url based on provider
     if provider == 'github':
         clone_url = github_service.build_authenticated_clone_url(decrypted_token, body.owner, body.repo)
         repo_url_display = f"https://github.com/{body.owner}/{body.repo}"
@@ -514,29 +463,13 @@ async def connect_oauth_git(
     else:
         raise HTTPException(status_code=400, detail="Unknown provider")
 
-    # verify project
-    proj_result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None)
-        )
-    )
-    project = proj_result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
+    project = await _get_project(project_id, current_user, db)
     project.source_type = SourceType.GIT
     project.git_repo_url = repo_url_display
     project.git_branch = body.branch
     project.git_provider = provider
 
-    analysis = Analysis(
-        project_id=project.id,
-        source_type="git",
-        source_path=clone_url,
-        total_steps=8,
-    )
+    analysis = Analysis(project_id=project.id, source_type="git", source_path=clone_url, total_steps=8)
     db.add(analysis)
     await db.commit()
     await db.refresh(analysis)
@@ -545,7 +478,7 @@ async def connect_oauth_git(
     return {"job_id": task.id, "analysis_id": analysis.id}
 
 
-# ── POST /projects/{id}/git/sync ────────────────────────────────
+# ── POST /projects/{id}/git/sync ─────────────────────────────────
 
 @router.post("/{project_id}/git/sync", status_code=status.HTTP_202_ACCEPTED)
 async def sync_git_repo(
@@ -553,22 +486,14 @@ async def sync_git_repo(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None)
-        )
-    )
-    project = result.scalar_one_or_none()
-    if not project or project.source_type != SourceType.GIT or not project.git_repo_url:
+    project = await _get_project(project_id, current_user, db)
+    if project.source_type != SourceType.GIT or not project.git_repo_url:
         raise HTTPException(status_code=400, detail="Project is not connected to a Git repository")
 
     clone_url = project.git_repo_url
     if project.git_provider:
         token_res = await db.execute(select(OAuthToken).where(
-            OAuthToken.user_id == current_user.id,
-            OAuthToken.provider == project.git_provider
+            OAuthToken.user_id == current_user.id, OAuthToken.provider == project.git_provider
         ))
         token_obj = token_res.scalar_one_or_none()
         if token_obj:
@@ -580,14 +505,9 @@ async def sync_git_repo(
                 elif project.git_provider == 'gitlab':
                     clone_url = gitlab_service.build_authenticated_clone_url(decrypted, f"{owner}/{repo}")
             except Exception:
-                pass 
+                pass
 
-    analysis = Analysis(
-        project_id=project.id,
-        source_type="git",
-        source_path=clone_url,
-        total_steps=8,
-    )
+    analysis = Analysis(project_id=project.id, source_type="git", source_path=clone_url, total_steps=8)
     db.add(analysis)
     await db.commit()
     await db.refresh(analysis)
@@ -596,7 +516,7 @@ async def sync_git_repo(
     return {"job_id": task.id, "analysis_id": analysis.id}
 
 
-# ── GET /projects/{id}/analysis/status ──────────────────────────
+# ── GET /projects/{id}/analysis/status ───────────────────────────
 
 @router.get("/{project_id}/analysis/status", response_model=AnalysisStatusResponse)
 async def get_analysis_status(
@@ -604,23 +524,13 @@ async def get_analysis_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None)
-        )
-    )
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
-
+    await _get_project(project_id, current_user, db)
     analysis_result = await db.execute(
         select(Analysis).where(Analysis.project_id == project_id).order_by(Analysis.created_at.desc()).limit(1)
     )
     analysis = analysis_result.scalar_one_or_none()
     if not analysis:
         raise HTTPException(status_code=404, detail="No analysis found for this project")
-
     return analysis_to_status_response(analysis)
 
 
@@ -630,20 +540,10 @@ async def get_analysis_results(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None),
-        )
-    )
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
-
+    await _get_project(project_id, current_user, db)
     analysis = await get_latest_analysis(project_id, db)
     if not analysis:
         raise HTTPException(status_code=404, detail="No analysis found for this project")
-
     return analysis_to_full_response(analysis)
 
 
@@ -653,16 +553,7 @@ async def get_analysis_outline_diff(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None),
-        )
-    )
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
-
+    await _get_project(project_id, current_user, db)
     diff = await get_outline_diff(project_id, db)
     return OutlineDiffResponse(**diff)
 
@@ -673,20 +564,10 @@ async def apply_analysis_outline(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.owner_id == current_user.id,
-            Project.deleted_at.is_(None),
-        )
-    )
-    if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
-
+    await _get_project(project_id, current_user, db)
     analysis = await get_latest_analysis(project_id, db)
     if not analysis or not analysis.outline_json:
         raise HTTPException(status_code=400, detail="No proposed outline available")
-
     if analysis.status != AnalysisStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Analysis is not complete yet")
 
@@ -695,11 +576,8 @@ async def apply_analysis_outline(
     await db.commit()
 
     doc_result = await db.execute(
-        select(Document)
-        .where(Document.project_id == project_id)
-        .options(selectinload(Document.sections))
+        select(Document).where(Document.project_id == project_id).options(selectinload(Document.sections))
     )
     doc = doc_result.scalar_one_or_none()
     count = len(doc.sections) if doc else 0
-
     return ApplyOutlineResponse(applied=True, section_count=count)

@@ -29,6 +29,7 @@ export const RegisterPage = () => {
             name: string;
             email: string;
             password: string;
+            organization_name?: string;
           });
         }}
         className="space-y-4"
@@ -36,6 +37,10 @@ export const RegisterPage = () => {
         <div className="space-y-2">
           <Label htmlFor="name">Full name</Label>
           <Input id="name" name="name" placeholder="John Doe" required />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="organization_name">Organization name (Optional)</Label>
+          <Input id="organization_name" name="organization_name" placeholder="Acme Corp" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>

@@ -6,6 +6,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
     name: str
+    organization_name: Optional[str] = None
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -27,6 +28,7 @@ class MeResponse(BaseModel):
     email: str
     name: Optional[str]
     avatar_url: Optional[str]
+    is_verified: bool
     created_at: datetime
 
     class Config:

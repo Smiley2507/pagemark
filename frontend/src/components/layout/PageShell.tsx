@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { AppHeader } from './AppHeader';
+import { SidebarNavigation } from './SidebarNavigation';
 
 export function PageShell({
   children,
@@ -11,9 +11,11 @@ export function PageShell({
   onOpenSettings?: () => void;
 }) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <AppHeader onOpenSettings={onOpenSettings} />
-      <main className={cn('mx-auto px-6 py-8', maxWidth)}>{children}</main>
+    <div className="flex min-h-screen bg-background text-foreground">
+      <SidebarNavigation onOpenSettings={onOpenSettings} />
+      <div className="flex-1 overflow-auto">
+        <main className={cn('mx-auto px-8 py-8', maxWidth)}>{children}</main>
+      </div>
     </div>
   );
 }

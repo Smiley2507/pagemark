@@ -14,12 +14,15 @@ from alembic import context
 from app.database import Base, engine
 from app.models.user import User, UserRole, UserSettings
 from app.models.template import Template
+from app.models.organization import Organization, OrganizationMember
 from app.models.project import Project
 from app.models.document import Document, Section
 from app.models.analysis import Analysis
 from app.models.oauth_token import OAuthToken
 from app.models.version import SectionVersion
 from app.models.ai_credential import UserAiCredential
+from app.models.audit import AuditLog
+from app.models.key import UserAPIKey
 
 # Alembic Config object
 config = context.config

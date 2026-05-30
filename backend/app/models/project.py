@@ -24,7 +24,8 @@ class Project(Base):
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     name = Column(String, nullable=False)
     description = Column(Text, nullable=True)
     status = Column(Enum(ProjectStatus), nullable=False, default=ProjectStatus.PENDING)
@@ -40,6 +41,7 @@ class Project(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    owner = relationship("User", backref="projects")
+    organization = relationship("Organization", foreign_keys=[org_id])
+    creator = relationship("User", foreign_keys=[created_by], backref="created_projects")
     template = relationship("Template", backref="projects")
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")

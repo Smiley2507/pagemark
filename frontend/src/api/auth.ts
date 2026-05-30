@@ -2,7 +2,7 @@ import apiClient from './client';
 import type { User } from '../types';
 
 export const authApi = {
-  async register(registerData: { email: string; password: string; name: string }): Promise<User> {
+  async register(registerData: { email: string; password: string; name: string; organization_name?: string }): Promise<User> {
     const { data } = await apiClient.post('/auth/register', registerData);
     return data;
   },

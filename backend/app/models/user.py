@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Text, Boolean
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -17,6 +17,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     name = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
+    is_verified = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -44,5 +45,9 @@ class UserSettings(Base):
     # For forgot-password functionality
     reset_token = Column(String, nullable=True, index=True)
     reset_token_expires = Column(DateTime, nullable=True)
+
+    # For email verification
+    verification_token = Column(String, nullable=True, index=True)
+    verification_token_expires = Column(DateTime, nullable=True)
 
     user = relationship("User", back_populates="settings")

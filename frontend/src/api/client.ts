@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/authStore';
+import { useOrgStore } from '@/store/orgStore';
 
 const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password'];
 
@@ -11,6 +12,10 @@ const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     config.headers['Content-Type'] = 'application/json';
+    const activeOrgId = useOrgStore.getState().activeOrgId;
+    if (activeOrgId) {
+      config.headers['X-Organization-ID'] = activeOrgId.toString();
+    }
     return config;
   },
   (error) => Promise.reject(error)
