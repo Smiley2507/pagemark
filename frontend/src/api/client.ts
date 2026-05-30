@@ -4,7 +4,7 @@ import { useAuthStore } from '@/store/authStore';
 const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password'];
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
   withCredentials: true,
 });
 

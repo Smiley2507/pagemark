@@ -16,7 +16,11 @@ import { formatDistanceToNow } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
 import { sectionsApi } from '@/api/sections';
+import { useGenerateSection, useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread, useUpdateProjectContext } from '@/hooks/useAI';
+import { useProject } from '@/hooks/useProject';
+import type { ChatMessage, Section } from '@/types';
 
 interface RightPanelProps {
   projectId: number;
@@ -30,14 +34,7 @@ interface RightPanelProps {
   onToggle: () => void;
 }
 
-type TabType = 'Agent' | 'Chat' | 'History';
-
-interface ChatMessage {
-  id: string;
-  role: 'user' | 'ai';
-  content: string;
-  timestamp: Date;
-}
+type TabType = 'Agent' | 'Chat' | 'Context' | 'History';
 
 interface VersionEntry {
   id: number;
@@ -60,13 +57,33 @@ export function RightPanel({
   onToggle,
 }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>('Agent');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isRefining, setIsRefining] = useState(false);
   const [isExpanding, setIsExpanding] = useState(false);
   const [versions, setVersions] = useState<VersionEntry[]>([]);
+  const [contextForm, setContextForm] = useState('');
+
+  const { data: project } = useProject(projectId);
+  const updateContext = useUpdateProjectContext(projectId);
+
+  useEffect(() => {
+    if (project?.context_md !== undefined) {
+      setContextForm(project.context_md || '');
+    }
+  }, [project?.context_md]);
+
+  const generateSection = useGenerateSection(projectId);
+  const refineSection = useRefineSection();
+
+  // Chat state
+  const { data: threads } = useThreads(projectId);
+  const createThread = useCreateThread(projectId);
+  
+  // Use first thread or none
+  const activeThreadId = threads && threads.length > 0 ? threads[0].id : null;
+  
+  const { data: messages = [] } = useMessages(activeThreadId);
+  const { sendMessage: streamMessage, isStreaming, streamingContent } = useStreamMessage(activeThreadId);
+
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -97,73 +114,61 @@ export function RightPanel({
     setInputValue(target.value);
   };
 
+  const isGenerating = generateSection.isPending;
+  const isRefining = refineSection.isPending;
+
   const handleAction = async (type: 'generate' | 'refine' | 'expand', instruction?: string) => {
     if (!activeSectionId) return;
 
-    if (type === 'generate') setIsGenerating(true);
-    if (type === 'refine') setIsRefining(true);
     if (type === 'expand') setIsExpanding(true);
 
     try {
       if (type === 'generate') {
-        const data = await sectionsApi.generateAI(activeSectionId);
-        onContentAccepted(data.content);
+        const data = await generateSection.mutateAsync(activeSectionId);
+        onContentAccepted(data.content_md);
       } else {
         const inst = type === 'expand'
           ? "Expand this section with more detail, examples, and explanations"
           : (instruction || "Improve the clarity, completeness, and readability");
-        const data = await sectionsApi.refineAI(activeSectionId, inst);
+        const data = await refineSection.mutateAsync({ sectionId: activeSectionId, instruction: inst });
         onDiffReceived({ original: activeSectionContent, refined: data.refined });
       }
     } catch (e) {
       console.error(`AI ${type} failed`, e);
     } finally {
-      setIsGenerating(false);
-      setIsRefining(false);
-      setIsExpanding(false);
+      if (type === 'expand') setIsExpanding(false);
     }
   };
 
-  const sendMessage = async () => {
+  const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
-    const userMsg: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: inputValue.trim(),
-      timestamp: new Date(),
-    };
+    if (!activeThreadId) {
+      // Create thread if none exists
+      const thread = await createThread.mutateAsync({ firstMessage: inputValue.trim() });
+      // The query invalidation will fetch the new thread, but for immediate UI:
+      // ideally we'd stream directly, but to keep it simple, we can just trigger it
+      // though useStreamMessage depends on the hook having the threadId.
+      // In this app, we rely on the query to refresh.
+      toast.success('Chat started. Please send your message again.');
+      return;
+    }
 
-    setMessages(prev => [...prev, userMsg]);
+    const msg = inputValue.trim();
     setInputValue('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
     setActiveTab('Chat');
-    setIsStreaming(true);
-
-    try {
-      // Mock AI response for now as per common pattern, but implementation should call backend
-      setTimeout(() => {
-        const aiMsg: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          role: 'ai',
-          content: `I've received your request about "${userMsg.content}". How can I further help you refine this section?`,
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, aiMsg]);
-        setIsStreaming(false);
-      }, 1500);
-    } catch (e) {
-      setIsStreaming(false);
-    }
+    streamMessage(msg);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
-      sendMessage();
+      handleSendMessage();
     }
   };
+
 
   const statusColors = {
     pending: 'bg-muted text-muted-foreground',
@@ -309,14 +314,44 @@ export function RightPanel({
                 <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center shrink-0">
                   <Sparkles className="h-3 w-3 text-white" />
                 </div>
-                <div className="flex gap-1 pl-1">
-                  <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]" />
-                  <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]" />
-                  <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" />
+                <div className="text-sm max-w-[85%] pl-1 text-foreground">
+                  {streamingContent ? (
+                    <ReactMarkdown>{streamingContent}</ReactMarkdown>
+                  ) : (
+                    <div className="flex gap-1 h-5 items-center">
+                      <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]" />
+                      <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]" />
+                      <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
             <div ref={messagesEndRef} />
+          </div>
+        )}
+
+        {activeTab === 'Context' && (
+          <div className="px-3 py-4 space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-foreground">Project AI Context</label>
+              <textarea
+                value={contextForm}
+                onChange={(e) => setContextForm(e.target.value)}
+                placeholder="E.g. The audience is enterprise developers. The tone should be formal. Avoid using the word 'simply'."
+                className="w-full bg-muted rounded-xl border border-border px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none resize-none transition-colors h-48"
+              />
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Add instructions that apply to the whole project. The AI will consider this context when generating or refining any section.
+              </p>
+            </div>
+            <button
+              onClick={() => updateContext.mutate(contextForm === '' ? null : contextForm)}
+              disabled={updateContext.isPending || contextForm === (project?.context_md || '')}
+              className="w-full bg-primary text-primary-foreground text-sm font-medium rounded-lg px-4 py-2 hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {updateContext.isPending ? 'Saving...' : 'Save Context'}
+            </button>
           </div>
         )}
 
@@ -408,7 +443,7 @@ export function RightPanel({
           {/* Send Button */}
           <button
             disabled={!inputValue.trim()}
-            onClick={sendMessage}
+            onClick={handleSendMessage}
             className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center cursor-pointer hover:bg-primary/90 disabled:opacity-50 transition-opacity"
           >
             <ArrowUp className="h-3.5 w-3.5 text-primary-foreground" />

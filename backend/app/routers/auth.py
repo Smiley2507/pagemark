@@ -103,15 +103,15 @@ async def login(request: LoginRequest, response: Response, db: AsyncSession = De
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=False, # Set True in production
-        samesite="lax"
+        secure=True,
+        samesite="none"
     )
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=False, # Set True in production
-        samesite="lax"
+        secure=True,
+        samesite="none"
     )
 
     return user
@@ -139,8 +139,8 @@ async def refresh(request: Request, response: Response, db: AsyncSession = Depen
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=False,
-        samesite="lax"
+        secure=True,
+        samesite="none"
     )
     return {"message": "token refreshed"}
 

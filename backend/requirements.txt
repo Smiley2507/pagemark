@@ -20,7 +20,7 @@ tree-sitter
 tree-sitter-python
 tree-sitter-javascript
 tree-sitter-java
-fastapi-mail
+fastapi-mail==1.6.4
 python-docx
 weasyprint
 markdown

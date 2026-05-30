@@ -32,7 +32,7 @@ export const tableKeymap = keymap.of([
       if (nextRow <= maxRow) {
         const newPos = getCellPos(state.doc, ctx, nextRow, nextCol);
         view.dispatch({
-          selections: [{ anchor: newPos, head: newPos }],
+          selection: { anchor: newPos, head: newPos },
           scrollIntoView: true,
         });
         return true;
@@ -61,7 +61,7 @@ export const tableKeymap = keymap.of([
 
         view.dispatch({
           changes: { from: ctx.from, to: ctx.to, insert: newText },
-          selections: [{ anchor: ctx.from + totalOffset, head: ctx.from + totalOffset }],
+          selection: { anchor: ctx.from + totalOffset, head: ctx.from + totalOffset },
           scrollIntoView: true,
         });
         return true;
@@ -99,7 +99,7 @@ export const tableKeymap = keymap.of([
 
       view.dispatch({
         changes: { from: ctx.from, to: ctx.to, insert: newText },
-        selections: [{ anchor: ctx.from + totalOffset, head: ctx.from + totalOffset }],
+        selection: { anchor: ctx.from + totalOffset, head: ctx.from + totalOffset },
         scrollIntoView: true,
       });
       return true;
@@ -131,7 +131,7 @@ export const tableKeymap = keymap.of([
       if (prevRow >= 0) {
         const newPos = getCellPos(state.doc, ctx, prevRow, prevCol);
         view.dispatch({
-          selections: [{ anchor: newPos, head: newPos }],
+          selection: { anchor: newPos, head: newPos },
           scrollIntoView: true,
         });
         return true;

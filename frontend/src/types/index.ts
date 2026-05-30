@@ -18,6 +18,7 @@ export interface Project {
   git_branch?: string;
   git_provider?: "github" | "gitlab" | "bitbucket";
   starred: boolean;
+  context_md?: string;
   created_at: string;
   updated_at: string;
 }

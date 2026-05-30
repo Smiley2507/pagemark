@@ -7,6 +7,8 @@ import {
   Share2,
   PanelLeft,
   PanelRight,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LeftPanel } from "@/components/editor/LeftPanel";
@@ -17,6 +19,7 @@ import {
   useDocument,
   useUpdateSection,
 } from "@/hooks/useSections";
+import { useGenerateSection } from "@/hooks/useAI";
 import { useProject } from "@/hooks/useProject";
 import { cn } from "@/lib/utils";
 import type { Section } from "@/types";
@@ -28,12 +31,10 @@ export const EditorPage: React.FC = () => {
 
   // --- Orchestration State ---
   const [mode, setMode] = useState<'write' | 'preview' | 'diff'>('write');
-  const [diffData, setDiffData] = useState<{ original: string, refined: string } | null>(null);
+  const [diffData, setDiffData] = useState<{ original: string, refined: string } | undefined>(undefined);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   const middlePanelRef = useRef<{ scrollToSection: (id: number) => void }>(null);
   const leftPanelRef = useRef<any>(null);
@@ -42,8 +43,8 @@ export const EditorPage: React.FC = () => {
   // --- Data Fetching ---
   const { data: project } = useProject(projectId);
   const { data: document } = useDocument(projectId);
-  const { mutate: autosave } = useAutosave();
   const updateSection = useUpdateSection(projectId);
+  const generateSection = useGenerateSection(projectId);
 
   const sections = document?.sections ?? [];
   const completionPercent = project?.completion_pct ?? 0;
@@ -53,16 +54,6 @@ export const EditorPage: React.FC = () => {
   , [sections, activeSectionId]);
 
   // --- Actions ---
-  const debouncedAutosave = (sectionId: number, content: string) => {
-    autosave({ sectionId, content }, {
-      onMutate: () => setIsSaving(true),
-      onSettled: () => {
-        setIsSaving(false);
-        setLastSaved(new Date());
-      }
-    });
-  };
-
   const acceptRefinement = (sectionId: number, content: string) => {
     updateSection.mutate({
       id: sectionId,
@@ -76,7 +67,10 @@ export const EditorPage: React.FC = () => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
         if (activeSectionId && activeSection) {
-          debouncedAutosave(activeSectionId, activeSection.content_md);
+          updateSection.mutate({
+            id: activeSectionId,
+            data: { content_md: activeSection.content_md }
+          });
         }
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
@@ -85,7 +79,7 @@ export const EditorPage: React.FC = () => {
       }
       if (e.key === 'Escape' && mode === 'diff') {
         setMode('write');
-        setDiffData(null);
+        setDiffData(undefined);
       }
       if ((e.metaKey || e.ctrlKey) && e.key === '[') {
         e.preventDefault();
@@ -94,6 +88,10 @@ export const EditorPage: React.FC = () => {
       if ((e.metaKey || e.ctrlKey) && e.key === ']') {
         e.preventDefault();
         setRightOpen(o => !o);
+      }
+      if (e.key === 'Escape' && mode === 'diff') {
+        setMode('write');
+        setDiffData(undefined);
       }
     };
 
@@ -140,6 +138,28 @@ export const EditorPage: React.FC = () => {
             <PanelRight className="h-4 w-4" />
           </Button>
           <div className="w-px h-4 bg-border-1 mx-1" />
+          
+          {activeSection?.status === 'pending' && (
+            <Button 
+              variant="default" 
+              size="sm" 
+              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white"
+              onClick={() => {
+                if (activeSectionId) {
+                  generateSection.mutate(activeSectionId);
+                }
+              }}
+              disabled={generateSection.isPending}
+            >
+              {generateSection.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              <span>{generateSection.isPending ? "Generating..." : "Generate AI"}</span>
+            </Button>
+          )}
+
           <Button variant="ghost" size="sm" className="flex items-center gap-2">
             <Download className="h-4 w-4" />
             <span>Export</span>
@@ -169,7 +189,8 @@ export const EditorPage: React.FC = () => {
               sections={sections}
               activeSectionId={activeSectionId}
               onHeadingClick={(sectionId) => {
-                middlePanelRef.current?.scrollToSection(sectionId);
+                setActiveSectionId(sectionId);
+                // middlePanelRef.current?.scrollToSection(sectionId); // disabled until MiddlePanel supports it
               }}
               completionPercent={completionPercent}
               isOpen={leftOpen}
@@ -179,32 +200,30 @@ export const EditorPage: React.FC = () => {
 
           <div className="w-px bg-border-1 hover:bg-accent transition-colors cursor-col-resize" />
 
-          <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex-1 min-w-0 bg-background overflow-hidden relative">
             <MiddlePanel
-              ref={middlePanelRef}
               sections={sections}
               activeSectionId={activeSectionId}
-              onSectionVisible={setActiveSectionId}
+              onSectionVisible={(id) => {
+                if (mode !== 'diff') setActiveSectionId(id);
+              }}
               mode={mode}
               onModeChange={(m) => {
                 setMode(m);
-                if (m !== 'diff') setDiffData(null);
+                if (m !== 'diff') setDiffData(undefined);
               }}
               diffData={diffData}
-              onSectionChange={(sectionId, content) => {
-                debouncedAutosave(sectionId, content);
-              }}
-              onDiffAccept={(sectionId, content) => {
-                acceptRefinement(sectionId, content);
+              onDiffAccept={() => {
+                if (activeSectionId && diffData) {
+                  acceptRefinement(activeSectionId, diffData.refined);
+                }
                 setMode('write');
-                setDiffData(null);
+                setDiffData(undefined);
               }}
               onDiffReject={() => {
                 setMode('write');
-                setDiffData(null);
+                setDiffData(undefined);
               }}
-              isSaving={isSaving}
-              lastSaved={lastSaved}
             />
           </div>
 
@@ -219,8 +238,8 @@ export const EditorPage: React.FC = () => {
             <RightPanel
               projectId={projectId}
               activeSectionId={activeSectionId}
-              activeSectionHeading={activeSection?.heading}
-              activeSectionContent={activeSection?.content_md}
+              activeSectionHeading={activeSection?.heading ?? null}
+              activeSectionContent={activeSection?.content_md ?? ""}
               activeSectionStatus={activeSection?.status as any}
               onDiffReceived={(diff) => {
                 setDiffData(diff);

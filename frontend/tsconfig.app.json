@@ -16,7 +16,7 @@
     "jsx": "react-jsx",
 
     /* Path Aliases */
-    "baseUrl": ".",
+    "baseUrl": ".", "ignoreDeprecations": "6.0",
     "paths": {
       "@/*": ["./src/*"],
     },

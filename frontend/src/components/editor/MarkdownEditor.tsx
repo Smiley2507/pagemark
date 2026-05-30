@@ -425,7 +425,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           closeBrackets(),
           wikiLinkAutocomplete,
           placeholder("Type '/' for commands"),
-          keymap.of([tableKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+          tableKeymap,
+          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
           history(),
           updateListener,
           selectionListener,
@@ -448,7 +449,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         e.preventDefault();
         e.stopPropagation();
 
-        const files = Array.from(e.dataTransfer.files);
+        const files = e.dataTransfer ? Array.from(e.dataTransfer.files) : [];
         const images = files.filter(f => f.type.startsWith('image/'));
 
         if (images.length > 0) {
