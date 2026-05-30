@@ -16,6 +16,8 @@ import { Analysis } from './pages/Analysis';
 import { KnowledgeBase } from './pages/KnowledgeBase';
 import { GitConnectPage } from './pages/GitConnectPage';
 import { useMe } from './hooks/useAuth';
+import { ProjectsView, TemplatesView } from './components/dashboard';
+import { OrgMembersView, OrgAuditLogView, OrgApiKeysView, OrgSettingsView } from './components/org';
 
 const queryClient = new QueryClient();
 
@@ -34,13 +36,26 @@ const RootRedirect = () => {
 const AppRoutes = () => {
   const { isLoading } = useMe();
   const user = useAuthStore((state) => state.user);
-  const setOrganizations = useOrgStore((state) => state.setOrganizations);
+  const { setOrganizations, activeOrgId, setCurrentRole } = useOrgStore();
 
   React.useEffect(() => {
     if (user && user.is_verified) {
       orgApi.listOrganizations().then(setOrganizations).catch(console.error);
     }
   }, [user, setOrganizations]);
+
+  React.useEffect(() => {
+    if (user && activeOrgId) {
+      orgApi.listMembers(activeOrgId)
+        .then((members) => {
+          const me = members.find((m) => m.user_id === user.id);
+          if (me) {
+            setCurrentRole(me.role);
+          }
+        })
+        .catch((err) => console.error('Failed to fetch org role:', err));
+    }
+  }, [user, activeOrgId, setCurrentRole]);
 
   if (isLoading) {
     return (
@@ -65,7 +80,15 @@ const AppRoutes = () => {
 
       {/* Protected Routes */}
       <Route element={<ProtectedRoute />}>
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard" element={<Dashboard />}>
+          <Route index element={<Navigate to="projects" replace />} />
+          <Route path="projects" element={<ProjectsView />} />
+          <Route path="templates" element={<TemplatesView />} />
+          <Route path="members" element={<OrgMembersView />} />
+          <Route path="activity" element={<OrgAuditLogView />} />
+          <Route path="keys" element={<OrgApiKeysView />} />
+          <Route path="settings" element={<OrgSettingsView />} />
+        </Route>
         <Route path="/new-project" element={<NewProject />} />
         <Route path="/editor/:id" element={<Editor />} />
         <Route path="/analysis/:id" element={<Analysis />} />

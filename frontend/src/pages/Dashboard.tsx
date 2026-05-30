@@ -1,194 +1,33 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  Folder,
-  Layers,
-  Settings,
-  Plus,
-  PlusCircle,
-  AlertTriangle,
-  RefreshCw,
-  FolderOpen,
-  ArrowRight,
-  Lock,
-} from 'lucide-react';
-import { Icon } from '@/components/icons/Icon';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
-import {
-  useProjects,
-  useDeleteProject,
-  useDuplicateProject,
-  useStarProject,
-  useTemplates,
-  useCreateTemplate,
-} from '@/hooks/useProjects';
-import { ProjectCard } from '@/components/dashboard/ProjectCard';
-import { TemplateCard } from '@/components/dashboard/TemplateCard';
-import { SearchBar } from '@/components/dashboard/SearchBar';
 import { QualityModal } from '@/components/editor/QualityModal';
-import { AppHeader } from '@/components/layout/AppHeader';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
-import type { Template } from '@/types';
-import { AiProvidersSection } from '@/components/settings/AiProvidersSection';
 
 export const Dashboard: React.FC = () => {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const user = useAuthStore((state) => state.user);
-  const [activeTab, setActiveTab] = useState('projects');
-
-  useEffect(() => {
-    if (searchParams.get('tab') === 'settings') {
-      setActiveTab('settings');
-    }
-  }, [searchParams]);
-  const [search, setSearch] = useState('');
-  const [projectFilter, setProjectFilter] = useState<'all' | 'starred' | 'recent'>('all');
-  
   const [qualityProjectId, setQualityProjectId] = useState<number | null>(null);
-
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [editName, setEditName] = useState(user?.name || '');
-  const [editAvatar, setEditAvatar] = useState(user?.avatar_url || '');
-
-  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
-  const [newTemplateName, setNewTemplateName] = useState('');
-  const [newTemplateDesc, setNewTemplateDesc] = useState('');
-  const [newTemplateCategory, setNewTemplateCategory] = useState('Technical');
-  const [newTemplateSections, setNewTemplateSections] = useState<string[]>([
-    'Overview',
-    'Architecture',
-    'Implementation',
-  ]);
-  const [customSectionInput, setCustomSectionInput] = useState('');
-
-  const {
-    data: projectsList,
-    isLoading: projectsLoading,
-    isError: projectsError,
-    refetch: refetchProjects,
-  } = useProjects({
-    search: search || undefined,
-    starred: projectFilter === 'starred' ? true : undefined,
-  });
-
-  const {
-    data: templatesList,
-    isLoading: templatesLoading,
-    isError: templatesError,
-    refetch: refetchTemplates,
-  } = useTemplates();
-
-  const deleteProjectMutation = useDeleteProject();
-  const duplicateProjectMutation = useDuplicateProject();
-  const starProjectMutation = useStarProject();
-  const createTemplateMutation = useCreateTemplate();
-
-  const projects = useMemo(() => {
-    if (!projectsList) return [];
-    if (projectFilter === 'recent') {
-      return [...projectsList].sort(
-        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-      );
-    }
-    return projectsList;
-  }, [projectsList, projectFilter]);
-
-  const handleCreateTemplate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTemplateName.trim()) return;
-    await createTemplateMutation.mutateAsync({
-      name: newTemplateName,
-      description: newTemplateDesc,
-      category: newTemplateCategory,
-      sections_json: newTemplateSections,
-    });
-    setNewTemplateName('');
-    setNewTemplateDesc('');
-    setNewTemplateCategory('Technical');
-    setNewTemplateSections(['Overview', 'Architecture', 'Implementation']);
-    setIsTemplateModalOpen(false);
-  };
-
-  const handleProfileSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (user) {
-      useAuthStore.getState().setUser({
-        ...user,
-        name: editName,
-        avatar_url: editAvatar,
-      });
-      setIsEditingProfile(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <AppHeader onOpenSettings={() => setActiveTab('settings')} />
-
       <div className="mx-auto max-w-7xl px-6 pt-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6 w-full max-w-md">
-            <TabsTrigger value="projects" className="gap-2">
-              <Folder className="h-4 w-4" />
-              Projects
-            </TabsTrigger>
-            <TabsTrigger value="templates" className="gap-2">
-              <Layers className="h-4 w-4" />
-              Templates
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="gap-2">
-              <Settings className="h-4 w-4" />
-              Settings
-            </TabsTrigger>
-          </TabsList>
+        <Outlet
+          context={{
+            setQualityProjectId
+          }}
+        />
+      </div>
 
-          {/* forceMount keeps form state when switching tabs */}
-          <TabsContent value="projects" forceMount className="data-[state=inactive]:hidden">
-            <div className="space-y-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
-                  <SearchBar onSearch={setSearch} />
-                  <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
-                    {(['all', 'starred', 'recent'] as const).map((filter) => (
-                      <button
-                        key={filter}
-                        type="button"
-                        onClick={() => setProjectFilter(filter)}
-                        className={cn(
-                          'rounded-md px-3 py-1 text-meta-sm font-medium capitalize',
-                          projectFilter === filter
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground'
-                        )}
-                      >
-                        {filter}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <Button onClick={() => navigate('/new-project')}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  New project
-                </Button>
-              </div>
+      {qualityProjectId !== null && (
+        <QualityModal
+          projectId={qualityProjectId}
+          open={true}
+          onClose={() => setQualityProjectId(null)}
+        />
+      )}
+    </div>
+  );
+};
 
-              {projectsError && (
-                <ErrorBanner
-                  message="Failed to load projects"
-                  onRetry={() => refetchProjects()}
-                />
-              )}
-
-              {projectsLoading && (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
-                  {[...Array(6)].map((_, i) => (
-                    <Skeleton key={i} className="h-44 w-full" />
                   ))}
                 </div>
               )}
