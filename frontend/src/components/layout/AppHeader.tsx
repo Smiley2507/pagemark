@@ -1,20 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Laptop, LogOut, Moon, Settings, Sun, User as UserIcon } from 'lucide-react';
+import { Laptop, LogOut, Moon, Settings, Sun } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { useLogout } from '@/hooks/useAuth';
-import { PagemarkWordmark } from './PagemarkWordmark';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 type Theme = 'light' | 'dark' | 'system';
 
-export function AppHeader({
-  onOpenSettings,
-}: {
-  onOpenSettings?: () => void;
-}) {
+export function AppHeader() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const { theme, setTheme } = useThemeStore();
@@ -44,15 +39,7 @@ export function AppHeader({
 
   return (
     <header className="sticky top-0 z-40 h-12 border-b border-border bg-background/80 backdrop-blur-sm">
-      <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-6">
-        <button
-          type="button"
-          onClick={() => navigate('/dashboard')}
-          className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <PagemarkWordmark className="text-section" />
-        </button>
-
+      <div className="mx-auto flex h-full max-w-7xl items-center justify-end px-6">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -101,20 +88,6 @@ export function AppHeader({
                   </p>
                 </div>
                 <div className="my-1 h-px bg-border" />
-                {onOpenSettings && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      onOpenSettings();
-                      setProfileMenuOpen(false);
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-body hover:bg-accent"
-                  >
-                    <UserIcon className="h-4 w-4 text-muted-foreground" />
-                    Profile settings
-                  </button>
-                )}
                 <button
                   type="button"
                   role="menuitem"

@@ -2,61 +2,34 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   FolderPlus,
-  Library,
-  Settings,
-  LogOut,
-  Sun,
-  Moon,
-  Laptop,
-  User as UserIcon,
-  Users,
-  Activity,
-  Key,
-  UserCog
+  UserCog,
+  LayoutTemplate
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { OrgSwitcher } from './OrgSwitcher';
 import { PagemarkWordmark } from './PagemarkWordmark';
-import { useAuthStore } from '@/store/authStore';
-import { useLogout } from '@/hooks/useAuth';
-import { useThemeStore } from '@/store/themeStore';
-import { useOrgStore } from '@/store/orgStore';
 
-export function SidebarNavigation({ onOpenSettings }: { onOpenSettings?: () => void }) {
+export function SidebarNavigation() {
   const location = useLocation();
-  const user = useAuthStore((s) => s.user);
-  const logoutMutation = useLogout();
-  const { theme, setTheme } = useThemeStore();
-  const { currentRole } = useOrgStore();
-
-  const cycleTheme = () => {
-    const order: ('light' | 'dark' | 'system')[] = ['light', 'dark', 'system'];
-    const next = order[(order.indexOf(theme) + 1) % order.length];
-    setTheme(next);
-  };
-
-  const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Laptop;
-
-  const isAdmin = currentRole === 'ADMIN' || currentRole === 'PROJECT_MANAGER';
 
   const navGroups = [
     {
-      group: 'Organization',
+      group: 'Main',
       links: [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        ...(isAdmin ? [
-          { href: '/dashboard/members', label: 'Members', icon: Users },
-          { href: '/dashboard/activity', label: 'Activity Log', icon: Activity },
-          { href: '/dashboard/keys', label: 'API Keys', icon: Key },
-        ] : []),
-        { href: '/dashboard/settings', label: 'Org Settings', icon: UserCog },
+        { href: '/dashboard/templates', label: 'Templates', icon: LayoutTemplate },
+      ]
+    },
+    {
+      group: 'Organization',
+      links: [
+        { href: '/dashboard/settings', label: 'Settings', icon: UserCog },
       ]
     },
     {
       group: 'Workspace',
       links: [
         { href: '/new-project', label: 'New Project', icon: FolderPlus },
-        { href: '/knowledge-base', label: 'Knowledge Base', icon: Library },
       ]
     }
   ];
@@ -103,60 +76,6 @@ export function SidebarNavigation({ onOpenSettings }: { onOpenSettings?: () => v
         ))}
       </nav>
 
-      {/* Settings & User Menu */}
-      <div className="border-t border-border p-4 space-y-2">
-        <div className="flex items-center gap-2 mb-4 px-2">
-          <img
-            src={
-              user?.avatar_url ||
-              `https://api.dicebear.com/7.x/adventurer/svg?seed=${user?.name || 'pagemark'}`
-            }
-            alt=""
-            className="h-8 w-8 rounded-full object-cover border border-border"
-          />
-          <div className="flex flex-col overflow-hidden">
-            <span className="truncate text-sm font-medium leading-tight">
-              {user?.name}
-            </span
-            <span className="truncate text-xs text-muted-foreground">
-              {user?.email}
-            </span>
-          </div>
-        </div>
-
-        {onOpenSettings && (
-          <button
-            onClick={onOpenSettings}
-            className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-          >
-            <UserIcon className="h-4 w-4" />
-            Profile Settings
-          </button>
-        )}
-        <Link
-          to="/git-connect"
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-        >
-          <Settings className="h-4 w-4" />
-          Connected Accounts
-        </Link>
-        <div className="flex items-center justify-between gap-2 pt-2">
-          <button
-            onClick={cycleTheme}
-            className="flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-            title="Toggle Theme"
-          >
-            <ThemeIcon className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => logoutMutation.mutate()}
-            className="flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
-            title="Log Out"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

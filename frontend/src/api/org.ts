@@ -23,6 +23,9 @@ export const orgApi = {
   removeMember: (orgId: number, userId: number) =>
     api.delete(`/organizations/${orgId}/members/${userId}`).then(res => res.data),
 
+  updateOrganization: (orgId: number, data: { name: string; avatar_url?: string }) =>
+    api.patch<Organization>(`/organizations/${orgId}`, data).then(res => res.data),
+
   listAuditLogs: (orgId: number, page: number = 1, perPage: number = 50) =>
     api.get<AuditLog[]>(`/organizations/${orgId}/audit-logs`, { params: { page, per_page: perPage } }).then(res => res.data),
 };

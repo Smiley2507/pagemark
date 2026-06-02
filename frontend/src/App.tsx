@@ -13,7 +13,6 @@ import { Dashboard } from './pages/Dashboard';
 import { NewProject } from './pages/NewProject';
 import { Editor } from './pages/Editor';
 import { Analysis } from './pages/Analysis';
-import { KnowledgeBase } from './pages/KnowledgeBase';
 import { GitConnectPage } from './pages/GitConnectPage';
 import { useMe } from './hooks/useAuth';
 import { ProjectsView, TemplatesView } from './components/dashboard';
@@ -25,6 +24,8 @@ import { VerifyEmailPendingPage } from './pages/auth/VerifyEmailPendingPage';
 import { VerifyEmailPage } from './pages/auth/VerifyEmailPage';
 import { useOrgStore } from './store/orgStore';
 import { orgApi } from './api/org';
+import { MainLayout } from './components/layout/MainLayout';
+import { PermissionGate } from './components/shared/PermissionGate';
 
 const RootRedirect = () => {
   const user = useAuthStore((state) => state.user);
@@ -80,20 +81,33 @@ const AppRoutes = () => {
 
       {/* Protected Routes */}
       <Route element={<ProtectedRoute />}>
-        <Route path="/dashboard" element={<Dashboard />}>
-          <Route index element={<Navigate to="projects" replace />} />
-          <Route path="projects" element={<ProjectsView />} />
-          <Route path="templates" element={<TemplatesView />} />
-          <Route path="members" element={<OrgMembersView />} />
-          <Route path="activity" element={<OrgAuditLogView />} />
-          <Route path="keys" element={<OrgApiKeysView />} />
-          <Route path="settings" element={<OrgSettingsView />} />
+        <Route element={<MainLayout />}>
+          <Route path="/dashboard" element={<Dashboard />}>
+            <Route index element={<Navigate to="projects" replace />} />
+            <Route path="projects" element={<ProjectsView />} />
+            <Route path="templates" element={<TemplatesView />} />
+            <Route path="members" element={
+              <PermissionGate allowedRoles={['ADMIN', 'PROJECT_MANAGER']}>
+                <OrgMembersView />
+              </PermissionGate>
+            } />
+            <Route path="activity" element={
+              <PermissionGate allowedRoles={['ADMIN', 'PROJECT_MANAGER']}>
+                <OrgAuditLogView />
+              </PermissionGate>
+            } />
+            <Route path="keys" element={
+              <PermissionGate allowedRoles={['ADMIN', 'PROJECT_MANAGER']}>
+                <OrgApiKeysView />
+              </PermissionGate>
+            } />
+            <Route path="settings" element={<OrgSettingsView />} />
+          </Route>
+          <Route path="/new-project" element={<NewProject />} />
+          <Route path="/editor/:id" element={<Editor />} />
+          <Route path="/analysis/:id" element={<Analysis />} />
+          <Route path="/git-connect" element={<GitConnectPage />} />
         </Route>
-        <Route path="/new-project" element={<NewProject />} />
-        <Route path="/editor/:id" element={<Editor />} />
-        <Route path="/analysis/:id" element={<Analysis />} />
-        <Route path="/knowledge-base" element={<KnowledgeBase />} />
-        <Route path="/git-connect" element={<GitConnectPage />} />
       </Route>
 
       {/* Root: redirect based on auth state */}

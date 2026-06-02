@@ -28,15 +28,17 @@ export function EmptyState({
   description,
   actionLabel,
   onAction,
+  icon: Icon = FolderOpen,
 }: {
   title: string;
   description: string;
   actionLabel: string;
   onAction: () => void;
+  icon?: React.ComponentType<React.ComponentProps<typeof FolderOpen>>;
 }) {
   return (
     <div className="flex flex-col items-center rounded-lg border border-dashed border-border bg-muted/30 p-12 text-center">
-      <FolderOpen className="h-8 w-8 text-muted-foreground" />
+      <Icon className="h-8 w-8 text-muted-foreground" />
       <h3 className="mt-4 text-section font-semibold">{title}</h3>
       <p className="mt-2 max-w-sm text-meta text-muted-foreground">{description}</p>
       <Button className="mt-6" onClick={onAction}>
