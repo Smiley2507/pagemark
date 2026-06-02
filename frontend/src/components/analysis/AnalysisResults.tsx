@@ -1,6 +1,7 @@
-import { Code2, Globe, FolderTree, BarChart3 } from "lucide-react";
+import { Code2, Globe, FolderTree, BarChart3, Share2 } from "lucide-react";
 import type { AnalysisResults as AnalysisResultsType } from "@/types";
 import { cn } from "@/lib/utils";
+import { DependencyGraph } from "./DependencyGraph";
 
 function FileTreeNodeView({ node, depth = 0 }: { node: any; depth?: number }) {
   if (node.type === "file") {
@@ -132,6 +133,35 @@ export function AnalysisResults({ results, className }: AnalysisResultsProps) {
         )}
       </div>
 
+      <div className="rounded-lg border border-border bg-card p-4 sm:col-span-2">
+        <div className="mb-3 flex items-center gap-2">
+          <BarChart3 className="h-4 w-4 text-primary" />
+          <h3 className="text-meta font-semibold uppercase tracking-wide text-muted-foreground">
+            File Metrics
+          </h3>
+        </div>
+        <div className="max-h-64 overflow-y-auto rounded-md border border-border">
+          <table className="w-full text-left text-meta-sm">
+            <thead className="sticky top-0 bg-muted text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-medium">File Path</th>
+                <th className="px-3 py-2 text-right font-medium">LOC</th>
+                <th className="px-3 py-2 text-right font-medium">Complexity</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {complexity?.complexity_metrics?.map((m: any, i: number) => (
+                <tr key={i} className="hover:bg-muted/50">
+                  <td className="px-3 py-2 font-mono truncate max-w-md">{m.file_path}</td>
+                  <td className="px-3 py-2 text-right">{m.loc}</td>
+                  <td className="px-3 py-2 text-right">{m.complexity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {tree && (
         <div className="rounded-lg border border-border bg-card p-4 sm:col-span-2">
           <div className="mb-3 flex items-center gap-2">
@@ -143,6 +173,18 @@ export function AnalysisResults({ results, className }: AnalysisResultsProps) {
           <div className="max-h-64 overflow-y-auto rounded-md bg-muted/30 p-2">
             <FileTreeNodeView node={tree} />
           </div>
+        </div>
+      )}
+
+      {results.dependencies_json && (
+        <div className="rounded-lg border border-border bg-card p-4 sm:col-span-2">
+          <div className="mb-3 flex items-center gap-2">
+            <Share2 className="h-4 w-4 text-primary" />
+            <h3 className="text-meta font-semibold uppercase tracking-wide text-muted-foreground">
+              Dependencies
+            </h3>
+          </div>
+          <DependencyGraph dependencies={results.dependencies_json} />
         </div>
       )}
     </div>

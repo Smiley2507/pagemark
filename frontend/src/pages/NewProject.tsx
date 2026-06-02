@@ -65,6 +65,8 @@ export const NewProject: React.FC = () => {
   const [selectedRepo, setSelectedRepo] = useState<GitRepo | null>(null);
   const [oauthBranch, setOauthBranch] = useState("main");
   const [zipFile, setZipFile] = useState<File | null>(null);
+  const [ignorePatterns, setIgnorePatterns] = useState("");
+
 
   const [submitting, setSubmitting] = useState(false);
   const [analysisProgress, setAnalysisProgress] =
@@ -159,7 +161,7 @@ export const NewProject: React.FC = () => {
       setStep(4);
 
       if (sourceChoice === "zip" && zipFile) {
-        await analysisApi.uploadZip(project.id, zipFile);
+        await analysisApi.uploadZip(project.id, zipFile, ignorePatterns);
       } else if (sourceChoice === "git" && gitTab === "url") {
         await analysisApi.connectGitUrl(project.id, {
           repo_url: repoUrl.trim(),
@@ -768,13 +770,34 @@ function ZipStep({
   onBack,
   onSubmit,
   submitting,
+  ignorePatterns,
+  setIgnorePatterns,
 }: {
   zipFile: File | null;
   onFile: (f: File | null) => void;
   onBack: () => void;
   onSubmit: () => void;
   submitting: boolean;
+  ignorePatterns: string;
+  setIgnorePatterns: (v: string) => void;
 }) {
+  const commonPatterns = ["node_modules", ".git", "dist", "build", "venv", ".venv"];
+  const selectedCommon = useMemo(
+    () => commonPatterns.filter((p) => ignorePatterns.includes(p)),
+    [ignorePatterns],
+  );
+
+  const toggleCommon = (pattern: string) => {
+    const patterns = ignorePatterns
+      ? ignorePatterns.split(",").map((p) => p.trim()).filter(Boolean)
+      : [];
+    if (patterns.includes(pattern)) {
+      setIgnorePatterns(patterns.filter((p) => p !== pattern).join(", "));
+    } else {
+      setIgnorePatterns([...patterns, pattern].join(", "));
+    }
+  };
+
   return (
     <div className="space-y-4 rounded-lg border border-border bg-card p-6">
       <Label htmlFor="zip-upload">ZIP archive</Label>
@@ -790,6 +813,35 @@ function ZipStep({
           MB)
         </p>
       )}
+      <div className="space-y-4">
+        <Label>File Exclusions</Label>
+        <p className="text-xs text-muted-foreground">
+          Specify folders or file patterns to ignore during analysis.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {commonPatterns.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => toggleCommon(p)}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs transition-colors",
+                selectedCommon.includes(p)
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-accent",
+              )}
+            >
+              {p}
+            </button>
+          ))}
+        </div >
+        <Input
+          placeholder="Custom patterns (e.g. *.tmp, *.bak)"
+          value={ignorePatterns}
+          onChange={(e) => setIgnorePatterns(e.target.value)}
+          className="mt-2"
+        />
+      </div >
       <div className="flex justify-between pt-2">
         <Button variant="outline" onClick={onBack}>
           Back

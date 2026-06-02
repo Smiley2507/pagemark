@@ -10,7 +10,8 @@ import {
   ArrowUp,
   ChevronRight,
   ChevronLeft,
-  History as HistoryIcon
+  History as HistoryIcon,
+  AlertCircle,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
@@ -61,6 +62,9 @@ export function RightPanel({
   const [isExpanding, setIsExpanding] = useState(false);
   const [versions, setVersions] = useState<VersionEntry[]>([]);
   const [contextForm, setContextForm] = useState('');
+  const [clarification, setClarification] = useState<{ question: string } | null>(null);
+  const [clarificationAnswer, setClarificationAnswer] = useState('');
+  const [isClarifying, setIsClarifying] = useState(false);
 
   const { data: project } = useProject(projectId);
   const updateContext = useUpdateProjectContext(projectId);
@@ -70,6 +74,24 @@ export function RightPanel({
       setContextForm(project.context_md || '');
     }
   }, [project?.context_md]);
+
+  useEffect(() => {
+    if (activeSectionId && activeSectionStatus === 'NEEDS_INPUT') {
+      fetchClarification();
+    } else {
+      setClarification(null);
+      setClarificationAnswer('');
+    }
+  }, [activeSectionId, activeSectionStatus]);
+
+  const fetchClarification = async () => {
+    try {
+      const data = await analysisApi.getClarification(activeSectionId!);
+      setClarification(data);
+    } catch (e) {
+      console.error('Failed to fetch clarification', e);
+    }
+  };
 
   const generateSection = useGenerateSection(projectId);
   const refineSection = useRefineSection();
@@ -137,6 +159,22 @@ export function RightPanel({
       console.error(`AI ${type} failed`, e);
     } finally {
       if (type === 'expand') setIsExpanding(false);
+    }
+  };
+
+  const handleClarify = async () => {
+    if (!activeSectionId || !clarificationAnswer.trim()) return;
+    setIsClarifying(true);
+    try {
+      await analysisApi.clarifySection(activeSectionId, clarificationAnswer.trim());
+      toast.success('Answer submitted. AI is resuming generation...');
+      setClarification(null);
+      setClarificationAnswer('');
+    } catch (e) {
+      toast.error('Failed to submit answer');
+      console.error(e);
+    } finally {
+      setIsClarifying(false);
     }
   };
 
@@ -236,6 +274,35 @@ export function RightPanel({
                 </span>
               )}
             </div>
+
+            {clarification && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-900/30 dark:bg-amber-900/20 dark:text-amber-200 space-y-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-sm font-medium italic">
+                    {clarification.question}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <textarea
+                    value={clarificationAnswer}
+                    onChange={(e) => setClarificationAnswer(e.target.value)}
+                    placeholder="Provide the missing context..."
+                    className="w-full bg-white rounded-md border border-amber-200 px-2 py-1.5 text-sm placeholder:text-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:bg-amber-950 dark:border-amber-800"
+                    rows={3}
+                  />
+                  <Button
+                    size="sm"
+                    className="w-full h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+                    onClick={handleClarify}
+                    disabled={isClarifying || !clarificationAnswer.trim()}
+                  >
+                    {isClarifying ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                    Submit Answer
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Action Cards */}
             <div className="space-y-2">

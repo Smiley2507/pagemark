@@ -25,6 +25,7 @@
     "@radix-ui/react-toast": "^1.2.15",
     "@remixicon/react": "^4.9.0",
     "@tanstack/react-query": "^5.100.11",
+    "@xyflow/react": "^12.11.0",
     "axios": "^1.16.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

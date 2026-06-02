@@ -75,12 +75,27 @@ export const analysisApi = {
     return data;
   },
 
-  async uploadZip(projectId: number, file: File): Promise<JobResponse> {
+  async uploadZip(projectId: number, file: File, ignorePatterns?: string): Promise<JobResponse> {
     const formData = new FormData();
     formData.append('file', file);
+    if (ignorePatterns) {
+      formData.append('ignore_patterns', ignorePatterns);
+    }
     const { data } = await apiClient.post(`/projects/${projectId}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    return data;
+  },
+
+  async clarifySection(sectionId: number, answer: string): Promise<{ status: string; section_id: number }> {
+    const { data } = await apiClient.post(`/clarifications/${sectionId}/clarify`, {
+      answer,
+    });
+    return data;
+  },
+
+  async getClarification(sectionId: number): Promise<{ question: string }> {
+    const { data } = await apiClient.get(`/clarifications/${sectionId}`);
     return data;
   },
 };

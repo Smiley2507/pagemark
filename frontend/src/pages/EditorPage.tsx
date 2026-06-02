@@ -10,6 +10,7 @@ import {
   Sparkles,
   Loader2,
   ShieldCheck,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LeftPanel } from "@/components/editor/LeftPanel";
@@ -53,6 +54,11 @@ export const EditorPage: React.FC = () => {
 
   const sections = document?.sections ?? [];
   const completionPercent = project?.completion_pct ?? 0;
+
+  const needsInputSection = useMemo(() =>
+    sections.find(s => s.status === 'NEEDS_INPUT'),
+    [sections]
+  );
 
   const activeSection = useMemo(() =>
     sections.find(s => s.id === activeSectionId) || null
@@ -194,6 +200,30 @@ export const EditorPage: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {needsInputSection && (
+        <div className="mx-auto max-w-full px-4 py-2">
+          <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-900/30 dark:bg-amber-900/20 dark:text-amber-200">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <p className="text-sm font-medium">
+                The AI needs more information to complete the section <span className="font-bold">"{needsInputSection.heading}"</span>.
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto text-amber-900 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40"
+              onClick={() => {
+                setActiveSectionId(needsInputSection.id);
+                setRightOpen(true);
+              }}
+            >
+              Provide answer
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Main Area */}
       <div className="flex flex-1 overflow-hidden">
