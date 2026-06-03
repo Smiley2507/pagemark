@@ -317,14 +317,11 @@ export function MiddlePanel({
     });
   }, [sections]);
 
-  const sensors = useMemo(() =>
-    useSensors(
-      useSensor(PointerSensor),
-      useSensor(KeyboardSensor, {
-        coordinateShorthand: sortableKeyboardCoordinates,
-      })
-    ),
-  []);
+  const pointerSensor = useSensor(PointerSensor);
+  const keyboardSensor = useSensor(KeyboardSensor, {
+    coordinateShorthand: sortableKeyboardCoordinates,
+  });
+  const sensors = useSensors(pointerSensor, keyboardSensor);
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
