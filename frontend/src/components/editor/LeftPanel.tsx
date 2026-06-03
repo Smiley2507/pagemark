@@ -11,27 +11,48 @@ export interface HeadingItem {
   text: string;
   sectionId: number;
   headingIndex: number;
+  isSectionTitle: boolean;
 }
 
-export function extractHeadings(sections: Section[]): HeadingItem[] {
-  const result: HeadingItem[] = [];
+export interface SectionOutline {
+  sectionId: number;
+  sectionTitle: string;
+  headings: HeadingItem[];
+}
 
-  for (const section of sections) {
+export function extractOutline(sections: Section[]): SectionOutline[] {
+  return sections.map((section) => {
+    const sectionTitle = section.title?.trim() ? section.title : section.heading;
+    const headings: HeadingItem[] = [
+      {
+        level: 1,
+        text: sectionTitle,
+        sectionId: section.id,
+        headingIndex: -1,
+        isSectionTitle: true,
+      },
+    ];
+
     const RE = /^(#{1,2})\s+(.+)$/gm;
     let match: RegExpExecArray | null;
     let headingIndex = 0;
 
     while ((match = RE.exec(section.content_md)) !== null) {
-      result.push({
+      headings.push({
         level: match[1].length as 1 | 2,
         text: match[2].trim(),
         sectionId: section.id,
         headingIndex: headingIndex++,
+        isSectionTitle: false,
       });
     }
-  }
 
-  return result;
+    return {
+      sectionId: section.id,
+      sectionTitle,
+      headings,
+    };
+  });
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -55,73 +76,85 @@ export function LeftPanel({
   isOpen,
   onToggle,
 }: LeftPanelProps) {
-  const headings = useMemo(() => extractHeadings(sections), [sections]);
+  const outline = useMemo(() => extractOutline(sections), [sections]);
 
   return (
     <>
       <motion.div
         initial={false}
-        animate={{ width: isOpen ? 220 : 0 }}
+        animate={{ width: isOpen ? 240 : 0 }}
         transition={{ duration: 0.2, ease: "easeInOut" }}
-        className="relative h-full shrink-0 overflow-hidden border-r border-border/50 bg-background"
+        className="relative h-full shrink-0 overflow-hidden border-r border-border/50 bg-muted/20"
       >
-        <div className="flex h-full w-[220px] flex-col">
-          {/* Progress bar at very top */}
+        <div className="flex h-full w-[240px] flex-col">
           <div className="h-0.5 w-full shrink-0 bg-muted">
             <div
-              className="h-full bg-primary/60 transition-all duration-500"
+              className="h-full bg-foreground/30 transition-all duration-500"
               style={{ width: `${completionPercent}%` }}
             />
           </div>
 
-          {/* Heading list */}
           <nav
             aria-label="Document outline"
-            className="flex-1 space-y-0.5 overflow-y-auto px-2 pt-6 scrollbar-hide"
+            className="flex-1 space-y-2 overflow-y-auto px-2 py-4 scrollbar-hide"
           >
-            {headings.length === 0 ? (
+            {outline.length === 0 ? (
               <p className="px-3 text-sm text-muted-foreground">
                 Add headings to your content to see them here.
               </p>
             ) : (
-              headings.map((heading) => {
-                const isActive = heading.sectionId === activeSectionId;
-                const key = `${heading.sectionId}-${heading.headingIndex}`;
-
-                if (heading.level === 1) {
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => onHeadingClick(heading.sectionId, heading.text)}
-                      className={cn(
-                        "block w-full truncate rounded-md px-3 py-1.5 text-left text-sm font-medium",
-                        "mx-1 cursor-pointer transition-colors duration-150",
-                        isActive
-                          ? "bg-accent/60 text-foreground"
-                          : "text-foreground hover:bg-accent/40"
-                      )}
-                    >
-                      {heading.text}
-                    </button>
-                  );
-                }
+              outline.map((section, sectionIndex) => {
+                const isActive = section.sectionId === activeSectionId;
 
                 return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => onHeadingClick(heading.sectionId, heading.text)}
+                  <div
+                    key={section.sectionId}
                     className={cn(
-                      "block w-full truncate rounded-md py-1 pl-6 pr-3 text-left text-sm",
-                      "mx-1 cursor-pointer transition-colors duration-150",
-                      isActive
-                        ? "bg-accent/50 text-foreground"
-                        : "text-muted-foreground hover:bg-accent/30 hover:text-foreground"
+                      "space-y-1 rounded-md px-1 py-1 transition-colors",
+                      isActive && "bg-background/80 shadow-[inset_3px_0_0_var(--foreground)]",
                     )}
                   >
-                    {heading.text}
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => onHeadingClick(section.sectionId, section.sectionTitle)}
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-150",
+                        isActive
+                          ? "text-foreground"
+                          : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
+                      )}
+                    >
+                      <span className="text-meta-sm font-semibold tabular-nums text-muted-foreground">
+                        {String(sectionIndex + 1).padStart(2, "0")}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">
+                        {section.sectionTitle}
+                      </span>
+                    </button>
+
+                    <div className="space-y-0.5 pl-6">
+                      {section.headings.slice(1).map((heading) => {
+                        const key = `${heading.sectionId}-${heading.headingIndex}`;
+
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => onHeadingClick(heading.sectionId, heading.text)}
+                            className={cn(
+                              "block w-full truncate rounded-md px-2 py-1 text-left transition-colors duration-150",
+                              heading.level === 1
+                                ? "text-meta font-medium text-foreground/80"
+                                : "text-meta text-muted-foreground",
+                              "hover:bg-background/70 hover:text-foreground",
+                            )}
+                          >
+                            {heading.text}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })
             )}
@@ -134,7 +167,7 @@ export function LeftPanel({
         type="button"
         onClick={onToggle}
         aria-label={isOpen ? "Collapse outline panel" : "Expand outline panel"}
-        style={{ left: isOpen ? "208px" : "0px" }}
+        style={{ left: isOpen ? "228px" : "0px" }}
         className={cn(
           "fixed top-[60px] z-10",
           "flex h-6 w-5 items-center justify-center",

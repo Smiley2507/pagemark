@@ -29,7 +29,7 @@ import { wikiLinkAutocomplete } from './wikiLinkAutocomplete';
 
 const editorTheme = EditorView.theme({
   '&': {
-    height: '100%',
+    minHeight: '180px',
     backgroundColor: 'transparent',
   },
   '.cm-scroller': {
@@ -37,10 +37,12 @@ const editorTheme = EditorView.theme({
     fontSize: '15px',
     lineHeight: '1.75',
     padding: '0',
+    overflow: 'visible',
   },
   '.cm-content': {
     padding: '0',
     caretColor: 'var(--foreground)',
+    minHeight: '180px',
   },
   '.cm-line': { padding: '0' },
   '.cm-focused': { outline: 'none' },
@@ -508,7 +510,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     }, [value]);
 
     return (
-      <div ref={containerRef} className={cn('h-full w-full relative', className)}>
+      <div ref={containerRef} className={cn('min-h-[180px] w-full relative', className)}>
         {menuState && viewRef.current &&
           createPortal(
             <SlashCommandMenu

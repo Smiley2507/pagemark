@@ -12,13 +12,16 @@ import {
   ChevronLeft,
   History as HistoryIcon,
   AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { sectionsApi } from '@/api/sections';
+import { analysisApi } from '@/api/analysis';
 import { useGenerateSection, useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread, useUpdateProjectContext } from '@/hooks/useAI';
 import { useProject } from '@/hooks/useProject';
 import type { ChatMessage, Section } from '@/types';
@@ -219,42 +222,36 @@ export function RightPanel({
   return (
     <motion.div
       initial={false}
-      animate={{ width: isOpen ? 300 : 0 }}
+      animate={{ width: isOpen ? 320 : 0 }}
       transition={{ duration: 0.2, ease: 'easeInOut' }}
       className={cn(
-        "relative h-full flex-shrink-0 overflow-hidden border-l border-border/50 bg-background flex flex-col",
+        "relative flex h-full flex-shrink-0 flex-col overflow-hidden border-l border-border/50 bg-muted/20",
         !isOpen && "border-none"
       )}
     >
       {/* Collapse Button Mirror */}
       <button
         onClick={onToggle}
-        className="absolute -left-4 top-[60px] z-50 w-8 h-8 bg-background border border-border rounded-full flex items-center justify-center shadow-sm hover:bg-muted transition-colors"
+        className="absolute -left-3 top-[60px] z-50 flex h-7 w-6 items-center justify-center rounded-l-md border border-r-0 border-border bg-background text-muted-foreground shadow-sm transition-colors hover:text-foreground"
       >
-        <ChevronLeft className={cn("h-4 w-4 text-muted-foreground transition-transform", !isOpen && "rotate-180")} />
+        <ChevronLeft className={cn("h-3.5 w-3.5 transition-transform", !isOpen && "rotate-180")} />
       </button>
 
       {/* Tab Strip */}
-      <div className="h-12 flex shrink-0 items-center border-b border-border px-3">
-        <div className="flex w-full gap-4">
+      <div className="flex h-12 shrink-0 items-center border-b border-border/60 px-3">
+        <div className="grid w-full grid-cols-3 rounded-md bg-background/70 p-0.5">
           {(['Agent', 'Chat', 'History'] as TabType[]).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={cn(
-                "px-4 py-2 text-sm cursor-pointer transition-colors relative",
+                "relative rounded px-2 py-1.5 text-sm transition-colors",
                 activeTab === tab
-                  ? "text-foreground font-medium"
+                  ? "bg-muted text-foreground font-medium"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
               {tab}
-              {activeTab === tab && (
-                <motion.div
-                  layoutId="activeTab"
-                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-foreground"
-                />
-              )}
             </button>
           ))}
         </div>
@@ -263,18 +260,25 @@ export function RightPanel({
       {/* Tab Content */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
         {activeTab === 'Agent' && (
-          <div className="px-3 py-4 space-y-3">
+          <div className="space-y-4 px-4 py-4">
             {/* Context Pill */}
-            <div className="bg-muted rounded-lg px-3 py-2 flex items-center gap-2">
+            <div className="border-b border-border/60 pb-4">
+              <div className="flex items-start gap-2">
               <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span className="text-sm font-medium text-foreground truncate flex-1">
-                {activeSectionHeading || "No section selected"}
-              </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {activeSectionHeading || "No section selected"}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Ask for edits, refinements, or generation against this section.
+                  </p>
+                </div>
               {activeSectionId && (
-                <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium uppercase tracking-wider", statusColors[activeSectionStatus])}>
+                  <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider", statusColors[activeSectionStatus])}>
                   {activeSectionStatus}
                 </span>
               )}
+              </div>
             </div>
 
             {clarification && (
@@ -307,13 +311,13 @@ export function RightPanel({
             )}
 
             {/* Action Cards */}
-            <div className="space-y-2">
+            <div className="space-y-1">
               <button
                 disabled={!activeSectionId || isGenerating}
                 onClick={() => handleAction('generate')}
-                className="w-full text-left border border-border rounded-lg px-3 py-3 cursor-pointer hover:border-border/80 shadow-sm bg-card/80 transition-all duration-150 flex items-start gap-3 group disabled:opacity-50"
+                className="group flex w-full cursor-pointer items-start gap-3 rounded-md border border-transparent bg-background/70 px-3 py-3 text-left transition-colors hover:border-border/80 hover:bg-background disabled:opacity-50"
               >
-                <Sparkles className={cn("h-4 w-4 text-violet-500 mt-0.5 transition-transform", isGenerating && "animate-spin")} />
+                <Sparkles className={cn("mt-0.5 h-4 w-4 text-muted-foreground transition-transform group-hover:text-foreground", isGenerating && "animate-spin")} />
                 <div>
                   <div className="text-sm font-medium">{isGenerating ? "Generating..." : "Generate"}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">Write this section using code analysis</div>
@@ -323,9 +327,9 @@ export function RightPanel({
               <button
                 disabled={!activeSectionId || isRefining}
                 onClick={() => handleAction('refine')}
-                className="w-full text-left border border-border rounded-lg px-3 py-3 cursor-pointer hover:border-border/80 shadow-sm bg-card/80 transition-all duration-150 flex items-start gap-3 group disabled:opacity-50"
+                className="group flex w-full cursor-pointer items-start gap-3 rounded-md border border-transparent bg-background/70 px-3 py-3 text-left transition-colors hover:border-border/80 hover:bg-background disabled:opacity-50"
               >
-                <Wand2 className="h-4 w-4 text-blue-500 mt-0.5" />
+                <Wand2 className="mt-0.5 h-4 w-4 text-muted-foreground group-hover:text-foreground" />
                 <div>
                   <div className="text-sm font-medium">{isRefining ? "Refining..." : "Refine"}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">Improve clarity and completeness</div>
@@ -335,9 +339,9 @@ export function RightPanel({
               <button
                 disabled={!activeSectionId || isExpanding}
                 onClick={() => handleAction('expand')}
-                className="w-full text-left border border-border rounded-lg px-3 py-3 cursor-pointer hover:border-border/80 shadow-sm bg-card/80 transition-all duration-150 flex items-start gap-3 group disabled:opacity-50"
+                className="group flex w-full cursor-pointer items-start gap-3 rounded-md border border-transparent bg-background/70 px-3 py-3 text-left transition-colors hover:border-border/80 hover:bg-background disabled:opacity-50"
               >
-                <ArrowsUpFromLine className="h-4 w-4 text-emerald-500 mt-0.5" />
+                <ArrowsUpFromLine className="mt-0.5 h-4 w-4 text-muted-foreground group-hover:text-foreground" />
                 <div>
                   <div className="text-sm font-medium">{isExpanding ? "Expanding..." : "Expand"}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">Add more detail and examples</div>
@@ -351,7 +355,7 @@ export function RightPanel({
         )}
 
         {activeTab === 'Chat' && (
-          <div className="px-3 py-4 space-y-4 flex flex-col">
+          <div className="flex flex-col space-y-4 px-4 py-4">
             {messages.length === 0 && !isStreaming && (
               <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
                 <MessageSquare className="h-8 w-8 text-muted-foreground/40 mx-auto" />
@@ -363,8 +367,8 @@ export function RightPanel({
             {messages.map(msg => (
               <div key={msg.id} className={cn("flex", msg.role === 'user' ? "justify-end" : "justify-start items-start gap-2")}>
                 {msg.role === 'ai' && (
-                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center shrink-0">
-                    <Sparkles className="h-3 w-3 text-white" />
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-background">
+                    <Sparkles className="h-3 w-3 text-muted-foreground" />
                   </div>
                 )}
                 <div className={cn(
@@ -380,8 +384,8 @@ export function RightPanel({
 
             {isStreaming && (
               <div className="flex justify-start items-start gap-2">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-blue-500 flex items-center justify-center shrink-0">
-                  <Sparkles className="h-3 w-3 text-white" />
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-background">
+                  <Sparkles className="h-3 w-3 text-muted-foreground" />
                 </div>
                 <div className="text-sm max-w-[85%] pl-1 text-foreground">
                   {streamingContent ? (
@@ -425,7 +429,7 @@ export function RightPanel({
         )}
 
         {activeTab === 'History' && (
-          <div className="px-3 py-4 space-y-2">
+          <div className="space-y-2 px-4 py-4">
             {versions.length === 0 ? (
               <div className="py-12 text-center text-sm text-muted-foreground">No history yet</div>
             ) : (
@@ -436,7 +440,7 @@ export function RightPanel({
                   className="bg-muted/50 rounded-lg px-3 py-3 hover:bg-muted cursor-pointer transition-colors group"
                 >
                   <div className="flex items-center gap-1.5">
-                    {v.author_type === 'ai' ? <Sparkles className="h-3 w-3 text-violet-500" /> : <User className="h-3 w-3 text-blue-500" />}
+                    {v.author_type === 'ai' ? <Sparkles className="h-3 w-3 text-muted-foreground" /> : <User className="h-3 w-3 text-muted-foreground" />}
                     <span className="text-xs font-medium">{v.author_type === 'ai' ? 'AI' : 'You'}</span>
                     <span className="text-xs text-muted-foreground">·</span>
                     <span className="text-xs text-muted-foreground font-mono">
@@ -464,12 +468,12 @@ export function RightPanel({
       </div>
 
       {/* Composer */}
-      <div className="shrink-0 border-t border-border px-3 pt-3 pb-3 bg-background">
+      <div className="shrink-0 border-t border-border/60 bg-muted/20 px-3 pb-3 pt-3">
         {/* Context Pill Row */}
         <div className="flex items-center gap-1 mb-2">
           <button className="text-xs text-muted-foreground bg-muted rounded-md px-2 py-0.5 hover:bg-muted/80 transition-colors flex items-center gap-1">
             <span className="opacity-70">@</span>
-            <span className="truncate max-w-[120px]">
+            <span className="max-w-[120px] truncate">
               {activeSectionHeading?.slice(0, 20) || "Section"}
             </span>
           </button>
@@ -483,7 +487,7 @@ export function RightPanel({
             onChange={handleAutoExpand}
             onKeyDown={handleKeyDown}
             placeholder="Ask or instruct..."
-            className="w-full bg-muted rounded-xl border border-transparent px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:border-border focus idea:outline-none resize-none transition-colors"
+            className="w-full resize-none rounded-md border border-border bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground transition-colors focus:border-foreground/30 focus:outline-none"
             rows={1}
           />
         </div>
@@ -502,7 +506,7 @@ export function RightPanel({
               <button
                 key={chip.label}
                 onClick={() => setInputValue(chip.text)}
-                className="text-xs px-2.5 py-1 rounded-full border border-border bg-background text-muted-foreground cursor-pointer hover:bg-muted hover:text-foreground transition-colors whitespace-nowrap"
+                className="cursor-pointer whitespace-nowrap rounded-md border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 {chip.label}
               </button>
@@ -513,9 +517,9 @@ export function RightPanel({
           <button
             disabled={!inputValue.trim()}
             onClick={handleSendMessage}
-            className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center cursor-pointer hover:bg-primary/90 disabled:opacity-50 transition-opacity"
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            <ArrowUp className="h-3.5 w-3.5 text-primary-foreground" />
+            <ArrowUp className="h-3.5 w-3.5 text-background" />
           </button>
         </div>
       </div>

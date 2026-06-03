@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LeftPanel } from "@/components/editor/LeftPanel";
-import { MiddlePanel } from "@/components/editor/MiddlePanel";
+import { MiddlePanel, type MiddlePanelHandle } from "@/components/editor/MiddlePanel";
 import { RightPanel } from "@/components/editor/RightPanel";
 import { ExportModal } from "@/components/editor/ExportModal";
 import { QualityModal } from "@/components/editor/QualityModal";
@@ -42,7 +42,7 @@ export const EditorPage: React.FC = () => {
   const [exportOpen, setExportOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
 
-  const middlePanelRef = useRef<{ scrollToSection: (id: number) => void }>(null);
+  const middlePanelRef = useRef<MiddlePanelHandle>(null);
   const leftPanelRef = useRef<any>(null);
   const rightPanelRef = useRef<any>(null);
 
@@ -238,7 +238,7 @@ export const EditorPage: React.FC = () => {
           <div
             className={cn(
               "h-full transition-all duration-200 ease-in-out overflow-hidden",
-              leftOpen ? "w-[220px]" : "w-0"
+              leftOpen ? "w-[240px]" : "w-0"
             )}
           >
             <LeftPanel
@@ -246,7 +246,7 @@ export const EditorPage: React.FC = () => {
               activeSectionId={activeSectionId}
               onHeadingClick={(sectionId) => {
                 setActiveSectionId(sectionId);
-                // middlePanelRef.current?.scrollToSection(sectionId); // disabled until MiddlePanel supports it
+                middlePanelRef.current?.scrollToSection(sectionId);
               }}
               completionPercent={completionPercent}
               isOpen={leftOpen}
@@ -258,6 +258,7 @@ export const EditorPage: React.FC = () => {
 
           <div className="flex-1 min-w-0 bg-background overflow-hidden relative">
             <MiddlePanel
+              ref={middlePanelRef}
               sections={editorSections}
               activeSectionId={activeSectionId}
               onSectionVisible={(id) => {
@@ -289,7 +290,7 @@ export const EditorPage: React.FC = () => {
           <div
             className={cn(
               "h-full transition-all duration-200 ease-in-out overflow-hidden",
-              rightOpen ? "w-[300px]" : "w-0"
+              rightOpen ? "w-[320px]" : "w-0"
             )}
           >
             <RightPanel

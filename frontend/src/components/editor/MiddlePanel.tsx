@@ -1,4 +1,14 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  forwardRef,
+  type ForwardedRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Check, Loader2, Copy, GripVertical, Plus, Trash2 } from 'lucide-react';
@@ -46,6 +56,10 @@ export interface MiddlePanelProps {
   diffData?: DiffData;
   onDiffAccept?: () => void;
   onDiffReject?: () => void;
+}
+
+export interface MiddlePanelHandle {
+  scrollToSection: (sectionId: number) => void;
 }
 
 // ── Components ───────────────────────────────────────────────────────────────────
@@ -113,10 +127,7 @@ function SortableSection({
       }}
       data-section-id={String(section.id)}
       style={style}
-      className={cn(
-        "group mb-16 relative",
-        activeSectionId === section.id && "ring-1 ring-primary/20 rounded-lg p-2 bg-primary/5"
-      )}
+      className="group relative mb-16 scroll-mt-14"
     >
       <div className="flex items-center gap-2 mb-4">
         <div
@@ -173,7 +184,7 @@ function SortableSection({
         </div>
       </div>
 
-      <div style={{ height: editorHeight(content) }}>
+      <div className="min-h-[180px]">
         <MarkdownEditor
           ref={editorRefCallback}
           value={content}
@@ -355,23 +366,9 @@ function computeLineDiff(
   return { left, right };
 }
 
-// ── Editor height helper ──────────────────────────────────────────────────────
-// CodeMirror (MarkdownEditor) uses height:100% internally.
-// We give each section wrapper an explicit pixel height so the editor fills it.
-// The height grows reactively as the user types.
-
-const LINE_HEIGHT_PX = 26; // Inter 15px × 1.7 ≈ 25.5, rounded up
-const SECTION_PADDING_PX = 56; // top + bottom breathing room inside the wrapper
-const MIN_EDITOR_HEIGHT_PX = 200;
-
-function editorHeight(content: string): number {
-  const lines = content.split('\n').length;
-  return Math.max(MIN_EDITOR_HEIGHT_PX, lines * LINE_HEIGHT_PX + SECTION_PADDING_PX);
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function MiddlePanel({
+function MiddlePanelImpl({
   sections,
   activeSectionId,
   onSectionVisible,
@@ -381,7 +378,9 @@ export function MiddlePanel({
   diffData,
   onDiffAccept,
   onDiffReject,
-}: MiddlePanelProps) {
+  }: MiddlePanelProps,
+  ref: ForwardedRef<MiddlePanelHandle>,
+) {
   // ── Local content (tracks in-progress edits; never overwritten by prop refresh) ──
   const [localContent, setLocalContent] = useState<Record<number, string>>(
     () => Object.fromEntries(sections.map((s) => [s.id, s.content_md])),
@@ -596,6 +595,13 @@ export function MiddlePanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const sectionRefsMap = useRef<Map<number, HTMLDivElement>>(new Map());
 
+  useImperativeHandle(ref, () => ({
+    scrollToSection: (sectionId: number) => {
+      const el = sectionRefsMap.current.get(sectionId);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+  }), []);
+
   // Stable observer setup — re-runs when the sections list changes so newly
   // added section divs get observed.
   useEffect(() => {
@@ -621,13 +627,6 @@ export function MiddlePanel({
 
     return () => observer.disconnect();
   }, [sortedSections, onSectionVisible]);
-
-  // ── Scroll to active section when the TOC selection changes ─────────────────
-  useEffect(() => {
-    if (activeSectionId === null) return;
-    const el = sectionRefsMap.current.get(activeSectionId);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [activeSectionId]);
 
   // ── Diff computation (memoised — only recalculates when diffData changes) ───
   const diffResult = useMemo(() => {
@@ -866,3 +865,5 @@ export function MiddlePanel({
     </div>
   );
 }
+
+export const MiddlePanel = forwardRef<MiddlePanelHandle, MiddlePanelProps>(MiddlePanelImpl);
