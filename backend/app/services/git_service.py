@@ -63,9 +63,10 @@ async def check_repo_accessible(url: str) -> bool:
         return False
 
 
-def clone_repo(url: str, target_path: str, branch: str = "main", depth: int = 1) -> str:
+def clone_repo(url: str, target_path: str, branch: str = "main", depth: int = 1, ignore_patterns: list[str] | None = None) -> str:
     """
     Clones a git repository to the target path.
+    Optionally writes a .gitignore with the given patterns to skip large/generated dirs at analysis time.
     """
     # Ensure directory exists and is empty
     if os.path.exists(target_path):
@@ -73,6 +74,16 @@ def clone_repo(url: str, target_path: str, branch: str = "main", depth: int = 1)
     os.makedirs(target_path, exist_ok=True)
 
     git.Repo.clone_from(url, target_path, branch=branch, depth=depth)
+    if ignore_patterns:
+        gitignore_path = os.path.join(target_path, ".gitignore")
+        existing = ""
+        if os.path.exists(gitignore_path):
+            with open(gitignore_path) as f:
+                existing = f.read().strip() + "\n"
+        with open(gitignore_path, "w") as f:
+            f.write(existing)
+            f.write("\n".join(ignore_patterns))
+            f.write("\n")
     return target_path
 
 
