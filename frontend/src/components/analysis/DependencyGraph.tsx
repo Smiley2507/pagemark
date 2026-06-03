@@ -3,11 +3,10 @@ import {
   ReactFlow,
   Background,
   Controls,
-  Edge,
-  Node,
   useNodesState,
   useEdgesState,
 } from '@xyflow/react';
+import type { Node, Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { cn } from '@/lib/utils';
 
