@@ -5,6 +5,7 @@ def build_section_prompt(
     section_heading: str,
     project_context: dict,
     analysis: dict,
+    user_clarification: str | None = None,
 ) -> str:
     """Return a prompt for generating a documentation section in markdown.
 
@@ -77,6 +78,13 @@ def build_section_prompt(
     ]
     if custom_instructions:
         lines.append(f"Additional instructions: {custom_instructions}")
+    if user_clarification:
+        lines += [
+            f"",
+            f"## User Clarification",
+            f"The user provided the following additional context to help you write this section:",
+            f"{user_clarification}",
+        ]
 
     lines += [
         f"",

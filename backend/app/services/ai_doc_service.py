@@ -192,6 +192,7 @@ class AIService:
         section_id: int,
         db: AsyncSession,
         user_id: int,
+        answer: str | None = None,
     ) -> tuple[str, int]:
         """Generate content and confidence score for a section using Claude.
 
@@ -210,6 +211,7 @@ class AIService:
             section_heading=section.heading,
             project_context=project_ctx,
             analysis=analysis_detail,
+            user_clarification=answer,
         )
 
         response = await client.messages.create(

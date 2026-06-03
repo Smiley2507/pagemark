@@ -244,9 +244,7 @@ def resume_generation_task(self, section_id: int, answer: str, project_id: int, 
     from app.database import SessionLocal
     with SessionLocal() as db:
         try:
-            # Note: ai_service.generate_section should be updated to take supplementary context (the answer)
-            # For now, we use a simple wrapper or assume the answer is integrated via prompt.
-            content, score = run_async(ai_service.generate_section(project_id, section_id, db, user_id))
+            content, score = run_async(ai_service.generate_section(project_id, section_id, db, user_id, answer=answer))
 
             section = db.query(Section).filter(Section.id == section_id).first()
             if section:
