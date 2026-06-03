@@ -6,7 +6,7 @@ from sqlalchemy.future import select
 from app.config import settings
 from app.database import async_session
 from app.models.template import Template
-from app.routers import auth, projects, templates, git, documents, sections, versions
+from app.routers import auth, projects, templates, git, documents, sections, versions, clarification, terminology
 from app.routers import ai as ai_router
 from app.routers import quality as quality_router
 from app.routers import export as export_router
@@ -113,7 +113,9 @@ app.include_router(git.router)
 app.include_router(documents.router)
 app.include_router(sections.router)
 app.include_router(versions.router)
+app.include_router(terminology.router)
 app.include_router(ai_router.router)
+app.include_router(clarification.router)
 app.include_router(quality_router.router)
 app.include_router(export_router.router)
 app.include_router(org_router.router)

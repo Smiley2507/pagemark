@@ -40,6 +40,44 @@ export const sectionsApi = {
     return data;
   },
 
+  async reorderSections(sectionIds: number[]): Promise<{ message: string }> {
+    const { data } = await apiClient.put(`/sections/reorder`, { section_ids: sectionIds });
+    return data;
+  },
+
+  async updateSectionTitle(id: number, title: string): Promise<Section> {
+    const { data } = await apiClient.put(`/sections/${id}/title`, { title });
+    return data;
+  },
+
+  async deleteSection(id: number): Promise<{ message: string }> {
+    const { data } = await apiClient.delete(`/sections/${id}`);
+    return data;
+  },
+
+  async createCustomSection(projectId: number, title: string): Promise<{ id: number, heading: string }> {
+    const { data } = await apiClient.post(`/projects/${projectId}/sections`, { title });
+    return data;
+  },
+
+  async getPhrasingSuggestions(sectionId: number, text: string): Promise<string[]> {
+    const { data } = await apiClient.post(`/sections/${sectionId}/phrasing-suggestions`, { text });
+    return data;
+  },
+
+  async getTerminologyConflicts(projectId: number): Promise<any[]> {
+    const { data } = await apiClient.get(`/terminology/projects/${projectId}/check`);
+    return data;
+  },
+
+  async resolveTerminology(projectId: number, termToReplace: string, correctTerm: string): Promise<{ message: string }> {
+    const { data } = await apiClient.post(`/terminology/projects/${projectId}/resolve`, {
+      term_to_replace: termToReplace,
+      correct_term: correctTerm,
+    });
+    return data;
+  },
+
   async getVersions(sectionId: number): Promise<Version[]> {
     const { data } = await apiClient.get(`/sections/${sectionId}/versions`);
     return data;

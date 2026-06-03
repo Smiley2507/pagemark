@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import zipfile
+import fnmatch
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -38,6 +39,64 @@ DEFAULT_SECTION_HEADINGS = [
     "API Reference",
     "Deployment",
 ]
+
+# ── Utilities ───────────────────────────────────────────────────────
+
+def calculate_complexity(text: str) -> int:
+    """
+    A simple heuristic for cyclomatic complexity:
+    Counts control flow keywords (if, for, while, case, except, etc.)
+    """
+    if not text:
+        return 1
+    # Match keywords that typically start a new branch of execution
+    # This is a very rough approximation but works for general metrics
+    patterns = [
+        r"\bif\b", r"\bfor\b", r"\bwhile\b", r"\bcase\b",
+        r"\bcatch\b", r"\bexcept\b", r"\b&&\b", r"\b\|\|\b", r"\b\?\s*:"
+    ]
+    complexity = 1
+    for pattern in patterns:
+        complexity += len(re.findall(pattern, text))
+    return complexity
+
+def extract_dependencies(files: list[RepoFile]) -> list[dict]:
+    """
+    Extracts module dependencies by searching for import statements.
+    Returns a list of {source, target} edges.
+    """
+    dependencies = []
+
+    # Simplified patterns for the most common languages
+    # Python: 'import x' or 'from x import y'
+    py_import = re.compile(r"^(?:import\s+([a-zA-Z0-9._]+)|from\s+([a-zA-Z0-9._]+)\s+import)", re.MULTILINE)
+    # JS/TS: 'import ... from "x"' or 'require("x")'
+    js_import = re.compile(r"import\s+.*?\s+from\s+['\"](.+?)['\"]|require\(['\"](.+?)['\"]\)", re.MULTILINE)
+    # Java: 'import x.y.z'
+    java_import = re.compile(r"^import\s+([a-zA-Z0-9._]+);", re.MULTILINE)
+
+    for f in files:
+        try:
+            text = Path(f.abs_path).read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+
+        targets = set()
+        if f.language == "python":
+            for match in py_import.finditer(text):
+                targets.add(match.group(1) or match.group(2))
+        elif f.language in ("javascript", "typescript"):
+            for match in js_import.finditer(text):
+                targets.add(match.group(1) or match.group(2))
+        elif f.language == "java":
+            for match in java_import.finditer(text):
+                targets.add(match.group(1))
+
+        for target in targets:
+            if target:
+                dependencies.append({"source": f.rel_path, "target": target})
+
+    return dependencies
 
 # ── Pipeline metadata ───────────────────────────────────────────
 
@@ -157,6 +216,7 @@ class RepoFile:
     abs_path: str
     language: Optional[str]
     lines: int = 0
+    complexity: int = 0
 
 
 @dataclass
@@ -165,6 +225,7 @@ class AnalysisArtifacts:
     languages_json: dict
     endpoints_json: dict
     complexity_json: dict
+    dependencies_json: list[dict] = field(default_factory=list)
     files: list[RepoFile] = field(default_factory=list)
 
 
@@ -172,7 +233,7 @@ def _should_ignore_dir(name: str) -> bool:
     return name in IGNORE_DIR_NAMES or name.startswith(".")
 
 
-def extract_zip_archive(zip_path: str, project_id: int) -> str:
+def extract_zip_archive(zip_path: str, project_id: int, ignore_patterns: Optional[list[str]] = None) -> str:
     """Extract ZIP to uploads/{project_id}/extracted and return root path."""
     extract_root = Path(f"uploads/{project_id}/extracted")
     if extract_root.exists():
@@ -183,6 +244,12 @@ def extract_zip_archive(zip_path: str, project_id: int) -> str:
     file_count = 0
     with zipfile.ZipFile(zip_path, "r") as zf:
         for info in zf.infolist():
+            # Check if file should be ignored
+            if ignore_patterns:
+                rel_path = info.filename
+                if any(fnmatch.fnmatch(rel_path, pat) for pat in ignore_patterns):
+                    continue
+
             if info.is_dir():
                 continue
             total_size += info.file_size
@@ -191,7 +258,7 @@ def extract_zip_archive(zip_path: str, project_id: int) -> str:
                 raise ValueError(f"ZIP contains more than {MAX_FILES} files")
             if total_size > MAX_UNCOMPRESSED_BYTES:
                 raise ValueError("ZIP uncompressed size exceeds limit")
-        zf.extractall(extract_root)
+            zf.extract(info, extract_root)
 
     # If single top-level folder, use it as root
     children = [p for p in extract_root.iterdir() if p.name not in IGNORE_FILE_NAMES]
@@ -221,10 +288,11 @@ def collect_repo_files(root_path: str) -> list[RepoFile]:
             try:
                 text = abs_path.read_text(encoding="utf-8", errors="ignore")
                 lines = text.count("\n") + (1 if text else 0)
+                complexity = calculate_complexity(text)
             except OSError:
                 pass
             files.append(
-                RepoFile(rel_path=rel, abs_path=str(abs_path), language=lang, lines=lines)
+                RepoFile(rel_path=rel, abs_path=str(abs_path), language=lang, lines=lines, complexity=complexity)
             )
             if len(files) > MAX_FILES:
                 raise ValueError(f"Repository exceeds {MAX_FILES} files")
@@ -396,6 +464,12 @@ def compute_complexity(files: list[RepoFile]) -> dict:
             by_lang[f.language]["lines"] += f.lines
 
     largest = sorted(files, key=lambda x: x.lines, reverse=True)[:10]
+
+    metrics = [
+        {"file_path": f.rel_path, "loc": f.lines, "complexity": f.complexity}
+        for f in files
+    ]
+
     return {
         "total_files": len(files),
         "total_lines": total_lines,
@@ -405,6 +479,7 @@ def compute_complexity(files: list[RepoFile]) -> dict:
             if f.lines > 0
         ],
         "by_language": dict(by_lang),
+        "complexity_metrics": metrics,
     }
 
 
@@ -426,12 +501,14 @@ def run_static_analysis(
     endpoints = extract_endpoints(files)
     complexity = compute_complexity(files)
     complexity["parse_stats"] = parse_stats
+    dependencies = extract_dependencies(files)
 
     return AnalysisArtifacts(
         file_tree_json=file_tree,
         languages_json=languages,
         endpoints_json=endpoints,
         complexity_json=complexity,
+        dependencies_json=dependencies,
         files=files,
     )
 
@@ -479,6 +556,10 @@ async def update_analysis_step(
             analysis.languages_json = artifacts.languages_json
             analysis.endpoints_json = artifacts.endpoints_json
             analysis.complexity_json = artifacts.complexity_json
+            analysis.analysis_data = {
+                "complexity_metrics": artifacts.complexity_json.get("complexity_metrics", []),
+                "dependencies": artifacts.dependencies_json,
+            }
 
         if outline_json is not None:
             analysis.outline_json = outline_json
@@ -533,6 +614,10 @@ def update_analysis_step_sync(
             analysis.languages_json = artifacts.languages_json
             analysis.endpoints_json = artifacts.endpoints_json
             analysis.complexity_json = artifacts.complexity_json
+            analysis.analysis_data = {
+                "complexity_metrics": artifacts.complexity_json.get("complexity_metrics", []),
+                "dependencies": artifacts.dependencies_json,
+            }
 
         if outline_json is not None:
             analysis.outline_json = outline_json

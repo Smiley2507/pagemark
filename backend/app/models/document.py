@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, ForeignKey, Enum,
+    Column, Integer, String, Text, DateTime, ForeignKey, Enum, Boolean,
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -11,6 +11,13 @@ class SectionStatus(enum.Enum):
     PENDING = "pending"
     DRAFT = "draft"
     FINALIZED = "finalized"
+    NEEDS_INPUT = "needs_input"
+
+
+class LifecycleStatus(enum.Enum):
+    ACTIVE = "active"
+    DELETED = "deleted"
+    ARCHIVED = "archived"
 
 
 class Document(Base):
@@ -34,6 +41,10 @@ class Section(Base):
     parent_id = Column(Integer, ForeignKey("sections.id"), nullable=True)
     order_index = Column(Integer, nullable=False, default=0)
     heading = Column(String, nullable=False)
+    title = Column(String, nullable=True)
+    is_custom = Column(Boolean, default=False)
+    lifecycle_status = Column(Enum(LifecycleStatus), nullable=False, default=LifecycleStatus.ACTIVE)
+    confidence_score = Column(Integer, nullable=True)
     content_md = Column(Text, default="")
     status = Column(Enum(SectionStatus), nullable=False, default=SectionStatus.PENDING)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -43,6 +54,11 @@ class Section(Base):
     parent = relationship("Section", remote_side=[id], backref="children")
     versions = relationship(
         "SectionVersion",
+        back_populates="section",
+        cascade="all, delete-orphan",
+    )
+    clarification_requests = relationship(
+        "ClarificationRequest",
         back_populates="section",
         cascade="all, delete-orphan",
     )

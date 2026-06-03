@@ -13,6 +13,7 @@ from app.models.chat import ChatThread, ChatMessage
 from app.models.quality import QualityReport, QualityIssue, BrokenLink
 from app.models.audit import AuditLog
 from app.models.key import UserAPIKey
+from app.models.clarification import ClarificationRequest, ClarificationStatus
 
 __all__ = [
     "User",
@@ -37,4 +38,6 @@ __all__ = [
     "BrokenLink",
     "AuditLog",
     "UserAPIKey",
+    "ClarificationRequest",
+    "ClarificationStatus",
 ]

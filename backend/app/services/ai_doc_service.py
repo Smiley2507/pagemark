@@ -17,6 +17,7 @@ from app.prompts.chat import build_chat_prompt
 from app.prompts.refine import build_refine_prompt
 from app.prompts.section import build_section_prompt
 from app.services import ai_credential_service
+from app.exceptions import NeedsClarificationException
 
 CLAUDE_MODEL = "claude-sonnet-4-5"
 MAX_TOKENS_SECTION = 2000
@@ -191,10 +192,10 @@ class AIService:
         section_id: int,
         db: AsyncSession,
         user_id: int,
-    ) -> str:
-        """Generate content for a section using Claude.
+    ) -> tuple[str, int]:
+        """Generate content and confidence score for a section using Claude.
 
-        Returns the generated markdown string.
+        Returns (content_markdown, confidence_score).
         Does NOT save to DB — caller is responsible.
         """
         client, model_id = await self._get_anthropic_client(db, user_id)
@@ -216,7 +217,20 @@ class AIService:
             max_tokens=MAX_TOKENS_SECTION,
             messages=[{"role": "user", "content": prompt}],
         )
-        return response.content[0].text.strip()
+        content = response.content[0].text.strip()
+
+        try:
+            data = json.loads(content)
+            if data.get("action") == "ask_user":
+                raise NeedsClarificationException(
+                    question=data.get("question", "Please provide more details."),
+                    section_id=section_id,
+                )
+
+            return data.get("content", ""), data.get("confidence_score", 0)
+        except json.JSONDecodeError:
+            # Fallback for cases where LLM might not return JSON
+            return content, 50
 
     async def refine_section(
         self,
@@ -399,6 +413,43 @@ class AIService:
 
         return _stream()
 
+    async def phrasing_suggestions(
+        self,
+        section_id: int,
+        text_fragment: str,
+        db: AsyncSession,
+        user_id: int,
+    ) -> list[str]:
+        """Generate 3 phrasing alternatives for a text fragment."""
+        client, model_id = await self._get_anthropic_client(db, user_id)
+        section = await self._fetch_section(db, section_id)
+
+        prompt = (
+            f"You are an expert technical writer. Provide 3 distinct phrasing alternatives "
+            f"for the following text fragment from the section '{section.heading}':\n\n"
+            f"\"{text_fragment}\"\n\n"
+            f"Return exactly 3 options, one for each of these styles:\n"
+            f"1. Professional: Polished, authoritative, and clear.\n"
+            f"2. Academic: Formal, precise, and structurally rigorous.\n"
+            f"3. Concise: Short, direct, and efficient.\n\n"
+            f"Return the result as a JSON array of strings: [\"Professional variant...\", \"Academic variant...\", \"Concise variant...\"]"
+        )
+
+        response = await client.messages.create(
+            model=model_id,
+            max_tokens=1000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        content = response.content[0].text.strip()
+        try:
+            suggestions = json.loads(content)
+            if isinstance(suggestions, list):
+                return suggestions[:3]
+        except json.JSONDecodeError:
+            pass
+
+        return ["Could not generate suggestions. Please try again."]
 
 # Module-level singleton
 ai_service = AIService()

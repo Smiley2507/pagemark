@@ -1,12 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Check, Loader2, Copy } from 'lucide-react';
+import { Check, Loader2, Copy, GripVertical, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MarkdownEditor } from '@/components/editor/MarkdownEditor';
+import { PhrasingModal } from './PhrasingModal';
 import { sectionsApi } from '@/api/sections';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import type { Section } from '@/types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -29,7 +47,119 @@ export interface MiddlePanelProps {
   onDiffReject?: () => void;
 }
 
-// ── Line-diff algorithm (LCS-based) ──────────────────────────────────────────
+// ── Components ───────────────────────────────────────────────────────────────────
+
+function SortableSection({
+  section,
+  content,
+  onChange,
+  onTitleChange,
+  onDelete,
+  activeSectionId,
+  setActiveSectionId,
+  onPolish,
+  editorRefCallback,
+}: {
+  section: Section;
+  content: string;
+  onChange: (val: string) => void;
+  onTitleChange: (title: string) => void;
+  onDelete: (id: number) => void;
+  activeSectionId: number | null;
+  setActiveSectionId: (id: number) => void;
+  onPolish: (text: string) => void;
+  editorRefCallback: (ref: any) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: section.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : 1,
+    opacity: isDragging ? 0.8 : 1,
+  };
+
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "group mb-16 relative",
+        activeSectionId === section.id && "ring-1 ring-primary/20 rounded-lg p-2 bg-primary/5"
+      )}
+    >
+      <div className="flex items-center gap-2 mb-4">
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded text-muted-foreground"
+        >
+          <GripVertical className="h-4 w-4" />
+        </div>
+
+        {isEditingTitle ? (
+          <input
+            className="text-title font-semibold bg-transparent border-b border-primary outline-none w-full max-w-md"
+            value={section.title || section.heading}
+            onChange={(e) => onTitleChange(e.target.value)}
+            onBlur={() => setIsEditingTitle(false)}
+            autoFocus
+            onKeyDown={(e) => e.key === 'Enter' && setIsEditingTitle(false)}
+          />
+        ) : (
+          <h2
+            className="text-title font-semibold text-foreground cursor-pointer hover:text-primary transition-colors"
+            onClick={() => setIsEditingTitle(true)}
+          >
+            {section.title || section.heading}
+          </h2>
+        )}
+
+        <div className="ml-auto flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          {section.confidence_score !== undefined && (
+            <div className={cn(
+              "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+              section.confidence_score >= 80 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+              section.confidence_score >= 50 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
+              "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+            )}>
+              {section.confidence_score}%
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+            onClick={() => onDelete(section.id)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      <div style={{ height: editorHeight(content) }}>
+        <MarkdownEditor
+          ref={editorRefCallback}
+          value={content}
+          onChange={(val) => onChange(val)}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ── Editor height helper ──────────────────────────────────────────────────────
+// CodeMirror (MarkdownEditor) uses height:100% internally.
+// We give each section wrapper an explicit pixel height so the editor fills it.
 
 type LineKind = 'added' | 'removed' | 'unchanged';
 
@@ -152,6 +282,26 @@ export function MiddlePanel({
   const [localContent, setLocalContent] = useState<Record<number, string>>(
     () => Object.fromEntries(sections.map((s) => [s.id, s.content_md])),
   );
+  const [isSaving, setIsSaving] = useState(false);
+  const sectionEditorRefs = useRef<Record<number, any>>({});
+  const [sortedSections, setSortedSections] = useState(sections);
+  const [phrasingState, setPhrasingState] = useState<{
+    isOpen: boolean;
+    suggestions: string[];
+    isLoading: boolean;
+    activeSectionId: number | null;
+    selectedText: string;
+  }>({
+    isOpen: false,
+    suggestions: [],
+    isLoading: false,
+    activeSectionId: null,
+    selectedText: '',
+  });
+
+  useEffect(() => {
+    setSortedSections(sections);
+  }, [sections]);
 
   // When the sections prop gains a new section (first load or new section added),
   // seed its content without clobbering any in-progress edit.
@@ -167,8 +317,88 @@ export function MiddlePanel({
     });
   }, [sections]);
 
-  // ── Autosave ─────────────────────────────────────────────────────────────────
-  const [isSaving, setIsSaving] = useState(false);
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(
+      new KeyboardSensor({
+        coordinateShorthand: sortableKeyboardCoordinates,
+      })
+    )
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = sortedSections.findIndex(s => s.id === active.id);
+    const newIndex = sortedSections.findIndex(s => s.id === over.id);
+
+    const newOrder = arrayMove(sortedSections, oldIndex, newIndex);
+    setSortedSections(newOrder);
+
+    try {
+      await sectionsApi.reorderSections(newOrder.map(s => s.id));
+      toast.success("Section reordered");
+    } catch (e) {
+      toast.error("Failed to reorder sections");
+      setSortedSections(sections); // reset
+    }
+  };
+
+  const handleTitleChange = async (id: number, title: string) => {
+    try {
+      await sectionsApi.updateSectionTitle(id, title);
+      toast.success("Title updated");
+    } catch (e) {
+      toast.error("Failed to update title");
+    }
+  };
+
+  const handleDeleteSection = async (id: number) => {
+    if (!confirm("Delete this section?")) return;
+    try {
+      await sectionsApi.deleteSection(id);
+      toast.success("Section deleted");
+    } catch (e) {
+      toast.error("Failed to delete section");
+    }
+  };
+
+  const handleAddSection = async (projectId: number) => {
+    const title = prompt("Section Title:");
+    if (!title) return;
+    try {
+      await sectionsApi.createCustomSection(projectId, title);
+      toast.success("Section added");
+    } catch (e) {
+      toast.error("Failed to add section");
+    }
+  };
+
+  const handlePolishRequest = async (sectionId: number, text: string) => {
+    setPhrasingState(prev => ({ ...prev, isOpen: true, isLoading: true, suggestions: [], activeSectionId: sectionId, selectedText: text }));
+    try {
+      const suggestions = await sectionsApi.getPhrasingSuggestions(sectionId, text);
+      setPhrasingState(prev => ({ ...prev, isLoading: false, suggestions }));
+    } catch (e) {
+      toast.error("Failed to get phrasing suggestions");
+      setPhrasingState(prev => ({ ...prev, isLoading: false, isOpen: false }));
+    }
+  };
+
+  const handleSelectPhrasing = (suggestion: string) => {
+    const { activeSectionId } = phrasingState;
+    if (!activeSectionId) return;
+
+    const editor = sectionEditorRefs.current[activeSectionId];
+    if (editor && editor.replaceSelection) {
+      editor.replaceSelection(suggestion);
+    } else {
+      toast.error("Could not replace text: editor not found");
+    }
+
+    setPhrasingState(prev => ({ ...prev, isOpen: false }));
+  };
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   // Use a ref-based counter so overlapping async saves don't race with setState.
@@ -308,33 +538,57 @@ export function MiddlePanel({
       <div className="mx-auto max-w-3xl px-8 py-8">
         {/* ── Write mode ──────────────────────────────────────────────── */}
         {mode === 'write' && (
-          <div>
-            {sections.map((section) => {
-              const content = localContent[section.id] ?? section.content_md;
-              return (
-                <div
-                  key={section.id}
-                  data-section-id={String(section.id)}
-                  ref={(el) => {
-                    if (el) sectionRefsMap.current.set(section.id, el);
-                    else sectionRefsMap.current.delete(section.id);
-                  }}
-                  className="mb-16"
-                >
-                  <h2 className="mb-4 text-title font-semibold text-foreground">
-                    {section.heading}
-                  </h2>
-                  {/* Explicit height so CodeMirror's h-full has something to fill.
-                      Recomputed on every keystroke so the editor grows with content. */}
-                  <div style={{ height: editorHeight(content) }}>
-                    <MarkdownEditor
-                      value={content}
+          <div className="relative">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={sortedSections.map(s => s.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {sortedSections.map((section, idx) => (
+                  <React.Fragment key={section.id}>
+                    <SortableSection
+                      section={section}
+                      content={localContent[section.id] ?? section.content_md}
                       onChange={(val) => handleSectionChange(section.id, val)}
+                      onTitleChange={(title) => handleTitleChange(section.id, title)}
+                      onDelete={(id) => handleDeleteSection(id)}
+                      activeSectionId={activeSectionId}
+                      setActiveSectionId={setActiveSectionId}
+                      onPolish={(text) => handlePolishRequest(section.id, text)}
+                      editorRefCallback={(ref) => { sectionEditorRefs.current[section.id] = ref; }}
                     />
-                  </div>
-                </div>
-              );
-            })}
+                    {idx < sortedSections.length - 1 && (
+                      <div className="my-8 flex justify-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 rounded-full p-0 hover:bg-primary/10"
+                          onClick={() => handleAddSection(sections[0]?.document_id || 0)} // Simplified projectId fetch
+                        >
+                          <Plus className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </SortableContext>
+            </DndContext>
+            {sortedSections.length > 0 && (
+               <div className="my-8 flex justify-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 rounded-full p-0 hover:bg-primary/10"
+                  onClick={() => handleAddSection(sections[0]?.document_id || 0)}
+                >
+                  <Plus className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -474,6 +728,13 @@ export function MiddlePanel({
           </p>
         )}
       </div>
+      <PhrasingModal
+        isOpen={phrasingState.isOpen}
+        onClose={() => setPhrasingState(prev => ({ ...prev, isOpen: false }))}
+        suggestions={phrasingState.suggestions}
+        onSelect={handleSelectPhrasing}
+        isLoading={phrasingState.isLoading}
+      />
     </div>
   );
 }

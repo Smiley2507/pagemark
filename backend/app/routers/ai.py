@@ -3,6 +3,7 @@
 import json
 from datetime import datetime
 from typing import List
+from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -114,6 +115,7 @@ async def generate_outline(
         elif isinstance(lang_data, list):
             language = lang_keys[0] if lang_data else ""
 
+    # pyrefly: ignore [missing-import]
     import anthropic as _anthropic
     from app.services.crypto_service import decrypt_token
     from app.models.ai_credential import UserAiCredential
@@ -427,3 +429,18 @@ async def get_chat_messages(
         )
         for m in messages
     ]
+
+class PhrasingRequest(BaseModel):
+    text: str
+
+
+@router.post("/sections/{section_id}/phrasing-suggestions", response_model=List[str])
+async def get_phrasing_suggestions(
+    section_id: int,
+    body: PhrasingRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Provide 3 phrasing alternatives for a text fragment."""
+    await section_service.get_section_for_user(db, section_id, current_user.id)
+    return await ai_service.phrasing_suggestions(section_id, body.text, db, current_user.id)

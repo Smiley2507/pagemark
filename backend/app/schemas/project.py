@@ -25,6 +25,7 @@ class ProjectCreateRequest(BaseModel):
     git_repo_url: Optional[str] = None
     git_branch: Optional[str] = None
     template_id: Optional[int] = None
+    ignore_patterns: Optional[List[str]] = None
 
 
 class ProjectUpdateRequest(BaseModel):

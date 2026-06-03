@@ -13,15 +13,16 @@ from app.models.user import User
 from app.models.organization import Organization, OrganizationMember, OrgMemberStatus
 from app.models.project import Project, ProjectStatus, SourceType
 from app.models.template import Template
-from app.models.document import Document, Section, SectionStatus
+from app.models.document import Document, Section, SectionStatus, LifecycleStatus
 from app.schemas.project import (
     ProjectCreateRequest,
     ProjectUpdateRequest,
     ProjectResponse,
     ProjectListResponse,
 )
+from app.schemas.section import CustomSectionRequest
 
-from fastapi import UploadFile, File
+from fastapi import UploadFile, File, Form
 import os as std_os
 import shutil
 from app.models.analysis import Analysis, AnalysisStatus
@@ -383,6 +384,7 @@ async def duplicate_project(
 async def upload_zip(
     project_id: int,
     file: UploadFile = File(...),
+    ignore_patterns: Optional[str] = Form(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -403,7 +405,8 @@ async def upload_zip(
     await db.commit()
     await db.refresh(analysis)
 
-    task = analyze_project_task.delay(project.id, analysis.id, file_path, "zip")
+    patterns = [p.strip() for p in ignore_patterns.split(",")] if ignore_patterns else None
+    task = analyze_project_task.delay(project.id, analysis.id, file_path, "zip", ignore_patterns=patterns)
     return {"job_id": task.id, "analysis_id": analysis.id}
 
 
@@ -581,3 +584,37 @@ async def apply_analysis_outline(
     doc = doc_result.scalar_one_or_none()
     count = len(doc.sections) if doc else 0
     return ApplyOutlineResponse(applied=True, section_count=count)
+
+@router.post("/{project_id}/sections", status_code=status.HTTP_201_CREATED, response_model=None)
+async def add_custom_section(
+    project_id: int,
+    body: CustomSectionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await _get_project(project_id, current_user, db)
+
+    doc_result = await db.execute(select(Document).where(Document.project_id == project.id))
+    document = doc_result.scalar_one()
+
+    # Compute next order_index
+    max_index_res = await db.execute(
+        select(func.max(Section.order_index)).where(Section.document_id == document.id)
+    )
+    max_index = max_index_res.scalar() or 0
+
+    new_section = Section(
+        document_id=document.id,
+        order_index=max_index + 1,
+        heading=body.title or "Untitled Section",
+        title=body.title,
+        is_custom=True,
+        lifecycle_status=LifecycleStatus.ACTIVE,
+        content_md="",
+        status=SectionStatus.PENDING,
+    )
+    db.add(new_section)
+    await db.commit()
+    await db.refresh(new_section)
+
+    return {"id": new_section.id, "heading": new_section.heading}

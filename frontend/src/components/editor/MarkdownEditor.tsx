@@ -293,12 +293,15 @@ function ensureLivePreviewStyles() {
 
 export interface MarkdownEditorHandle {
   focus: () => void;
+  replaceSelection: (text: string) => void;
 }
 
 interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  sectionId?: number;
+  onPolish?: (text: string) => void;
 }
 
 interface MenuState {
@@ -319,7 +322,7 @@ interface TableAssistantState {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-  function MarkdownEditor({ value, onChange, className }, ref) {
+  function MarkdownEditor({ value, onChange, className, sectionId, onPolish }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef      = useRef<EditorView | null>(null);
     const [menuState, setMenuState] = useState<MenuState | null>(null);
@@ -331,6 +334,15 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
 
     useImperativeHandle(ref, () => ({
       focus: () => viewRef.current?.focus(),
+      replaceSelection: (text: string) => {
+        const view = viewRef.current;
+        if (!view) return;
+        const selection = view.state.selection.main;
+        view.dispatch({
+          changes: { from: selection.from, to: selection.to, insert: text },
+        });
+        view.focus();
+      },
     }));
 
     // ── Mount ──────────────────────────────────────────────────────────────
@@ -517,6 +529,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
             <BubbleMenu
               position={bubbleMenuState.position}
               editor={viewRef.current}
+              onPolish={onPolish}
             />,
             document.body,
           )

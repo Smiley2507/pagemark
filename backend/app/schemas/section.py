@@ -17,6 +17,10 @@ class SectionResponse(BaseModel):
     parent_id: Optional[int] = None
     order_index: int
     heading: str
+    title: Optional[str] = None
+    is_custom: bool = False
+    lifecycle_status: str
+    confidence_score: Optional[int] = None
     content_md: str
     status: SectionStatusEnum
     children: List["SectionResponse"] = Field(default_factory=list)
@@ -46,6 +50,18 @@ class SectionStatusUpdateRequest(BaseModel):
 class SectionStatusUpdateResponse(BaseModel):
     status: SectionStatusEnum
     completion_pct: float
+
+
+class SectionReorderRequest(BaseModel):
+    section_ids: List[int]
+
+
+class SectionTitleRequest(BaseModel):
+    title: str
+
+
+class CustomSectionRequest(BaseModel):
+    title: str
 
 
 class SectionTreeResponse(BaseModel):

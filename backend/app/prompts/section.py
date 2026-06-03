@@ -80,7 +80,9 @@ def build_section_prompt(
 
     lines += [
         f"",
-        f"Return only the section content in markdown. No preamble.",
+        f"If you do not have enough business logic or context to document this section accurately, you MUST return a JSON response with the following structure: {{'action': 'ask_user', 'question': '<write a clear, targeted question asking for the missing detail>'}}.",
+        f"Otherwise, you MUST return a JSON response with the following structure: {{'content': '<the generated markdown content>', 'confidence_score': <integer 0-100 reflecting how confident you are in the accuracy based on the provided analysis>}}.",
+        f"Do not return any text outside the JSON object. No preamble.",
     ]
 
     return "\n".join(lines)

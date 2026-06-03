@@ -34,6 +34,7 @@ class Analysis(Base):
     outline_applied = Column(Boolean, nullable=False, default=False)
     outline_skipped = Column(Boolean, nullable=False, default=False)
     outline_skip_reason = Column(String, nullable=True)
+    analysis_data = Column(JSON, nullable=True)
     error_message = Column(Text, nullable=True)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)

@@ -6,7 +6,7 @@ from sqlalchemy.future import select
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models.document import Document, SectionStatus
+from app.models.document import Document, SectionStatus, LifecycleStatus
 from app.models.user import User
 from app.models.version import AuthorType
 from app.schemas.section import (
@@ -16,6 +16,9 @@ from app.schemas.section import (
     SectionStatusUpdateRequest,
     SectionStatusUpdateResponse,
     SectionUpdateRequest,
+    SectionReorderRequest,
+    SectionTitleRequest,
+    CustomSectionRequest,
 )
 from app.services import section_service
 from app.services.version_service import create_version_snapshot
@@ -148,3 +151,45 @@ async def update_section_status(
         status=body.status,
         completion_pct=completion_pct,
     )
+
+
+@router.put("/reorder")
+async def reorder_sections(
+    body: SectionReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # We assume the user provides a list of IDs in the new desired order
+    for index, section_id in enumerate(body.section_ids):
+        section = await section_service.get_section_for_user(db, section_id, current_user.id)
+        section.order_index = index
+
+    await db.commit()
+    return {"message": "Sections reordered successfully"}
+
+
+@router.put("/{section_id}/title", response_model=SectionResponse)
+async def update_section_title(
+    section_id: int,
+    body: SectionTitleRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    section = await section_service.get_section_for_user(db, section_id, current_user.id)
+    section.title = body.title
+    section.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(section)
+    return section_service.section_to_response(section)
+
+
+@router.delete("/{section_id}")
+async def delete_section(
+    section_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    section = await section_service.get_section_for_user(db, section_id, current_user.id)
+    section.lifecycle_status = LifecycleStatus.DELETED
+    await db.commit()
+    return {"message": "Section deleted successfully"}

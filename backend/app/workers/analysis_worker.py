@@ -40,6 +40,10 @@ from app.services.analysis_service import (
     update_analysis_step,
     update_analysis_step_sync,
 )
+from app.models.document import Section, SectionStatus
+from app.models.clarification import ClarificationRequest, ClarificationStatus
+from app.services.ai_doc_service import ai_service
+from app.exceptions import NeedsClarificationException
 
 
 def run_async(coro):
@@ -139,7 +143,7 @@ def _run_pipeline(project_id: int, analysis_id: int, root_path: str):
 
 
 @celery_app.task(bind=True, max_retries=3)
-def analyze_project_task(self, project_id: int, analysis_id: int, source_path: str, source_type: str = "zip"):
+def analyze_project_task(self, project_id: int, analysis_id: int, source_path: str, source_type: str = "zip", ignore_patterns: list[str] = None):
     _agent_log("A", "analysis_worker.py:analyze_project_task", "task_start", {"project_id": project_id, "analysis_id": analysis_id, "source_type": source_type})
     try:
         update_analysis_step_sync(
@@ -155,7 +159,7 @@ def analyze_project_task(self, project_id: int, analysis_id: int, source_path: s
             STEP_NAMES[2],
             step_detail="Extracting archive",
         )
-        root_path = extract_zip_archive(source_path, project_id)
+        root_path = extract_zip_archive(source_path, project_id, ignore_patterns=ignore_patterns)
         _agent_log("A", "analysis_worker.py:analyze_project_task", "extract_ok", {"root_path": root_path})
         _run_pipeline(project_id, analysis_id, root_path)
         _agent_log("A", "analysis_worker.py:analyze_project_task", "task_done", {"analysis_id": analysis_id})
@@ -196,3 +200,59 @@ def clone_and_analyze_task(
         raise self.retry(exc=e, countdown=10)
     finally:
         git_service.cleanup_repo(target_path)
+
+@celery_app.task(bind=True, max_retries=3)
+def generate_section_task(self, section_id: int, project_id: int, user_id: int):
+    """
+    Generate content for a section.
+    If AI requests clarification, it raises NeedsClarificationException
+    which is caught to set the status to NEEDS_INPUT.
+    """
+    from app.database import SessionLocal
+    with SessionLocal() as db:
+        try:
+            content, score = run_async(ai_service.generate_section(project_id, section_id, db, user_id))
+
+            section = db.query(Section).filter(Section.id == section_id).first()
+            if section:
+                section.content_md = content
+                section.confidence_score = score
+                section.status = SectionStatus.DRAFT
+                db.commit()
+
+        except NeedsClarificationException as e:
+            section = db.query(Section).filter(Section.id == section_id).first()
+            if section:
+                section.status = SectionStatus.NEEDS_INPUT
+
+            clarification = ClarificationRequest(
+                section_id=section_id,
+                question=e.question,
+                status=ClarificationStatus.PENDING,
+            )
+            db.add(clarification)
+            db.commit()
+        except Exception as e:
+            _agent_log("A", "analysis_worker.py:generate_section_task", "error", {"error": str(e)})
+            raise self.retry(exc=e, countdown=10)
+
+@celery_app.task(bind=True, max_retries=3)
+def resume_generation_task(self, section_id: int, answer: str, project_id: int, user_id: int):
+    """
+    Resume section generation after receiving user clarification.
+    """
+    from app.database import SessionLocal
+    with SessionLocal() as db:
+        try:
+            # Note: ai_service.generate_section should be updated to take supplementary context (the answer)
+            # For now, we use a simple wrapper or assume the answer is integrated via prompt.
+            content, score = run_async(ai_service.generate_section(project_id, section_id, db, user_id))
+
+            section = db.query(Section).filter(Section.id == section_id).first()
+            if section:
+                section.content_md = content
+                section.confidence_score = score
+                section.status = SectionStatus.DRAFT
+                db.commit()
+        except Exception as e:
+            raise self.retry(exc=e, countdown=10)

@@ -1,14 +1,15 @@
 import React, { useEffect } from 'react';
-import { Bold, Italic, Strikethrough, Code, Link } from 'lucide-react';
+import { Bold, Italic, Strikethrough, Code, Link, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { EditorView } from '@codemirror/view';
 
 interface BubbleMenuProps {
   position: { top: number; left: number };
   editor: EditorView;
+  onPolish?: (text: string) => void;
 }
 
-export function BubbleMenu({ position, editor }: BubbleMenuProps) {
+export function BubbleMenu({ position, editor, onPolish }: BubbleMenuProps) {
   // Helper to toggle formatting wrappers
   const toggleFormat = (before: string, after: string = before) => {
     const selection = editor.state.selection.main;
@@ -129,6 +130,20 @@ export function BubbleMenu({ position, editor }: BubbleMenuProps) {
         title="Link"
       >
         <Link className="w-4 h-4" />
+      </button>
+      <div className="w-[1px] h-4 bg-border-default mx-1" />
+      <button
+        onClick={() => {
+          const selection = editor.state.selection.main;
+          const text = editor.state.sliceDoc(selection.from, selection.to);
+          if (text && onPolish) {
+            onPolish(text);
+          }
+        }}
+        className="p-1.5 text-primary hover:text-foreground hover:bg-accent rounded transition-colors"
+        title="AI Phrasing Suggestions"
+      >
+        <Sparkles className="w-4 h-4" />
       </button>
     </div>
   );
