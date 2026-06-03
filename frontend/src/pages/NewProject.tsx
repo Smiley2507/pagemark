@@ -328,6 +328,8 @@ export const NewProject: React.FC = () => {
             onBack={() => setStep(2)}
             onSubmit={handleConnectAndAnalyse}
             submitting={submitting}
+            ignorePatterns={ignorePatterns}
+            setIgnorePatterns={setIgnorePatterns}
           />
         )}
 

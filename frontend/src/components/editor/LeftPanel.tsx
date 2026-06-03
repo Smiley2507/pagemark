@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { motion } from "framer-motion";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Section } from "@/types";
 
@@ -77,6 +77,13 @@ export function LeftPanel({
   onToggle,
 }: LeftPanelProps) {
   const outline = useMemo(() => extractOutline(sections), [sections]);
+  const sectionsById = useMemo(() => {
+    const map = new Map<number, Section>();
+    for (const s of sections) {
+      map.set(s.id, s);
+    }
+    return map;
+  }, [sections]);
 
   return (
     <>
@@ -130,6 +137,9 @@ export function LeftPanel({
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold">
                         {section.sectionTitle}
                       </span>
+                      {sectionsById.get(section.sectionId)?.status === 'NEEDS_INPUT' && (
+                        <HelpCircle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                      )}
                     </button>
 
                     <div className="space-y-0.5 pl-6">
