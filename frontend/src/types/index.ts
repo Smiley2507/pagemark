@@ -198,9 +198,14 @@ export interface Section {
   document_id: number;
   parent_id?: number;
   order_index: number;
+  sort_order?: number;
   heading: string;
+  title?: string | null;
   content_md: string;
-  status: "pending" | "draft" | "finalized";
+  status: "pending" | "draft" | "finalized" | "needs_input" | "NEEDS_INPUT";
+  is_custom?: boolean;
+  lifecycle_status?: "active" | "deleted" | "archived";
+  confidence_score?: number | null;
   created_at?: string;
   updated_at?: string;
   children?: Section[];

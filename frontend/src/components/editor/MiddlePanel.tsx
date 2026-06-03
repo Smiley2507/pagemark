@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Check, Loader2, Copy, GripVertical, Plus, Trash2 } from 'lucide-react';
@@ -40,6 +40,7 @@ export interface MiddlePanelProps {
   sections: Section[];
   activeSectionId: number | null;
   onSectionVisible: (sectionId: number) => void;
+  onSectionsChange?: (sections: Section[]) => void;
   mode: MiddlePanelMode;
   onModeChange: (mode: MiddlePanelMode) => void;
   diffData?: DiffData;
@@ -53,22 +54,24 @@ function SortableSection({
   section,
   content,
   onChange,
-  onTitleChange,
+  onTitleCommit,
   onDelete,
   activeSectionId,
   setActiveSectionId,
   onPolish,
   editorRefCallback,
+  sectionRefCallback,
 }: {
   section: Section;
   content: string;
   onChange: (val: string) => void;
-  onTitleChange: (title: string) => void;
+  onTitleCommit: (title: string) => void;
   onDelete: (id: number) => void;
   activeSectionId: number | null;
   setActiveSectionId: (id: number) => void;
   onPolish: (text: string) => void;
   editorRefCallback: (ref: any) => void;
+  sectionRefCallback: (el: HTMLDivElement | null) => void;
 }) {
   const {
     attributes,
@@ -87,10 +90,28 @@ function SortableSection({
   };
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(section.title ?? section.heading);
+  const confidenceScore = section.confidence_score;
+  const displayTitle = section.title?.trim() ? section.title : section.heading;
+
+  useEffect(() => {
+    setDraftTitle(section.title ?? section.heading);
+  }, [section.id, section.title, section.heading]);
+
+  const commitTitle = () => {
+    setIsEditingTitle(false);
+    const currentTitle = section.title ?? section.heading;
+    if (draftTitle === currentTitle) return;
+    onTitleCommit(draftTitle);
+  };
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(el) => {
+        setNodeRef(el);
+        sectionRefCallback(el);
+      }}
+      data-section-id={String(section.id)}
       style={style}
       className={cn(
         "group mb-16 relative",
@@ -109,30 +130,36 @@ function SortableSection({
         {isEditingTitle ? (
           <input
             className="text-title font-semibold bg-transparent border-b border-primary outline-none w-full max-w-md"
-            value={section.title || section.heading}
-            onChange={(e) => onTitleChange(e.target.value)}
-            onBlur={() => setIsEditingTitle(false)}
+            value={draftTitle}
+            onChange={(e) => setDraftTitle(e.target.value)}
+            onBlur={commitTitle}
             autoFocus
-            onKeyDown={(e) => e.key === 'Enter' && setIsEditingTitle(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitTitle();
+              if (e.key === 'Escape') {
+                setDraftTitle(section.title ?? section.heading);
+                setIsEditingTitle(false);
+              }
+            }}
           />
         ) : (
           <h2
             className="text-title font-semibold text-foreground cursor-pointer hover:text-primary transition-colors"
             onClick={() => setIsEditingTitle(true)}
           >
-            {section.title || section.heading}
+            {displayTitle}
           </h2>
         )}
 
         <div className="ml-auto flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          {section.confidence_score !== undefined && (
+          {confidenceScore != null && (
             <div className={cn(
               "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-              section.confidence_score >= 80 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-              section.confidence_score >= 50 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
+              confidenceScore >= 80 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+              confidenceScore >= 50 ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" :
               "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
             )}>
-              {section.confidence_score}%
+              {confidenceScore}%
             </div>
           )}
           <Button
@@ -161,7 +188,7 @@ function DndEditorWrapper({
   sections,
   localContent,
   handleSectionChange,
-  handleTitleChange,
+  handleTitleCommit,
   handleDeleteSection,
   activeSectionId,
   setActiveSectionId,
@@ -169,11 +196,12 @@ function DndEditorWrapper({
   editorRefCallback,
   onDragEnd,
   onAddSection,
+  sectionRefCallback,
 }: {
   sections: Section[];
   localContent: Record<number, string>;
   handleSectionChange: (id: number, val: string) => void;
-  handleTitleChange: (id: number, title: string) => void;
+  handleTitleCommit: (id: number, title: string) => void;
   handleDeleteSection: (id: number) => void;
   activeSectionId: number | null;
   setActiveSectionId: (id: number) => void;
@@ -181,10 +209,11 @@ function DndEditorWrapper({
   editorRefCallback: (id: number, ref: any) => void;
   onDragEnd: (event: DragEndEvent) => void;
   onAddSection: (projectId: number) => void;
+  sectionRefCallback: (id: number, el: HTMLDivElement | null) => void;
 }) {
   const pointerSensor = useSensor(PointerSensor);
   const keyboardSensor = useSensor(KeyboardSensor, {
-    coordinateShorthand: sortableKeyboardCoordinates,
+    coordinateGetter: sortableKeyboardCoordinates,
   });
   const sensors = useSensors(pointerSensor, keyboardSensor);
 
@@ -199,17 +228,18 @@ function DndEditorWrapper({
         strategy={verticalListSortingStrategy}
       >
         {sections.map((section, idx) => (
-          <React.Fragment key={section.id}>
+          <Fragment key={section.id}>
             <SortableSection
               section={section}
               content={localContent[section.id] ?? section.content_md}
               onChange={(val) => handleSectionChange(section.id, val)}
-              onTitleChange={(title) => handleTitleChange(section.id, title)}
+              onTitleCommit={(title) => handleTitleCommit(section.id, title)}
               onDelete={(id) => handleDeleteSection(id)}
               activeSectionId={activeSectionId}
               setActiveSectionId={setActiveSectionId}
               onPolish={(text) => onPolish(section.id, text)}
               editorRefCallback={(ref) => editorRefCallback(section.id, ref)}
+              sectionRefCallback={(el) => sectionRefCallback(section.id, el)}
             />
             {idx < sections.length - 1 && (
               <div className="my-8 flex justify-center">
@@ -223,7 +253,7 @@ function DndEditorWrapper({
                 </Button>
               </div>
             )}
-          </React.Fragment>
+          </Fragment>
         ))}
       </SortableContext>
     </DndContext>
@@ -345,6 +375,7 @@ export function MiddlePanel({
   sections,
   activeSectionId,
   onSectionVisible,
+  onSectionsChange,
   mode,
   onModeChange,
   diffData,
@@ -376,6 +407,13 @@ export function MiddlePanel({
     setSortedSections(sections);
   }, [sections]);
 
+  const applySectionUpdate = (updater: (sections: Section[]) => Section[]) => {
+    const next = updater(sortedSections);
+    setSortedSections(next);
+    onSectionsChange?.(next);
+    return next;
+  };
+
   // When the sections prop gains a new section (first load or new section added),
   // seed its content without clobbering any in-progress edit.
   useEffect(() => {
@@ -396,34 +434,57 @@ export function MiddlePanel({
 
     const oldIndex = sortedSections.findIndex(s => s.id === active.id);
     const newIndex = sortedSections.findIndex(s => s.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
 
     const newOrder = arrayMove(sortedSections, oldIndex, newIndex);
-    setSortedSections(newOrder);
+    applySectionUpdate(() => newOrder);
 
     try {
       await sectionsApi.reorderSections(newOrder.map(s => s.id));
       toast.success("Section reordered");
     } catch (e) {
       toast.error("Failed to reorder sections");
-      setSortedSections(sections); // reset
+      applySectionUpdate(() => sections);
     }
   };
 
-  const handleTitleChange = async (id: number, title: string) => {
+  const handleTitleCommit = async (id: number, title: string) => {
+    const previousSections = sortedSections;
+    applySectionUpdate((current) =>
+      current.map((section) =>
+        section.id === id ? { ...section, title } : section
+      )
+    );
+
     try {
-      await sectionsApi.updateSectionTitle(id, title);
+      const updatedSection = await sectionsApi.updateSectionTitle(id, title);
+      applySectionUpdate((current) =>
+        current.map((section) =>
+          section.id === id ? { ...section, ...updatedSection } : section
+        )
+      );
       toast.success("Title updated");
     } catch (e) {
+      applySectionUpdate(() => previousSections);
       toast.error("Failed to update title");
     }
   };
 
   const handleDeleteSection = async (id: number) => {
     if (!confirm("Delete this section?")) return;
+    const previousSections = sortedSections;
+    const nextSections = sortedSections.filter((section) => section.id !== id);
+    applySectionUpdate(() => nextSections);
+    if (activeSectionId === id) {
+      const fallbackSection = nextSections[0];
+      if (fallbackSection) onSectionVisible(fallbackSection.id);
+    }
+
     try {
       await sectionsApi.deleteSection(id);
       toast.success("Section deleted");
     } catch (e) {
+      applySectionUpdate(() => previousSections);
       toast.error("Failed to delete section");
     }
   };
@@ -432,7 +493,26 @@ export function MiddlePanel({
     const title = prompt("Section Title:");
     if (!title) return;
     try {
-      await sectionsApi.createCustomSection(projectId, title);
+      const createdSection = await sectionsApi.createCustomSection(projectId, title);
+      const orderIndex = sortedSections.length;
+      const section: Section = {
+        id: createdSection.id,
+        document_id: sortedSections[0]?.document_id ?? projectId,
+        parent_id: undefined,
+        order_index: orderIndex,
+        sort_order: orderIndex,
+        heading: createdSection.heading,
+        title,
+        content_md: '',
+        status: 'pending',
+        is_custom: true,
+        lifecycle_status: 'active',
+        confidence_score: null,
+        children: [],
+      };
+      applySectionUpdate((current) => [...current, section]);
+      setLocalContent((prev) => ({ ...prev, [section.id]: '' }));
+      onSectionVisible(section.id);
       toast.success("Section added");
     } catch (e) {
       toast.error("Failed to add section");
@@ -472,6 +552,11 @@ export function MiddlePanel({
 
   const handleSectionChange = useCallback((sectionId: number, value: string) => {
     setLocalContent((prev) => ({ ...prev, [sectionId]: value }));
+    applySectionUpdate((current) =>
+      current.map((section) =>
+        section.id === sectionId ? { ...section, content_md: value } : section
+      )
+    );
 
     // Debounce: cancel any pending save for this section and schedule a new one.
     if (saveTimersRef.current[sectionId]) {
@@ -497,7 +582,7 @@ export function MiddlePanel({
         if (savingCountRef.current === 0) setIsSaving(false);
       }
     }, 3000);
-  }, []);
+  }, [sortedSections, onSectionsChange]);
 
   // Clear timers on unmount to prevent state updates on an unmounted component.
   useEffect(
@@ -515,7 +600,7 @@ export function MiddlePanel({
   // added section divs get observed.
   useEffect(() => {
     const root = scrollRef.current;
-    if (!root || sections.length === 0) return;
+    if (!root || sortedSections.length === 0) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -535,7 +620,7 @@ export function MiddlePanel({
     }
 
     return () => observer.disconnect();
-  }, [sections, onSectionVisible]);
+  }, [sortedSections, onSectionVisible]);
 
   // ── Scroll to active section when the TOC selection changes ─────────────────
   useEffect(() => {
@@ -607,14 +692,18 @@ export function MiddlePanel({
               sections={sortedSections}
               localContent={localContent}
               handleSectionChange={handleSectionChange}
-              handleTitleChange={(id, title) => handleTitleChange(id, title)}
+              handleTitleCommit={(id, title) => handleTitleCommit(id, title)}
               handleDeleteSection={handleDeleteSection}
               activeSectionId={activeSectionId}
-              setActiveSectionId={setActiveSectionId}
+              setActiveSectionId={onSectionVisible}
               onPolish={handlePolishRequest}
               editorRefCallback={(id, ref) => { sectionEditorRefs.current[id] = ref; }}
               onDragEnd={handleDragEnd}
               onAddSection={handleAddSection}
+              sectionRefCallback={(id, el) => {
+                if (el) sectionRefsMap.current.set(id, el);
+                else sectionRefsMap.current.delete(id);
+              }}
             />
             {sortedSections.length > 0 && (
                <div className="my-8 flex justify-center">
@@ -622,7 +711,7 @@ export function MiddlePanel({
                   variant="ghost"
                   size="sm"
                   className="h-8 w-8 rounded-full p-0 hover:bg-primary/10"
-                  onClick={() => handleAddSection(sections[0]?.document_id || 0)}
+                  onClick={() => handleAddSection(sortedSections[0]?.document_id || 0)}
                 >
                   <Plus className="h-4 w-4 text-muted-foreground" />
                 </Button>
@@ -634,7 +723,7 @@ export function MiddlePanel({
         {/* ── Preview mode ─────────────────────────────────────────────── */}
         {mode === 'preview' && (
           <div>
-            {sections.map((section) => (
+            {sortedSections.map((section) => (
               <div
                 key={section.id}
                 data-section-id={String(section.id)}
@@ -645,7 +734,7 @@ export function MiddlePanel({
                 className="mb-16"
               >
                 <h2 className="mb-4 text-title font-semibold text-foreground">
-                  {section.heading}
+                  {section.title?.trim() ? section.title : section.heading}
                 </h2>
                 <div className="prose prose-neutral max-w-none dark:prose-invert">
                   <ReactMarkdown

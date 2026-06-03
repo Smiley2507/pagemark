@@ -28,7 +28,7 @@ interface RightPanelProps {
   activeSectionId: number | null;
   activeSectionHeading: string | null;
   activeSectionContent: string;
-  activeSectionStatus: 'pending' | 'draft' | 'finalized';
+  activeSectionStatus: Section['status'];
   onDiffReceived: (diff: { original: string, refined: string }) => void;
   onContentAccepted: (content: string) => void;
   isOpen: boolean;
@@ -212,6 +212,8 @@ export function RightPanel({
     pending: 'bg-muted text-muted-foreground',
     draft: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
     finalized: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+    needs_input: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+    NEEDS_INPUT: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
   };
 
   return (

@@ -52,17 +52,24 @@ export const EditorPage: React.FC = () => {
   const updateSection = useUpdateSection(projectId);
   const generateSection = useGenerateSection(projectId);
 
-  const sections = document?.sections ?? [];
+  const sections = useMemo(() => document?.sections ?? [], [document?.sections]);
+  const [liveSections, setLiveSections] = useState<Section[]>([]);
   const completionPercent = project?.completion_pct ?? 0;
 
+  useEffect(() => {
+    setLiveSections(sections);
+  }, [sections]);
+
+  const editorSections = liveSections;
+
   const needsInputSection = useMemo(() =>
-    sections.find(s => s.status === 'NEEDS_INPUT'),
-    [sections]
+    editorSections.find(s => s.status === 'NEEDS_INPUT'),
+    [editorSections]
   );
 
   const activeSection = useMemo(() =>
-    sections.find(s => s.id === activeSectionId) || null
-  , [sections, activeSectionId]);
+    editorSections.find(s => s.id === activeSectionId) || null
+  , [editorSections, activeSectionId]);
 
   // --- Actions ---
   const acceptRefinement = (sectionId: number, content: string) => {
@@ -235,7 +242,7 @@ export const EditorPage: React.FC = () => {
             )}
           >
             <LeftPanel
-              sections={sections}
+              sections={editorSections}
               activeSectionId={activeSectionId}
               onHeadingClick={(sectionId) => {
                 setActiveSectionId(sectionId);
@@ -251,11 +258,12 @@ export const EditorPage: React.FC = () => {
 
           <div className="flex-1 min-w-0 bg-background overflow-hidden relative">
             <MiddlePanel
-              sections={sections}
+              sections={editorSections}
               activeSectionId={activeSectionId}
               onSectionVisible={(id) => {
                 if (mode !== 'diff') setActiveSectionId(id);
               }}
+              onSectionsChange={setLiveSections}
               mode={mode}
               onModeChange={(m) => {
                 setMode(m);

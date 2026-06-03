@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.models.document import Document, Section, SectionStatus
+from app.models.document import Document, Section, SectionStatus, LifecycleStatus
 from app.models.project import Project
 from app.schemas.section import SectionResponse, SectionStatusEnum
 
@@ -24,6 +24,10 @@ def section_to_response(section: Section, children: Optional[list[SectionRespons
         parent_id=section.parent_id,
         order_index=section.order_index,
         heading=section.heading,
+        title=section.title,
+        is_custom=bool(section.is_custom),
+        lifecycle_status=section.lifecycle_status.value,
+        confidence_score=section.confidence_score,
         content_md=section.content_md or "",
         status=SectionStatusEnum(section.status.value),
         children=children or [],
@@ -114,6 +118,7 @@ async def list_sections_for_project(
         select(Section)
         .join(Document)
         .where(Document.project_id == project_id)
+        .where(Section.lifecycle_status == LifecycleStatus.ACTIVE)
         .order_by(Section.order_index)
     )
     return list(result.scalars().all())
@@ -126,7 +131,10 @@ async def recompute_project_completion(
     result = await db.execute(
         select(Section)
         .join(Document)
-        .where(Document.project_id == project_id)
+        .where(
+            Document.project_id == project_id,
+            Section.lifecycle_status == LifecycleStatus.ACTIVE,
+        )
     )
     sections = list(result.scalars().all())
     pct = compute_completion_pct(sections)
