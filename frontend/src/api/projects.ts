@@ -6,6 +6,7 @@ export const projectsApi = {
     search?: string;
     status?: string;
     starred?: boolean;
+    tag?: string;
   }): Promise<Project[]> {
     const { data } = await apiClient.get('/projects', { params });
     // Note: The backend returns a ProjectListResponse containing { projects: Project[], total: number }
@@ -50,6 +51,11 @@ export const projectsApi = {
   async duplicateProject(id: number): Promise<Project> {
     const { data } = await apiClient.post(`/projects/${id}/duplicate`);
     return data;
+  },
+
+  async getTags(): Promise<string[]> {
+    const { data } = await apiClient.get('/projects/tags');
+    return data.tags;
   },
 
   async getTemplates(): Promise<Template[]> {

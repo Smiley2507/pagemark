@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,9 +11,11 @@ import { ErrorBanner, EmptyState } from './DashboardViews';
 
 export const ProjectsView: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [projectFilter, setProjectFilter] = useState<'all' | 'starred' | 'recent'>('all');
   const [qualityProjectId, setQualityProjectId] = useState<number | null>(null);
+  const tagFilter = searchParams.get('tag') || undefined;
 
   const {
     data: projectsList,
@@ -23,6 +25,7 @@ export const ProjectsView: React.FC = () => {
   } = useProjects({
     search: search || undefined,
     starred: projectFilter === 'starred' ? true : undefined,
+    tag: tagFilter,
   });
 
   const deleteProjectMutation = useDeleteProject();

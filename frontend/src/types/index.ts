@@ -238,6 +238,7 @@ export interface SectionTreeResponse {
   document_id: number;
   sections: Section[];
   status: string;
+  reviewer_id?: number | null;
 }
 
 export interface Version {

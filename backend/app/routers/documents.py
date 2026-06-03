@@ -30,7 +30,7 @@ async def get_project_document_tree(
         db, project_id, current_user.id
     )
     tree = section_service.build_section_tree(sections)
-    return SectionTreeResponse(document_id=document.id, sections=tree, status=document.status.value)
+    return SectionTreeResponse(document_id=document.id, sections=tree, status=document.status.value, reviewer_id=document.reviewer_id)
 
 
 async def _get_document_and_check_approval(

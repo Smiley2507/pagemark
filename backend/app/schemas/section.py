@@ -68,6 +68,7 @@ class SectionTreeResponse(BaseModel):
     document_id: int
     sections: List[SectionResponse]
     status: str = "DRAFT"
+    reviewer_id: Optional[int] = None
 
 
 SectionResponse.model_rebuild()

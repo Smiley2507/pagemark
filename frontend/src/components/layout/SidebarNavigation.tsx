@@ -1,16 +1,36 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   FolderPlus,
   UserCog,
-  LayoutTemplate
+  LayoutTemplate,
+  Tags,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { OrgSwitcher } from './OrgSwitcher';
 import { PagemarkWordmark } from './PagemarkWordmark';
+import { projectsApi } from '@/api/projects';
 
 export function SidebarNavigation() {
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tags, setTags] = useState<string[]>([]);
+  const activeTag = searchParams.get('tag') || '';
+
+  useEffect(() => {
+    projectsApi.getTags().then(setTags).catch(() => {});
+  }, []);
+
+  const setTagFilter = (tag: string) => {
+    if (tag === activeTag) {
+      searchParams.delete('tag');
+    } else {
+      searchParams.set('tag', tag);
+    }
+    setSearchParams(searchParams);
+  };
 
   const navGroups = [
     {
@@ -74,6 +94,37 @@ export function SidebarNavigation() {
             })}
           </div>
         ))}
+
+        {tags.length > 0 && (
+          <div className="space-y-1 pt-2 border-t border-border/60">
+            <div className="flex items-center justify-between px-3 mb-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tags</span>
+              {activeTag && (
+                <button
+                  onClick={() => { searchParams.delete('tag'); setSearchParams(searchParams); }}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+            {tags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setTagFilter(tag)}
+                className={cn(
+                  'flex items-center gap-3 rounded-md px-3 py-1.5 text-sm w-full text-left transition-colors',
+                  activeTag === tag
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                )}
+              >
+                <Tags className="h-3.5 w-3.5" />
+                <span className="truncate">{tag}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </nav>
 
     </div>

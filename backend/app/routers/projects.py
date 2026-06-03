@@ -150,6 +150,25 @@ async def _get_project(project_id: int, current_user: User, db: AsyncSession) ->
     return project
 
 
+# ── GET /projects/tags ────────────────────────────────────────────
+
+@router.get("/tags")
+async def list_tags(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    org_id = await _resolve_org_id(request, current_user, db)
+    res = await db.execute(
+        select(func.unnest(Project.tags)).where(
+            Project.org_id == org_id,
+            Project.deleted_at.is_(None),
+        )
+    )
+    tags = sorted(set(row[0] for row in res.all() if row[0]))
+    return {"tags": tags}
+
+
 # ── GET /projects ─────────────────────────────────────────────────
 
 @router.get("", response_model=ProjectListResponse)

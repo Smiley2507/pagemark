@@ -31,6 +31,7 @@ import {
 import { useGenerateSection } from "@/hooks/useAI";
 import { useProject } from "@/hooks/useProject";
 import { useOrgStore } from "@/store/orgStore";
+import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/lib/utils";
 import { documentsApi } from "@/api/documents";
 import { qualityApi } from "@/api/quality";
@@ -110,9 +111,8 @@ export const EditorPage: React.FC = () => {
     }
   }, [activeOrgId, projectId]);
 
-  // Current user is the reviewer?
-  const { data: currentUser } = { data: undefined }; // We'd need user from store
-  // Simplified: we check localStorage or authStore
+  const currentUser = useAuthStore(s => s.user);
+  const isReviewer = currentUser != null && document?.reviewer_id === currentUser.id;
   const acceptRefinement = (sectionId: number, content: string) => {
     updateSection.mutate({
       id: sectionId,
@@ -333,7 +333,7 @@ export const EditorPage: React.FC = () => {
       </header>
 
       {/* Reviewer banner */}
-      {docStatus === 'IN_REVIEW' && (
+      {docStatus === 'IN_REVIEW' && isReviewer && (
         <div className="mx-auto w-full px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-900/30">
           <div className="flex items-center justify-between max-w-5xl mx-auto">
             <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">

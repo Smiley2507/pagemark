@@ -7,6 +7,7 @@ export const useProjects = (filters?: {
   search?: string;
   status?: string;
   starred?: boolean;
+  tag?: string;
 }) => {
   return useQuery({
     queryKey: ['projects', filters],
