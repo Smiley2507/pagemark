@@ -319,11 +319,9 @@ export function MiddlePanel({
 
   const sensors = useSensors(
     useSensor(PointerSensor),
-    useSensor(
-      new KeyboardSensor({
-        coordinateShorthand: sortableKeyboardCoordinates,
-      })
-    )
+    useSensor(KeyboardSensor, {
+      coordinateShorthand: sortableKeyboardCoordinates,
+    })
   );
 
   const handleDragEnd = async (event: DragEndEvent) => {
