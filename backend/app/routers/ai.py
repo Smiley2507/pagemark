@@ -185,7 +185,7 @@ async def generate_section(
 
     old_content = section.content_md or ""
 
-    generated = await ai_service.generate_section(
+    generated, confidence = await ai_service.generate_section(
         project_id=project_id,
         section_id=section_id,
         db=db,
@@ -194,6 +194,7 @@ async def generate_section(
 
     # Auto-save content
     section.content_md = generated
+    section.confidence_score = confidence
     section.status = SectionStatus.DRAFT
     section.updated_at = datetime.utcnow()
 
