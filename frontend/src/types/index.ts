@@ -237,6 +237,7 @@ export interface Section {
 export interface SectionTreeResponse {
   document_id: number;
   sections: Section[];
+  status: string;
 }
 
 export interface Version {
@@ -346,6 +347,7 @@ export interface Organization {
   avatar_url?: string;
   personal: boolean;
   created_at: string;
+  quality_threshold: number;
 }
 
 export type OrgMemberRole = 'ADMIN' | 'PROJECT_MANAGER' | 'DEVELOPER' | 'TECHNICAL_WRITER' | 'VIEWER';

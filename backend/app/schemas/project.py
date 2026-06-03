@@ -33,6 +33,7 @@ class ProjectUpdateRequest(BaseModel):
     description: Optional[str] = None
     starred: Optional[bool] = None
     status: Optional[ProjectStatusEnum] = None
+    tags: Optional[List[str]] = None
 
 
 # ── Response schemas ─────────────────────────────────────────────

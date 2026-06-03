@@ -67,6 +67,7 @@ class CustomSectionRequest(BaseModel):
 class SectionTreeResponse(BaseModel):
     document_id: int
     sections: List[SectionResponse]
+    status: str = "DRAFT"
 
 
 SectionResponse.model_rebuild()

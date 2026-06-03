@@ -84,9 +84,7 @@ export const EditorPage: React.FC = () => {
     editorSections.find(s => s.id === activeSectionId) || null
   , [editorSections, activeSectionId]);
 
-  // Fetch document status from the first section's document
-  // We expose document_id in the Section type
-  const docStatus = (document as any)?.status || 'DRAFT';
+  const docStatus = document?.status || 'DRAFT';
 
   // Fetch org members for reviewer dropdown
   useEffect(() => {

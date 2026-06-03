@@ -20,6 +20,7 @@ class OrganizationResponse(BaseModel):
     avatar_url: Optional[str]
     personal: bool
     created_at: datetime
+    quality_threshold: int = 70
 
 
 # ── Member ────────────────────────────────────────────────────────────────────
