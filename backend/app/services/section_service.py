@@ -58,7 +58,7 @@ async def get_project_for_user(
     result = await db.execute(
         select(Project).where(
             Project.id == project_id,
-            Project.owner_id == user_id,
+            Project.created_by == user_id,
             Project.deleted_at.is_(None),
         )
     )
@@ -94,7 +94,7 @@ async def get_section_for_user(
         .join(Project)
         .where(
             Section.id == section_id,
-            Project.owner_id == user_id,
+            Project.created_by == user_id,
             Project.deleted_at.is_(None),
         )
     )

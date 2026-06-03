@@ -46,7 +46,7 @@ export function PhrasingModal({ isOpen, onClose, suggestions, onSelect, isLoadin
                   <div className="flex items-center gap-3 w-full">
                     <div className="text-xs font-bold text-muted-foreground uppercase">
                       {i === 0 ? 'Professional' : i === 1 ? 'Academic' : 'Concise'}
-                    </div}
+                    </div>
                     <span className="text-sm flex-1">{s}</span>
                   </div>
                 </Button>

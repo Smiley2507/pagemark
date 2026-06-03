@@ -40,7 +40,7 @@ async def _require_project(db: AsyncSession, project_id: int, user_id: int) -> P
     result = await db.execute(
         select(Project).where(
             Project.id == project_id,
-            Project.owner_id == user_id,
+            Project.created_by == user_id,
             Project.deleted_at.is_(None),
         )
     )

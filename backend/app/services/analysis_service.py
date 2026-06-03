@@ -732,7 +732,7 @@ def run_outline_step_sync(
         if not project:
             raise ValueError(f"Project {project_id} not found")
 
-        owner_id = project.owner_id
+        owner_id = project.created_by
 
     credential = get_active_credential_sync(owner_id)
     template_sections = get_template_sections_for_project_sync(project_id)
@@ -930,7 +930,7 @@ async def run_outline_step(
         if not project:
             raise ValueError(f"Project {project_id} not found")
 
-        credential = await get_active_credential(db, project.owner_id)
+        credential = await get_active_credential(db, project.created_by)
         template_sections = await get_template_sections_for_project(project_id, db)
 
     if not credential:

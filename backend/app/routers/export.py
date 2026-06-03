@@ -28,7 +28,7 @@ async def _get_project_or_404(project_id: int, db: AsyncSession, user) -> Projec
     result = await db.execute(
         select(Project).where(
             Project.id == project_id,
-            Project.owner_id == user.id,
+            Project.created_by == user.id,
             Project.deleted_at.is_(None),
         )
     )
