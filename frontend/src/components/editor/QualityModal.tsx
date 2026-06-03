@@ -227,7 +227,15 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
     ? issues
     : issues.filter(i => i.severity === severityFilter);
 
-  // Terminology: extract consistency issues (those without section_ref that contain "Inconsistent terminology")
+  // Terminology: fetch from dedicated endpoint
+  const { data: terminologies } = useQuery({
+    queryKey: ['terminology', projectId],
+    queryFn: () => sectionsApi.getTerminologyConflicts(projectId),
+    enabled: open && activeTab === 'terminology',
+    retry: false,
+  });
+
+  // Also extract from quality issues as fallback
   const terminologyIssues = issues.filter(i =>
     i.message.toLowerCase().includes('inconsistent') || i.message.toLowerCase().includes('terminolog')
   );
@@ -438,9 +446,9 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Inconsistent terminology detected across sections. Standardising terms improves clarity.
+          Terminology consistency analysis. Standardising terms improves clarity.
         </p>
-        {terminologyIssues.length > 0 && (
+        {(terminologies && terminologies.length > 0 || terminologyIssues.length > 0) && (
           <Button
             variant="outline"
             size="sm"
@@ -456,16 +464,33 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
         )}
       </div>
 
-      {terminologyIssues.length === 0 ? (
+      {!terminologies && terminologyIssues.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <CheckCircle2 className="h-10 w-10 text-emerald-500" />
           <p className="text-base font-medium text-foreground">Terminology is consistent</p>
           <p className="text-sm text-muted-foreground">No conflicting terms detected across your documentation.</p>
         </div>
+      ) : terminologies && terminologies.length > 0 ? (
+        <div className="space-y-3">
+          {terminologies.map((tc, i) => (
+            <div key={i} className="rounded-xl border border-border bg-card p-5">
+              <div className="flex items-start gap-4">
+                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium mb-2">
+                    Conflict: "{tc.term_a}" vs "{tc.term_b}"
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {tc.conflicts.length} conflicting {tc.conflicts.length === 1 ? 'occurrence' : 'occurrences'} found.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="space-y-3">
           {terminologyIssues.map(issue => {
-            // Parse terms from issue message e.g. '"endpoint" (5×) and "route" (2×) ...'
             const matches = [...issue.message.matchAll(/"([^"]+)"\s*\((\d+)×\)/g)];
             const canonical = matches[0];
             const alternates = matches.slice(1);
