@@ -157,6 +157,79 @@ function SortableSection({
   );
 }
 
+function DndEditorWrapper({
+  sections,
+  localContent,
+  handleSectionChange,
+  handleTitleChange,
+  handleDeleteSection,
+  activeSectionId,
+  setActiveSectionId,
+  onPolish,
+  editorRefCallback,
+  onDragEnd,
+  onAddSection,
+}: {
+  sections: Section[];
+  localContent: Record<number, string>;
+  handleSectionChange: (id: number, val: string) => void;
+  handleTitleChange: (id: number, title: string) => void;
+  handleDeleteSection: (id: number) => void;
+  activeSectionId: number | null;
+  setActiveSectionId: (id: number) => void;
+  onPolish: (id: number, text: string) => void;
+  editorRefCallback: (id: number, ref: any) => void;
+  onDragEnd: (event: DragEndEvent) => void;
+  onAddSection: (projectId: number) => void;
+}) {
+  const pointerSensor = useSensor(PointerSensor);
+  const keyboardSensor = useSensor(KeyboardSensor, {
+    coordinateShorthand: sortableKeyboardCoordinates,
+  });
+  const sensors = useSensors(pointerSensor, keyboardSensor);
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={onDragEnd}
+    >
+      <SortableContext
+        items={sections.map(s => s.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        {sections.map((section, idx) => (
+          <React.Fragment key={section.id}>
+            <SortableSection
+              section={section}
+              content={localContent[section.id] ?? section.content_md}
+              onChange={(val) => handleSectionChange(section.id, val)}
+              onTitleChange={(title) => handleTitleChange(section.id, title)}
+              onDelete={(id) => handleDeleteSection(id)}
+              activeSectionId={activeSectionId}
+              setActiveSectionId={setActiveSectionId}
+              onPolish={(text) => onPolish(section.id, text)}
+              editorRefCallback={(ref) => editorRefCallback(section.id, ref)}
+            />
+            {idx < sections.length - 1 && (
+              <div className="my-8 flex justify-center">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 rounded-full p-0 hover:bg-primary/10"
+                  onClick={() => onAddSection(sections[0]?.document_id || 0)}
+                >
+                  <Plus className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </div>
+            )}
+          </React.Fragment>
+        ))}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 // ── Editor height helper ──────────────────────────────────────────────────────
 // CodeMirror (MarkdownEditor) uses height:100% internally.
 // We give each section wrapper an explicit pixel height so the editor fills it.
@@ -316,12 +389,6 @@ export function MiddlePanel({
       return next;
     });
   }, [sections]);
-
-  const pointerSensor = useSensor(PointerSensor);
-  const keyboardSensor = useSensor(KeyboardSensor, {
-    coordinateShorthand: sortableKeyboardCoordinates,
-  });
-  const sensors = useSensors(pointerSensor, keyboardSensor);
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -536,44 +603,19 @@ export function MiddlePanel({
         {/* ── Write mode ──────────────────────────────────────────────── */}
         {mode === 'write' && (
           <div className="relative">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
+            <DndEditorWrapper
+              sections={sortedSections}
+              localContent={localContent}
+              handleSectionChange={handleSectionChange}
+              handleTitleChange={(id, title) => handleTitleChange(id, title)}
+              handleDeleteSection={handleDeleteSection}
+              activeSectionId={activeSectionId}
+              setActiveSectionId={setActiveSectionId}
+              onPolish={handlePolishRequest}
+              editorRefCallback={(id, ref) => { sectionEditorRefs.current[id] = ref; }}
               onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={sortedSections.map(s => s.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {sortedSections.map((section, idx) => (
-                  <React.Fragment key={section.id}>
-                    <SortableSection
-                      section={section}
-                      content={localContent[section.id] ?? section.content_md}
-                      onChange={(val) => handleSectionChange(section.id, val)}
-                      onTitleChange={(title) => handleTitleChange(section.id, title)}
-                      onDelete={(id) => handleDeleteSection(id)}
-                      activeSectionId={activeSectionId}
-                      setActiveSectionId={setActiveSectionId}
-                      onPolish={(text) => handlePolishRequest(section.id, text)}
-                      editorRefCallback={(ref) => { sectionEditorRefs.current[section.id] = ref; }}
-                    />
-                    {idx < sortedSections.length - 1 && (
-                      <div className="my-8 flex justify-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 rounded-full p-0 hover:bg-primary/10"
-                          onClick={() => handleAddSection(sections[0]?.document_id || 0)} // Simplified projectId fetch
-                        >
-                          <Plus className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                      </div>
-                    )}
-                  </React.Fragment>
-                ))}
-              </SortableContext>
-            </DndContext>
+              onAddSection={handleAddSection}
+            />
             {sortedSections.length > 0 && (
                <div className="my-8 flex justify-center">
                 <Button
