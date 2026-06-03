@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, List
 from datetime import datetime
 from enum import Enum
 
@@ -50,6 +50,7 @@ class ProjectResponse(BaseModel):
     git_branch: Optional[str]
     template_id: Optional[int]
     starred: bool
+    tags: List[str] = []
     sections_count: int = 0
     created_at: datetime
     updated_at: datetime

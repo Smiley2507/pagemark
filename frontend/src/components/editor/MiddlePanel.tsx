@@ -11,7 +11,7 @@ import {
 } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Check, Loader2, Copy, GripVertical, Plus, Trash2 } from 'lucide-react';
+import { Check, Loader2, Copy, GripVertical, Plus, Trash2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MarkdownEditor } from '@/components/editor/MarkdownEditor';
 import { PhrasingModal } from './PhrasingModal';
@@ -56,6 +56,7 @@ export interface MiddlePanelProps {
   diffData?: DiffData;
   onDiffAccept?: () => void;
   onDiffReject?: () => void;
+  isApproved?: boolean;
 }
 
 export interface MiddlePanelHandle {
@@ -75,7 +76,9 @@ function SortableSection({
   onPolish,
   editorRefCallback,
   sectionRefCallback,
+  isApproved,
 }: {
+  isApproved?: boolean;
   section: Section;
   content: string;
   onChange: (val: string) => void;
@@ -163,6 +166,12 @@ function SortableSection({
         )}
 
         <div className="ml-auto flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          {isApproved && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Lock className="h-3 w-3" />
+              <span>Locked</span>
+            </div>
+          )}
           {confidenceScore != null && (
             <div className={cn(
               "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
@@ -173,14 +182,16 @@ function SortableSection({
               {confidenceScore}%
             </div>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 text-muted-foreground hover:text-destructive"
-            onClick={() => onDelete(section.id)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {!isApproved && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+              onClick={() => onDelete(section.id)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -208,7 +219,9 @@ function DndEditorWrapper({
   onDragEnd,
   onAddSection,
   sectionRefCallback,
+  isApproved,
 }: {
+  isApproved?: boolean;
   sections: Section[];
   localContent: Record<number, string>;
   handleSectionChange: (id: number, val: string) => void;
@@ -251,6 +264,7 @@ function DndEditorWrapper({
               onPolish={(text) => onPolish(section.id, text)}
               editorRefCallback={(ref) => editorRefCallback(section.id, ref)}
               sectionRefCallback={(el) => sectionRefCallback(section.id, el)}
+              isApproved={isApproved}
             />
             {idx < sections.length - 1 && (
               <div className="my-8 flex justify-center">
@@ -378,6 +392,7 @@ function MiddlePanelImpl({
   diffData,
   onDiffAccept,
   onDiffReject,
+  isApproved,
   }: MiddlePanelProps,
   ref: ForwardedRef<MiddlePanelHandle>,
 ) {
@@ -703,6 +718,7 @@ function MiddlePanelImpl({
                 if (el) sectionRefsMap.current.set(id, el);
                 else sectionRefsMap.current.delete(id);
               }}
+              isApproved={isApproved}
             />
             {sortedSections.length > 0 && (
                <div className="my-8 flex justify-center">

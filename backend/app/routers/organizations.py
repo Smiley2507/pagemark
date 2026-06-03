@@ -2,6 +2,8 @@
 Organizations router:
   GET    /organizations                         — list user's orgs
   POST   /organizations                         — create new org
+  GET    /organizations/{org_id}                 — get org details
+  PATCH  /organizations/{org_id}                 — update org (name, avatar, quality_threshold)
   GET    /organizations/{org_id}/members        — list members
   POST   /organizations/{org_id}/invites        — send invite
   POST   /organizations/invites/{token}/accept  — accept invite
@@ -66,7 +68,6 @@ async def _get_membership(
 
 async def _log(db: AsyncSession, user_id: int, org_id: int, action: str, resource: str = ""):
     db.add(AuditLog(user_id=user_id, org_id=org_id, action=action, resource=resource))
-    # flushed with next commit
 
 
 async def _send_invite_email(email: str, org_name: str, token: str):
@@ -98,7 +99,7 @@ async def _send_invite_email(email: str, org_name: str, token: str):
         )
         await FastMail(conf).send_message(msg)
     except Exception:
-        pass  # best-effort
+        pass
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -147,6 +148,58 @@ async def create_organization(
     return org
 
 
+from pydantic import BaseModel
+
+
+class OrganizationUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    quality_threshold: Optional[int] = None
+
+
+@router.get("/{org_id}", response_model=OrganizationResponse)
+async def get_organization(
+    org_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_membership(db, org_id, current_user.id)
+    res = await db.execute(select(Organization).where(Organization.id == org_id))
+    org = res.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    return org
+
+
+@router.patch("/{org_id}", response_model=OrganizationResponse)
+async def update_organization(
+    org_id: int,
+    body: OrganizationUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_membership(db, org_id, current_user.id, [OrgMemberRole.ADMIN])
+
+    res = await db.execute(select(Organization).where(Organization.id == org_id))
+    org = res.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    if body.name is not None:
+        org.name = body.name
+    if body.avatar_url is not None:
+        org.avatar_url = body.avatar_url
+    if body.quality_threshold is not None:
+        if body.quality_threshold < 0 or body.quality_threshold > 100:
+            raise HTTPException(status_code=400, detail="Quality threshold must be between 0 and 100")
+        org.quality_threshold = body.quality_threshold
+
+    await _log(db, current_user.id, org_id, "update_organization", f"org:{org_id}")
+    await db.commit()
+    await db.refresh(org)
+    return org
+
+
 @router.get("/{org_id}/members", response_model=List[MemberResponse])
 async def list_members(
     org_id: int,
@@ -184,7 +237,6 @@ async def send_invite(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Only admin can invite
     await _get_membership(db, org_id, current_user.id, [OrgMemberRole.ADMIN])
 
     org_res = await db.execute(select(Organization).where(Organization.id == org_id))
@@ -192,13 +244,11 @@ async def send_invite(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    # Check invitee user exists
     user_res = await db.execute(select(User).where(User.email == body.email))
     invitee = user_res.scalar_one_or_none()
     if not invitee:
         raise HTTPException(status_code=404, detail="User not found. They must register first.")
 
-    # Don't duplicate invite
     existing_res = await db.execute(
         select(OrganizationMember).where(
             OrganizationMember.org_id == org_id,

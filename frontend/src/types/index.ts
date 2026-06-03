@@ -20,6 +20,7 @@ export interface Project {
   git_repo_url?: string;
   git_branch?: string;
   git_provider?: "github" | "gitlab" | "bitbucket";
+  tags: string[];
   starred: boolean;
   context_md?: string;
   created_at: string;
@@ -191,6 +192,28 @@ export interface Document {
   id: number;
   project_id: number;
   title: string;
+}
+
+export type DocumentStatus = 'DRAFT' | 'IN_REVIEW' | 'APPROVED';
+
+export interface CollaborationNote {
+  id: number;
+  document_id: number;
+  user_id: number;
+  content: string;
+  created_at: string;
+  user_name?: string;
+  user_avatar?: string;
+}
+
+export interface SearchResult {
+  section_id: number;
+  section_heading: string;
+  content_excerpt: string;
+  document_id: number;
+  document_title: string;
+  project_id: number;
+  project_name: string;
 }
 
 export interface Section {

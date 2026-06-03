@@ -20,16 +20,26 @@ class LifecycleStatus(enum.Enum):
     ARCHIVED = "archived"
 
 
+class DocumentStatus(enum.Enum):
+    DRAFT = "DRAFT"
+    IN_REVIEW = "IN_REVIEW"
+    APPROVED = "APPROVED"
+
+
 class Document(Base):
     __tablename__ = "documents"
 
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     title = Column(String, nullable=False, default="Documentation")
+    status = Column(Enum(DocumentStatus), nullable=False, default=DocumentStatus.DRAFT)
+    reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    approved_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     project = relationship("Project", back_populates="documents")
+    reviewer = relationship("User", foreign_keys=[reviewer_id])
     sections = relationship("Section", back_populates="document", cascade="all, delete-orphan")
 
 

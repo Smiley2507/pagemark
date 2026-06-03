@@ -11,6 +11,11 @@ import {
   Loader2,
   ShieldCheck,
   AlertCircle,
+  Lock,
+  Send,
+  CheckCircle,
+  XCircle,
+  UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LeftPanel } from "@/components/editor/LeftPanel";
@@ -25,15 +30,19 @@ import {
 } from "@/hooks/useSections";
 import { useGenerateSection } from "@/hooks/useAI";
 import { useProject } from "@/hooks/useProject";
+import { useOrgStore } from "@/store/orgStore";
 import { cn } from "@/lib/utils";
-import type { Section } from "@/types";
+import { documentsApi } from "@/api/documents";
+import { qualityApi } from "@/api/quality";
+import { orgApi } from "@/api/org";
+import { toast } from "sonner";
+import type { Section, OrgMember } from "@/types";
 
 export const EditorPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const projectId = Number(id);
   const navigate = useNavigate();
 
-  // --- Orchestration State ---
   const [mode, setMode] = useState<'write' | 'preview' | 'diff'>('write');
   const [diffData, setDiffData] = useState<{ original: string, refined: string } | undefined>(undefined);
   const [leftOpen, setLeftOpen] = useState(true);
@@ -42,11 +51,15 @@ export const EditorPage: React.FC = () => {
   const [exportOpen, setExportOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
 
-  const middlePanelRef = useRef<MiddlePanelHandle>(null);
-  const leftPanelRef = useRef<any>(null);
-  const rightPanelRef = useRef<any>(null);
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [selectedReviewer, setSelectedReviewer] = useState<number | null>(null);
+  const [members, setMembers] = useState<OrgMember[]>([]);
+  const [qualityThreshold, setQualityThreshold] = useState(70);
+  const [latestQualityScore, setLatestQualityScore] = useState<number | null>(null);
 
-  // --- Data Fetching ---
+  const middlePanelRef = useRef<MiddlePanelHandle>(null);
+  const { activeOrgId } = useOrgStore();
+
   const { data: project } = useProject(projectId);
   const { data: document } = useDocument(projectId);
   const updateSection = useUpdateSection(projectId);
@@ -71,7 +84,37 @@ export const EditorPage: React.FC = () => {
     editorSections.find(s => s.id === activeSectionId) || null
   , [editorSections, activeSectionId]);
 
-  // --- Actions ---
+  // Fetch document status from the first section's document
+  // We expose document_id in the Section type
+  const docStatus = (document as any)?.status || 'DRAFT';
+
+  // Fetch org members for reviewer dropdown
+  useEffect(() => {
+    if (activeOrgId) {
+      orgApi.listMembers(activeOrgId).then(setMembers).catch(() => {});
+    }
+  }, [activeOrgId]);
+
+  // Fetch org quality threshold and latest quality score
+  useEffect(() => {
+    if (activeOrgId) {
+      orgApi.listOrganizations().then(orgs => {
+        const org = orgs.find(o => o.id === activeOrgId);
+        if (org) {
+          setQualityThreshold((org as any).quality_threshold ?? 70);
+        }
+      }).catch(() => {});
+    }
+    if (projectId) {
+      qualityApi.getQuality(projectId).then(report => {
+        setLatestQualityScore(report.overall_score);
+      }).catch(() => {});
+    }
+  }, [activeOrgId, projectId]);
+
+  // Current user is the reviewer?
+  const { data: currentUser } = { data: undefined }; // We'd need user from store
+  // Simplified: we check localStorage or authStore
   const acceptRefinement = (sectionId: number, content: string) => {
     updateSection.mutate({
       id: sectionId,
@@ -79,12 +122,41 @@ export const EditorPage: React.FC = () => {
     });
   };
 
-  // --- Keyboard Shortcuts ---
+  const handleSubmitReview = async () => {
+    if (!selectedReviewer) return;
+    try {
+      await documentsApi.submitForReview(projectId, selectedReviewer);
+      toast.success('Document submitted for review');
+      setReviewModalOpen(false);
+    } catch (e: any) {
+      toast.error(e.response?.data?.detail || 'Failed to submit for review');
+    }
+  };
+
+  const handleApprove = async () => {
+    try {
+      await documentsApi.approveDocument(projectId);
+      toast.success('Document approved');
+    } catch (e: any) {
+      toast.error(e.response?.data?.detail || 'Failed to approve');
+    }
+  };
+
+  const handleRequestChanges = async () => {
+    try {
+      await documentsApi.requestChanges(projectId);
+      toast.success('Changes requested, document reverted to DRAFT');
+    } catch (e: any) {
+      toast.error(e.response?.data?.detail || 'Failed to request changes');
+    }
+  };
+
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        if (activeSectionId && activeSection) {
+        if (activeSectionId && activeSection && docStatus !== 'APPROVED') {
           updateSection.mutate({
             id: activeSectionId,
             data: { content_md: activeSection.content_md }
@@ -107,15 +179,28 @@ export const EditorPage: React.FC = () => {
         e.preventDefault();
         setRightOpen(o => !o);
       }
-      if (e.key === 'Escape' && mode === 'diff') {
-        setMode('write');
-        setDiffData(undefined);
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeSectionId, activeSection, mode]);
+  }, [activeSectionId, activeSection, mode, docStatus]);
+
+  const statusBadge = () => {
+    if (docStatus === 'DRAFT') return { label: 'Draft', cls: 'bg-muted text-muted-foreground' };
+    if (docStatus === 'IN_REVIEW') return { label: 'In Review', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' };
+    if (docStatus === 'APPROVED') return { label: 'Approved', cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' };
+    return { label: 'Draft', cls: 'bg-muted text-muted-foreground' };
+  };
+
+  const badge = statusBadge();
+
+  // Find reviewers (Technical Writers and PMs)
+  const potentialReviewers = members.filter(m =>
+    m.role === 'TECHNICAL_WRITER' || m.role === 'PROJECT_MANAGER' || m.role === 'ADMIN'
+  );
+
+  // Quality threshold warning
+  const showQualityWarning = latestQualityScore !== null && latestQualityScore < qualityThreshold;
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -133,12 +218,54 @@ export const EditorPage: React.FC = () => {
           <span className="text-sm font-medium truncate max-w-[200px]">
             {project?.name ?? "Project Editor"}
           </span>
+          {/* Status badge */}
+          <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", badge.cls)}>
+            {docStatus === 'APPROVED' && <Lock className="inline h-3 w-3 mr-1" />}
+            {badge.label}
+          </span>
           <div className="bg-muted text-muted-foreground text-xs px-2 py-0.5 rounded-full font-mono">
             {completionPercent}% complete
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Submit for Review button (only for DRAFT) */}
+          {docStatus === 'DRAFT' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-2"
+              onClick={() => setReviewModalOpen(true)}
+            >
+              <Send className="h-4 w-4" />
+              <span>Submit for Review</span>
+            </Button>
+          )}
+
+          {/* Approve/Request Changes (for reviewer) */}
+          {docStatus === 'IN_REVIEW' && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
+                onClick={handleRequestChanges}
+              >
+                <XCircle className="h-4 w-4" />
+                <span>Request Changes</span>
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={handleApprove}
+              >
+                <CheckCircle className="h-4 w-4" />
+                <span>Approve</span>
+              </Button>
+            </>
+          )}
+
           <Button
             variant="ghost"
             size="icon"
@@ -156,8 +283,8 @@ export const EditorPage: React.FC = () => {
             <PanelRight className="h-4 w-4" />
           </Button>
           <div className="w-px h-4 bg-border-1 mx-1" />
-          
-          {activeSection?.status === 'pending' && (
+
+          {activeSection?.status === 'pending' && docStatus !== 'APPROVED' && (
             <Button 
               variant="default" 
               size="sm" 
@@ -200,7 +327,6 @@ export const EditorPage: React.FC = () => {
             <Share2 className="h-4 w-4" />
           </Button>
           <div className="w-7 h-7 rounded-full bg-muted border border-border overflow-hidden ml-2">
-            {/* User Avatar Placeholder */}
             <div className="w-full h-full flex items-center justify-center text-xs font-mono">
               U
             </div>
@@ -208,6 +334,41 @@ export const EditorPage: React.FC = () => {
         </div>
       </header>
 
+      {/* Reviewer banner */}
+      {docStatus === 'IN_REVIEW' && (
+        <div className="mx-auto w-full px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-900/30">
+          <div className="flex items-center justify-between max-w-5xl mx-auto">
+            <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+              <UserCheck className="h-4 w-4" />
+              <p className="text-sm font-medium">You are reviewing this document.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleRequestChanges}>
+                <XCircle className="h-3 w-3 mr-1" />
+                Request Changes
+              </Button>
+              <Button size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleApprove}>
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Approve
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quality threshold warning */}
+      {showQualityWarning && (
+        <div className="mx-auto w-full px-4 py-2 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-900/30">
+          <div className="flex items-center gap-2 max-w-5xl mx-auto text-red-700 dark:text-red-300">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <p className="text-sm">
+              Warning: Document score ({Math.round(latestQualityScore!)}%) is below the Organization threshold ({qualityThreshold}%). Please refine content.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Needs Input Banner */}
       {needsInputSection && (
         <div className="mx-auto max-w-full px-4 py-2">
           <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-900/30 dark:bg-amber-900/20 dark:text-amber-200">
@@ -282,6 +443,7 @@ export const EditorPage: React.FC = () => {
                 setMode('write');
                 setDiffData(undefined);
               }}
+              isApproved={docStatus === 'APPROVED'}
             />
           </div>
 
@@ -295,6 +457,7 @@ export const EditorPage: React.FC = () => {
           >
             <RightPanel
               projectId={projectId}
+              documentId={document?.document_id ?? 0}
               activeSectionId={activeSectionId}
               activeSectionHeading={activeSection?.heading ?? null}
               activeSectionContent={activeSection?.content_md ?? ""}
@@ -313,10 +476,35 @@ export const EditorPage: React.FC = () => {
               }}
               isOpen={rightOpen}
               onToggle={() => setRightOpen(o => !o)}
+              isApproved={docStatus === 'APPROVED'}
             />
           </div>
         </div>
       </div>
+
+      {/* Review Modal */}
+      {reviewModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setReviewModalOpen(false)}>
+          <div className="bg-card rounded-xl border border-border p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">Submit for Review</h3>
+            <p className="text-sm text-muted-foreground mb-4">Select a reviewer (Technical Writer or Project Manager) to review this document.</p>
+            <select
+              value={selectedReviewer ?? ''}
+              onChange={e => setSelectedReviewer(Number(e.target.value))}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm mb-4 focus:outline-none focus:border-primary"
+            >
+              <option value="">Select a reviewer...</option>
+              {potentialReviewers.map(m => (
+                <option key={m.user_id} value={m.user_id}>{m.user_name || m.user_email}</option>
+              ))}
+            </select>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setReviewModalOpen(false)}>Cancel</Button>
+              <Button onClick={handleSubmitReview} disabled={!selectedReviewer}>Submit</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Export modal */}
       <ExportModal

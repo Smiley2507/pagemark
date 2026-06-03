@@ -21,6 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { sectionsApi } from '@/api/sections';
+import { documentsApi } from '@/api/documents';
 import { analysisApi } from '@/api/analysis';
 import { useGenerateSection, useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread, useUpdateProjectContext } from '@/hooks/useAI';
 import { useProject } from '@/hooks/useProject';
@@ -28,6 +29,7 @@ import type { ChatMessage, Section } from '@/types';
 
 interface RightPanelProps {
   projectId: number;
+  documentId: number;
   activeSectionId: number | null;
   activeSectionHeading: string | null;
   activeSectionContent: string;
@@ -36,9 +38,10 @@ interface RightPanelProps {
   onContentAccepted: (content: string) => void;
   isOpen: boolean;
   onToggle: () => void;
+  isApproved?: boolean;
 }
 
-type TabType = 'Agent' | 'Chat' | 'Context' | 'History';
+type TabType = 'Agent' | 'Chat' | 'History' | 'Notes';
 
 interface VersionEntry {
   id: number;
@@ -51,6 +54,7 @@ interface VersionEntry {
 
 export function RightPanel({
   projectId,
+  documentId,
   activeSectionId,
   activeSectionHeading,
   activeSectionContent,
@@ -59,6 +63,7 @@ export function RightPanel({
   onContentAccepted,
   isOpen,
   onToggle,
+  isApproved,
 }: RightPanelProps) {
   const [activeTab, setActiveTab] = useState<TabType>('Agent');
   const [inputValue, setInputValue] = useState('');
@@ -68,6 +73,8 @@ export function RightPanel({
   const [clarification, setClarification] = useState<{ question: string } | null>(null);
   const [clarificationAnswer, setClarificationAnswer] = useState('');
   const [isClarifying, setIsClarifying] = useState(false);
+  const [notes, setNotes] = useState<{ id: number; content: string; created_at: string; user_name?: string; user_avatar?: string }[]>([]);
+  const [noteInput, setNoteInput] = useState('');
 
   const { data: project } = useProject(projectId);
   const updateContext = useUpdateProjectContext(projectId);
@@ -122,6 +129,13 @@ export function RightPanel({
       fetchVersions();
     }
   }, [activeSectionId]);
+
+  useEffect(() => {
+    if (documentId) {
+      documentsApi.getNotes(documentId).then(setNotes).catch(() => {});
+    }
+  }, [documentId]);
+
 
   const fetchVersions = async () => {
     try {
@@ -203,6 +217,17 @@ export function RightPanel({
     streamMessage(msg);
   };
 
+  const handleAddNote = async () => {
+    if (!noteInput.trim() || !documentId) return;
+    try {
+      const newNote = await documentsApi.addNote(documentId, noteInput.trim());
+      setNotes(prev => [...prev, newNote]);
+      setNoteInput('');
+    } catch (e) {
+      toast.error('Failed to add note');
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
@@ -239,8 +264,8 @@ export function RightPanel({
 
       {/* Tab Strip */}
       <div className="flex h-12 shrink-0 items-center border-b border-border/60 px-3">
-        <div className="grid w-full grid-cols-3 rounded-md bg-background/70 p-0.5">
-          {(['Agent', 'Chat', 'History'] as TabType[]).map(tab => (
+        <div className="grid w-full grid-cols-4 rounded-md bg-background/70 p-0.5">
+          {(['Agent', 'Chat', 'History', 'Notes'] as TabType[]).map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -425,6 +450,45 @@ export function RightPanel({
             >
               {updateContext.isPending ? 'Saving...' : 'Save Context'}
             </button>
+          </div>
+        )}
+
+        {activeTab === 'Notes' && (
+          <div className="flex flex-col h-full">
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+              {notes.length === 0 ? (
+                <div className="py-12 text-center text-sm text-muted-foreground">No notes yet</div>
+              ) : (
+                notes.map(note => (
+                  <div key={note.id} className="bg-muted/40 rounded-lg p-3 border border-border/50">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
+                        {note.user_name?.[0] || 'U'}
+                      </div>
+                      <span className="text-xs font-medium">{note.user_name || 'Unknown'}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(note.created_at), { addSuffix: true })}
+                      </span>
+                    </div>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{note.content}</p>
+                  </div>
+                ))
+              )}
+            </div>
+            {!isApproved && (
+              <div className="shrink-0 border-t border-border/60 px-4 py-3">
+                <div className="flex gap-2">
+                  <input
+                    value={noteInput}
+                    onChange={e => setNoteInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddNote(); } }}
+                    placeholder="Add a note..."
+                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                  />
+                  <Button size="sm" onClick={handleAddNote} disabled={!noteInput.trim()}>Add</Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

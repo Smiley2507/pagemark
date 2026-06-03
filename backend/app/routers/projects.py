@@ -14,6 +14,7 @@ from app.models.organization import Organization, OrganizationMember, OrgMemberS
 from app.models.project import Project, ProjectStatus, SourceType
 from app.models.template import Template
 from app.models.document import Document, Section, SectionStatus, LifecycleStatus
+from typing import List
 from app.schemas.project import (
     ProjectCreateRequest,
     ProjectUpdateRequest,
@@ -78,6 +79,7 @@ def _project_to_response(project: Project, sections: list[Section]) -> ProjectRe
         git_branch=project.git_branch,
         template_id=project.template_id,
         starred=project.starred,
+        tags=project.tags or [],
         sections_count=len(sections),
         created_at=project.created_at,
         updated_at=project.updated_at,
@@ -277,6 +279,8 @@ async def update_project(
         project.description = body.description
     if body.starred is not None:
         project.starred = body.starred
+    if body.tags is not None:
+        project.tags = body.tags
     if body.status is not None:
         project.status = ProjectStatus(body.status.value)
 

@@ -6,7 +6,7 @@ from sqlalchemy.future import select
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models.document import Document, SectionStatus, LifecycleStatus
+from app.models.document import Document, DocumentStatus, SectionStatus, LifecycleStatus
 from app.models.user import User
 from app.models.version import AuthorType
 from app.schemas.section import (
@@ -52,6 +52,11 @@ async def autosave_section(
     current_user: User = Depends(get_current_user),
 ):
     section = await section_service.get_section_for_user(db, section_id, current_user.id)
+    doc_res = await db.execute(select(Document).where(Document.id == section.document_id))
+    document = doc_res.scalar_one()
+    if document.status == DocumentStatus.APPROVED:
+        raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
+
     current_content = section.content_md or ""
 
     if body.content_md == current_content:
@@ -73,6 +78,11 @@ async def update_section(
     current_user: User = Depends(get_current_user),
 ):
     section = await section_service.get_section_for_user(db, section_id, current_user.id)
+    doc_res = await db.execute(select(Document).where(Document.id == section.document_id))
+    document = doc_res.scalar_one()
+    if document.status == DocumentStatus.APPROVED:
+        raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
+
     old_content = section.content_md or ""
     old_status = section.status
 

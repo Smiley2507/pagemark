@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Enum, Text,
+    ARRAY,
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -33,10 +34,11 @@ class Project(Base):
     source_type = Column(Enum(SourceType), nullable=False, default=SourceType.SCRATCH)
     git_repo_url = Column(String, nullable=True)
     git_branch = Column(String, nullable=True)
-    git_provider = Column(String, nullable=True)  # 'github', 'gitlab', 'bitbucket'
+    git_provider = Column(String, nullable=True)
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
+    tags = Column(ARRAY(String), default=[], server_default="{}")
     starred = Column(Boolean, default=False)
-    context_md = Column(Text, nullable=True)  # user-defined AI context (JSON or free text)
+    context_md = Column(Text, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

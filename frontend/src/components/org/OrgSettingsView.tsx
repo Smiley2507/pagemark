@@ -11,6 +11,7 @@ export const OrgSettingsView: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [orgAvatar, setOrgAvatar] = useState('');
+  const [qualityThreshold, setQualityThreshold] = useState(70);
 
   const activeOrg = getActiveOrg();
 
@@ -24,13 +25,20 @@ export const OrgSettingsView: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // Assuming orgApi.updateOrganization exists or will be added.
-      // If not, we'll just toast that it's coming soon.
       await orgApi.updateOrganization(activeOrgId!, { name: orgName, avatar_url: orgAvatar });
       toast.success('Organization settings updated');
       setIsEditing(false);
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to update organization settings');
+    }
+  };
+
+  const handleQualityThresholdSave = async () => {
+    try {
+      await orgApi.updateOrganization(activeOrgId!, { quality_threshold: qualityThreshold });
+      toast.success('Quality threshold updated');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to update quality threshold');
     }
   };
 
@@ -110,6 +118,33 @@ export const OrgSettingsView: React.FC = () => {
             </div>
           </form>
         )}
+      </div>
+
+      {/* Quality Threshold */}
+      <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-medium">Documentation Quality Threshold</h3>
+          <p className="text-meta text-muted-foreground">Set the minimum quality score for documentation. Documents below this threshold will display a warning.</p>
+        </div>
+        <div className="flex items-center gap-4">
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={qualityThreshold}
+            onChange={(e) => setQualityThreshold(Number(e.target.value))}
+            className="flex-1 h-2 rounded-full appearance-none bg-muted cursor-pointer accent-primary"
+          />
+          <span className="text-lg font-bold tabular-nums w-12 text-right">{qualityThreshold}%</span>
+        </div>
+        <div className="flex justify-end">
+          <Button
+            onClick={handleQualityThresholdSave}
+            disabled={qualityThreshold === (activeOrg as any)?.quality_threshold}
+          >
+            Save Threshold
+          </Button>
+        </div>
       </div>
     </div>
   );
