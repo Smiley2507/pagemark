@@ -1,16 +1,20 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
-from app.models.document import Section, SectionStatus
+from app.models.document import Document, Section, SectionStatus
 from app.models.clarification import ClarificationRequest, ClarificationStatus
 from app.workers.analysis_worker import resume_generation_task
 
 router = APIRouter(prefix="/clarifications", tags=["clarifications"])
+
+class ClarifyRequest(BaseModel):
+    answer: str
 
 async def verify_section_ownership(section_id: int, current_user: User, db: AsyncSession):
     res = await db.execute(
@@ -53,7 +57,7 @@ async def get_clarification(
 @router.post("/{section_id}/clarify")
 async def clarify_section(
     section_id: int,
-    answer: str,
+    body: ClarifyRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -74,7 +78,7 @@ async def clarify_section(
         raise HTTPException(status_code=404, detail="No pending clarification request found")
 
     # Resolve request
-    request.user_answer = answer
+    request.user_answer = body.answer
     request.status = ClarificationStatus.RESOLVED
     request.resolved_at = datetime.utcnow()
 
@@ -91,7 +95,7 @@ async def clarify_section(
     # Dispatch resume task
     resume_generation_task.delay(
         section_id=section_id,
-        answer=answer,
+        answer=body.answer,
         project_id=project_id,
         user_id=current_user.id,
     )
