@@ -16,6 +16,7 @@ import {
   CheckCircle,
   XCircle,
   UserCheck,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LeftPanel } from "@/components/editor/LeftPanel";
@@ -311,6 +312,15 @@ export const EditorPage: React.FC = () => {
           >
             <ShieldCheck className="h-4 w-4" />
             <span>Quality</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={() => { setQualityOpen(true); }}
+          >
+            <BookOpen className="h-4 w-4" />
+            <span>Check Terminology</span>
           </Button>
           <Button
             variant="ghost"

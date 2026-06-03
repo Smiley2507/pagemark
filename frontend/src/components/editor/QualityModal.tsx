@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { sectionsApi } from '@/api/sections';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
@@ -17,6 +18,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { qualityApi } from '@/api/quality';
@@ -158,6 +160,24 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
     queryFn: () => qualityApi.getQuality(projectId),
     retry: false,
     enabled: open,
+  });
+
+  const resolveAllMutation = useMutation({
+    mutationFn: async () => {
+      for (const issue of terminologyIssues) {
+        const matches = [...issue.message.matchAll(/"([^"]+)"\s*\((\d+)×\)/g)];
+        const canonical = matches[0];
+        const alternates = matches.slice(1);
+        for (const [, term] of alternates) {
+          await sectionsApi.resolveTerminology(projectId, term, canonical[1]);
+        }
+      }
+    },
+    onSuccess: () => {
+      toast.success('All terminology issues resolved');
+      refetch();
+    },
+    onError: () => toast.error('Failed to resolve some terminology issues'),
   });
 
   const runMutation = useMutation({
@@ -416,9 +436,25 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
 
   const renderTerminology = () => (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Inconsistent terminology detected across sections. Standardising terms improves clarity.
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Inconsistent terminology detected across sections. Standardising terms improves clarity.
+        </p>
+        {terminologyIssues.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => resolveAllMutation.mutate()}
+            disabled={resolveAllMutation.isPending}
+          >
+            {resolveAllMutation.isPending ? (
+              <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Resolving…</>
+            ) : (
+              <><CheckCircle2 className="h-4 w-4 mr-1" /> Resolve All</>
+            )}
+          </Button>
+        )}
+      </div>
 
       {terminologyIssues.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
