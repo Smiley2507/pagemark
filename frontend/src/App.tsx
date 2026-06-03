@@ -101,7 +101,11 @@ const AppRoutes = () => {
                 <OrgApiKeysView />
               </PermissionGate>
             } />
-            <Route path="settings" element={<OrgSettingsView />} />
+            <Route path="settings" element={
+              <PermissionGate allowedRoles={['ADMIN']}>
+                <OrgSettingsView />
+              </PermissionGate>
+            } />
           </Route>
           <Route path="/new-project" element={<NewProject />} />
           <Route path="/editor/:id" element={<Editor />} />

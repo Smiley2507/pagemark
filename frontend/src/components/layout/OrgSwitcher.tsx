@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
-import { Check, ChevronsUpDown, PlusCircle, Building2 } from 'lucide-react';
+import { Check, ChevronsUpDown, PlusCircle, Building2, UserPlus } from 'lucide-react';
 import { useOrgStore } from '@/store/orgStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 
 export function OrgSwitcher() {
   const { organizations, activeOrgId, setActiveOrgId } = useOrgStore();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -77,7 +79,16 @@ export function OrgSwitcher() {
             className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground cursor-pointer"
             onClick={() => {
               setOpen(false);
-              // Trigger create org modal or navigate to create org page
+              navigate('/join-organization');
+            }}
+          >
+            <UserPlus className="mr-2 h-4 w-4" />
+            <span>Join Organization</span>
+          </div>
+          <div
+            className="relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-2 pr-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground cursor-pointer"
+            onClick={() => {
+              setOpen(false);
               alert("Create Organization coming soon!");
             }}
           >
