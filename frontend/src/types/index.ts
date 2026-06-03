@@ -108,12 +108,23 @@ export interface AiCredentialListResponse {
   has_active: boolean;
 }
 
+export interface DependencyItem {
+  source: string;
+  target: string;
+}
+
+export interface DependenciesJson {
+  items: DependencyItem[];
+  total_files: number;
+}
+
 export interface AnalysisResults extends AnalysisStatus {
   file_tree_json?: FileTreeNode;
   languages_json?: LanguagesJson;
   endpoints_json?: EndpointsJson;
   complexity_json?: ComplexityJson;
   outline_json?: OutlineSection[];
+  dependencies_json?: DependenciesJson;
 }
 
 export interface FileTreeNode {

@@ -42,6 +42,7 @@ class AnalysisResponse(AnalysisStatusResponse):
     endpoints_json: Optional[Any] = None
     complexity_json: Optional[Any] = None
     outline_json: Optional[Any] = None
+    dependencies_json: Optional[Any] = None
 
 
 class OutlineDiffResponse(BaseModel):
@@ -128,6 +129,7 @@ def analysis_to_status_response(analysis: Analysis) -> AnalysisStatusResponse:
 
 def analysis_to_full_response(analysis: Analysis) -> AnalysisResponse:
     base = analysis_to_status_response(analysis)
+    deps = analysis.analysis_data.get("dependencies") if analysis.analysis_data else None
     return AnalysisResponse(
         **base.model_dump(),
         file_tree_json=analysis.file_tree_json,
@@ -135,4 +137,5 @@ def analysis_to_full_response(analysis: Analysis) -> AnalysisResponse:
         endpoints_json=analysis.endpoints_json,
         complexity_json=analysis.complexity_json,
         outline_json=analysis.outline_json,
+        dependencies_json=deps,
     )
