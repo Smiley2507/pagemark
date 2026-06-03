@@ -6,18 +6,23 @@ import {
   UserCog,
   LayoutTemplate,
   Tags,
+  Users,
+  Activity,
+  Key,
   X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { OrgSwitcher } from './OrgSwitcher';
 import { PagemarkWordmark } from './PagemarkWordmark';
 import { projectsApi } from '@/api/projects';
+import { useOrgStore } from '@/store/orgStore';
 
 export function SidebarNavigation() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tags, setTags] = useState<string[]>([]);
   const activeTag = searchParams.get('tag') || '';
+  const currentRole = useOrgStore((s) => s.currentRole);
 
   useEffect(() => {
     projectsApi.getTags().then(setTags).catch(() => {});
@@ -32,6 +37,20 @@ export function SidebarNavigation() {
     setSearchParams(searchParams);
   };
 
+  const isAdmin = currentRole === 'ADMIN';
+
+  const orgLinks = [];
+  if (isAdmin) {
+    orgLinks.push({ href: '/dashboard/settings', label: 'Settings', icon: UserCog });
+  }
+  orgLinks.push(
+    { href: '/dashboard/members', label: 'Members', icon: Users },
+    { href: '/dashboard/activity', label: 'Activity Log', icon: Activity },
+  );
+  if (isAdmin) {
+    orgLinks.push({ href: '/dashboard/api-keys', label: 'API Keys', icon: Key });
+  }
+
   const navGroups = [
     {
       group: 'Main',
@@ -42,9 +61,7 @@ export function SidebarNavigation() {
     },
     {
       group: 'Organization',
-      links: [
-        { href: '/dashboard/settings', label: 'Settings', icon: UserCog },
-      ]
+      links: orgLinks,
     },
     {
       group: 'Workspace',
