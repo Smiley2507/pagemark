@@ -13,7 +13,7 @@ export function AuthLayout({
       <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center">
-            <PagemarkWordmark className="h-7 mx-auto" />
+            <PagemarkWordmark className="h-8 mx-auto" />
             {subtitle && (
               <p className="mt-2 text-meta text-muted-foreground">{subtitle}</p>
             )}
@@ -40,10 +40,10 @@ export function AuthLayout({
           <div className="absolute right-0 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-primary/10 to-transparent" />
         </div>
         <div className="relative z-10 max-w-md text-center">
-          <div className="mb-8 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20">
-            <PagemarkWordmark className="h-8 w-auto text-primary" />
-          </div>
-          <h2 className="text-2xl font-bold text-white">Documentation that writes itself</h2>
+          <h2 className="text-3xl font-bold text-white">
+            AI-assisted. Automated.{' '}
+            <span className="text-primary">Collaborative.</span>
+          </h2>
           <p className="mt-4 text-base text-white/60 leading-relaxed">
             Pagemark turns source code into structured technical documentation
             that developers refine section by section — with AI assistance,
@@ -51,9 +51,9 @@ export function AuthLayout({
           </p>
           <div className="mt-10 grid grid-cols-1 gap-3 text-left">
             {[
-              { label: 'AI-Powered Outlines', desc: 'Generate structured docs from any codebase automatically' },
-              { label: 'Quality Gates', desc: 'Grammar checking, readability scoring, and style consistency' },
-              { label: 'Team Review Workflow', desc: 'Submit, review, and approve sections with your team' },
+              { label: 'AI-Assisted', desc: 'Smart outlines and writing suggestions from your codebase' },
+              { label: 'Automated', desc: 'Grammar checking, readability scoring, and style consistency' },
+              { label: 'Collaborative', desc: 'Submit, review, and approve sections with your team' },
             ].map((item) => (
               <div key={item.label} className="rounded-lg border border-white/10 bg-white/[0.03] p-3.5">
                 <div className="font-medium text-sm text-white">{item.label}</div>
