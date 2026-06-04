@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy.orm import relationship
 from app.database import Base
 
 
@@ -15,3 +16,5 @@ class Template(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     is_builtin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    documents = relationship("Document", back_populates="template")

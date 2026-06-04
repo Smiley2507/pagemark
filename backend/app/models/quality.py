@@ -16,11 +16,11 @@ class IssueSeverity(enum.Enum):
 class QualityReport(Base):
     __tablename__ = "quality_reports"
     __table_args__ = (
-        UniqueConstraint("project_id", name="uq_quality_reports_project_id"),
+        UniqueConstraint("document_id", name="uq_quality_reports_document_id"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
     overall_score = Column(Float, nullable=False, default=0.0)
     completeness = Column(Float, nullable=False, default=0.0)
     consistency = Column(Float, nullable=False, default=0.0)
@@ -28,7 +28,7 @@ class QualityReport(Base):
     accuracy = Column(Float, nullable=False, default=0.0)
     generated_at = Column(DateTime, default=datetime.utcnow)
 
-    project = relationship("Project", backref="quality_reports")
+    document = relationship("Document", back_populates="quality_reports")
     issues = relationship("QualityIssue", back_populates="report", cascade="all, delete-orphan")
     broken_links = relationship("BrokenLink", back_populates="report", cascade="all, delete-orphan")
 

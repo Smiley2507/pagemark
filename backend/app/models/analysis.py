@@ -26,14 +26,13 @@ class Analysis(Base):
     total_steps = Column(Integer, default=8)
     source_type = Column(String, nullable=False)          # 'zip' or 'git'
     source_path = Column(String, nullable=True)            # local path to source
+    source_commit = Column(String, nullable=True)
+    is_current = Column(Boolean, nullable=False, default=False)
+    effective_exclusions_json = Column(JSON, nullable=True)
     file_tree_json = Column(JSON, nullable=True)
     languages_json = Column(JSON, nullable=True)
     endpoints_json = Column(JSON, nullable=True)
     complexity_json = Column(JSON, nullable=True)
-    outline_json = Column(JSON, nullable=True)
-    outline_applied = Column(Boolean, nullable=False, default=False)
-    outline_skipped = Column(Boolean, nullable=False, default=False)
-    outline_skip_reason = Column(String, nullable=True)
     analysis_data = Column(JSON, nullable=True)
     error_message = Column(Text, nullable=True)
     started_at = Column(DateTime, nullable=True)
@@ -41,4 +40,7 @@ class Analysis(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    project = relationship("Project", backref="analyses")
+    project = relationship("Project", back_populates="analyses")
+    outline_proposals = relationship("OutlineProposal", back_populates="analysis")
+    template_recommendations = relationship("TemplateRecommendation", back_populates="analysis")
+    evidence_references = relationship("EvidenceReference", back_populates="analysis")

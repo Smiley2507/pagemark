@@ -15,9 +15,15 @@ from app.database import Base, engine
 from app.models.user import User, UserRole, UserSettings
 from app.models.template import Template
 from app.models.organization import Organization, OrganizationMember
-from app.models.project import Project
+from app.models.project import Project, ProjectSourceExclusion
 from app.models.document import Document, Section
 from app.models.analysis import Analysis
+from app.models.outline_proposal import OutlineProposal
+from app.models.template_recommendation import TemplateRecommendation
+from app.models.generation import GenerationRun, GenerationSectionTask
+from app.models.evidence import EvidenceReference
+from app.models.activity import ActivityEvent
+from app.models.workspace_preference import WorkspacePreference
 from app.models.oauth_token import OAuthToken
 from app.models.version import SectionVersion
 from app.models.ai_credential import UserAiCredential
