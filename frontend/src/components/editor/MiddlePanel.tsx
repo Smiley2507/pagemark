@@ -2,6 +2,7 @@ import {
   Fragment,
   forwardRef,
   type ForwardedRef,
+  type ReactNode,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -388,6 +389,44 @@ function computeLineDiff(
   return { left, right };
 }
 
+/**
+ * Renders inline markdown patterns (bold, italic, code, links, strikethrough)
+ * as styled React elements. Used in diff lines for a richer preview.
+ */
+const INLINE_MD_RE = /(`[^`]+`)|\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|~~([^~]+)~~/g;
+
+function renderInlineMarkdown(text: string): ReactNode {
+  if (!text) return text;
+
+  const elements: ReactNode[] = [];
+  let lastIndex = 0;
+  let key = 0;
+  let match: RegExpExecArray | null;
+
+  INLINE_MD_RE.lastIndex = 0;
+  while ((match = INLINE_MD_RE.exec(text)) !== null) {
+    if (match.index > lastIndex) elements.push(text.slice(lastIndex, match.index));
+
+    if (match[1]) {
+      elements.push(<code key={key}>{match[1].slice(1, -1)}</code>);
+    } else if (match[2]) {
+      elements.push(<a key={key} href={match[3]}>{match[2]}</a>);
+    } else if (match[4]) {
+      elements.push(<strong key={key}>{match[4]}</strong>);
+    } else if (match[5]) {
+      elements.push(<em key={key}>{match[5]}</em>);
+    } else if (match[6]) {
+      elements.push(<s key={key}>{match[6]}</s>);
+    }
+
+    lastIndex = match.index + match[0].length;
+    key++;
+  }
+
+  if (lastIndex < text.length) elements.push(text.slice(lastIndex));
+  return elements.length === 0 ? text : <Fragment>{elements}</Fragment>;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 function MiddlePanelImpl({
@@ -425,6 +464,35 @@ function MiddlePanelImpl({
     activeSectionId: null,
     selectedText: '',
   });
+
+  // ── Inject preview styles once ──
+  const PREVIEW_STYLE_ID = 'pagemark-preview-styles';
+  useEffect(() => {
+    if (document.getElementById(PREVIEW_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = PREVIEW_STYLE_ID;
+    style.textContent = `
+      .preview-markdown { font-family: Inter, sans-serif; font-size: 15px; line-height: 1.75; color: var(--foreground); }
+      .preview-markdown h1 { font-weight: 600; font-size: 1.85rem; color: var(--foreground); margin: 1.5em 0 0.5em; }
+      .preview-markdown h2 { font-weight: 600; font-size: 1.5rem; color: var(--foreground); margin: 1.5em 0 0.5em; }
+      .preview-markdown h3 { font-weight: 600; font-size: 1.25rem; color: var(--foreground); margin: 1.25em 0 0.5em; }
+      .preview-markdown h4, .preview-markdown h5, .preview-markdown h6 { font-weight: 600; color: var(--foreground); margin: 1em 0 0.5em; }
+      .preview-markdown a { color: var(--primary); text-decoration: underline; text-decoration-color: color-mix(in oklch, var(--primary), transparent 60%); }
+      .preview-markdown strong { font-weight: 700; }
+      .preview-markdown em { font-style: italic; }
+      .preview-markdown del, .preview-markdown s { text-decoration: line-through; opacity: 0.55; }
+      .preview-markdown blockquote { border-left: 3px solid color-mix(in oklch, var(--primary), transparent 50%); padding-left: 1rem; color: var(--muted-foreground); font-style: italic; margin: 1em 0; }
+      .preview-markdown hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+      .preview-markdown table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+      .preview-markdown th, .preview-markdown td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
+      .preview-markdown th { background: var(--muted); font-weight: 600; }
+      .preview-markdown ul, .preview-markdown ol { padding-left: 1.5rem; margin: 0.75em 0; }
+      .preview-markdown li { margin: 0.25em 0; }
+      .preview-markdown p { margin: 0.75em 0; }
+      .preview-markdown img { max-width: 100%; border-radius: 6px; }
+    `;
+    document.head.appendChild(style);
+  }, []);
 
   useEffect(() => {
     setSortedSections(sections);
@@ -761,7 +829,7 @@ function MiddlePanelImpl({
                 <h2 className="mb-4 text-title font-semibold text-foreground">
                   {section.title?.trim() ? section.title : section.heading}
                 </h2>
-                <div className="prose prose-neutral max-w-none dark:prose-invert">
+                <div className="preview-markdown">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
@@ -844,7 +912,7 @@ function MiddlePanelImpl({
                       )}
                     >
                       {/* Preserve empty lines so the two sides stay visually aligned */}
-                      {line.content || '\u00a0'}
+                      {renderInlineMarkdown(line.content) || '\u00a0'}
                     </div>
                   ))}
                 </div>
@@ -865,7 +933,7 @@ function MiddlePanelImpl({
                           : 'border-transparent',
                       )}
                     >
-                      {line.content || '\u00a0'}
+                      {renderInlineMarkdown(line.content) || '\u00a0'}
                     </div>
                   ))}
                 </div>
