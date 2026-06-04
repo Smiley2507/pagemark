@@ -12,8 +12,7 @@ from app.dependencies import get_current_user
 from app.models.user import User
 from app.models.organization import Organization, OrganizationMember, OrgMemberStatus
 from app.models.project import Project, ProjectStatus, SourceType
-from app.models.template import Template
-from app.models.document import Document, Section, SectionStatus, LifecycleStatus
+from app.models.document import Document, Section, SectionStatus
 from typing import List
 from app.schemas.project import (
     ProjectCreateRequest,
@@ -21,7 +20,6 @@ from app.schemas.project import (
     ProjectResponse,
     ProjectListResponse,
 )
-from app.schemas.section import CustomSectionRequest
 
 from fastapi import UploadFile, File, Form
 import os as std_os
@@ -45,16 +43,6 @@ from app.models.oauth_token import OAuthToken
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
-DEFAULT_SECTIONS = [
-    "Project Overview",
-    "Installation",
-    "Features",
-    "Architecture",
-    "API Reference",
-    "Deployment",
-]
-
-
 # ── Helpers ───────────────────────────────────────────────────────
 
 
@@ -65,7 +53,11 @@ def _compute_completion_pct(sections: list[Section]) -> float:
     return round(finalized / len(sections) * 100, 1)
 
 
-def _project_to_response(project: Project, sections: list[Section]) -> ProjectResponse:
+def _project_to_response(
+    project: Project,
+    sections: list[Section],
+    documents_count: int = 0,
+) -> ProjectResponse:
     return ProjectResponse(
         id=project.id,
         org_id=project.org_id,
@@ -75,12 +67,15 @@ def _project_to_response(project: Project, sections: list[Section]) -> ProjectRe
         status=project.status.value,
         completion_pct=_compute_completion_pct(sections),
         source_type=project.source_type.value,
-        git_repo_url=project.git_repo_url,
-        git_branch=project.git_branch,
-        template_id=project.template_id,
+        source_provider=project.source_provider,
+        source_owner=project.source_owner,
+        source_repository=project.source_repository,
+        selected_branch=project.selected_branch,
+        default_branch=project.default_branch,
+        source_visibility=project.source_visibility,
         starred=project.starred,
         tags=project.tags or [],
-        export_settings=project.export_settings,
+        documents_count=documents_count,
         sections_count=len(sections),
         created_at=project.created_at,
         updated_at=project.updated_at,
@@ -207,7 +202,16 @@ async def list_projects(
         sec_result = await db.execute(
             select(Section).join(Document).where(Document.project_id == proj.id)
         )
-        responses.append(_project_to_response(proj, sec_result.scalars().all()))
+        doc_count_result = await db.execute(
+            select(func.count(Document.id)).where(Document.project_id == proj.id)
+        )
+        responses.append(
+            _project_to_response(
+                proj,
+                sec_result.scalars().all(),
+                documents_count=doc_count_result.scalar_one(),
+            )
+        )
 
     return ProjectListResponse(projects=responses, total=len(responses))
 
@@ -229,42 +233,18 @@ async def create_project(
         name=body.name,
         description=body.description,
         source_type=SourceType(body.source_type.value),
-        git_repo_url=body.git_repo_url,
-        git_branch=body.git_branch,
-        template_id=body.template_id,
+        source_provider=body.source_provider,
+        source_owner=body.source_owner,
+        source_repository=body.source_repository,
+        selected_branch=body.selected_branch,
+        default_branch=body.default_branch,
+        source_visibility=body.source_visibility,
+        source_metadata=body.source_metadata,
     )
     db.add(project)
-    await db.flush()
-
-    document = Document(project_id=project.id, title="Documentation")
-    db.add(document)
-    await db.flush()
-
-    section_headings = DEFAULT_SECTIONS
-    if body.template_id:
-        tmpl_result = await db.execute(select(Template).where(Template.id == body.template_id))
-        template = tmpl_result.scalar_one_or_none()
-        if template and template.sections_json:
-            section_headings = [
-                s["heading"] if isinstance(s, dict) else s
-                for s in template.sections_json
-            ]
-
-    sections = []
-    for idx, heading in enumerate(section_headings):
-        section = Section(
-            document_id=document.id,
-            order_index=idx,
-            heading=heading,
-            content_md="",
-            status=SectionStatus.PENDING,
-        )
-        db.add(section)
-        sections.append(section)
-
     await db.commit()
     await db.refresh(project)
-    return _project_to_response(project, sections)
+    return _project_to_response(project, [], documents_count=0)
 
 
 # ── GET /projects/{id} ───────────────────────────────────────────
@@ -279,7 +259,14 @@ async def get_project(
     sec_result = await db.execute(
         select(Section).join(Document).where(Document.project_id == project.id)
     )
-    return _project_to_response(project, sec_result.scalars().all())
+    doc_count_result = await db.execute(
+        select(func.count(Document.id)).where(Document.project_id == project.id)
+    )
+    return _project_to_response(
+        project,
+        sec_result.scalars().all(),
+        documents_count=doc_count_result.scalar_one(),
+    )
 
 
 # ── PATCH /projects/{id} ─────────────────────────────────────────
@@ -303,8 +290,6 @@ async def update_project(
         project.tags = body.tags
     if body.status is not None:
         project.status = ProjectStatus(body.status.value)
-    if body.export_settings is not None:
-        project.export_settings = body.export_settings
 
     project.updated_at = datetime.utcnow()
     await db.commit()
@@ -313,7 +298,14 @@ async def update_project(
     sec_result = await db.execute(
         select(Section).join(Document).where(Document.project_id == project.id)
     )
-    return _project_to_response(project, sec_result.scalars().all())
+    doc_count_result = await db.execute(
+        select(func.count(Document.id)).where(Document.project_id == project.id)
+    )
+    return _project_to_response(
+        project,
+        sec_result.scalars().all(),
+        documents_count=doc_count_result.scalar_one(),
+    )
 
 
 # ── DELETE /projects/{id} ────────────────────────────────────────
@@ -351,7 +343,14 @@ async def update_project_context(
     sec_result = await db.execute(
         select(Section).join(Document).where(Document.project_id == project.id)
     )
-    return _project_to_response(project, sec_result.scalars().all())
+    doc_count_result = await db.execute(
+        select(func.count(Document.id)).where(Document.project_id == project.id)
+    )
+    return _project_to_response(
+        project,
+        sec_result.scalars().all(),
+        documents_count=doc_count_result.scalar_one(),
+    )
 
 
 # ── POST /projects/{id}/duplicate ────────────────────────────────
@@ -370,17 +369,22 @@ async def duplicate_project(
         name=f"{original.name} (copy)",
         description=original.description,
         source_type=original.source_type,
-        git_repo_url=original.git_repo_url,
-        git_branch=original.git_branch,
-        template_id=original.template_id,
+        source_provider=original.source_provider,
+        source_owner=original.source_owner,
+        source_repository=original.source_repository,
+        selected_branch=original.selected_branch,
+        default_branch=original.default_branch,
+        source_visibility=original.source_visibility,
+        source_metadata=original.source_metadata,
         status=ProjectStatus.PENDING,
     )
     db.add(new_project)
     await db.flush()
 
     doc_result = await db.execute(select(Document).where(Document.project_id == original.id))
+    original_documents = list(doc_result.scalars().all())
     all_new_sections = []
-    for orig_doc in doc_result.scalars().all():
+    for orig_doc in original_documents:
         new_doc = Document(project_id=new_project.id, title=orig_doc.title)
         db.add(new_doc)
         await db.flush()
@@ -401,7 +405,11 @@ async def duplicate_project(
 
     await db.commit()
     await db.refresh(new_project)
-    return _project_to_response(new_project, all_new_sections)
+    return _project_to_response(
+        new_project,
+        all_new_sections,
+        documents_count=len(original_documents),
+    )
 
 
 # ── POST /projects/{id}/upload ────────────────────────────────────
@@ -452,9 +460,14 @@ async def connect_public_git(
 
     project = await _get_project(project_id, current_user, db)
     project.source_type = SourceType.GIT
-    project.git_repo_url = body.repo_url
-    project.git_branch = body.branch
-    project.git_provider = provider
+    project.source_provider = provider
+    project.source_owner = owner
+    project.source_repository = repo
+    project.selected_branch = body.branch
+    project.source_metadata = {
+        **(project.source_metadata or {}),
+        "repo_url": body.repo_url,
+    }
 
     analysis = Analysis(project_id=project.id, source_type="git", source_path=body.repo_url, total_steps=8)
     db.add(analysis)
@@ -488,9 +501,14 @@ async def connect_oauth_git(
 
     project = await _get_project(project_id, current_user, db)
     project.source_type = SourceType.GIT
-    project.git_repo_url = repo_url_display
-    project.git_branch = body.branch
-    project.git_provider = provider
+    project.source_provider = provider
+    project.source_owner = body.owner
+    project.source_repository = body.repo
+    project.selected_branch = body.branch
+    project.source_metadata = {
+        **(project.source_metadata or {}),
+        "repo_url": repo_url_display,
+    }
 
     analysis = Analysis(project_id=project.id, source_type="git", source_path=clone_url, total_steps=8)
     db.add(analysis)
@@ -510,20 +528,21 @@ async def sync_git_repo(
     current_user: User = Depends(get_current_user),
 ):
     project = await _get_project(project_id, current_user, db)
-    if project.source_type != SourceType.GIT or not project.git_repo_url:
+    repo_url = (project.source_metadata or {}).get("repo_url")
+    if project.source_type != SourceType.GIT or not repo_url:
         raise HTTPException(status_code=400, detail="Project is not connected to a Git repository")
 
-    clone_url = project.git_repo_url
-    if project.git_provider:
+    clone_url = repo_url
+    if project.source_provider:
         token_res = await db.execute(select(OAuthToken).where(
-            OAuthToken.user_id == current_user.id, OAuthToken.provider == project.git_provider
+            OAuthToken.user_id == current_user.id, OAuthToken.provider == project.source_provider
         ))
         token_obj = token_res.scalar_one_or_none()
         if token_obj:
             decrypted = crypto_service.decrypt_token(token_obj.access_token_encrypted)
             try:
-                _, owner, repo = git_service.validate_git_url(project.git_repo_url)
-                if project.git_provider == 'github':
+                _, owner, repo = git_service.validate_git_url(repo_url)
+                if project.source_provider == 'github':
                     clone_url = github_service.build_authenticated_clone_url(decrypted, owner, repo)
             except Exception:
                 pass
@@ -533,7 +552,7 @@ async def sync_git_repo(
     await db.commit()
     await db.refresh(analysis)
 
-    task = clone_and_analyze_task.delay(project.id, analysis.id, clone_url, project.git_branch)
+    task = clone_and_analyze_task.delay(project.id, analysis.id, clone_url, project.selected_branch)
     return {"job_id": task.id, "analysis_id": analysis.id}
 
 
@@ -602,37 +621,3 @@ async def apply_analysis_outline(
     doc = doc_result.scalar_one_or_none()
     count = len(doc.sections) if doc else 0
     return ApplyOutlineResponse(applied=True, section_count=count)
-
-@router.post("/{project_id}/sections", status_code=status.HTTP_201_CREATED, response_model=None)
-async def add_custom_section(
-    project_id: int,
-    body: CustomSectionRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    project = await _get_project(project_id, current_user, db)
-
-    doc_result = await db.execute(select(Document).where(Document.project_id == project.id))
-    document = doc_result.scalar_one()
-
-    # Compute next order_index
-    max_index_res = await db.execute(
-        select(func.max(Section.order_index)).where(Section.document_id == document.id)
-    )
-    max_index = max_index_res.scalar() or 0
-
-    new_section = Section(
-        document_id=document.id,
-        order_index=max_index + 1,
-        heading=body.title or "Untitled Section",
-        title=body.title,
-        is_custom=True,
-        lifecycle_status=LifecycleStatus.ACTIVE,
-        content_md="",
-        status=SectionStatus.PENDING,
-    )
-    db.add(new_section)
-    await db.commit()
-    await db.refresh(new_section)
-
-    return {"id": new_section.id, "heading": new_section.heading}

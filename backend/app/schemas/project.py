@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, List, Dict, Any
+from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
@@ -22,9 +22,13 @@ class ProjectCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     source_type: SourceTypeEnum = SourceTypeEnum.SCRATCH
-    git_repo_url: Optional[str] = None
-    git_branch: Optional[str] = None
-    template_id: Optional[int] = None
+    source_provider: Optional[str] = None
+    source_owner: Optional[str] = None
+    source_repository: Optional[str] = None
+    selected_branch: Optional[str] = None
+    default_branch: Optional[str] = None
+    source_visibility: Optional[str] = None
+    source_metadata: Optional[dict] = None
     ignore_patterns: Optional[List[str]] = None
 
 
@@ -34,7 +38,6 @@ class ProjectUpdateRequest(BaseModel):
     starred: Optional[bool] = None
     status: Optional[ProjectStatusEnum] = None
     tags: Optional[List[str]] = None
-    export_settings: Optional[Dict[str, Any]] = None
 
 
 # ── Response schemas ─────────────────────────────────────────────
@@ -48,12 +51,15 @@ class ProjectResponse(BaseModel):
     status: ProjectStatusEnum
     completion_pct: float
     source_type: SourceTypeEnum
-    git_repo_url: Optional[str]
-    git_branch: Optional[str]
-    template_id: Optional[int]
+    source_provider: Optional[str]
+    source_owner: Optional[str]
+    source_repository: Optional[str]
+    selected_branch: Optional[str]
+    default_branch: Optional[str]
+    source_visibility: Optional[str]
     starred: bool
     tags: List[str] = []
-    export_settings: Optional[Dict[str, Any]] = None
+    documents_count: int = 0
     sections_count: int = 0
     created_at: datetime
     updated_at: datetime

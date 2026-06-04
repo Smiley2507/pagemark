@@ -9,6 +9,7 @@ class SectionStatusEnum(str, Enum):
     PENDING = "pending"
     DRAFT = "draft"
     FINALIZED = "finalized"
+    NEEDS_INPUT = "needs_input"
 
 
 class SectionResponse(BaseModel):

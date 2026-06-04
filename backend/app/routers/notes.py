@@ -4,16 +4,16 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, verify_project_ownership
 from app.models.user import User
 from app.models.document import Document
 from app.models.note import CollaborationNote
+from app.models.project import Project
 
-router = APIRouter(prefix="/documents", tags=["notes"])
+router = APIRouter(prefix="/projects", tags=["notes"])
 
 
 class NoteCreate(BaseModel):
@@ -33,20 +33,36 @@ class NoteResponse(BaseModel):
         from_attributes = True
 
 
-@router.get("/{doc_id}/notes", response_model=List[NoteResponse])
+async def _get_document_for_project(
+    db: AsyncSession,
+    project_id: int,
+    document_id: int,
+) -> Document:
+    doc_res = await db.execute(
+        select(Document).where(
+            Document.id == document_id,
+            Document.project_id == project_id,
+        )
+    )
+    document = doc_res.scalar_one_or_none()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document
+
+
+@router.get("/{project_id}/documents/{document_id}/notes", response_model=List[NoteResponse])
 async def list_notes(
-    doc_id: int,
+    document_id: int,
+    project: Project = Depends(verify_project_ownership),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    doc_res = await db.execute(select(Document).where(Document.id == doc_id))
-    if not doc_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = await _get_document_for_project(db, project.id, document_id)
 
     res = await db.execute(
         select(CollaborationNote, User)
         .join(User, User.id == CollaborationNote.user_id)
-        .where(CollaborationNote.document_id == doc_id)
+        .where(CollaborationNote.document_id == document.id)
         .order_by(CollaborationNote.created_at.asc())
     )
     rows = res.all()
@@ -64,19 +80,22 @@ async def list_notes(
     ]
 
 
-@router.post("/{doc_id}/notes", status_code=status.HTTP_201_CREATED, response_model=NoteResponse)
+@router.post(
+    "/{project_id}/documents/{document_id}/notes",
+    status_code=status.HTTP_201_CREATED,
+    response_model=NoteResponse,
+)
 async def create_note(
-    doc_id: int,
+    document_id: int,
     body: NoteCreate,
+    project: Project = Depends(verify_project_ownership),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    doc_res = await db.execute(select(Document).where(Document.id == doc_id))
-    if not doc_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Document not found")
+    document = await _get_document_for_project(db, project.id, document_id)
 
     note = CollaborationNote(
-        document_id=doc_id,
+        document_id=document.id,
         user_id=current_user.id,
         content=body.content,
     )

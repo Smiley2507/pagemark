@@ -1,9 +1,9 @@
 """
 quality.py — API router for quality scoring.
 
-POST /projects/{id}/quality/run   → dispatch Celery task (202)
-GET  /projects/{id}/quality       → return latest QualityReport (with issues/links)
-GET  /projects/{id}/quality/issues → return QualityIssues filtered by severity
+POST /projects/{project_id}/documents/{document_id}/quality/run   → dispatch Celery task (202)
+GET  /projects/{project_id}/documents/{document_id}/quality       → return QualityReport
+GET  /projects/{project_id}/documents/{document_id}/quality/issues → return QualityIssues
 """
 from typing import Optional
 
@@ -13,10 +13,9 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, verify_project_ownership
+from app.models.document import Document
 from app.models.project import Project
-from app.models.organization import OrgMemberStatus
-from app.models.organization import OrganizationMember
 from app.models.quality import QualityReport, QualityIssue, IssueSeverity
 from app.schemas.quality import QualityReportOut, QualityIssueOut, QualityRunResponse
 from app.workers.quality_worker import score_quality_task
@@ -24,50 +23,49 @@ from app.workers.quality_worker import score_quality_task
 router = APIRouter(prefix="/projects", tags=["quality"])
 
 
-async def _get_project_or_404(project_id: int, db: AsyncSession, user) -> Project:
-    result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.deleted_at.is_(None),
-        )
-    )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    member_res = await db.execute(
-        select(OrganizationMember).where(
-            OrganizationMember.org_id == project.org_id,
-            OrganizationMember.user_id == user.id,
-            OrganizationMember.status == OrgMemberStatus.ACTIVE,
-        )
-    )
-    if not member_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    return project
-
-
-@router.post("/{project_id}/quality/run", response_model=QualityRunResponse, status_code=202)
-async def run_quality_analysis(
+async def _get_document_or_404(
     project_id: int,
+    document_id: int,
+    db: AsyncSession,
+) -> Document:
+    result = await db.execute(
+        select(Document).where(
+            Document.id == document_id,
+            Document.project_id == project_id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/quality/run",
+    response_model=QualityRunResponse,
+    status_code=202,
+)
+async def run_quality_analysis(
+    document_id: int,
+    project: Project = Depends(verify_project_ownership),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Dispatch the quality scoring Celery task for the project."""
-    await _get_project_or_404(project_id, db, current_user)
-    score_quality_task.delay(project_id)
+    """Dispatch quality scoring for a Document under an authorized Project."""
+    await _get_document_or_404(project.id, document_id, db)
+    score_quality_task.delay(project.id)
     return QualityRunResponse(message="Quality analysis started")
 
 
-@router.get("/{project_id}/quality", response_model=QualityReportOut)
+@router.get("/{project_id}/documents/{document_id}/quality", response_model=QualityReportOut)
 async def get_quality_report(
-    project_id: int,
+    document_id: int,
+    project: Project = Depends(verify_project_ownership),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Return the latest QualityReport for a project, including issues and broken links."""
-    await _get_project_or_404(project_id, db, current_user)
+    """Return the QualityReport for a Document, including issues and broken links."""
+    document = await _get_document_or_404(project.id, document_id, db)
 
     result = await db.execute(
         select(QualityReport)
@@ -75,7 +73,7 @@ async def get_quality_report(
             selectinload(QualityReport.issues),
             selectinload(QualityReport.broken_links),
         )
-        .where(QualityReport.project_id == project_id)
+        .where(QualityReport.document_id == document.id)
     )
     report = result.scalar_one_or_none()
     if not report:
@@ -86,18 +84,19 @@ async def get_quality_report(
     return report
 
 
-@router.get("/{project_id}/quality/issues", response_model=list[QualityIssueOut])
+@router.get("/{project_id}/documents/{document_id}/quality/issues", response_model=list[QualityIssueOut])
 async def get_quality_issues(
-    project_id: int,
+    document_id: int,
     severity: Optional[str] = Query(None, description="Filter by severity: error, warning, info"),
+    project: Project = Depends(verify_project_ownership),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
     """Return quality issues for the latest report, optionally filtered by severity."""
-    await _get_project_or_404(project_id, db, current_user)
+    document = await _get_document_or_404(project.id, document_id, db)
 
     report_result = await db.execute(
-        select(QualityReport).where(QualityReport.project_id == project_id)
+        select(QualityReport).where(QualityReport.document_id == document.id)
     )
     report = report_result.scalar_one_or_none()
     if not report:

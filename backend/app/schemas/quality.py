@@ -28,7 +28,7 @@ class BrokenLinkOut(BaseModel):
 
 class QualityReportOut(BaseModel):
     id: int
-    project_id: int
+    document_id: int
     overall_score: float
     completeness: float
     consistency: float

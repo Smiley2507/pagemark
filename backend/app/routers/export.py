@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, verify_project_ownership
 from app.models.project import Project
 from app.models.document import Document, Section, LifecycleStatus
 from app.services.export_service import export_markdown, export_html, export_pdf
@@ -26,22 +26,26 @@ def _safe_filename(name: str) -> str:
     return re.sub(r"[^\w\-\. ]", "_", name).strip()
 
 
-async def _get_project_or_404(project_id: int, db: AsyncSession, user) -> Project:
+async def _get_document_or_404(
+    project_id: int,
+    document_id: int,
+    db: AsyncSession,
+) -> Document:
     result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.deleted_at.is_(None),
+        select(Document).where(
+            Document.id == document_id,
+            Document.project_id == project_id,
         )
     )
-    project = result.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    return project
+    document = result.scalar_one_or_none()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document
 
 
-@router.get("/{project_id}/export")
-async def export_project(
-    project_id: int,
+@router.get("/{project_id}/documents/{document_id}/export")
+async def export_document(
+    document_id: int,
     format: str = Query("markdown", description="Export format: markdown, html, pdf"),
     h1_color: Optional[str] = Query(None),
     h2_color: Optional[str] = Query(None),
@@ -55,26 +59,20 @@ async def export_project(
     page_numbers: Optional[bool] = Query(None),
     paper_size: Optional[str] = Query(None),
     margins: Optional[str] = Query(None),
+    project: Project = Depends(verify_project_ownership),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    project = await _get_project_or_404(project_id, db, current_user)
-
-    doc_result = await db.execute(
-        select(Document).where(Document.project_id == project_id)
-    )
-    doc = doc_result.scalar_one_or_none()
-    if not doc:
-        raise HTTPException(status_code=404, detail="No document found for this project")
+    document = await _get_document_or_404(project.id, document_id, db)
 
     sec_result = await db.execute(
         select(Section)
-        .where(Section.document_id == doc.id, Section.lifecycle_status != LifecycleStatus.DELETED)
+        .where(Section.document_id == document.id, Section.lifecycle_status != LifecycleStatus.DELETED)
         .order_by(Section.order_index)
     )
     sections = sec_result.scalars().all()
 
-    export_settings = dict(project.export_settings or {})
+    export_settings = dict(document.export_settings or {})
 
     overrides = {
         "h1_color": h1_color,
@@ -94,8 +92,8 @@ async def export_project(
         if val is not None:
             export_settings[key] = val
 
-    doc_title = doc.title or "Documentation"
-    safe_name = _safe_filename(project.name)
+    doc_title = document.title or "Documentation"
+    safe_name = _safe_filename(f"{project.name}-{document.title}")
     fmt = format.lower().strip()
 
     if fmt == "markdown":
@@ -159,7 +157,7 @@ async def batch_export(
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for pid in body.project_ids:
             try:
-                project = await _get_project_or_404(pid, db, current_user)
+                project = await verify_project_ownership(pid, current_user, db)
                 doc_result = await db.execute(
                     select(Document).where(Document.project_id == pid)
                 )
@@ -173,7 +171,7 @@ async def batch_export(
                     .order_by(Section.order_index)
                 )
                 sections = sec_result.scalars().all()
-                export_settings = project.export_settings or {}
+                export_settings = doc.export_settings or {}
                 pdf_bytes = export_pdf(sections, project.name, doc.title or "Documentation", export_settings)
                 safe_name = _safe_filename(project.name)
                 zf.writestr(f"{safe_name}.pdf", pdf_bytes)
