@@ -22,6 +22,7 @@ import { pairingExtension } from './markdownPairing';
 import { livePreviewExtension } from './livePreview';
 import { tableKeymap } from './tableKeymap';
 import { wikiLinkAutocomplete } from './wikiLinkAutocomplete';
+import { grammarDecorationField, grammarDecorationTheme, setGrammarIssues, type GrammarIssue } from './grammarDecoration';
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 // Base CodeMirror theme — keeps transparent background, hides gutters, etc.
@@ -296,6 +297,7 @@ function ensureLivePreviewStyles() {
 export interface MarkdownEditorHandle {
   focus: () => void;
   replaceSelection: (text: string) => void;
+  setGrammarIssues: (issues: GrammarIssue[]) => void;
 }
 
 interface MarkdownEditorProps {
@@ -304,6 +306,7 @@ interface MarkdownEditorProps {
   className?: string;
   sectionId?: number;
   onPolish?: (text: string) => void;
+  grammarIssues?: GrammarIssue[];
 }
 
 interface MenuState {
@@ -324,7 +327,7 @@ interface TableAssistantState {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-  function MarkdownEditor({ value, onChange, className, sectionId, onPolish }, ref) {
+  function MarkdownEditor({ value, onChange, className, sectionId, onPolish, grammarIssues }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef      = useRef<EditorView | null>(null);
     const [menuState, setMenuState] = useState<MenuState | null>(null);
@@ -345,7 +348,19 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         });
         view.focus();
       },
+      setGrammarIssues: (issues: GrammarIssue[]) => {
+        const view = viewRef.current;
+        if (!view) return;
+        view.dispatch({ effects: setGrammarIssues.of(issues) });
+      },
     }));
+
+    // Sync grammar issues from props
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view || !grammarIssues) return;
+      view.dispatch({ effects: setGrammarIssues.of(grammarIssues) });
+    }, [grammarIssues]);
 
     // ── Mount ──────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -435,6 +450,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           EditorView.lineWrapping,
           editorTheme,
           livePreviewExtension,          // ← Obsidian-style live preview
+          grammarDecorationField,
+          grammarDecorationTheme(),
           pairingExtension,               // ← Advanced Auto-pairing
           closeBrackets(),
           wikiLinkAutocomplete,

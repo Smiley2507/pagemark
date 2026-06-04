@@ -38,7 +38,9 @@ interface EditorTopBarProps {
   onToggleRight: () => void;
   onGenerateAI: () => void;
   onQualityClick: () => void;
+  onGrammarCheck: () => void;
   isGenerating: boolean;
+  grammarChecking?: boolean;
   notesCount?: number;
   overflowActions?: OverflowAction[];
   userName?: string;
@@ -201,7 +203,9 @@ export function EditorTopBar({
   onToggleRight,
   onGenerateAI,
   onQualityClick,
+  onGrammarCheck,
   isGenerating,
+  grammarChecking,
   notesCount = 0,
   qualityScore,
   issueCount,
@@ -334,6 +338,18 @@ export function EditorTopBar({
             >
               <ShieldCheck className="h-3.5 w-3.5" />
               <span className="text-xs">Quality</span>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center gap-1.5"
+              onClick={onGrammarCheck}
+              disabled={grammarChecking}
+            >
+              <span className={cn('text-xs', grammarChecking && 'animate-pulse')}>
+                {grammarChecking ? 'Checking...' : 'Spelling'}
+              </span>
             </Button>
           </>
         )}

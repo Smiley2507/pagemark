@@ -18,6 +18,7 @@ import { PhrasingModal } from './PhrasingModal';
 import { sectionsApi } from '@/api/sections';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import type { GrammarIssue } from './grammarDecoration';
 import {
   DndContext,
   closestCenter,
@@ -57,6 +58,7 @@ export interface MiddlePanelProps {
   onDiffAccept?: () => void;
   onDiffReject?: () => void;
   isApproved?: boolean;
+  grammarIssues?: Record<number, GrammarIssue[]>;
 }
 
 export interface MiddlePanelHandle {
@@ -77,6 +79,7 @@ function SortableSection({
   editorRefCallback,
   sectionRefCallback,
   isApproved,
+  grammarIssues,
 }: {
   isApproved?: boolean;
   section: Section;
@@ -89,6 +92,7 @@ function SortableSection({
   onPolish: (text: string) => void;
   editorRefCallback: (ref: any) => void;
   sectionRefCallback: (el: HTMLDivElement | null) => void;
+  grammarIssues?: GrammarIssue[];
 }) {
   const {
     attributes,
@@ -200,6 +204,7 @@ function SortableSection({
           ref={editorRefCallback}
           value={content}
           onChange={(val) => onChange(val)}
+          grammarIssues={grammarIssues}
         />
       </div>
     </div>
@@ -220,6 +225,7 @@ function DndEditorWrapper({
   onAddSection,
   sectionRefCallback,
   isApproved,
+  grammarIssues,
 }: {
   isApproved?: boolean;
   sections: Section[];
@@ -234,6 +240,7 @@ function DndEditorWrapper({
   onDragEnd: (event: DragEndEvent) => void;
   onAddSection: (projectId: number) => void;
   sectionRefCallback: (id: number, el: HTMLDivElement | null) => void;
+  grammarIssues?: Record<number, GrammarIssue[]>;
 }) {
   const pointerSensor = useSensor(PointerSensor);
   const keyboardSensor = useSensor(KeyboardSensor, {
@@ -265,6 +272,7 @@ function DndEditorWrapper({
               editorRefCallback={(ref) => editorRefCallback(section.id, ref)}
               sectionRefCallback={(el) => sectionRefCallback(section.id, el)}
               isApproved={isApproved}
+              grammarIssues={grammarIssues?.[section.id]}
             />
             {idx < sections.length - 1 && (
               <div className="my-8 flex justify-center">
@@ -393,6 +401,7 @@ function MiddlePanelImpl({
   onDiffAccept,
   onDiffReject,
   isApproved,
+  grammarIssues,
   }: MiddlePanelProps,
   ref: ForwardedRef<MiddlePanelHandle>,
 ) {
@@ -719,6 +728,7 @@ function MiddlePanelImpl({
                 else sectionRefsMap.current.delete(id);
               }}
               isApproved={isApproved}
+              grammarIssues={grammarIssues}
             />
             {sortedSections.length > 0 && (
                <div className="my-8 flex justify-center">

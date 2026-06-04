@@ -25,6 +25,8 @@ import { useAuthStore } from "@/store/authStore";
 import { cn } from "@/lib/utils";
 import { documentsApi } from "@/api/documents";
 import { qualityApi } from "@/api/quality";
+import { grammarApi } from "@/api/grammar";
+import type { GrammarIssue } from "@/components/editor/grammarDecoration";
 import { orgApi } from "@/api/org";
 import { toast } from "sonner";
 import type { Section, OrgMember } from "@/types";
@@ -41,6 +43,44 @@ export const EditorPage: React.FC = () => {
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
 
   const [qualityOpen, setQualityOpen] = useState(false);
+  const [grammarIssues, setGrammarIssues] = useState<Record<number, GrammarIssue[]>>({});
+  const [grammarChecking, setGrammarChecking] = useState(false);
+
+  const handleGrammarCheck = async () => {
+    if (!activeSection || !activeSection.content_md.trim()) return;
+    setGrammarChecking(true);
+    try {
+      const result = await grammarApi.checkGrammar(projectId, activeSection.content_md);
+      const issues: GrammarIssue[] = result.matches.map(m => ({
+        offset: m.offset,
+        length: m.length,
+        message: m.message,
+        short_message: m.short_message,
+        rule_id: m.rule_id,
+        replacements: m.replacements.map(r => r.value),
+      }));
+      setGrammarIssues(prev => ({ ...prev, [activeSection.id]: issues }));
+      if (issues.length === 0) {
+        toast.success('No grammar issues found');
+      } else {
+        toast(`${issues.length} grammar issue${issues.length === 1 ? '' : 's'} found`);
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.detail || 'Grammar check failed');
+    } finally {
+      setGrammarChecking(false);
+    }
+  };
+
+  const clearGrammarIssues = () => {
+    if (activeSectionId) {
+      setGrammarIssues(prev => {
+        const next = { ...prev };
+        delete next[activeSectionId];
+        return next;
+      });
+    }
+  };
 
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedReviewer, setSelectedReviewer] = useState<number | null>(null);
@@ -75,7 +115,7 @@ export const EditorPage: React.FC = () => {
     editorSections.find(s => s.id === activeSectionId) || null
   , [editorSections, activeSectionId]);
 
-  const docStatus = document?.status || 'DRAFT';
+  const docStatus = (document?.status || 'DRAFT') as 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'PENDING';
 
   // Fetch org members for reviewer dropdown
   useEffect(() => {
@@ -206,7 +246,9 @@ export const EditorPage: React.FC = () => {
           if (activeSectionId) generateSection.mutate(activeSectionId);
         }}
         onQualityClick={() => setQualityOpen(true)}
+        onGrammarCheck={handleGrammarCheck}
         isGenerating={generateSection.isPending}
+        grammarChecking={grammarChecking}
         qualityScore={latestQualityScore}
         issueCount={sections.filter(s => s.status === 'NEEDS_INPUT').length}
         userName={currentUser?.name}
@@ -342,6 +384,7 @@ export const EditorPage: React.FC = () => {
                 setDiffData(undefined);
               }}
               isApproved={docStatus === 'APPROVED'}
+              grammarIssues={grammarIssues}
             />
           </div>
 
