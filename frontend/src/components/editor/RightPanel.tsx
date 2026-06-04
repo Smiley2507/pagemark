@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import {
   Sparkles,
   ArrowUp,
-  ChevronLeft,
   AlertCircle,
   Loader2,
   Copy,
@@ -26,8 +24,6 @@ interface RightPanelProps {
   activeSectionStatus: Section['status'];
   onDiffReceived: (diff: { original: string; refined: string }) => void;
   onContentAccepted: (content: string) => void;
-  isOpen: boolean;
-  onToggle: () => void;
   isApproved?: boolean;
 }
 
@@ -62,8 +58,6 @@ export function RightPanel({
   activeSectionContent,
   activeSectionStatus,
   onDiffReceived,
-  isOpen,
-  onToggle,
   isApproved,
 }: RightPanelProps) {
   const [inputValue, setInputValue] = useState('');
@@ -165,21 +159,7 @@ export function RightPanel({
   const hasMessages = messages.length > 0 || isStreaming;
 
   return (
-    <motion.div
-      initial={false}
-      animate={{ width: isOpen ? 360 : 0 }}
-      transition={{ duration: 0.2, ease: 'easeInOut' }}
-      className={cn(
-        'relative flex h-full flex-shrink-0 flex-col overflow-hidden border-l border-border bg-background',
-        !isOpen && 'border-none'
-      )}
-    >
-      <button
-        onClick={onToggle}
-        className="absolute -left-3 top-[60px] z-50 flex h-7 w-6 items-center justify-center rounded-l-md border border-r-0 border-border bg-background text-muted-foreground shadow-sm transition-colors hover:text-foreground"
-      >
-        <ChevronLeft className={cn('h-3.5 w-3.5 transition-transform', !isOpen && 'rotate-180')} />
-      </button>
+    <div className="flex h-full w-full flex-col overflow-hidden border-l border-border bg-background">
 
       {/* Header */}
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
@@ -309,7 +289,7 @@ export function RightPanel({
           </div>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 

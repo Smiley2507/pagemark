@@ -7,6 +7,7 @@ import {
   XCircle,
   UserCheck,
 } from "lucide-react";
+import { Group, Panel, Separator, type PanelImperativeHandle } from "react-resizable-panels";
 import { Button } from "@/components/ui/button";
 import { EditorTopBar } from "@/components/editor/EditorTopBar";
 import { LeftPanel } from "@/components/editor/LeftPanel";
@@ -89,6 +90,8 @@ export const EditorPage: React.FC = () => {
   const [latestQualityScore, setLatestQualityScore] = useState<number | null>(null);
 
   const middlePanelRef = useRef<MiddlePanelHandle>(null);
+  const leftPanelRef = useRef<PanelImperativeHandle | null>(null);
+  const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const { activeOrgId } = useOrgStore();
 
   const { data: project } = useProject(projectId);
@@ -201,11 +204,25 @@ export const EditorPage: React.FC = () => {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === '[') {
         e.preventDefault();
-        setLeftOpen(o => !o);
+        const panel = leftPanelRef.current;
+        if (panel?.isCollapsed()) {
+          panel.expand();
+          setLeftOpen(true);
+        } else {
+          panel?.collapse();
+          setLeftOpen(false);
+        }
       }
       if ((e.metaKey || e.ctrlKey) && e.key === ']') {
         e.preventDefault();
-        setRightOpen(o => !o);
+        const panel = rightPanelRef.current;
+        if (panel?.isCollapsed()) {
+          panel.expand();
+          setRightOpen(true);
+        } else {
+          panel?.collapse();
+          setRightOpen(false);
+        }
       }
     };
 
@@ -240,8 +257,26 @@ export const EditorPage: React.FC = () => {
         projectStatus={project?.status ?? 'draft'}
         leftOpen={leftOpen}
         rightOpen={rightOpen}
-        onToggleLeft={() => setLeftOpen(o => !o)}
-        onToggleRight={() => setRightOpen(o => !o)}
+        onToggleLeft={() => {
+          const panel = leftPanelRef.current;
+          if (panel?.isCollapsed()) {
+            panel.expand();
+            setLeftOpen(true);
+          } else {
+            panel?.collapse();
+            setLeftOpen(false);
+          }
+        }}
+        onToggleRight={() => {
+          const panel = rightPanelRef.current;
+          if (panel?.isCollapsed()) {
+            panel.expand();
+            setRightOpen(true);
+          } else {
+            panel?.collapse();
+            setRightOpen(false);
+          }
+        }}
         onGenerateAI={() => {
           if (activeSectionId) generateSection.mutate(activeSectionId);
         }}
@@ -336,12 +371,16 @@ export const EditorPage: React.FC = () => {
 
       {/* Main Area */}
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex flex-1 overflow-hidden">
-          <div
-            className={cn(
-              "h-full transition-all duration-200 ease-in-out overflow-hidden",
-              leftOpen ? "w-[240px]" : "w-0"
-            )}
+        <Group orientation="horizontal" className="flex-1">
+          <Panel
+            panelRef={leftPanelRef}
+            id="left-panel"
+            defaultSize="240px"
+            minSize="160px"
+            maxSize="400px"
+            collapsible
+            collapsedSize="0px"
+            onResize={(size) => setLeftOpen(size.inPixels > 0)}
           >
             <LeftPanel
               sections={editorSections}
@@ -350,14 +389,12 @@ export const EditorPage: React.FC = () => {
                 setActiveSectionId(sectionId);
                 middlePanelRef.current?.scrollToSection(sectionId);
               }}
-              isOpen={leftOpen}
-              onToggle={() => setLeftOpen(o => !o)}
             />
-          </div>
+          </Panel>
 
-          <div className="w-px bg-border-1 hover:bg-accent transition-colors cursor-col-resize" />
+          <Separator className="w-px bg-border hover:bg-accent transition-colors cursor-col-resize data-[resize-handle-active]:bg-accent" />
 
-          <div className="flex-1 min-w-0 bg-background overflow-hidden relative">
+          <Panel id="middle-panel" minSize="400px">
             <MiddlePanel
               ref={middlePanelRef}
               sections={editorSections}
@@ -386,15 +423,19 @@ export const EditorPage: React.FC = () => {
               isApproved={docStatus === 'APPROVED'}
               grammarIssues={grammarIssues}
             />
-          </div>
+          </Panel>
 
-          <div className="w-px bg-border-1 hover:bg-accent transition-colors cursor-col-resize" />
+          <Separator className="w-px bg-border hover:bg-accent transition-colors cursor-col-resize data-[resize-handle-active]:bg-accent" />
 
-          <div
-            className={cn(
-              "h-full transition-all duration-200 ease-in-out overflow-hidden",
-              rightOpen ? "w-[320px]" : "w-0"
-            )}
+          <Panel
+            panelRef={rightPanelRef}
+            id="right-panel"
+            defaultSize="360px"
+            minSize="240px"
+            maxSize="600px"
+            collapsible
+            collapsedSize="0px"
+            onResize={(size) => setRightOpen(size.inPixels > 0)}
           >
             <RightPanel
               projectId={projectId}
@@ -415,12 +456,10 @@ export const EditorPage: React.FC = () => {
                   });
                 }
               }}
-              isOpen={rightOpen}
-              onToggle={() => setRightOpen(o => !o)}
               isApproved={docStatus === 'APPROVED'}
             />
-          </div>
-        </div>
+          </Panel>
+        </Group>
       </div>
 
       {/* Review Modal */}
