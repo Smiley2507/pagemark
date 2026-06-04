@@ -70,3 +70,105 @@ class DocumentResponse(BaseModel):
 class DocumentListResponse(BaseModel):
     documents: list[DocumentResponse]
     total: int
+
+
+class TemplateRecommendationBasisEnum(str, Enum):
+    RULE_BASED = "rule_based"
+    AI_PERSONALIZED = "ai_personalized"
+    CUSTOM_OUTLINE_SEEDED = "custom_outline_seeded"
+
+
+class OutlineProposalStatusEnum(str, Enum):
+    DRAFT = "draft"
+    APPROVED = "approved"
+    SUPERSEDED = "superseded"
+
+
+class OutlineProposalBasisEnum(str, Enum):
+    TEMPLATE = "template"
+    CUSTOM_OUTLINE = "custom_outline"
+    ANALYSIS_ADAPTED = "analysis_adapted"
+
+
+class TemplateRecommendationRequest(BaseModel):
+    basis: TemplateRecommendationBasisEnum = TemplateRecommendationBasisEnum.RULE_BASED
+    refresh: bool = False
+
+
+class TemplateRecommendationResponse(BaseModel):
+    id: int
+    document_id: int
+    analysis_id: Optional[int]
+    template_id: Optional[int]
+    basis: TemplateRecommendationBasisEnum
+    score: Optional[float]
+    explanation: Optional[str]
+    supporting_facts: dict[str, Any] = Field(default_factory=dict)
+    provider_usage_ref: Optional[dict[str, Any]] = None
+    template: Optional[TemplateResponse] = None
+    created_at: datetime
+
+
+class TemplateRecommendationListResponse(BaseModel):
+    recommendations: list[TemplateRecommendationResponse]
+
+
+class OutlineProposalCreateRequest(BaseModel):
+    template_id: Optional[int] = None
+    outline: Optional[list[dict[str, Any]]] = None
+    basis: OutlineProposalBasisEnum = OutlineProposalBasisEnum.TEMPLATE
+    explanation: Optional[dict[str, Any]] = None
+
+
+class OutlineProposalUpdateRequest(BaseModel):
+    outline: Optional[list[dict[str, Any]]] = None
+    explanation: Optional[dict[str, Any]] = None
+
+
+class OutlineProposalResponse(BaseModel):
+    id: int
+    document_id: int
+    analysis_id: Optional[int]
+    basis: OutlineProposalBasisEnum
+    status: OutlineProposalStatusEnum
+    version: int
+    outline: list[dict[str, Any]]
+    explanation: Optional[dict[str, Any]]
+    approved_by: Optional[int]
+    approved_at: Optional[datetime]
+    approval_metadata: Optional[dict[str, Any]]
+    superseded_at: Optional[datetime]
+    created_at: datetime
+
+
+class OutlineProposalListResponse(BaseModel):
+    proposals: list[OutlineProposalResponse]
+
+
+class ClarificationRequestCreateRequest(BaseModel):
+    question: str = Field(..., min_length=1)
+    affected_sections: list[str] = Field(default_factory=list)
+    confidence_tradeoff: str
+
+
+class ClarificationRequestResponse(BaseModel):
+    id: int
+    document_id: Optional[int]
+    outline_proposal_id: Optional[int]
+    section_id: Optional[int]
+    question: str
+    affected_sections: list[str] = Field(default_factory=list)
+    confidence_tradeoff: Optional[str]
+    status: str
+    user_answer: Optional[str]
+    created_at: datetime
+    resolved_at: Optional[datetime]
+    skipped_at: Optional[datetime]
+
+
+class DocumentSetupStateResponse(BaseModel):
+    document: DocumentResponse
+    recommendations: list[TemplateRecommendationResponse] = Field(default_factory=list)
+    outline_proposals: list[OutlineProposalResponse] = Field(default_factory=list)
+    clarification_requests: list[ClarificationRequestResponse] = Field(default_factory=list)
+    sections: list[dict[str, Any]] = Field(default_factory=list)

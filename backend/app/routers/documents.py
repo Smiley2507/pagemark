@@ -17,19 +17,33 @@ from app.models.document import (
     SectionContentLifecycle,
     SectionStatus,
 )
+from app.models.clarification import ClarificationRequest
+from app.models.outline_proposal import OutlineProposal, OutlineProposalBasis
 from app.models.project import Project
 from app.models.template import Template
+from app.models.template_recommendation import TemplateRecommendationBasis
 from app.models.user import User
 from app.schemas.document import (
+    ClarificationRequestCreateRequest,
+    ClarificationRequestResponse,
     DocumentCreateRequest,
     DocumentListResponse,
     DocumentProgressResponse,
     DocumentResponse,
+    DocumentSetupStateResponse,
     DocumentUpdateRequest,
+    OutlineProposalCreateRequest,
+    OutlineProposalListResponse,
+    OutlineProposalResponse,
+    OutlineProposalUpdateRequest,
+    TemplateRecommendationListResponse,
+    TemplateRecommendationRequest,
+    TemplateRecommendationResponse,
 )
 from app.schemas.section import CustomSectionRequest, SectionResponse, SectionTreeResponse, SectionUpdateRequest
 from app.schemas.template import TemplateResponse
 from app.services import section_service
+from app.services import template_recommendation_service
 
 router = APIRouter(prefix="/projects", tags=["documents"])
 
@@ -131,6 +145,57 @@ def _template_response(template: Template | None) -> TemplateResponse | None:
     if template is None:
         return None
     return TemplateResponse.model_validate(template)
+
+
+def _recommendation_to_response(recommendation) -> TemplateRecommendationResponse:
+    return TemplateRecommendationResponse(
+        id=recommendation.id,
+        document_id=recommendation.document_id,
+        analysis_id=recommendation.analysis_id,
+        template_id=recommendation.template_id,
+        basis=recommendation.basis.value,
+        score=recommendation.score,
+        explanation=recommendation.explanation,
+        supporting_facts=recommendation.supporting_facts_json or {},
+        provider_usage_ref=recommendation.provider_usage_ref,
+        template=_template_response(recommendation.template),
+        created_at=recommendation.created_at,
+    )
+
+
+def _outline_proposal_to_response(proposal: OutlineProposal) -> OutlineProposalResponse:
+    return OutlineProposalResponse(
+        id=proposal.id,
+        document_id=proposal.document_id,
+        analysis_id=proposal.analysis_id,
+        basis=proposal.basis.value,
+        status=proposal.status.value,
+        version=proposal.version,
+        outline=proposal.outline_json,
+        explanation=proposal.explanation_json,
+        approved_by=proposal.approved_by,
+        approved_at=proposal.approved_at,
+        approval_metadata=proposal.approval_metadata,
+        superseded_at=proposal.superseded_at,
+        created_at=proposal.created_at,
+    )
+
+
+def _clarification_to_response(request: ClarificationRequest) -> ClarificationRequestResponse:
+    return ClarificationRequestResponse(
+        id=request.id,
+        document_id=request.document_id,
+        outline_proposal_id=request.outline_proposal_id,
+        section_id=request.section_id,
+        question=request.question,
+        affected_sections=request.affected_sections_json or [],
+        confidence_tradeoff=request.confidence_tradeoff,
+        status=request.status.value,
+        user_answer=request.user_answer,
+        created_at=request.created_at,
+        resolved_at=request.resolved_at,
+        skipped_at=request.skipped_at,
+    )
 
 
 def _document_to_response(document: Document) -> DocumentResponse:
@@ -248,6 +313,251 @@ async def update_document(
     document.updated_at = datetime.utcnow()
     await db.commit()
     return await _load_document_response(db, project.id, document.id)
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/setup",
+    response_model=DocumentSetupStateResponse,
+)
+async def get_document_setup_state(
+    document_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    recommendations = await template_recommendation_service.list_recommendations(db, document.id)
+    proposals = await template_recommendation_service.list_outline_proposals(db, document.id)
+    clarification_result = await db.execute(
+        select(ClarificationRequest)
+        .where(ClarificationRequest.document_id == document.id)
+        .order_by(ClarificationRequest.created_at.desc())
+    )
+    sections = [
+        {
+            "id": section.id,
+            "heading": section.heading,
+            "order_index": section.order_index,
+            "content_lifecycle": section.content_lifecycle.value,
+            "status": section.status.value,
+        }
+        for section in sorted(_active_sections(document), key=lambda section: section.order_index)
+    ]
+    return DocumentSetupStateResponse(
+        document=_document_to_response(document),
+        recommendations=[_recommendation_to_response(item) for item in recommendations],
+        outline_proposals=[_outline_proposal_to_response(item) for item in proposals],
+        clarification_requests=[
+            _clarification_to_response(item) for item in clarification_result.scalars().all()
+        ],
+        sections=sections,
+    )
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/template-recommendations",
+    response_model=TemplateRecommendationListResponse,
+)
+async def list_template_recommendations(
+    document_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    recommendations = await template_recommendation_service.list_recommendations(db, document.id)
+    return TemplateRecommendationListResponse(
+        recommendations=[_recommendation_to_response(item) for item in recommendations]
+    )
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/template-recommendations",
+    response_model=TemplateRecommendationListResponse,
+)
+async def create_template_recommendations(
+    document_id: int,
+    body: TemplateRecommendationRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    if body.basis.value == TemplateRecommendationBasis.RULE_BASED.value:
+        recommendations = await template_recommendation_service.create_rule_based_recommendations(
+            db,
+            document,
+            refresh=body.refresh,
+        )
+    elif body.basis.value == TemplateRecommendationBasis.AI_PERSONALIZED.value:
+        recommendations = await template_recommendation_service.create_ai_personalized_recommendation(
+            db,
+            document,
+            current_user.id,
+            refresh=body.refresh,
+        )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Custom Outline seeded recommendations are created with an Outline Proposal.",
+        )
+    return TemplateRecommendationListResponse(
+        recommendations=[_recommendation_to_response(item) for item in recommendations]
+    )
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/outline-proposals",
+    response_model=OutlineProposalListResponse,
+)
+async def list_outline_proposals(
+    document_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    proposals = await template_recommendation_service.list_outline_proposals(db, document.id)
+    return OutlineProposalListResponse(
+        proposals=[_outline_proposal_to_response(item) for item in proposals]
+    )
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/outline-proposals",
+    status_code=status.HTTP_201_CREATED,
+    response_model=OutlineProposalResponse,
+)
+async def create_outline_proposal(
+    document_id: int,
+    body: OutlineProposalCreateRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    proposal = await template_recommendation_service.create_outline_proposal(
+        db,
+        document,
+        template_id=body.template_id,
+        outline=body.outline,
+        basis=OutlineProposalBasis(body.basis.value),
+        explanation=body.explanation,
+    )
+    return _outline_proposal_to_response(proposal)
+
+
+async def _get_outline_proposal_for_document(
+    db: AsyncSession,
+    document_id: int,
+    proposal_id: int,
+) -> OutlineProposal:
+    result = await db.execute(
+        select(OutlineProposal).where(
+            OutlineProposal.id == proposal_id,
+            OutlineProposal.document_id == document_id,
+        )
+    )
+    proposal = result.scalar_one_or_none()
+    if proposal is None:
+        raise HTTPException(status_code=404, detail="Outline Proposal not found")
+    return proposal
+
+
+@router.patch(
+    "/{project_id}/documents/{document_id}/outline-proposals/{proposal_id}",
+    response_model=OutlineProposalResponse,
+)
+async def update_outline_proposal(
+    document_id: int,
+    proposal_id: int,
+    body: OutlineProposalUpdateRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _get_document_for_project(db, project.id, document_id)
+    proposal = await _get_outline_proposal_for_document(db, document_id, proposal_id)
+    proposal = await template_recommendation_service.update_draft_outline_proposal(
+        db,
+        proposal,
+        outline=body.outline,
+        explanation=body.explanation,
+    )
+    return _outline_proposal_to_response(proposal)
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/outline-proposals/{proposal_id}/approve",
+    response_model=OutlineProposalResponse,
+)
+async def approve_outline_proposal(
+    document_id: int,
+    proposal_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    proposal = await _get_outline_proposal_for_document(db, document.id, proposal_id)
+    proposal = await template_recommendation_service.approve_outline_proposal(
+        db,
+        document,
+        proposal,
+        current_user.id,
+    )
+    return _outline_proposal_to_response(proposal)
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/outline-proposals/{proposal_id}/clarification-requests",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ClarificationRequestResponse,
+)
+async def create_outline_clarification_request(
+    document_id: int,
+    proposal_id: int,
+    body: ClarificationRequestCreateRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    proposal = await _get_outline_proposal_for_document(db, document.id, proposal_id)
+    request = await template_recommendation_service.create_clarification_request(
+        db,
+        document,
+        proposal,
+        question=body.question,
+        affected_sections=body.affected_sections,
+        confidence_tradeoff=body.confidence_tradeoff,
+    )
+    return _clarification_to_response(request)
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/clarification-requests/{request_id}/skip",
+    response_model=ClarificationRequestResponse,
+)
+async def skip_outline_clarification_request(
+    document_id: int,
+    request_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _get_document_for_project(db, project.id, document_id)
+    result = await db.execute(
+        select(ClarificationRequest).where(
+            ClarificationRequest.id == request_id,
+            ClarificationRequest.document_id == document_id,
+        )
+    )
+    request = result.scalar_one_or_none()
+    if request is None:
+        raise HTTPException(status_code=404, detail="Clarification Request not found")
+    request = await template_recommendation_service.skip_clarification_request(db, request)
+    return _clarification_to_response(request)
 
 
 async def _load_document_response(

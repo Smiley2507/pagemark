@@ -24,6 +24,7 @@ from app.models.generation import GenerationRun, GenerationSectionTask
 from app.models.evidence import EvidenceReference
 from app.models.activity import ActivityEvent
 from app.models.workspace_preference import WorkspacePreference
+from app.models.clarification import ClarificationRequest
 from app.models.oauth_token import OAuthToken
 from app.models.version import SectionVersion
 from app.models.ai_credential import UserAiCredential
