@@ -2,9 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Download, Image, Type, Palette, Layout as LayoutIcon,
-  FileType, BookOpen, Ruler, Loader2, Eye, CheckCircle2,
+  FileType, BookOpen, Ruler, Loader2, Eye,
 } from 'lucide-react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { projectsApi } from '@/api/projects';
 import { cn } from '@/lib/utils';
@@ -26,12 +26,31 @@ const LOGO_POSITIONS = [
   { value: 'none', label: 'None' },
 ];
 
+const VISUAL_KEYS = new Set(['h1_color', 'h2_color', 'primary_color', 'font_family', 'logo_url']);
+
 function useProject(projectId: number) {
   return useQuery<Project>({
     queryKey: ['project', projectId],
     queryFn: () => projectsApi.getProject(projectId),
     enabled: !!projectId,
   });
+}
+
+function structuralKey(s: ExportSettings): string {
+  const rest: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(s))
+    if (!VISUAL_KEYS.has(k)) rest[k] = v;
+  return JSON.stringify(rest);
+}
+
+function visualCSS(s: ExportSettings): string {
+  return [
+    s.h1_color && `--h1-color:${s.h1_color}`,
+    s.h2_color && `--h2-color:${s.h2_color}`,
+    s.primary_color && `--primary-color:${s.primary_color}`,
+    s.font_family && `--font-family:${s.font_family}`,
+    s.logo_url && `--logo-url:url(${s.logo_url})`,
+  ].filter(Boolean).join(';');
 }
 
 export function ExportPage() {
@@ -48,12 +67,14 @@ export function ExportPage() {
   const [exportFormat, setExportFormat] = useState<'html' | 'pdf'>('html');
   const [exporting, setExporting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
+  const prevSk = useRef('');
+
+  const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
   useEffect(() => {
-    if (savedSettings) {
-      setSettings((s) => ({ ...s, ...savedSettings }));
-    }
+    if (savedSettings) setSettings((s) => ({ ...s, ...savedSettings }));
   }, [savedSettings]);
 
   const updateSetting = useCallback(<K extends keyof ExportSettings>(
@@ -62,27 +83,59 @@ export function ExportPage() {
     setSettings((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  const mergeSettings = useCallback((partial: Partial<ExportSettings>) => {
-    setSettings((prev) => ({ ...prev, ...partial }));
-  }, []);
-
+  // Initial fetch — runs once on mount
   useEffect(() => {
     if (!pid) return;
     setPreviewLoading(true);
     const params = new URLSearchParams({ format: 'html' });
     for (const [key, val] of Object.entries(settings)) {
-      if (val !== undefined && val !== null && val !== '') {
+      if (val !== undefined && val !== null && val !== '')
         params.set(key, String(val));
-      }
     }
-    const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
     fetch(`${baseURL}/projects/${pid}/export?${params}`, { credentials: 'include' })
       .then((r) => r.text())
       .then(setPreviewHtml)
       .catch(() => {})
       .finally(() => setPreviewLoading(false));
-  }, [pid, settings]);
+  }, [pid]);
 
+  // Re-fetch on structural changes; inject CSS on visual-only changes
+  useEffect(() => {
+    if (!pid) return;
+    const sk = structuralKey(settings);
+    if (sk === prevSk.current && previewHtml) {
+      const ifr = iframeRef.current;
+      try {
+        const doc = ifr?.contentDocument ?? ifr?.contentWindow?.document;
+        if (doc) {
+          let style = doc.getElementById('pm-export-style') as HTMLStyleElement | null;
+          if (!style) {
+            style = doc.createElement('style');
+            style.id = 'pm-export-style';
+            doc.head.appendChild(style);
+          }
+          style.textContent = `:root{${visualCSS(settings)}}`;
+          return;
+        }
+      } catch { /* fall through to re-fetch */ }
+    } else {
+      prevSk.current = sk;
+    }
+    if (!previewHtml) return;
+    setPreviewLoading(true);
+    const params = new URLSearchParams({ format: 'html' });
+    for (const [key, val] of Object.entries(settings)) {
+      if (val !== undefined && val !== null && val !== '')
+        params.set(key, String(val));
+    }
+    fetch(`${baseURL}/projects/${pid}/export?${params}`, { credentials: 'include' })
+      .then((r) => r.text())
+      .then(setPreviewHtml)
+      .catch(() => {})
+      .finally(() => setPreviewLoading(false));
+  }, [pid, settings, previewHtml, baseURL]);
+
+  // Auto-save with debounce
   useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
@@ -101,12 +154,10 @@ export function ExportPage() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
       const params = new URLSearchParams({ format: exportFormat });
       for (const [key, val] of Object.entries(settings)) {
-        if (val !== undefined && val !== null && val !== '') {
+        if (val !== undefined && val !== null && val !== '')
           params.set(key, String(val));
-        }
       }
       const res = await fetch(`${baseURL}/projects/${pid}/export?${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error(`Export failed (HTTP ${res.status})`);
@@ -136,9 +187,9 @@ export function ExportPage() {
           Back to editor
         </Link>
         <span className="text-muted-foreground/30">|</span>
-        <h1 className="text-section font-semibold truncate">{project?.name ?? 'Loading…'} — Export</h1>
+        <h1 className="text-section font-semibold truncate">{project?.name ?? 'Loading\u2026'} \u2014 Export</h1>
         <div className="flex-1" />
-        {saving && <span className="text-xs text-muted-foreground animate-pulse">Saving…</span>}
+        {saving && <span className="text-xs text-muted-foreground animate-pulse">Saving\u2026</span>}
         <select
           value={exportFormat}
           onChange={(e) => setExportFormat(e.target.value as 'html' | 'pdf')}
@@ -160,7 +211,7 @@ export function ExportPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Settings sidebar */}
         <aside className="w-80 shrink-0 overflow-y-auto border-r border-border bg-card p-5 space-y-6">
-          {/* ── Branding ── */}
+          {/* Branding */}
           <section>
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
               <Palette className="h-4 w-4" />
@@ -191,7 +242,7 @@ export function ExportPage() {
             </div>
           </section>
 
-          {/* ── Header / Footer ── */}
+          {/* Header / Footer */}
           <section>
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
               <BookOpen className="h-4 w-4" />
@@ -205,7 +256,7 @@ export function ExportPage() {
             </div>
           </section>
 
-          {/* ── Layout ── */}
+          {/* Layout */}
           <section>
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
               <Ruler className="h-4 w-4" />
@@ -241,15 +292,16 @@ export function ExportPage() {
           <div className="flex-1 overflow-auto bg-muted/30 p-4">
             {previewHtml ? (
               <iframe
+                ref={iframeRef}
                 srcDoc={previewHtml}
                 className="mx-auto h-full w-full max-w-[900px] rounded-lg border border-border bg-white shadow-sm"
                 title="Export preview"
-                sandbox="allow-same-origin"
+                sandbox="allow-same-origin allow-scripts"
               />
             ) : (
               <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading preview…
+                Loading preview\u2026
               </div>
             )}
           </div>
@@ -259,7 +311,7 @@ export function ExportPage() {
   );
 }
 
-// ── Helpers ────────────────────────────────────────────────────────
+// Helpers
 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (

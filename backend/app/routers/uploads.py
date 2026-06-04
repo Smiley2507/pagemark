@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -9,11 +10,12 @@ from app.dependencies import get_current_user
 from app.models.user import User
 from app.config import settings
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/upload", tags=["uploads"])
 
 ALLOWED_MIME_TYPES = {"image/png", "image/jpeg", "image/webp", "image/svg+xml"}
-
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+MAX_FILE_SIZE = 5 * 1024 * 1024
 
 
 @router.post("/logo")
@@ -22,11 +24,9 @@ async def upload_logo(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if file.content_type not in ALLOWED_MIME_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file type: {file.content_type}. Allowed: PNG, JPEG, WebP, SVG",
-        )
+    ct = file.content_type or "application/octet-stream"
+    if ct not in ALLOWED_MIME_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unsupported type: {ct}")
 
     contents = await file.read()
     if len(contents) > MAX_FILE_SIZE:
@@ -35,10 +35,14 @@ async def upload_logo(
     ext = os.path.splitext(file.filename or "logo.png")[1] or ".png"
     filename = f"{uuid.uuid4().hex}{ext}"
     upload_path = os.path.join(settings.UPLOAD_DIR, "logos")
-    os.makedirs(upload_path, exist_ok=True)
-    filepath = os.path.join(upload_path, filename)
 
-    with open(filepath, "wb") as f:
-        f.write(contents)
+    try:
+        os.makedirs(upload_path, exist_ok=True)
+        filepath = os.path.join(upload_path, filename)
+        with open(filepath, "wb") as f:
+            f.write(contents)
+    except OSError as e:
+        logger.error("Logo upload write failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
     return JSONResponse(content={"url": f"/static/logos/{filename}"})
