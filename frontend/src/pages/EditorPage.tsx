@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { LeftPanel } from "@/components/editor/LeftPanel";
 import { MiddlePanel, type MiddlePanelHandle } from "@/components/editor/MiddlePanel";
 import { RightPanel } from "@/components/editor/RightPanel";
-import { ExportModal } from "@/components/editor/ExportModal";
+
 import { QualityModal } from "@/components/editor/QualityModal";
 import {
   useAutosave,
@@ -49,7 +49,7 @@ export const EditorPage: React.FC = () => {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
-  const [exportOpen, setExportOpen] = useState(false);
+
   const [qualityOpen, setQualityOpen] = useState(false);
 
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
@@ -316,7 +316,7 @@ export const EditorPage: React.FC = () => {
             variant="ghost"
             size="sm"
             className="flex items-center gap-2"
-            onClick={() => setExportOpen(true)}
+            onClick={() => navigate(`/export/${projectId}`)}
           >
             <Download className="h-4 w-4" />
             <span>Export</span>
@@ -510,15 +510,6 @@ export const EditorPage: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Export modal */}
-      <ExportModal
-        projectId={projectId}
-        projectName={project?.name ?? 'Documentation'}
-        open={exportOpen}
-        onClose={() => setExportOpen(false)}
-        initialSettings={project?.export_settings}
-      />
 
       {/* Quality modal */}
       <QualityModal

@@ -18,6 +18,7 @@ import { useMe } from './hooks/useAuth';
 import { ProjectsView, TemplatesView } from './components/dashboard';
 import { SettingsPage } from './pages/SettingsPage';
 import { NLPDashboard } from './pages/NLPDashboard';
+import { ExportPage } from './pages/ExportPage';
 
 const queryClient = new QueryClient();
 
@@ -93,6 +94,7 @@ const AppRoutes = () => {
           <Route path="/editor/:id" element={<Editor />} />
           <Route path="/analysis/:id" element={<Analysis />} />
           <Route path="/nlp/:projectId" element={<NLPDashboard />} />
+          <Route path="/export/:projectId" element={<ExportPage />} />
           <Route path="/git-connect" element={<GitConnectPage />} />
         </Route>
       </Route>

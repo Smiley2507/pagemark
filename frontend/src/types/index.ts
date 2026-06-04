@@ -399,8 +399,17 @@ export interface APIKey {
 
 export interface ExportSettings {
   logo_url?: string;
+  logo_position?: 'title-page' | 'header-left' | 'header-center' | 'header-right' | 'none';
+  h1_color?: string;
+  h2_color?: string;
   primary_color?: string;
   font_family?: string;
+  header_left?: string;
+  header_center?: string;
+  header_right?: string;
+  page_numbers?: boolean;
+  paper_size?: 'a4' | 'letter';
+  margins?: 'normal' | 'narrow' | 'wide';
 }
 
 export interface NLPReport {

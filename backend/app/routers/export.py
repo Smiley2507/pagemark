@@ -1,13 +1,7 @@
-"""
-export.py — API router for documentation export.
-
-GET  /projects/{id}/export?format=markdown|html|pdf
-POST /projects/batch-export
-"""
 import io
 import re
 import zipfile
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -29,7 +23,6 @@ class BatchExportRequest(BaseModel):
 
 
 def _safe_filename(name: str) -> str:
-    """Strip characters unsafe for filenames."""
     return re.sub(r"[^\w\-\. ]", "_", name).strip()
 
 
@@ -50,6 +43,18 @@ async def _get_project_or_404(project_id: int, db: AsyncSession, user) -> Projec
 async def export_project(
     project_id: int,
     format: str = Query("markdown", description="Export format: markdown, html, pdf"),
+    h1_color: Optional[str] = Query(None),
+    h2_color: Optional[str] = Query(None),
+    primary_color: Optional[str] = Query(None),
+    font_family: Optional[str] = Query(None),
+    logo_url: Optional[str] = Query(None),
+    logo_position: Optional[str] = Query(None),
+    header_left: Optional[str] = Query(None),
+    header_center: Optional[str] = Query(None),
+    header_right: Optional[str] = Query(None),
+    page_numbers: Optional[bool] = Query(None),
+    paper_size: Optional[str] = Query(None),
+    margins: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -69,7 +74,26 @@ async def export_project(
     )
     sections = sec_result.scalars().all()
 
-    export_settings = project.export_settings or {}
+    export_settings = dict(project.export_settings or {})
+
+    overrides = {
+        "h1_color": h1_color,
+        "h2_color": h2_color,
+        "primary_color": primary_color,
+        "font_family": font_family,
+        "logo_url": logo_url,
+        "logo_position": logo_position,
+        "header_left": header_left,
+        "header_center": header_center,
+        "header_right": header_right,
+        "page_numbers": page_numbers,
+        "paper_size": paper_size,
+        "margins": margins,
+    }
+    for key, val in overrides.items():
+        if val is not None:
+            export_settings[key] = val
+
     doc_title = doc.title or "Documentation"
     safe_name = _safe_filename(project.name)
     fmt = format.lower().strip()
