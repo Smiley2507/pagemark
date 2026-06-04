@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,10 +9,13 @@ import { ErrorBanner } from './DashboardViews';
 import type { Template } from '@/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
+import { projectsApi } from '@/api/projects';
 
 export const TemplatesView: React.FC = () => {
   const navigate = useNavigate();
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [editTemplate, setEditTemplate] = useState<Template | null>(null);
   const [newTemplateName, setNewTemplateName] = useState('');
   const [newTemplateDesc, setNewTemplateDesc] = useState('');
   const [newTemplateCategory, setNewTemplateCategory] = useState('Technical');
@@ -87,6 +90,24 @@ export const TemplatesView: React.FC = () => {
               onUse={(t: Template) =>
                 navigate(`/new-project?template_id=${t.id}`)
               }
+              onEdit={(t) => {
+                setEditTemplate(t);
+                setNewTemplateName(t.name);
+                setNewTemplateDesc(t.description || '');
+                setNewTemplateCategory(t.category || 'Technical');
+                setNewTemplateSections([]);
+                setIsTemplateModalOpen(true);
+              }}
+              onDelete={async (t) => {
+                if (!confirm(`Delete template "${t.name}"?`)) return;
+                try {
+                  await projectsApi.deleteTemplate(t.id);
+                  toast.success('Template deleted');
+                  refetchTemplates();
+                } catch (e: any) {
+                  toast.error(e?.response?.data?.detail || 'Failed to delete template');
+                }
+              }}
             />
           ))}
         </div>
@@ -95,8 +116,37 @@ export const TemplatesView: React.FC = () => {
       {isTemplateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">
           <div className="w-full max-w-lg animate-slide-up rounded-xl border border-border bg-card p-6 shadow-sm">
-            <h3 className="text-section font-semibold">Create template</h3>
-            <form onSubmit={handleCreateTemplate} className="mt-4 space-y-4">
+            <h3 className="text-section font-semibold">{editTemplate ? 'Edit template' : 'Create template'}</h3>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!newTemplateName.trim()) return;
+              try {
+                if (editTemplate) {
+                  await projectsApi.updateTemplate(editTemplate.id, {
+                    name: newTemplateName,
+                    description: newTemplateDesc,
+                    category: newTemplateCategory,
+                    sections_json: newTemplateSections,
+                  });
+                  toast.success('Template updated');
+                } else {
+                  await createTemplateMutation.mutateAsync({
+                    name: newTemplateName,
+                    description: newTemplateDesc,
+                    category: newTemplateCategory,
+                    sections_json: newTemplateSections,
+                  });
+                }
+                setNewTemplateName('');
+                setNewTemplateDesc('');
+                setNewTemplateCategory('Technical');
+                setNewTemplateSections(['Overview', 'Architecture', 'Implementation']);
+                setEditTemplate(null);
+                setIsTemplateModalOpen(false);
+              } catch (e: any) {
+                toast.error(e?.response?.data?.detail || 'Failed to save template');
+              }
+            }} className="mt-4 space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="tmpl-name">Name</Label>
                 <Input
@@ -172,11 +222,14 @@ export const TemplatesView: React.FC = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setIsTemplateModalOpen(false)}
+                  onClick={() => {
+                    setEditTemplate(null);
+                    setIsTemplateModalOpen(false);
+                  }}
                 >
                   Cancel
                 </Button>
-                <Button type="submit">Create</Button>
+                <Button type="submit">{editTemplate ? 'Save' : 'Create'}</Button>
               </div>
             </form>
           </div>

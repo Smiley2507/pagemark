@@ -12,6 +12,13 @@ class TemplateCreateRequest(BaseModel):
     sections_json: Optional[List[Any]] = None
 
 
+class TemplateUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = None
+    category: Optional[str] = None
+    sections_json: Optional[List[Any]] = None
+
+
 # ── Response schemas ─────────────────────────────────────────────
 
 class TemplateResponse(BaseModel):

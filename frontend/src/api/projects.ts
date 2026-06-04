@@ -73,4 +73,18 @@ export const projectsApi = {
     const { data } = await apiClient.post('/templates', templateData);
     return data;
   },
+
+  async deleteTemplate(id: number): Promise<void> {
+    await apiClient.delete(`/templates/${id}`);
+  },
+
+  async updateTemplate(id: number, data: {
+    name?: string;
+    description?: string;
+    category?: string;
+    sections_json?: string[] | { heading: string; description?: string }[];
+  }): Promise<Template> {
+    const res = await apiClient.patch(`/templates/${id}`, data);
+    return res.data;
+  },
 };

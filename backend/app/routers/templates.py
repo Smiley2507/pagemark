@@ -8,6 +8,7 @@ from app.models.user import User
 from app.models.template import Template
 from app.schemas.template import (
     TemplateCreateRequest,
+    TemplateUpdateRequest,
     TemplateResponse,
     TemplateListResponse,
 )
@@ -51,6 +52,36 @@ async def create_template(
         is_builtin=False,
     )
     db.add(template)
+    await db.commit()
+    await db.refresh(template)
+    return TemplateResponse.model_validate(template)
+
+
+# ── PATCH /templates/{id} ────────────────────────────────────────
+
+@router.patch("/{template_id}", response_model=TemplateResponse)
+async def update_template(
+    template_id: int,
+    body: TemplateUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Template).where(Template.id == template_id)
+    )
+    template = result.scalar_one_or_none()
+
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    if template.is_builtin:
+        raise HTTPException(status_code=403, detail="Cannot edit built-in templates")
+    if template.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this template")
+
+    update_data = body.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(template, key, value)
+
     await db.commit()
     await db.refresh(template)
     return TemplateResponse.model_validate(template)
