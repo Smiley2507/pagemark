@@ -11,6 +11,7 @@ class Template(Base):
     description = Column(Text, nullable=True)
     category = Column(String, nullable=True)
     sections_json = Column(JSON, nullable=True)
+    system_prompt = Column(Text, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     is_builtin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)

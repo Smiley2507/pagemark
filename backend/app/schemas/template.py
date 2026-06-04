@@ -10,6 +10,7 @@ class TemplateCreateRequest(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     sections_json: Optional[List[Any]] = None
+    system_prompt: Optional[str] = None
 
 
 class TemplateUpdateRequest(BaseModel):
@@ -17,6 +18,7 @@ class TemplateUpdateRequest(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     sections_json: Optional[List[Any]] = None
+    system_prompt: Optional[str] = None
 
 
 # ── Response schemas ─────────────────────────────────────────────
@@ -27,6 +29,7 @@ class TemplateResponse(BaseModel):
     description: Optional[str]
     category: Optional[str]
     sections_json: Optional[List[Any]]
+    system_prompt: Optional[str]
     owner_id: Optional[int]
     is_builtin: bool
     created_at: datetime

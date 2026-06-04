@@ -24,6 +24,7 @@ export const TemplatesView: React.FC = () => {
     'Architecture',
     'Implementation',
   ]);
+  const [newTemplateSystemPrompt, setNewTemplateSystemPrompt] = useState('');
   const [customSectionInput, setCustomSectionInput] = useState('');
 
   const {
@@ -43,11 +44,13 @@ export const TemplatesView: React.FC = () => {
       description: newTemplateDesc,
       category: newTemplateCategory,
       sections_json: newTemplateSections,
+      system_prompt: newTemplateSystemPrompt || undefined,
     });
     setNewTemplateName('');
     setNewTemplateDesc('');
     setNewTemplateCategory('Technical');
     setNewTemplateSections(['Overview', 'Architecture', 'Implementation']);
+    setNewTemplateSystemPrompt('');
     setIsTemplateModalOpen(false);
   };
 
@@ -96,6 +99,7 @@ export const TemplatesView: React.FC = () => {
                 setNewTemplateDesc(t.description || '');
                 setNewTemplateCategory(t.category || 'Technical');
                 setNewTemplateSections([]);
+                setNewTemplateSystemPrompt(t.system_prompt || '');
                 setIsTemplateModalOpen(true);
               }}
               onDelete={async (t) => {
@@ -127,6 +131,7 @@ export const TemplatesView: React.FC = () => {
                     description: newTemplateDesc,
                     category: newTemplateCategory,
                     sections_json: newTemplateSections,
+                    system_prompt: newTemplateSystemPrompt || undefined,
                   });
                   toast.success('Template updated');
                 } else {
@@ -135,12 +140,14 @@ export const TemplatesView: React.FC = () => {
                     description: newTemplateDesc,
                     category: newTemplateCategory,
                     sections_json: newTemplateSections,
+                    system_prompt: newTemplateSystemPrompt || undefined,
                   });
                 }
                 setNewTemplateName('');
                 setNewTemplateDesc('');
                 setNewTemplateCategory('Technical');
                 setNewTemplateSections(['Overview', 'Architecture', 'Implementation']);
+                setNewTemplateSystemPrompt('');
                 setEditTemplate(null);
                 setIsTemplateModalOpen(false);
               } catch (e: any) {
@@ -218,12 +225,27 @@ export const TemplatesView: React.FC = () => {
                   ))}
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="tmpl-prompt">AI Writing Instructions</Label>
+                <textarea
+                  id="tmpl-prompt"
+                  value={newTemplateSystemPrompt}
+                  onChange={(e) => setNewTemplateSystemPrompt(e.target.value)}
+                  placeholder="e.g., Write for a technical audience. Use concise language. Include code examples for every API endpoint."
+                  rows={3}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-body placeholder:text-muted-foreground resize-none"
+                />
+                <p className="text-meta-sm text-muted-foreground">
+                  Instructions the AI follows when generating or refining content for projects using this template.
+                </p>
+              </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => {
                     setEditTemplate(null);
+                    setNewTemplateSystemPrompt('');
                     setIsTemplateModalOpen(false);
                   }}
                 >

@@ -6,6 +6,7 @@ def build_section_prompt(
     project_context: dict,
     analysis: dict,
     user_clarification: str | None = None,
+    template_system_prompt: str | None = None,
 ) -> str:
     """Return a prompt for generating a documentation section in markdown.
 
@@ -13,6 +14,7 @@ def build_section_prompt(
                           key_features, custom_instructions, preferred_terms
     analysis keys: classes, functions, endpoints, dependencies, languages,
                    file_count, complexity_notes
+    template_system_prompt: optional writing instructions from the project's template.
     """
     name = project_context.get("name", "this project")
     language = project_context.get("language", "")
@@ -69,6 +71,13 @@ def build_section_prompt(
         lines.append(f"- **Dependencies**: {dep_list}")
     if complexity_notes:
         lines.append(f"- **Complexity Notes**: {complexity_notes}")
+
+    if template_system_prompt:
+        lines += [
+            f"",
+            f"## Template Instructions",
+            template_system_prompt,
+        ]
 
     lines += [
         f"",

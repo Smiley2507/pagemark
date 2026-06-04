@@ -70,6 +70,7 @@ export const projectsApi = {
     description?: string;
     category?: string;
     sections_json?: string[] | { heading: string; description?: string }[];
+    system_prompt?: string;
   }): Promise<Template> {
     const { data } = await apiClient.post('/templates', templateData);
     return data;
@@ -84,6 +85,7 @@ export const projectsApi = {
     description?: string;
     category?: string;
     sections_json?: string[] | { heading: string; description?: string }[];
+    system_prompt?: string;
   }): Promise<Template> {
     const res = await apiClient.patch(`/templates/${id}`, data);
     return res.data;

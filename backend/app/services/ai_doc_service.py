@@ -13,6 +13,7 @@ from app.models.analysis import Analysis, AnalysisStatus
 from app.models.chat import ChatMessage, ChatThread, MessageRole
 from app.models.document import Document, Section, SectionStatus
 from app.models.project import Project
+from app.models.template import Template
 from app.prompts.chat import build_chat_prompt
 from app.prompts.refine import build_refine_prompt
 from app.prompts.section import build_section_prompt
@@ -184,6 +185,19 @@ class AIService:
             "complexity_notes": summary.get("complexity_notes", ""),
         }
 
+    async def _get_template_prompt(
+        self, db: AsyncSession, project_id: int
+    ) -> str | None:
+        """Return the system_prompt from the project's template, if any."""
+        project = await self._fetch_project(db, project_id)
+        if not project.template_id:
+            return None
+        result = await db.execute(
+            select(Template).where(Template.id == project.template_id)
+        )
+        template = result.scalar_one_or_none()
+        return template.system_prompt if template else None
+
     # ── Public API ──────────────────────────────────────────────
 
     async def generate_section(
@@ -206,12 +220,14 @@ class AIService:
 
         project_ctx = self._project_context(project)
         analysis_detail = self._analysis_detail(analysis)
+        template_prompt = await self._get_template_prompt(db, project_id)
 
         prompt = build_section_prompt(
             section_heading=section.heading,
             project_context=project_ctx,
             analysis=analysis_detail,
             user_clarification=answer,
+            template_system_prompt=template_prompt,
         )
 
         response = await client.messages.create(
@@ -257,6 +273,7 @@ class AIService:
         project = await self._fetch_project(db, document.project_id) if document else None
 
         project_ctx = self._project_context(project) if project else {}
+        template_prompt = await self._get_template_prompt(db, document.project_id) if project else None
         original = section.content_md or ""
 
         prompt = build_refine_prompt(
@@ -264,6 +281,7 @@ class AIService:
             current_content=original,
             instruction=instruction,
             project_context=project_ctx,
+            template_system_prompt=template_prompt,
         )
 
         response = await client.messages.create(
@@ -376,6 +394,7 @@ class AIService:
 
         project_ctx = self._project_context(project)
         analysis_summary = self._analysis_summary(analysis)
+        template_prompt = await self._get_template_prompt(db, thread.project_id)
 
         # Determine current section from thread title (best-effort)
         current_section_heading = thread.title
@@ -387,6 +406,7 @@ class AIService:
             current_section_content=current_section_content,
             project_context=project_ctx,
             analysis_summary=analysis_summary,
+            template_system_prompt=template_prompt,
         )
 
         # Stream response

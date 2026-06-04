@@ -9,6 +9,7 @@ def build_chat_prompt(
     current_section_content: str,
     project_context: dict,
     analysis_summary: dict,
+    template_system_prompt: str | None = None,
 ) -> tuple[str, list]:
     """Build system prompt and messages list for the Claude API.
 
@@ -21,6 +22,7 @@ def build_chat_prompt(
                           key_features, custom_instructions, preferred_terms
     analysis_summary keys: languages, file_count, endpoint_count,
                            frameworks, complexity_notes
+    template_system_prompt: optional writing instructions from the project's template.
     """
     name = project_context.get("name", "the project")
     language = project_context.get("language", "")
@@ -59,6 +61,13 @@ def build_chat_prompt(
         system_lines.append(f"- **Key Features**: {key_features}")
     if preferred_terms:
         system_lines.append(f"- **Preferred Terminology**: {preferred_terms}")
+
+    if template_system_prompt:
+        system_lines += [
+            f"",
+            f"## Template Instructions",
+            template_system_prompt,
+        ]
 
     system_lines += [
         f"",

@@ -6,11 +6,13 @@ def build_refine_prompt(
     current_content: str,
     instruction: str,
     project_context: dict,
+    template_system_prompt: str | None = None,
 ) -> str:
     """Return a prompt that refines existing section content per user instruction.
 
     project_context keys: name, language, framework, tone, audience,
                           key_features, custom_instructions, preferred_terms
+    template_system_prompt: optional writing instructions from the project's template.
     Returns ONLY the improved content in markdown.
     """
     name = project_context.get("name", "this project")
@@ -28,6 +30,13 @@ def build_refine_prompt(
     ]
     if preferred_terms:
         lines.append(f"- **Preferred Terminology**: {preferred_terms}")
+
+    if template_system_prompt:
+        lines += [
+            f"",
+            f"## Template Instructions",
+            template_system_prompt,
+        ]
 
     lines += [
         f"",

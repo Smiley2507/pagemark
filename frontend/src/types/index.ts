@@ -200,6 +200,8 @@ export interface Template {
   description?: string;
   category: string;
   is_builtin: boolean;
+  sections_json?: any[];
+  system_prompt?: string;
 }
 
 export interface Document {
