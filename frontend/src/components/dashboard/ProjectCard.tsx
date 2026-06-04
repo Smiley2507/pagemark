@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
   Star,
@@ -14,6 +15,8 @@ import {
   Edit3,
   Tags,
   X,
+  Pencil,
+  FileText,
 } from 'lucide-react';
 import type { Project } from '../../types';
 import { cn } from '@/lib/utils';
@@ -62,12 +65,59 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   onQuality,
 }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const [tags, setTags] = useState<string[]>(project.tags || []);
   const [tagInput, setTagInput] = useState('');
+
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState(project.name);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  const [descModalOpen, setDescModalOpen] = useState(false);
+  const [descDraft, setDescDraft] = useState(project.description ?? '');
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { name?: string; description?: string }) =>
+      projectsApi.updateProject(project.id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+
+  useEffect(() => {
+    setNameDraft(project.name);
+  }, [project.name]);
+
+  useEffect(() => {
+    setDescDraft(project.description ?? '');
+  }, [project.description]);
+
+  useEffect(() => {
+    if (renaming && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [renaming]);
+
+  const handleRenameSubmit = () => {
+    const trimmed = nameDraft.trim();
+    if (trimmed && trimmed !== project.name) {
+      updateMutation.mutate({ name: trimmed });
+    } else {
+      setNameDraft(project.name);
+    }
+    setRenaming(false);
+  };
+
+  const handleDescSave = () => {
+    updateMutation.mutate({ description: descDraft });
+    setDescModalOpen(false);
+  };
   const status = statusConfig[project.status] || statusConfig.pending;
   const StatusIcon = status.icon;
 
@@ -140,7 +190,25 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
         </button>
 
         <div className="flex items-start justify-between gap-2 pr-16">
-          <h3 className="text-section font-semibold text-foreground">{project.name}</h3>
+          {renaming ? (
+            <input
+              ref={nameInputRef}
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={handleRenameSubmit}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRenameSubmit();
+                if (e.key === 'Escape') {
+                  setNameDraft(project.name);
+                  setRenaming(false);
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="h-8 rounded border border-border bg-background px-2 text-section font-semibold text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring w-full"
+            />
+          ) : (
+            <h3 className="text-section font-semibold text-foreground">{project.name}</h3>
+          )}
           <div className="relative" ref={dropdownRef}>
             <button
               type="button"
@@ -159,6 +227,8 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
                 onClick={(e) => e.stopPropagation()}
               >
                 <MenuItem icon={Edit3} label="Open editor" onClick={() => { setDropdownOpen(false); onOpen(project.id); }} />
+                <MenuItem icon={Pencil} label="Rename" onClick={() => { setDropdownOpen(false); setRenaming(true); }} />
+                <MenuItem icon={FileText} label="Edit description" onClick={() => { setDropdownOpen(false); setDescModalOpen(true); }} />
                 <MenuItem icon={Tags} label="Edit Tags" onClick={() => { setDropdownOpen(false); setTagModalOpen(true); }} />
                 <MenuItem icon={BarChart2} label="Analysis" onClick={() => { setDropdownOpen(false); navigate(`/analysis/${project.id}`); }} />
                 {onQuality && <MenuItem icon={ShieldCheck} label="Quality" onClick={() => { setDropdownOpen(false); onQuality(project.id); }} />}
@@ -206,6 +276,30 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
           <span>Updated {updatedLabel}</span>
         </div>
       </div>
+
+      {/* Description Edit Modal */}
+      {descModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDescModalOpen(false)}>
+          <div className="bg-card rounded-xl border border-border p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Edit Description</h3>
+              <button onClick={() => setDescModalOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <textarea
+              value={descDraft}
+              onChange={(e) => setDescDraft(e.target.value)}
+              placeholder="Describe your project..."
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-primary resize-none h-24 mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDescModalOpen(false)}>Cancel</Button>
+              <Button onClick={handleDescSave}>Save</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tag Edit Modal */}
       {tagModalOpen && (

@@ -16,12 +16,12 @@ import {
 } from 'lucide-react';
 
 const SECTIONS = [
-  { id: 'profile', label: 'Profile', icon: User, admin: false },
-  { id: 'organization', label: 'Organization', icon: Building2, admin: true },
-  { id: 'members', label: 'Members', icon: Users, admin: false },
-  { id: 'ai-providers', label: 'AI Providers', icon: Bot, admin: false },
-  { id: 'api-keys', label: 'API Keys', icon: Key, admin: false },
-  { id: 'activity', label: 'Activity Log', icon: Activity, admin: false },
+  { id: 'profile', label: 'Profile', icon: User, admin: false, keywords: ['password', 'name', 'avatar', 'email', 'display'] },
+  { id: 'organization', label: 'Organization', icon: Building2, admin: true, keywords: ['org', 'threshold', 'quality', 'settings', 'team'] },
+  { id: 'members', label: 'Members', icon: Users, admin: false, keywords: ['people', 'invite', 'role', 'team', 'user'] },
+  { id: 'ai-providers', label: 'AI Providers', icon: Bot, admin: false, keywords: ['claude', 'gemini', 'anthropic', 'google', 'model', 'key', 'credential'] },
+  { id: 'api-keys', label: 'API Keys', icon: Key, admin: false, keywords: ['token', 'secret', 'authentication', 'api'] },
+  { id: 'activity', label: 'Activity Log', icon: Activity, admin: false, keywords: ['audit', 'log', 'history', 'events', 'changes'] },
 ];
 
 export function SettingsPage() {
@@ -34,9 +34,13 @@ export function SettingsPage() {
     setSearchParams(searchParams);
   };
 
-  const filtered = SECTIONS.filter((s) =>
-    s.label.toLowerCase().includes(sectionSearch.toLowerCase()),
-  );
+  const filtered = SECTIONS.filter((s) => {
+    const q = sectionSearch.toLowerCase();
+    return (
+      s.label.toLowerCase().includes(q) ||
+      s.keywords.some((k) => k.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <div className="flex h-full">

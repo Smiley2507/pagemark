@@ -1,30 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Sparkles,
-  Wand2,
-  ArrowsUpFromLine,
-  MessageSquare,
-  FileText,
-  User,
   ArrowUp,
-  ChevronRight,
   ChevronLeft,
-  History as HistoryIcon,
   AlertCircle,
   Loader2,
+  Copy,
+  Check,
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
-import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { sectionsApi } from '@/api/sections';
-import { documentsApi } from '@/api/documents';
 import { analysisApi } from '@/api/analysis';
-import { useGenerateSection, useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread, useUpdateProjectContext } from '@/hooks/useAI';
-import { useProject } from '@/hooks/useProject';
+import { useGenerateSection, useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread } from '@/hooks/useAI';
 import type { ChatMessage, Section } from '@/types';
 
 interface RightPanelProps {
@@ -34,88 +24,61 @@ interface RightPanelProps {
   activeSectionHeading: string | null;
   activeSectionContent: string;
   activeSectionStatus: Section['status'];
-  onDiffReceived: (diff: { original: string, refined: string }) => void;
+  onDiffReceived: (diff: { original: string; refined: string }) => void;
   onContentAccepted: (content: string) => void;
   isOpen: boolean;
   onToggle: () => void;
   isApproved?: boolean;
 }
 
-type TabType = 'Agent' | 'Chat' | 'History' | 'Notes';
-
-interface VersionEntry {
-  id: number;
-  author_type: 'ai' | 'user';
-  created_at: string;
-  summary?: string;
-  added: number;
-  removed: number;
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 rounded flex items-center justify-center hover:bg-muted"
+    >
+      {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3 text-muted-foreground" />}
+    </button>
+  );
 }
+
+const quickChips = [
+  { label: 'Generate', text: 'Generate content for this section from the code analysis' },
+  { label: 'Refine', text: 'Refine this section for clarity and completeness' },
+  { label: 'Expand', text: 'Expand with more detail and examples' },
+  { label: 'Summarise', text: 'Summarise the key points of this section' },
+  { label: 'Fix', text: 'Fix any inconsistencies or errors in this section' },
+];
 
 export function RightPanel({
   projectId,
-  documentId,
   activeSectionId,
   activeSectionHeading,
   activeSectionContent,
   activeSectionStatus,
   onDiffReceived,
-  onContentAccepted,
   isOpen,
   onToggle,
   isApproved,
 }: RightPanelProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('Agent');
   const [inputValue, setInputValue] = useState('');
-  const [isExpanding, setIsExpanding] = useState(false);
-  const [versions, setVersions] = useState<VersionEntry[]>([]);
-  const [contextForm, setContextForm] = useState('');
   const [clarification, setClarification] = useState<{ question: string } | null>(null);
   const [clarificationAnswer, setClarificationAnswer] = useState('');
   const [isClarifying, setIsClarifying] = useState(false);
-  const [notes, setNotes] = useState<{ id: number; content: string; created_at: string; user_name?: string; user_avatar?: string }[]>([]);
-  const [noteInput, setNoteInput] = useState('');
-
-  const { data: project } = useProject(projectId);
-  const updateContext = useUpdateProjectContext(projectId);
-
-  useEffect(() => {
-    if (project?.context_md !== undefined) {
-      setContextForm(project.context_md || '');
-    }
-  }, [project?.context_md]);
-
-  useEffect(() => {
-    if (activeSectionId && activeSectionStatus === 'NEEDS_INPUT') {
-      fetchClarification();
-    } else {
-      setClarification(null);
-      setClarificationAnswer('');
-    }
-  }, [activeSectionId, activeSectionStatus]);
-
-  const fetchClarification = async () => {
-    try {
-      const data = await analysisApi.getClarification(activeSectionId!);
-      setClarification(data);
-    } catch (e) {
-      console.error('Failed to fetch clarification', e);
-    }
-  };
 
   const generateSection = useGenerateSection(projectId);
   const refineSection = useRefineSection();
 
-  // Chat state
   const { data: threads } = useThreads(projectId);
   const createThread = useCreateThread(projectId);
-  
-  // Use first thread or none
   const activeThreadId = threads && threads.length > 0 ? threads[0].id : null;
-  
   const { data: messages = [] } = useMessages(activeThreadId);
   const { sendMessage: streamMessage, isStreaming, streamingContent } = useStreamMessage(activeThreadId);
-
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -125,101 +88,30 @@ export function RightPanel({
   }, [messages, isStreaming]);
 
   useEffect(() => {
-    if (activeSectionId) {
-      fetchVersions();
-    }
-  }, [activeSectionId]);
-
-  useEffect(() => {
-    if (documentId) {
-      documentsApi.getNotes(documentId).then(setNotes).catch(() => {});
-    }
-  }, [documentId]);
-
-
-  const fetchVersions = async () => {
-    try {
-      const data = await sectionsApi.getVersions(activeSectionId!);
-      setVersions(data);
-    } catch (e) {
-      console.error('Failed to fetch versions', e);
-    }
-  };
-
-  const handleAutoExpand = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const target = e.target;
-    target.style.height = 'auto';
-    target.style.height = `${Math.min(target.scrollHeight, 96)}px`;
-    setInputValue(target.value);
-  };
-
-  const isGenerating = generateSection.isPending;
-  const isRefining = refineSection.isPending;
-
-  const handleAction = async (type: 'generate' | 'refine' | 'expand', instruction?: string) => {
-    if (!activeSectionId) return;
-
-    if (type === 'expand') setIsExpanding(true);
-
-    try {
-      if (type === 'generate') {
-        const data = await generateSection.mutateAsync(activeSectionId);
-        onContentAccepted(data.content_md);
-      } else {
-        const inst = type === 'expand'
-          ? "Expand this section with more detail, examples, and explanations"
-          : (instruction || "Improve the clarity, completeness, and readability");
-        const data = await refineSection.mutateAsync({ sectionId: activeSectionId, instruction: inst });
-        onDiffReceived({ original: activeSectionContent, refined: data.refined });
-      }
-    } catch (e) {
-      console.error(`AI ${type} failed`, e);
-    } finally {
-      if (type === 'expand') setIsExpanding(false);
-    }
-  };
-
-  const handleClarify = async () => {
-    if (!activeSectionId || !clarificationAnswer.trim()) return;
-    setIsClarifying(true);
-    try {
-      await analysisApi.clarifySection(activeSectionId, clarificationAnswer.trim());
-      toast.success('Answer submitted. AI is resuming generation...');
+    if (activeSectionId && activeSectionStatus === 'NEEDS_INPUT') {
+      analysisApi.getClarification(activeSectionId).then(setClarification).catch(() => {});
+    } else {
       setClarification(null);
       setClarificationAnswer('');
-    } catch (e) {
-      toast.error('Failed to submit answer');
-      console.error(e);
-    } finally {
-      setIsClarifying(false);
     }
-  };
+  }, [activeSectionId, activeSectionStatus]);
+
+  useEffect(() => {
+    if (inputValue && textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  }, [inputValue]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
-
     const msg = inputValue.trim();
     setInputValue('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
-    setActiveTab('Chat');
-
     if (activeThreadId) {
       streamMessage(msg);
     } else {
-      const thread = await createThread.mutateAsync({ firstMessage: msg });
-      // Thread creation invalidates query; next render will have activeThreadId set
-      // so the message was sent as the first message of the new thread
-    }
-  };
-
-  const handleAddNote = async () => {
-    if (!noteInput.trim() || !documentId) return;
-    try {
-      const newNote = await documentsApi.addNote(documentId, noteInput.trim());
-      setNotes(prev => [...prev, newNote]);
-      setNoteInput('');
-    } catch (e) {
-      toast.error('Failed to add note');
+      await createThread.mutateAsync({ firstMessage: msg });
     }
   };
 
@@ -228,194 +120,149 @@ export function RightPanel({
       e.preventDefault();
       handleSendMessage();
     }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
   };
 
-
-  const statusColors = {
-    pending: 'bg-muted text-muted-foreground',
-    draft: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-    finalized: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-    needs_input: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-    NEEDS_INPUT: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  const handleClarify = async () => {
+    if (!activeSectionId || !clarificationAnswer.trim()) return;
+    setIsClarifying(true);
+    try {
+      await analysisApi.clarifySection(activeSectionId, clarificationAnswer.trim());
+      toast.success('Answer submitted. AI is resuming...');
+      setClarification(null);
+      setClarificationAnswer('');
+    } catch {
+      toast.error('Failed to submit answer');
+    } finally {
+      setIsClarifying(false);
+    }
   };
+
+  const isGenerating = generateSection.isPending;
+  const isRefining = refineSection.isPending;
+
+  const handleAction = async (type: 'generate' | 'refine' | 'expand', instruction?: string) => {
+    if (!activeSectionId) return;
+    try {
+      if (type === 'generate') {
+        const data = await generateSection.mutateAsync(activeSectionId);
+        toast.success('Section generated');
+      } else {
+        const inst = type === 'expand'
+          ? 'Expand this section with more detail, examples, and explanations'
+          : (instruction || 'Improve the clarity, completeness, and readability');
+        const data = await refineSection.mutateAsync({ sectionId: activeSectionId, instruction: inst });
+        onDiffReceived({ original: activeSectionContent, refined: data.refined });
+      }
+    } catch {
+      toast.error(`AI ${type} failed`);
+    }
+  };
+
+  const hasMessages = messages.length > 0 || isStreaming;
 
   return (
     <motion.div
       initial={false}
-      animate={{ width: isOpen ? 320 : 0 }}
+      animate={{ width: isOpen ? 360 : 0 }}
       transition={{ duration: 0.2, ease: 'easeInOut' }}
       className={cn(
-        "relative flex h-full flex-shrink-0 flex-col overflow-hidden border-l border-border/50 bg-muted/20",
-        !isOpen && "border-none"
+        'relative flex h-full flex-shrink-0 flex-col overflow-hidden border-l border-border bg-background',
+        !isOpen && 'border-none'
       )}
     >
-      {/* Collapse Button Mirror */}
       <button
         onClick={onToggle}
         className="absolute -left-3 top-[60px] z-50 flex h-7 w-6 items-center justify-center rounded-l-md border border-r-0 border-border bg-background text-muted-foreground shadow-sm transition-colors hover:text-foreground"
       >
-        <ChevronLeft className={cn("h-3.5 w-3.5 transition-transform", !isOpen && "rotate-180")} />
+        <ChevronLeft className={cn('h-3.5 w-3.5 transition-transform', !isOpen && 'rotate-180')} />
       </button>
 
-      {/* Tab Strip */}
-      <div className="flex h-12 shrink-0 items-center border-b border-border/60 px-3">
-        <div className="grid w-full grid-cols-4 rounded-md bg-background/70 p-0.5">
-          {(['Agent', 'Chat', 'History', 'Notes'] as TabType[]).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                "relative rounded px-2 py-1.5 text-sm transition-colors",
-                activeTab === tab
-                  ? "bg-muted text-foreground font-medium"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+      {/* Header */}
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+        <Sparkles className="h-4 w-4 text-primary" />
+        <span className="text-sm font-medium">AI Assistant</span>
+        {activeSectionHeading && (
+          <span className="ml-auto truncate text-meta text-muted-foreground max-w-[180px]">
+            @{activeSectionHeading}
+          </span>
+        )}
       </div>
 
-      {/* Tab Content */}
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto scrollbar-hide">
-        {activeTab === 'Agent' && (
-          <div className="space-y-4 px-4 py-4">
-            {/* Context Pill */}
-            <div className="border-b border-border/60 pb-4">
-              <div className="flex items-start gap-2">
-              <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-foreground">
-                    {activeSectionHeading || "No section selected"}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Ask for edits, refinements, or generation against this section.
-                  </p>
-                </div>
-              {activeSectionId && (
-                  <span className={cn("shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider", statusColors[activeSectionStatus])}>
-                  {activeSectionStatus}
-                </span>
-              )}
-              </div>
+        {clarification && (
+          <div className="mx-3 mt-3 rounded-lg border border-warning bg-warning/5 p-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+              <p className="text-sm text-foreground">{clarification.question}</p>
             </div>
-
-            {clarification && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 dark:border-amber-900/30 dark:bg-amber-900/20 dark:text-amber-200 space-y-3">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                  <div className="text-sm font-medium italic">
-                    {clarification.question}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <textarea
-                    value={clarificationAnswer}
-                    onChange={(e) => setClarificationAnswer(e.target.value)}
-                    placeholder="Provide the missing context..."
-                    className="w-full bg-white rounded-md border border-amber-200 px-2 py-1.5 text-sm placeholder:text-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:bg-amber-950 dark:border-amber-800"
-                    rows={3}
-                  />
-                  <Button
-                    size="sm"
-                    className="w-full h-8 text-xs bg-amber-600 hover:bg-amber-700 text-white"
-                    onClick={handleClarify}
-                    disabled={isClarifying || !clarificationAnswer.trim()}
-                  >
-                    {isClarifying ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                    Submit Answer
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Action Cards */}
-            <div className="space-y-1">
-              <button
-                disabled={!activeSectionId || isGenerating}
-                onClick={() => handleAction('generate')}
-                className="group flex w-full cursor-pointer items-start gap-3 rounded-md border border-transparent bg-background/70 px-3 py-3 text-left transition-colors hover:border-border/80 hover:bg-background disabled:opacity-50"
-              >
-                <Sparkles className={cn("mt-0.5 h-4 w-4 text-muted-foreground transition-transform group-hover:text-foreground", isGenerating && "animate-spin")} />
-                <div>
-                  <div className="text-sm font-medium">{isGenerating ? "Generating..." : "Generate"}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">Write this section using code analysis</div>
-                </div>
-              </button>
-
-              <button
-                disabled={!activeSectionId || isRefining}
-                onClick={() => handleAction('refine')}
-                className="group flex w-full cursor-pointer items-start gap-3 rounded-md border border-transparent bg-background/70 px-3 py-3 text-left transition-colors hover:border-border/80 hover:bg-background disabled:opacity-50"
-              >
-                <Wand2 className="mt-0.5 h-4 w-4 text-muted-foreground group-hover:text-foreground" />
-                <div>
-                  <div className="text-sm font-medium">{isRefining ? "Refining..." : "Refine"}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">Improve clarity and completeness</div>
-                </div>
-              </button>
-
-              <button
-                disabled={!activeSectionId || isExpanding}
-                onClick={() => handleAction('expand')}
-                className="group flex w-full cursor-pointer items-start gap-3 rounded-md border border-transparent bg-background/70 px-3 py-3 text-left transition-colors hover:border-border/80 hover:bg-background disabled:opacity-50"
-              >
-                <ArrowsUpFromLine className="mt-0.5 h-4 w-4 text-muted-foreground group-hover:text-foreground" />
-                <div>
-                  <div className="text-sm font-medium">{isExpanding ? "Expanding..." : "Expand"}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">Add more detail and examples</div>
-                </div>
-              </button>
-            </div>
-
-            <Separator className="my-2" />
-            <div className="text-xs text-muted-foreground">Or describe what you want:</div>
+            <textarea
+              value={clarificationAnswer}
+              onChange={(e) => setClarificationAnswer(e.target.value)}
+              placeholder="Provide the missing context..."
+              className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+              rows={2}
+            />
+            <Button
+              size="sm"
+              className="w-full h-8 text-xs"
+              onClick={handleClarify}
+              disabled={isClarifying || !clarificationAnswer.trim()}
+            >
+              {isClarifying && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              Submit Answer
+            </Button>
           </div>
         )}
 
-        {activeTab === 'Chat' && (
-          <div className="flex flex-col space-y-4 px-4 py-4">
-            {messages.length === 0 && !isStreaming && (
-              <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
-                <MessageSquare className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-                <div className="text-sm text-muted-foreground mt-2">No messages yet</div>
-                <div className="text-xs text-muted-foreground/60 mt-1">Ask anything about your documentation</div>
-              </div>
-            )}
+        {!hasMessages && (
+          <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+            <div className="mb-4 rounded-full bg-primary/10 p-3">
+              <Sparkles className="h-6 w-6 text-primary" />
+            </div>
+            <p className="text-sm font-medium text-foreground mb-1">AI Assistant</p>
+            <p className="text-meta text-muted-foreground mb-6 max-w-[220px]">
+              Ask me anything about your documentation
+            </p>
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {quickChips.slice(0, 3).map((chip) => (
+                <button
+                  key={chip.label}
+                  onClick={() => setInputValue(chip.text)}
+                  className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-            {messages.map(msg => (
-              <div key={msg.id} className={cn("flex", msg.role === 'user' ? "justify-end" : "justify-start items-start gap-2")}>
-                {msg.role === 'ai' && (
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-background">
-                    <Sparkles className="h-3 w-3 text-muted-foreground" />
-                  </div>
-                )}
-                <div className={cn(
-                  "text-sm max-w-[85%] pl-1",
-                  msg.role === 'user'
-                    ? "bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-3 py-2"
-                    : "text-foreground"
-                )}>
-                  {msg.role === 'ai' ? <ReactMarkdown>{msg.content}</ReactMarkdown> : msg.content}
-                </div>
-              </div>
+        {hasMessages && (
+          <div className="flex flex-col px-4 py-4 space-y-4">
+            {messages.map((msg) => (
+              <MessageBubble key={msg.id} message={msg} />
             ))}
-
             {isStreaming && (
-              <div className="flex justify-start items-start gap-2">
-                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border bg-background">
-                  <Sparkles className="h-3 w-3 text-muted-foreground" />
+              <div className="flex justify-start items-start gap-2 group">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
+                  <Sparkles className="h-3 w-3 text-primary" />
                 </div>
-                <div className="text-sm max-w-[85%] pl-1 text-foreground">
+                <div className="text-sm text-foreground max-w-[85%]">
                   {streamingContent ? (
-                    <ReactMarkdown>{streamingContent}</ReactMarkdown>
+                    <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none">
+                      {streamingContent}
+                    </ReactMarkdown>
                   ) : (
-                    <div className="flex gap-1 h-5 items-center">
-                      <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]" />
-                      <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]" />
-                      <span className="w-1 h-1 bg-muted-foreground rounded-full animate-bounce" />
-                    </div>
+                    <span className="inline-flex gap-1">
+                      <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]" />
+                      <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]" />
+                      <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" />
+                    </span>
                   )}
                 </div>
               </div>
@@ -423,172 +270,74 @@ export function RightPanel({
             <div ref={messagesEndRef} />
           </div>
         )}
-
-        {activeTab === 'Context' && (
-          <div className="px-3 py-4 space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-foreground">Project AI Context</label>
-              <textarea
-                value={contextForm}
-                onChange={(e) => setContextForm(e.target.value)}
-                placeholder="E.g. The audience is enterprise developers. The tone should be formal. Avoid using the word 'simply'."
-                className="w-full bg-muted rounded-xl border border-border px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none resize-none transition-colors h-48"
-              />
-              <p className="text-[10px] text-muted-foreground leading-relaxed">
-                Add instructions that apply to the whole project. The AI will consider this context when generating or refining any section.
-              </p>
-            </div>
-            <button
-              onClick={() => updateContext.mutate(contextForm === '' ? null : contextForm)}
-              disabled={updateContext.isPending || contextForm === (project?.context_md || '')}
-              className="w-full bg-primary text-primary-foreground text-sm font-medium rounded-lg px-4 py-2 hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {updateContext.isPending ? 'Saving...' : 'Save Context'}
-            </button>
-          </div>
-        )}
-
-        {activeTab === 'Notes' && (
-          <div className="flex flex-col h-full">
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-              {notes.length === 0 ? (
-                <div className="py-12 text-center text-sm text-muted-foreground">No notes yet</div>
-              ) : (
-                notes.map(note => (
-                  <div key={note.id} className="bg-muted/40 rounded-lg p-3 border border-border/50">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-                        {note.user_name?.[0] || 'U'}
-                      </div>
-                      <span className="text-xs font-medium">{note.user_name || 'Unknown'}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(note.created_at), { addSuffix: true })}
-                      </span>
-                    </div>
-                    <p className="text-sm text-foreground whitespace-pre-wrap">{note.content}</p>
-                  </div>
-                ))
-              )}
-            </div>
-            {!isApproved && (
-              <div className="shrink-0 border-t border-border/60 px-4 py-3">
-                <div className="flex gap-2">
-                  <input
-                    value={noteInput}
-                    onChange={e => setNoteInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddNote(); } }}
-                    placeholder="Add a note..."
-                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-primary"
-                  />
-                  <Button size="sm" onClick={handleAddNote} disabled={!noteInput.trim()}>Add</Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'History' && (
-          <div className="space-y-2 px-4 py-4">
-            {versions.length === 0 ? (
-              <div className="py-12 text-center text-sm text-muted-foreground">No history yet</div>
-            ) : (
-              versions.map(v => (
-                <div
-                  key={v.id}
-                  onClick={async () => {
-                    try {
-                      const diff = await sectionsApi.getVersionDiff(v.id);
-                      onDiffReceived({ original: diff.content_old, refined: diff.content_new });
-                    } catch {
-                      toast.error('Failed to load version diff');
-                    }
-                  }}
-                  className="bg-muted/50 rounded-lg px-3 py-3 hover:bg-muted cursor-pointer transition-colors group"
-                >
-                  <div className="flex items-center gap-1.5">
-                    {v.author_type === 'ai' ? <Sparkles className="h-3 w-3 text-muted-foreground" /> : <User className="h-3 w-3 text-muted-foreground" />}
-                    <span className="text-xs font-medium">{v.author_type === 'ai' ? 'AI' : 'You'}</span>
-                    <span className="text-xs text-muted-foreground">·</span>
-                    <span className="text-xs text-muted-foreground font-mono">
-                      {formatDistanceToNow(new Date(v.created_at), { addSuffix: true })}
-                    </span>
-                  </div>
-                  <div className="text-sm text-foreground font-medium line-clamp-1 mt-1">
-                    {v.summary}
-                  </div>
-                  <div className="flex justify-between items-center mt-1.5">
-                    <div className="text-xs">
-                      <span className="text-emerald-600">+{v.added}</span>
-                      <span className="mx-1 text-muted-foreground">·</span>
-                      <span className="text-red-500">-{v.removed}</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
-                      View diff →
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
       </div>
 
       {/* Composer */}
-      <div className="shrink-0 border-t border-border/60 bg-muted/20 px-3 pb-3 pt-3">
-        {/* Context Pill Row */}
-        <div className="flex items-center gap-1 mb-2">
-          <button className="text-xs text-muted-foreground bg-muted rounded-md px-2 py-0.5 hover:bg-muted/80 transition-colors flex items-center gap-1">
-            <span className="opacity-70">@</span>
-            <span className="max-w-[120px] truncate">
-              {activeSectionHeading?.slice(0, 20) || "Section"}
-            </span>
-          </button>
-        </div>
-
-        {/* Textarea */}
-        <div className="relative">
+      <div className="shrink-0 border-t border-border px-3 pb-3 pt-3 bg-background">
+        <div className="rounded-xl border border-border bg-muted/30 focus-within:border-foreground/30 transition-colors">
           <textarea
             ref={textareaRef}
             value={inputValue}
-            onChange={handleAutoExpand}
+            onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask or instruct..."
-            className="w-full resize-none rounded-md border border-border bg-background px-3 py-2.5 text-sm placeholder:text-muted-foreground transition-colors focus:border-foreground/30 focus:outline-none"
+            placeholder="Message AI Assistant..."
+            className="w-full resize-none bg-transparent px-3 py-2.5 text-sm placeholder:text-muted-foreground focus:outline-none"
             rows={1}
           />
-        </div>
-
-        {/* Bottom Row */}
-        <div className="flex justify-between items-center mt-2">
-          {/* Quick Chips */}
-          <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
-            {[
-              { label: "Generate", text: "Generate content for this section from the code analysis" },
-              { label: "Refine", text: "Refine this section for clarity and completeness" },
-              { label: "Expand", text: "Expand with more detail and examples" },
-              { label: "Summarise", text: "Summarise the key points of this section" },
-              { label: "Fix", text: "Fix any inconsistencies or errors in this section" },
-            ].map(chip => (
-              <button
-                key={chip.label}
-                onClick={() => setInputValue(chip.text)}
-                className="cursor-pointer whitespace-nowrap rounded-md border border-border bg-background px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                {chip.label}
-              </button>
-            ))}
+          <div className="flex items-center justify-between px-2 pb-2">
+            <div className="flex gap-1 overflow-x-auto scrollbar-hide">
+              {quickChips.slice(0, 3).map((chip) => (
+                <button
+                  key={chip.label}
+                  onClick={() => {
+                    if (activeSectionId) handleAction(chip.label.toLowerCase() as any);
+                  }}
+                  disabled={isGenerating || isRefining}
+                  className="whitespace-nowrap rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-40"
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+            <button
+              disabled={!inputValue.trim() || isStreaming}
+              onClick={handleSendMessage}
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
+            >
+              <ArrowUp className="h-3.5 w-3.5 text-background" />
+            </button>
           </div>
-
-          {/* Send Button */}
-          <button
-            disabled={!inputValue.trim()}
-            onClick={handleSendMessage}
-            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
-          >
-            <ArrowUp className="h-3.5 w-3.5 text-background" />
-          </button>
         </div>
       </div>
     </motion.div>
+  );
+}
+
+function MessageBubble({ message }: { message: ChatMessage }) {
+  const isUser = message.role === 'user';
+  return (
+    <div className={cn('flex items-start gap-2', isUser ? 'justify-end' : 'justify-start group')}>
+      {!isUser && (
+        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted">
+          <Sparkles className="h-3 w-3 text-primary" />
+        </div>
+      )}
+      <div
+        className={cn(
+          'text-sm max-w-[85%]',
+          isUser
+            ? 'bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-3 py-2'
+            : 'text-foreground'
+        )}
+      >
+        {isUser ? (
+          message.content
+        ) : (
+          <div className="prose prose-sm dark:prose-invert max-w-none relative">
+            <ReactMarkdown>{message.content}</ReactMarkdown>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

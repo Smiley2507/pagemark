@@ -83,6 +83,11 @@ const AppRoutes = () => {
 
       {/* Protected Routes */}
       <Route element={<ProtectedRoute />}>
+        {/* Full-screen routes (no sidebar/header) */}
+        <Route path="/editor/:id" element={<Editor />} />
+        <Route path="/export/:projectId" element={<ExportPage />} />
+
+        {/* Dashboard layout routes (sidebar + header) */}
         <Route element={<MainLayout />}>
           <Route path="/dashboard" element={<Dashboard />}>
             <Route index element={<Navigate to="projects" replace />} />
@@ -91,10 +96,8 @@ const AppRoutes = () => {
             <Route path="settings" element={<SettingsPage />} />
           </Route>
           <Route path="/new-project" element={<NewProject />} />
-          <Route path="/editor/:id" element={<Editor />} />
           <Route path="/analysis/:id" element={<Analysis />} />
           <Route path="/nlp/:projectId" element={<NLPDashboard />} />
-          <Route path="/export/:projectId" element={<ExportPage />} />
           <Route path="/git-connect" element={<GitConnectPage />} />
         </Route>
       </Route>

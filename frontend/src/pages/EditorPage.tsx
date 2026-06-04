@@ -1,30 +1,20 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { formatDistanceToNow } from "date-fns";
 import {
-  ArrowLeft,
-  Download,
-  Share2,
-  PanelLeft,
-  PanelRight,
-  Sparkles,
-  Loader2,
-  ShieldCheck,
   AlertCircle,
-  Lock,
   Send,
   CheckCircle,
   XCircle,
   UserCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EditorTopBar } from "@/components/editor/EditorTopBar";
 import { LeftPanel } from "@/components/editor/LeftPanel";
 import { MiddlePanel, type MiddlePanelHandle } from "@/components/editor/MiddlePanel";
 import { RightPanel } from "@/components/editor/RightPanel";
 
 import { QualityModal } from "@/components/editor/QualityModal";
 import {
-  useAutosave,
   useDocument,
   useUpdateSection,
 } from "@/hooks/useSections";
@@ -202,142 +192,44 @@ export const EditorPage: React.FC = () => {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
-      {/* Top Bar */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate("/dashboard")}
-            aria-label="Back to dashboard"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <span className="text-sm font-medium truncate max-w-[200px]">
-            {project?.name ?? "Project Editor"}
-          </span>
-          {/* Status badge */}
-          <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", badge.cls)}>
-            {docStatus === 'APPROVED' && <Lock className="inline h-3 w-3 mr-1" />}
-            {badge.label}
-          </span>
-          <div className="bg-muted text-muted-foreground text-xs px-2 py-0.5 rounded-full font-mono">
-            {completionPercent}% complete
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Submit for Review button (only for DRAFT) */}
-          {docStatus === 'DRAFT' && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2"
-              onClick={() => setReviewModalOpen(true)}
-            >
-              <Send className="h-4 w-4" />
-              <span>Submit for Review</span>
-            </Button>
-          )}
-
-          {/* Approve/Request Changes (for reviewer) */}
-          {docStatus === 'IN_REVIEW' && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2 text-red-600 border-red-200 hover:bg-red-50"
-                onClick={handleRequestChanges}
-              >
-                <XCircle className="h-4 w-4" />
-                <span>Request Changes</span>
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                onClick={handleApprove}
-              >
-                <CheckCircle className="h-4 w-4" />
-                <span>Approve</span>
-              </Button>
-            </>
-          )}
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setLeftOpen(o => !o)}
-            aria-label="Toggle left panel"
-          >
-            <PanelLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setRightOpen(o => !o)}
-            aria-label="Toggle right panel"
-          >
-            <PanelRight className="h-4 w-4" />
-          </Button>
-          <div className="w-px h-4 bg-border-1 mx-1" />
-
-          {activeSection?.status === 'pending' && docStatus !== 'APPROVED' && (
-            <Button 
-              variant="default" 
-              size="sm" 
-              className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white"
-              onClick={() => {
-                if (activeSectionId) {
-                  generateSection.mutate(activeSectionId);
-                }
-              }}
-              disabled={generateSection.isPending}
-            >
-              {generateSection.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-              <span>{generateSection.isPending ? "Generating..." : "Generate AI"}</span>
-            </Button>
-          )}
-
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex items-center gap-2"
-            onClick={() => setQualityOpen(true)}
-          >
-            <ShieldCheck className="h-4 w-4" />
-            <span>Quality</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex items-center gap-2"
-            onClick={() => navigate(`/export/${projectId}`)}
-          >
-            <Download className="h-4 w-4" />
-            <span>Export</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              navigator.clipboard.writeText(window.location.href);
-              toast.success('Project link copied to clipboard');
-            }}
-          >
-            <Share2 className="h-4 w-4" />
-          </Button>
-          <div className="w-7 h-7 rounded-full bg-muted border border-border overflow-hidden ml-2">
-            <div className="w-full h-full flex items-center justify-center text-xs font-mono">
-              {(currentUser?.name || 'U')[0].toUpperCase()}
-            </div>
-          </div>
-        </div>
-      </header>
+      <EditorTopBar
+        projectId={projectId}
+        projectName={project?.name ?? 'Project Editor'}
+        completionPct={completionPercent}
+        docStatus={docStatus}
+        projectStatus={project?.status ?? 'draft'}
+        leftOpen={leftOpen}
+        rightOpen={rightOpen}
+        onToggleLeft={() => setLeftOpen(o => !o)}
+        onToggleRight={() => setRightOpen(o => !o)}
+        onGenerateAI={() => {
+          if (activeSectionId) generateSection.mutate(activeSectionId);
+        }}
+        onQualityClick={() => setQualityOpen(true)}
+        isGenerating={generateSection.isPending}
+        userName={currentUser?.name}
+        overflowActions={[
+          ...(docStatus === 'DRAFT'
+            ? [{
+                label: 'Submit for Review',
+                icon: <Send className="h-3.5 w-3.5" />,
+                onClick: () => setReviewModalOpen(true),
+              }]
+            : []),
+          ...(docStatus === 'IN_REVIEW'
+            ? [{
+                label: 'Approve',
+                icon: <CheckCircle className="h-3.5 w-3.5" />,
+                onClick: handleApprove,
+              },
+              {
+                label: 'Request Changes',
+                icon: <XCircle className="h-3.5 w-3.5" />,
+                onClick: handleRequestChanges,
+              }]
+            : []),
+        ]}
+      />
 
       {/* Reviewer banner */}
       {docStatus === 'IN_REVIEW' && isReviewer && (
@@ -414,7 +306,6 @@ export const EditorPage: React.FC = () => {
                 setActiveSectionId(sectionId);
                 middlePanelRef.current?.scrollToSection(sectionId);
               }}
-              completionPercent={completionPercent}
               isOpen={leftOpen}
               onToggle={() => setLeftOpen(o => !o)}
             />

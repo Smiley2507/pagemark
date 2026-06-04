@@ -1,10 +1,8 @@
-import React, { useMemo } from "react";
-import { motion } from "framer-motion";
-import { ChevronLeft, HelpCircle } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { Section } from "@/types";
-
-// ── Heading extraction ────────────────────────────────────────────────────────
+import React, { useMemo } from 'react';
+import { motion } from 'framer-motion';
+import { ChevronLeft, FileText, AlertCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import type { Section } from '@/types';
 
 export interface HeadingItem {
   level: 1 | 2;
@@ -14,181 +12,139 @@ export interface HeadingItem {
   isSectionTitle: boolean;
 }
 
-export interface SectionOutline {
-  sectionId: number;
-  sectionTitle: string;
-  headings: HeadingItem[];
-}
-
-export function extractOutline(sections: Section[]): SectionOutline[] {
-  return sections.map((section) => {
-    const sectionTitle = section.title?.trim() ? section.title : section.heading;
-    const headings: HeadingItem[] = [
-      {
-        level: 1,
-        text: sectionTitle,
-        sectionId: section.id,
-        headingIndex: -1,
-        isSectionTitle: true,
-      },
-    ];
-
-    const RE = /^(#{1,2})\s+(.+)$/gm;
-    let match: RegExpExecArray | null;
-    let headingIndex = 0;
-
-    while ((match = RE.exec(section.content_md)) !== null) {
-      headings.push({
-        level: match[1].length as 1 | 2,
-        text: match[2].trim(),
-        sectionId: section.id,
-        headingIndex: headingIndex++,
-        isSectionTitle: false,
-      });
-    }
-
-    return {
-      sectionId: section.id,
-      sectionTitle,
-      headings,
-    };
-  });
-}
-
-// ── Props ─────────────────────────────────────────────────────────────────────
-
 interface LeftPanelProps {
   sections: Section[];
   activeSectionId: number | null;
-  onHeadingClick: (sectionId: number, headingText: string) => void;
-  completionPercent: number;
+  onHeadingClick: (sectionId: number) => void;
   isOpen: boolean;
   onToggle: () => void;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+function extractHeadings(sections: Section[]): HeadingItem[] {
+  const items: HeadingItem[] = [];
+
+  for (const section of sections) {
+    const sectionTitle = section.title?.trim() ? section.title : section.heading;
+    items.push({
+      level: 1,
+      text: sectionTitle,
+      sectionId: section.id,
+      headingIndex: -1,
+      isSectionTitle: true,
+    });
+
+    const re = /^(#{1,2})\s+(.+)$/gm;
+    let match: RegExpExecArray | null;
+    let idx = 0;
+    while ((match = re.exec(section.content_md)) !== null) {
+      items.push({
+        level: match[1].length as 1 | 2,
+        text: match[2].trim(),
+        sectionId: section.id,
+        headingIndex: idx++,
+        isSectionTitle: false,
+      });
+    }
+  }
+
+  return items;
+}
+
+function computeWordCount(sections: Section[]): number {
+  return sections.reduce((sum, s) => {
+    const text = s.content_md?.replace(/#{1,6}\s+/g, '').replace(/[*_~`]/g, '') ?? '';
+    return sum + text.split(/\s+/).filter(Boolean).length;
+  }, 0);
+}
 
 export function LeftPanel({
   sections,
   activeSectionId,
   onHeadingClick,
-  completionPercent,
   isOpen,
   onToggle,
 }: LeftPanelProps) {
-  const outline = useMemo(() => extractOutline(sections), [sections]);
-  const sectionsById = useMemo(() => {
-    const map = new Map<number, Section>();
-    for (const s of sections) {
-      map.set(s.id, s);
-    }
-    return map;
-  }, [sections]);
+  const headings = useMemo(() => extractHeadings(sections), [sections]);
+  const wordCount = useMemo(() => computeWordCount(sections), [sections]);
 
   return (
     <>
       <motion.div
         initial={false}
         animate={{ width: isOpen ? 240 : 0 }}
-        transition={{ duration: 0.2, ease: "easeInOut" }}
-        className="relative h-full shrink-0 overflow-hidden border-r border-border/50 bg-muted/20"
+        transition={{ duration: 0.2, ease: 'easeInOut' }}
+        className="relative h-full shrink-0 overflow-hidden border-r border-border bg-background"
       >
         <div className="flex h-full w-[240px] flex-col">
-          <div className="h-0.5 w-full shrink-0 bg-muted">
-            <div
-              className="h-full bg-foreground/30 transition-all duration-500"
-              style={{ width: `${completionPercent}%` }}
-            />
+          <div className="px-3 py-3 border-b border-border">
+            <h3 className="text-meta-sm font-semibold text-muted-foreground uppercase tracking-wider">
+              Outline
+            </h3>
           </div>
 
           <nav
             aria-label="Document outline"
-            className="flex-1 space-y-2 overflow-y-auto px-2 py-4 scrollbar-hide"
+            className="flex-1 overflow-y-auto py-2 scrollbar-hide"
           >
-            {outline.length === 0 ? (
-              <p className="px-3 text-sm text-muted-foreground">
-                Add headings to your content to see them here.
+            {headings.length === 0 ? (
+              <p className="px-4 py-6 text-meta text-muted-foreground text-center">
+                No headings yet
               </p>
             ) : (
-              outline.map((section, sectionIndex) => {
-                const isActive = section.sectionId === activeSectionId;
-
-                return (
-                  <div
-                    key={section.sectionId}
-                    className={cn(
-                      "space-y-1 rounded-md px-1 py-1 transition-colors",
-                      isActive && "bg-background/80 shadow-[inset_3px_0_0_var(--foreground)]",
-                    )}
-                  >
+              <div className="space-y-0.5 px-2">
+                {headings.map((h, i) => {
+                  const isActive = h.sectionId === activeSectionId;
+                  return (
                     <button
+                      key={`${h.sectionId}-${h.headingIndex}-${i}`}
                       type="button"
-                      onClick={() => onHeadingClick(section.sectionId, section.sectionTitle)}
+                      onClick={() => onHeadingClick(h.sectionId)}
                       className={cn(
-                        "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-150",
+                        'block w-full text-left rounded-md px-3 py-1.5 text-sm transition-colors',
                         isActive
-                          ? "text-foreground"
-                          : "text-muted-foreground hover:bg-background/70 hover:text-foreground",
+                          ? 'bg-primary/10 text-foreground font-medium'
+                          : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                        h.level === 2 && 'pl-7 text-meta',
+                        h.isSectionTitle && 'font-medium'
                       )}
                     >
-                      <span className="text-meta-sm font-semibold tabular-nums text-muted-foreground">
-                        {String(sectionIndex + 1).padStart(2, "0")}
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">
-                        {section.sectionTitle}
-                      </span>
-                      {sectionsById.get(section.sectionId)?.status === 'NEEDS_INPUT' && (
-                        <HelpCircle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-                      )}
+                      <span className="truncate block">{h.text}</span>
                     </button>
-
-                    <div className="space-y-0.5 pl-6">
-                      {section.headings.slice(1).map((heading) => {
-                        const key = `${heading.sectionId}-${heading.headingIndex}`;
-
-                        return (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => onHeadingClick(heading.sectionId, heading.text)}
-                            className={cn(
-                              "block w-full truncate rounded-md px-2 py-1 text-left transition-colors duration-150",
-                              heading.level === 1
-                                ? "text-meta font-medium text-foreground/80"
-                                : "text-meta text-muted-foreground",
-                              "hover:bg-background/70 hover:text-foreground",
-                            )}
-                          >
-                            {heading.text}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
           </nav>
+
+          <div className="border-t border-border px-3 py-2.5 space-y-1.5">
+            <div className="flex items-center gap-2 text-meta text-muted-foreground">
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span>{wordCount.toLocaleString()} words</span>
+            </div>
+            <div className="flex items-center gap-2 text-meta text-muted-foreground">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              <span>Quality & grammar —</span>
+            </div>
+          </div>
         </div>
       </motion.div>
 
-      {/* Collapse / expand toggle */}
       <button
         type="button"
         onClick={onToggle}
-        aria-label={isOpen ? "Collapse outline panel" : "Expand outline panel"}
-        style={{ left: isOpen ? "228px" : "0px" }}
+        aria-label={isOpen ? 'Collapse outline panel' : 'Expand outline panel'}
+        style={{ left: isOpen ? '228px' : '0px' }}
         className={cn(
-          "fixed top-[60px] z-10",
-          "flex h-6 w-5 items-center justify-center",
-          "rounded-r-md border border-l-0 border-border bg-background",
-          "transition-[left] duration-200",
+          'fixed top-[60px] z-10',
+          'flex h-6 w-5 items-center justify-center',
+          'rounded-r-md border border-l-0 border-border bg-background',
+          'transition-[left] duration-200',
         )}
       >
         <ChevronLeft
           className={cn(
-            "h-3 w-3 text-muted-foreground transition-transform duration-200",
-            !isOpen && "rotate-180",
+            'h-3 w-3 text-muted-foreground transition-transform duration-200',
+            !isOpen && 'rotate-180',
           )}
         />
       </button>
