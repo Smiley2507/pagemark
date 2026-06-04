@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useOutletContext } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,7 +14,7 @@ export const ProjectsView: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [projectFilter, setProjectFilter] = useState<'all' | 'starred' | 'recent'>('all');
-  const [qualityProjectId, setQualityProjectId] = useState<number | null>(null);
+  const { setQualityProjectId } = useOutletContext<{ setQualityProjectId: (id: number | null) => void }>();
   const tagFilter = searchParams.get('tag') || undefined;
 
   const {

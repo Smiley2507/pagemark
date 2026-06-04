@@ -198,23 +198,18 @@ export function RightPanel({
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
-    if (!activeThreadId) {
-      // Create thread if none exists
-      const thread = await createThread.mutateAsync({ firstMessage: inputValue.trim() });
-      // The query invalidation will fetch the new thread, but for immediate UI:
-      // ideally we'd stream directly, but to keep it simple, we can just trigger it
-      // though useStreamMessage depends on the hook having the threadId.
-      // In this app, we rely on the query to refresh.
-      toast.success('Chat started. Please send your message again.');
-      return;
-    }
-
     const msg = inputValue.trim();
     setInputValue('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
-
     setActiveTab('Chat');
-    streamMessage(msg);
+
+    if (activeThreadId) {
+      streamMessage(msg);
+    } else {
+      const thread = await createThread.mutateAsync({ firstMessage: msg });
+      // Thread creation invalidates query; next render will have activeThreadId set
+      // so the message was sent as the first message of the new thread
+    }
   };
 
   const handleAddNote = async () => {
@@ -500,7 +495,14 @@ export function RightPanel({
               versions.map(v => (
                 <div
                   key={v.id}
-                  onClick={() => onDiffReceived({ original: '', refined: '' })} // Simplified for now
+                  onClick={async () => {
+                    try {
+                      const diff = await sectionsApi.getVersionDiff(v.id);
+                      onDiffReceived({ original: diff.content_old, refined: diff.content_new });
+                    } catch {
+                      toast.error('Failed to load version diff');
+                    }
+                  }}
                   className="bg-muted/50 rounded-lg px-3 py-3 hover:bg-muted cursor-pointer transition-colors group"
                 >
                   <div className="flex items-center gap-1.5">
