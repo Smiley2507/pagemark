@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Laptop, Moon, Sun, Bell, Search, Loader2, FileText, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 import { useThemeStore } from '@/store/themeStore';
 import { Button } from '@/components/ui/button';
@@ -12,20 +12,7 @@ import type { SearchResult, AuditLog } from '@/types';
 
 type Theme = 'light' | 'dark' | 'system';
 
-function getPageTitle(pathname: string): string {
-  if (pathname.startsWith('/editor/')) return 'Editor';
-  if (pathname.startsWith('/analysis/')) return 'Analysis';
-  if (pathname === '/new-project') return 'New Project';
-  if (pathname === '/git-connect') return 'Git Connect';
-  if (pathname === '/dashboard') return 'Dashboard';
-  if (pathname.startsWith('/dashboard/projects')) return 'Projects';
-  if (pathname.startsWith('/dashboard/templates')) return 'Outlines';
-  if (pathname.startsWith('/dashboard/settings')) return 'Settings';
-  return 'Dashboard';
-}
-
 export function AppHeader() {
-  const location = useLocation();
   const navigate = useNavigate();
   const { theme, setTheme } = useThemeStore();
   const activeOrgId = useOrgStore(s => s.activeOrgId);
@@ -41,8 +28,6 @@ export function AppHeader() {
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
-
-  const pageTitle = getPageTitle(location.pathname);
 
   const cycleTheme = () => {
     const order: Theme[] = ['light', 'dark', 'system'];
@@ -107,13 +92,8 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-40 h-12 border-b border-border bg-background/80 backdrop-blur-sm">
       <div className="mx-auto flex h-full max-w-7xl items-center gap-4 px-4">
-        {/* Left: page title */}
-        <h1 className="text-sm font-semibold text-foreground shrink-0 min-w-0 truncate">
-          {pageTitle}
-        </h1>
-
         {/* Center: global search */}
-        <div ref={searchRef} className="relative flex-1 max-w-md mx-auto">
+        <div ref={searchRef} className="relative flex-1 max-w-md">
           <div
             className="relative cursor-text"
             onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
