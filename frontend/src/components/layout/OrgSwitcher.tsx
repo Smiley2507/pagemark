@@ -3,7 +3,7 @@ import { Check, ChevronsUpDown, PlusCircle, Building2, UserPlus, Loader2 } from 
 import { useOrgStore } from '@/store/orgStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { orgApi } from '@/api/org';
 import { toast } from 'sonner';
@@ -154,9 +154,6 @@ export function OrgSwitcher() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Organization</DialogTitle>
-            <DialogDescription>
-              Create a new workspace for your team.
-            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
@@ -186,9 +183,6 @@ export function OrgSwitcher() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Join Organization</DialogTitle>
-            <DialogDescription>
-              Enter the invite token you received from your organization admin.
-            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
