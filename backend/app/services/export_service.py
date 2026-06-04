@@ -120,7 +120,7 @@ def _resolve(settings: dict, key: str, default: str) -> str:
 def export_markdown(sections: list["Section"], doc_title: str = "Documentation") -> str:
     parts: list[str] = [f"# {doc_title}\n"]
     for section in sorted(sections, key=lambda s: s.order_index):
-        parts.append(f"\n## {section.heading}\n")
+        parts.append(f"\n## {section.title or section.heading}\n")
         content = (section.content_md or "").strip()
         if content:
             parts.append(f"\n{content}\n")

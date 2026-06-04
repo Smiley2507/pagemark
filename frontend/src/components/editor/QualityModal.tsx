@@ -217,6 +217,14 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
     onError: () => toast.error('Failed to start quality analysis'),
   });
 
+  // Terminology: fetch from dedicated endpoint (must be before early return — hooks rule)
+  const { data: terminologies } = useQuery({
+    queryKey: ['terminology', projectId],
+    queryFn: () => sectionsApi.getTerminologyConflicts(projectId),
+    enabled: open && activeTab === 'terminology',
+    retry: false,
+  });
+
   if (!open) return null;
 
   // ── Derived data ────────────────────────────────────────────────
@@ -226,14 +234,6 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
   const filteredIssues = severityFilter === 'all'
     ? issues
     : issues.filter(i => i.severity === severityFilter);
-
-  // Terminology: fetch from dedicated endpoint
-  const { data: terminologies } = useQuery({
-    queryKey: ['terminology', projectId],
-    queryFn: () => sectionsApi.getTerminologyConflicts(projectId),
-    enabled: open && activeTab === 'terminology',
-    retry: false,
-  });
 
   // Also extract from quality issues as fallback
   const terminologyIssues = issues.filter(i =>

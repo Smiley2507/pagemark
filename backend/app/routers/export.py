@@ -12,7 +12,7 @@ from sqlalchemy.future import select
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.project import Project
-from app.models.document import Document, Section
+from app.models.document import Document, Section, LifecycleStatus
 from app.services.export_service import export_markdown, export_html, export_pdf
 
 router = APIRouter(prefix="/projects", tags=["export"])
@@ -69,7 +69,7 @@ async def export_project(
 
     sec_result = await db.execute(
         select(Section)
-        .where(Section.document_id == doc.id)
+        .where(Section.document_id == doc.id, Section.lifecycle_status != LifecycleStatus.DELETED)
         .order_by(Section.order_index)
     )
     sections = sec_result.scalars().all()
@@ -169,7 +169,7 @@ async def batch_export(
 
                 sec_result = await db.execute(
                     select(Section)
-                    .where(Section.document_id == doc.id)
+                    .where(Section.document_id == doc.id, Section.lifecycle_status != LifecycleStatus.DELETED)
                     .order_by(Section.order_index)
                 )
                 sections = sec_result.scalars().all()
