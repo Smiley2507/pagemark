@@ -41,7 +41,7 @@ export function DependencyGraph({ dependencies, className }: DependencyGraphProp
       ),
     }));
 
-    return { nodes: initialNodes, edges: initialEdges };
+    return { nodes, edges };
   }, [dependencies]);
 
   // Note: Simple random positioning for now. A real layout engine like d3-force or dagre would be better.

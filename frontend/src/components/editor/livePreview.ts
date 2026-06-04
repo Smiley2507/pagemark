@@ -358,23 +358,11 @@ function buildDecorations(state: EditorState): DecorationSet {
           }
           break;
         }
-        case 'StrongEmphasis':
-          add(f, t, Decoration.mark({ class: 'cm-lp-strong' }));
-          break;
-        case 'Emphasis':
-          add(f, t, Decoration.mark({ class: 'cm-lp-em' }));
-          break;
         case 'EmphasisMark':
           if (!onCursor(f)) add(f, t, Decoration.replace({}));
           break;
-        case 'Strikethrough':
-          add(f, t, Decoration.mark({ class: 'cm-lp-strike' }));
-          break;
         case 'Strikethrough la':
           if (!onCursor(f)) add(f, t, Decoration.replace({}));
-          break;
-        case 'InlineCode':
-          add(f, t, Decoration.mark({ class: 'cm-lp-inline-code' }));
           break;
         case 'CodeMark':
           if (node.node.parent?.name === 'FencedCode') {
@@ -471,15 +459,11 @@ function buildDecorations(state: EditorState): DecorationSet {
           }
           break;
         }
-        case 'Link': {
-          add(f, t, Decoration.mark({ class: 'cm-lp-link' }));
-          break;
-        }
         case 'LinkMark':
           if (!onCursor(f)) add(f, t, Decoration.replace({}));
           break;
         case 'URL':
-          if (!onCursor(f)) add(f, t, Decoration.replace({}));
+          if (!onCursor(f) && node.node.parent?.name !== 'Autolink') add(f, t, Decoration.replace({}));
           break;
       }
     },

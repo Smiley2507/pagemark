@@ -68,7 +68,7 @@ export function ExportPage() {
   const [exporting, setExporting] = useState(false);
   const [saving, setSaving] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const prevSk = useRef('');
 
   const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';

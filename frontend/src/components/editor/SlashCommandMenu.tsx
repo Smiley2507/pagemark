@@ -283,18 +283,22 @@ export function SlashCommandMenu({
     const pos = state.selection.main.from;
     const block = findBlockAtCursor(state.doc, pos);
 
-    if (block && block.type !== 'paragraph') {
-      let transformationText = '';
-      if (action.id === 'insert-h1')
-        transformationText = '# ' + state.doc.sliceString(block.from + 1, block.to).trim();
-      else if (action.id === 'insert-h2')
-        transformationText = '## ' + state.doc.sliceString(block.from + 1, block.to).trim();
-      else if (action.id === 'insert-h3')
-        transformationText = '### ' + state.doc.sliceString(block.from + 1, block.to).trim();
-      else if (action.id === 'insert-quote')
-        transformationText = '> ' + state.doc.sliceString(block.from, block.to);
-      else if (action.id === 'insert-divider')
-        transformationText = '---';
+      if (block && block.type !== 'paragraph') {
+        let transformationText = '';
+        const blockText = state.doc.sliceString(block.from, block.to);
+        const leadingHash = blockText.match(/^#+\s*/)?.[0] || '';
+        const trimmed = blockText.slice(leadingHash.length).trim();
+
+        if (action.id === 'insert-h1')
+          transformationText = '# ' + trimmed;
+        else if (action.id === 'insert-h2')
+          transformationText = '## ' + trimmed;
+        else if (action.id === 'insert-h3')
+          transformationText = '### ' + trimmed;
+        else if (action.id === 'insert-quote')
+          transformationText = '> ' + state.doc.sliceString(block.from, block.to);
+        else if (action.id === 'insert-divider')
+          transformationText = '---';
 
       if (transformationText) {
         editor.dispatch({

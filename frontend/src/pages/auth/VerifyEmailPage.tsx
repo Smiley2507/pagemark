@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { AuthLayout } from '@/components/layout/AuthLayout';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import apiClient from '@/api/client';
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 
@@ -52,9 +53,7 @@ export const VerifyEmailPage = () => {
                 Your email has been successfully verified. You can now access your account.
               </p>
             </div>
-            <Button asChild className="w-full mt-4">
-              <Link to="/login">Continue to Login</Link>
-            </Button>
+            <Link to="/login" className={cn(buttonVariants({ variant: 'default' }), 'w-full mt-4')}>Continue to Login</Link>
           </>
         )}
 
@@ -67,9 +66,7 @@ export const VerifyEmailPage = () => {
               <h3 className="text-xl font-medium tracking-tight">Verification Failed</h3>
               <p className="text-muted-foreground text-sm">{errorMsg}</p>
             </div>
-            <Button asChild variant="outline" className="w-full mt-4">
-              <Link to="/login">Back to Login</Link>
-            </Button>
+            <Link to="/login" className={cn(buttonVariants({ variant: 'outline' }), 'w-full mt-4')}>Back to Login</Link>
           </>
         )}
       </div>

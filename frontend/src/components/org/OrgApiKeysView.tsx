@@ -31,7 +31,7 @@ export const OrgApiKeysView: React.FC = () => {
     mutationFn: () => keysApi.createAPIKey(newKeyName),
     onSuccess: (data) => {
       toast.success('API Key created successfully');
-      setGeneratedKey(data.raw_key);
+      setGeneratedKey(data.raw_key ?? null);
       setNewKeyName('');
       queryClient.invalidateQueries({ queryKey: ['api-keys'] });
     },

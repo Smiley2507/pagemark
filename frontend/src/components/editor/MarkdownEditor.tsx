@@ -10,6 +10,7 @@ import { EditorView, keymap, placeholder } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { markdown } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
+import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { closeBrackets } from '@codemirror/autocomplete';
 import { cn } from '@/lib/utils';
@@ -53,14 +54,38 @@ const editorTheme = EditorView.theme({
   '&.cm-focused .cm-selectionBackground': { backgroundColor: 'color-mix(in oklch, var(--accent), transparent 65%)' },
   '.cm-gutters': { display: 'none' },
 
-  // ── Syntax highlighting (visible on cursor line / raw mode) ─────────────
+  // ── Syntax highlighting (applied via defaultHighlightStyle) ────────────
   '.cm-formatting': {
     color: 'var(--muted-foreground)',
     fontSize: '0.85em',
   },
   '.cm-strong': { fontWeight: '700' },
   '.cm-em':     { fontStyle: 'italic' },
+  '.cm-strikethrough': { textDecoration: 'line-through', opacity: '0.55' },
+  '.cm-link': {
+    color: 'var(--primary)',
+    textDecoration: 'underline',
+    textDecorationColor: 'color-mix(in oklch, var(--primary), transparent 60%)',
+  },
   '.cm-url':    { color: 'var(--primary)' },
+  '.cm-heading': { fontWeight: '600', color: 'var(--foreground)' },
+  '.cm-heading-1': { fontSize: '1.85rem' },
+  '.cm-heading-2': { fontSize: '1.5rem' },
+  '.cm-heading-3': { fontSize: '1.25rem' },
+  '.cm-comment': { color: 'var(--muted-foreground)', fontStyle: 'italic' },
+  '.cm-monospace': {
+    fontFamily: '"JetBrains Mono", "Fira Code", monospace',
+    fontSize: '0.85em',
+    background: 'var(--muted)',
+    borderRadius: '4px',
+    padding: '2px 6px',
+  },
+  '.cm-quote': {
+    borderLeft: '3px solid color-mix(in oklch, var(--primary), transparent 50%)',
+    paddingLeft: '1rem',
+    color: 'var(--muted-foreground)',
+    fontStyle: 'italic',
+  },
 });
 
 // ── Live-preview CSS injected once into <head> ────────────────────────────────
@@ -449,6 +474,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
           markdown({ codeLanguages: languages }),
           EditorView.lineWrapping,
           editorTheme,
+          syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           livePreviewExtension,          // ← Obsidian-style live preview
           grammarDecorationField,
           grammarDecorationTheme(),

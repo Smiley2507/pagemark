@@ -1,11 +1,10 @@
 import { keymap } from '@codemirror/view';
-import { Text } from '@codemirror/state';
 import {
   findTableAtCursor,
-  getCellPos,
+  getCellPosInString,
   addRow,
-  addCol,
-  type TableContext
+  formatTable,
+  getTableAlignments,
 } from './tableUtils';
 
 export const tableKeymap = keymap.of([
@@ -20,6 +19,7 @@ export const tableKeymap = keymap.of([
       const { rows, cursorRow, cursorCol } = ctx;
       const maxCol = Math.max(...rows.map(r => r.length));
       const maxRow = rows.length - 1;
+      const alignments = getTableAlignments(state.doc, ctx);
 
       let nextRow = cursorRow;
       let nextCol = cursorCol + 1;
@@ -30,38 +30,28 @@ export const tableKeymap = keymap.of([
       }
 
       if (nextRow <= maxRow) {
-        const newPos = getCellPos(state.doc, ctx, nextRow, nextCol);
+        // Auto-format the entire table, then navigate to the next cell
+        const formatted = formatTable(rows, alignments);
+        const targetPos = getCellPosInString(formatted, nextRow, nextCol);
         view.dispatch({
-          selection: { anchor: newPos, head: newPos },
+          changes: { from: ctx.from, to: ctx.to, insert: formatted },
+          selection: { anchor: ctx.from + targetPos, head: ctx.from + targetPos },
           scrollIntoView: true,
         });
         return true;
       } else {
-        const newText = addCol(ctx, false);
-        const lines = newText.split('\n');
-        const targetLine = lines[maxRow] || '';
-        let pipeCount = 0;
-        let offset = 0;
-        for (let i = 0; i < targetLine.length; i++) {
-          if (targetLine[i] === '|') {
-            pipeCount++;
-            if (pipeCount === maxCol + 1) {
-              offset = i + 1;
-              if (offset < targetLine.length && targetLine[offset] === ' ') offset++;
-              break;
-            }
-          }
-        }
-
-        let totalOffset = 0;
-        for (let i = 0; i < maxRow; i++) {
-          totalOffset += lines[i].length + 1;
-        }
-        totalOffset += offset;
-
+        // At the last cell of the last row — add a column
+        const newRows = rows.map((row, rIdx) => {
+          const newRow = [...row];
+          newRow.splice(maxCol, 0, rIdx === 1 ? '---' : '');
+          return newRow;
+        });
+        const newAlignments: ('left' | 'center' | 'right')[] = [...alignments, 'left'];
+        const formatted = formatTable(newRows, newAlignments);
+        const targetPos = getCellPosInString(formatted, cursorRow, maxCol);
         view.dispatch({
-          changes: { from: ctx.from, to: ctx.to, insert: newText },
-          selection: { anchor: ctx.from + totalOffset, head: ctx.from + totalOffset },
+          changes: { from: ctx.from, to: ctx.to, insert: formatted },
+          selection: { anchor: ctx.from + targetPos, head: ctx.from + targetPos },
           scrollIntoView: true,
         });
         return true;
@@ -76,13 +66,14 @@ export const tableKeymap = keymap.of([
       const ctx = findTableAtCursor(state.doc, pos);
       if (!ctx) return false;
 
-      const newText = addRow(ctx, false);
+      const alignments = getTableAlignments(state.doc, ctx);
+      const newText = addRow(ctx, false, alignments);
       const lines = newText.split('\n');
 
-      // The new row is at index ctx.cursorRow + 1
-      const targetLine = lines[ctx.cursorRow + 1] || '';
+      // addRow inserts at max(2, cursorRow + 1) to skip the separator
+      const newRowIdx = ctx.cursorRow + 1 <= 1 ? 2 : ctx.cursorRow + 1;
+      const targetLine = lines[newRowIdx] || '';
       let offset = 0;
-      // Find the first cell content start (after the first pipe and space)
       for (let i = 0; i < targetLine.length; i++) {
         if (targetLine[i] === '|') {
           offset = i + 1;
@@ -92,7 +83,7 @@ export const tableKeymap = keymap.of([
       }
 
       let totalOffset = 0;
-      for (let i = 0; i < ctx.cursorRow + 1; i++) {
+      for (let i = 0; i < newRowIdx; i++) {
         totalOffset += lines[i].length + 1;
       }
       totalOffset += offset;
@@ -129,9 +120,12 @@ export const tableKeymap = keymap.of([
       }
 
       if (prevRow >= 0) {
-        const newPos = getCellPos(state.doc, ctx, prevRow, prevCol);
+        const alignments = getTableAlignments(state.doc, ctx);
+        const formatted = formatTable(ctx.rows, alignments);
+        const targetPos = getCellPosInString(formatted, prevRow, prevCol);
         view.dispatch({
-          selection: { anchor: newPos, head: newPos },
+          changes: { from: ctx.from, to: ctx.to, insert: formatted },
+          selection: { anchor: ctx.from + targetPos, head: ctx.from + targetPos },
           scrollIntoView: true,
         });
         return true;

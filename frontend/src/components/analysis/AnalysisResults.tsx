@@ -184,7 +184,7 @@ export function AnalysisResults({ results, className }: AnalysisResultsProps) {
               Dependencies
             </h3>
           </div>
-          <DependencyGraph dependencies={results.dependencies_json} />
+          <DependencyGraph dependencies={results.dependencies_json?.items ?? []} />
         </div>
       )}
     </div>

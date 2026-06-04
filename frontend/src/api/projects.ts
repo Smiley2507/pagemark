@@ -38,6 +38,7 @@ export const projectsApi = {
       starred?: boolean;
       status?: 'pending' | 'draft' | 'finalized';
       tags?: string[];
+      export_settings?: import('@/types').ExportSettings;
     }
   ): Promise<Project> {
     const { data } = await apiClient.patch(`/projects/${id}`, projectData);

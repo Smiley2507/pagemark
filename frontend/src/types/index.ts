@@ -168,6 +168,7 @@ export interface ComplexityJson {
   total_lines: number;
   largest_files: { path: string; lines: number; language?: string }[];
   by_language: Record<string, { files: number; lines: number }>;
+  complexity_metrics?: { file_path: string; loc: number; complexity: number }[];
   parse_stats?: {
     parsed_files: number;
     parse_errors: number;
@@ -399,7 +400,7 @@ export interface APIKey {
 }
 
 export interface ExportSettings {
-  logo_url?: string;
+  logo_url?: string | null;
   logo_position?: 'title-page' | 'header-left' | 'header-center' | 'header-right' | 'none';
   h1_color?: string;
   h2_color?: string;

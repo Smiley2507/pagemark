@@ -234,9 +234,9 @@ export function RightPanel({
                 </div>
                 <div className="text-sm text-foreground max-w-[85%]">
                   {streamingContent ? (
-                    <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none">
-                      {streamingContent}
-                    </ReactMarkdown>
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <ReactMarkdown>{streamingContent}</ReactMarkdown>
+                </div>
                   ) : (
                     <span className="inline-flex gap-1">
                       <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]" />

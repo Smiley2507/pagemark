@@ -95,6 +95,37 @@ export function getCellPos(doc: Text, ctx: TableContext, row: number, col: numbe
 }
 
 /**
+ * Computes the cursor position (0-indexed) within a formatted table string
+ * for a given cell location. Used to position the cursor after auto-formatting.
+ */
+export function getCellPosInString(formatted: string, row: number, col: number): number {
+  const lines = formatted.split('\n');
+  if (row >= lines.length) return formatted.length;
+
+  const line = lines[row];
+  let pipeCount = 0;
+  for (let i = 0; i < line.length; i++) {
+    if (line[i] === '|') {
+      pipeCount++;
+      if (pipeCount === col + 1) {
+        let pos = i + 1;
+        if (pos < line.length && line[pos] === ' ') pos++;
+        for (let r = 0; r < row; r++) {
+          pos += lines[r].length + 1;
+        }
+        return pos;
+      }
+    }
+  }
+
+  let pos = line.length;
+  for (let r = 0; r < row; r++) {
+    pos += lines[r].length + 1;
+  }
+  return pos;
+}
+
+/**
  * Extracts the alignment of each column from the separator row of a table.
  */
 export function getTableAlignments(doc: Text, ctx: TableContext): ('left' | 'center' | 'right')[] {
@@ -159,7 +190,7 @@ export function findTableAtCursor(doc: Text, pos: number): TableContext | null {
 
 // ── Mutations ────────────────────────────────────────────────────────────────
 
-export function addRow(ctx: TableContext, above: boolean): string {
+export function addRow(ctx: TableContext, above: boolean, alignments?: ('left' | 'center' | 'right')[]): string {
   const newRows = [...ctx.rows];
   const colCount = Math.max(...newRows.map(r => r.length));
   const emptyRow = new Array(colCount).fill('');
@@ -169,7 +200,7 @@ export function addRow(ctx: TableContext, above: boolean): string {
   if (targetIdx <= 1) targetIdx = 2;
 
   newRows.splice(targetIdx, 0, emptyRow);
-  return formatTable(newRows);
+  return formatTable(newRows, alignments);
 }
 
 export function deleteRow(ctx: TableContext): string | null {
@@ -181,7 +212,7 @@ export function deleteRow(ctx: TableContext): string | null {
   return formatTable(newRows);
 }
 
-export function addCol(ctx: TableContext, left: boolean): string {
+export function addCol(ctx: TableContext, left: boolean, alignments?: ('left' | 'center' | 'right')[]): string {
   const newRows = [...ctx.rows];
   let targetIdx = ctx.cursorCol;
   if (!left) targetIdx++;
@@ -193,7 +224,7 @@ export function addCol(ctx: TableContext, left: boolean): string {
       newRows[r].splice(targetIdx, 0, '');
     }
   }
-  return formatTable(newRows);
+  return formatTable(newRows, alignments);
 }
 
 export function deleteCol(ctx: TableContext): string | null {

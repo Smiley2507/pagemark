@@ -12,7 +12,7 @@ export function PageShell({
 }) {
   return (
     <div className="flex min-h-screen bg-background text-foreground">
-      <SidebarNavigation onOpenSettings={onOpenSettings} />
+      <SidebarNavigation />
       <div className="flex-1 overflow-auto">
         <main className={cn('mx-auto px-8 py-8', maxWidth)}>{children}</main>
       </div>
