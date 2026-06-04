@@ -16,7 +16,6 @@ import {
   CheckCircle,
   XCircle,
   UserCheck,
-  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LeftPanel } from "@/components/editor/LeftPanel";
@@ -317,26 +316,24 @@ export const EditorPage: React.FC = () => {
             variant="ghost"
             size="sm"
             className="flex items-center gap-2"
-            onClick={() => { setQualityOpen(true); }}
-          >
-            <BookOpen className="h-4 w-4" />
-            <span>Check Terminology</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex items-center gap-2"
             onClick={() => setExportOpen(true)}
           >
             <Download className="h-4 w-4" />
             <span>Export</span>
           </Button>
-          <Button variant="ghost" size="icon">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              toast.success('Project link copied to clipboard');
+            }}
+          >
             <Share2 className="h-4 w-4" />
           </Button>
           <div className="w-7 h-7 rounded-full bg-muted border border-border overflow-hidden ml-2">
             <div className="w-full h-full flex items-center justify-center text-xs font-mono">
-              U
+              {(currentUser?.name || 'U')[0].toUpperCase()}
             </div>
           </div>
         </div>
