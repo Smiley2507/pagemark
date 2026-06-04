@@ -1,24 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Sparkles, Table, ListCheck, AlertCircle, Wand2,
   Heading1, Heading2, Heading3, List, ListOrdered,
-  Quote, Code, Minus
+  Quote, Code, Minus, Image, BookOpen, Sigma,
+  ChevronRight, Hash, WrapText, TextQuote,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { findBlockAtCursor } from './blockUtils';
 
-// ── Command definitions ───────────────────────────────────────────────────────
-
-export interface CommandAction {
+interface CommandAction {
   id: string;
   label: string;
   icon: React.ElementType;
   description: string;
   content: string;
   shortcut?: string;
+  keywords?: string[];
+  cursorOffset?: number;
 }
 
-export interface CommandCategory {
+interface CommandCategory {
   title: string;
   items: CommandAction[];
 }
@@ -31,20 +32,24 @@ const COMMAND_CATEGORIES: CommandCategory[] = [
         id: 'ai-generate',
         label: 'Generate',
         icon: Sparkles,
-        description: 'Generate content for this section using AI',
-        content: 'AI is generating content...',
+        description: 'Generate content using AI',
+        content: '',
+        shortcut: '⌘I',
+        keywords: ['draft', 'write', 'create'],
       },
       {
         id: 'ai-refine',
         label: 'Refine',
         icon: Wand2,
-        description: 'Improve the clarity and professional tone',
-        content: '[Refinement in progress...]',
+        description: 'Improve clarity and tone',
+        content: '',
+        shortcut: '⌘R',
+        keywords: ['improve', 'rewrite', 'polish'],
       },
-    ]
+    ],
   },
   {
-    title: 'Basic Blocks',
+    title: 'Headings',
     items: [
       {
         id: 'insert-h1',
@@ -53,6 +58,7 @@ const COMMAND_CATEGORIES: CommandCategory[] = [
         description: 'Large section heading',
         content: '# ',
         shortcut: '#',
+        keywords: ['h1', 'title'],
       },
       {
         id: 'insert-h2',
@@ -61,6 +67,7 @@ const COMMAND_CATEGORIES: CommandCategory[] = [
         description: 'Medium section heading',
         content: '## ',
         shortcut: '##',
+        keywords: ['h2'],
       },
       {
         id: 'insert-h3',
@@ -69,82 +76,153 @@ const COMMAND_CATEGORIES: CommandCategory[] = [
         description: 'Small section heading',
         content: '### ',
         shortcut: '###',
+        keywords: ['h3'],
       },
+    ],
+  },
+  {
+    title: 'Lists',
+    items: [
       {
         id: 'insert-bullet-list',
         label: 'Bulleted List',
         icon: List,
-        description: 'Create a simple bulleted list',
+        description: 'Simple bulleted list',
         content: '- ',
         shortcut: '-',
+        keywords: ['ul', 'unordered'],
       },
       {
         id: 'insert-numbered-list',
         label: 'Numbered List',
         icon: ListOrdered,
-        description: 'Create a list with numbering',
+        description: 'Ordered list',
         content: '1. ',
         shortcut: '1.',
+        keywords: ['ol', 'ordered'],
       },
       {
         id: 'insert-checklist',
         label: 'Checklist',
         icon: ListCheck,
-        description: 'Track tasks with a to-do list',
+        description: 'Task list with checkboxes',
         content: '- [ ] ',
         shortcut: '[]',
+        keywords: ['todo', 'task', 'checkbox'],
       },
-      {
-        id: 'insert-quote',
-        label: 'Quote',
-        icon: Quote,
-        description: 'Capture a quote',
-        content: '> ',
-        shortcut: '>',
-      },
-    ]
+    ],
   },
   {
-    title: 'Media & Advanced',
+    title: 'Blocks',
     items: [
       {
-        id: 'insert-table',
-        label: 'Table',
-        icon: Table,
-        description: 'Add simple tabular content',
-        content: '| Header 1 | Header 2 |\n|---|---|\n| Cell 1 | Cell 2 |',
+        id: 'insert-quote',
+        label: 'Blockquote',
+        icon: Quote,
+        description: 'Pull quote or citation',
+        content: '> ',
+        shortcut: '>',
+        keywords: ['quote', 'cite'],
       },
       {
         id: 'insert-code',
         label: 'Code Block',
         icon: Code,
-        description: 'Capture a code snippet',
+        description: 'Code snippet with syntax highlighting',
         content: '```\n\n```',
         shortcut: '```',
+        keywords: ['pre', 'snippet', 'fence'],
+        cursorOffset: -4,
+      },
+      {
+        id: 'insert-callout',
+        label: 'Callout',
+        icon: TextQuote,
+        description: 'Highlighted info box',
+        content: '> **Note:** ',
+        keywords: ['info', 'note', 'alert'],
       },
       {
         id: 'insert-divider',
         label: 'Divider',
         icon: Minus,
-        description: 'Visually divide blocks',
+        description: 'Horizontal rule',
         content: '---\n',
         shortcut: '---',
+        keywords: ['hr', 'horizontal', 'line', 'separator'],
       },
       {
-        id: 'insert-callout',
-        label: 'Callout',
-        icon: AlertCircle,
-        description: 'Make text stand out',
-        content: '> **Note:** ',
+        id: 'insert-details',
+        label: 'Details',
+        icon: ChevronRight,
+        description: 'Collapsible details block',
+        content: '<details>\n<summary>Click to expand</summary>\n\n</details>\n',
+        keywords: ['collapse', 'expand', 'spoiler'],
       },
-    ]
-  }
+    ],
+  },
+  {
+    title: 'Media',
+    items: [
+      {
+        id: 'insert-table',
+        label: 'Table',
+        icon: Table,
+        description: 'Tabular content',
+        content: '| Header 1 | Header 2 |\n|---|---|\n| Cell 1 | Cell 2 |',
+        keywords: ['grid', 'csv'],
+      },
+      {
+        id: 'insert-image',
+        label: 'Image',
+        icon: Image,
+        description: 'Insert an image',
+        content: '![alt text](https://)',
+        keywords: ['img', 'picture', 'photo', 'screenshot'],
+      },
+    ],
+  },
+  {
+    title: 'Advanced',
+    items: [
+      {
+        id: 'insert-toc',
+        label: 'Table of Contents',
+        icon: BookOpen,
+        description: 'Auto-generated table of contents',
+        content: '[[_TOC_]]\n',
+        keywords: ['toc', 'index', 'outline'],
+      },
+      {
+        id: 'insert-frontmatter',
+        label: 'Frontmatter',
+        icon: Hash,
+        description: 'YAML frontmatter block',
+        content: '---\ntitle: \ndescription: \n---\n',
+        keywords: ['yaml', 'metadata', 'meta', 'header'],
+      },
+      {
+        id: 'insert-math',
+        label: 'Math (LaTeX)',
+        icon: Sigma,
+        description: 'Inline or block math',
+        content: '$$',
+        keywords: ['equation', 'formula', 'latex'],
+        cursorOffset: 0,
+      },
+      {
+        id: 'insert-html',
+        label: 'HTML Block',
+        icon: WrapText,
+        description: 'Raw HTML block',
+        content: '<div>\n\n</div>\n',
+        keywords: ['raw', 'embed', 'custom'],
+      },
+    ],
+  },
 ];
 
-// Flatten for easy index-based navigation
-const ALL_ACTIONS = COMMAND_CATEGORIES.flatMap(c => c.items);
-
-// ── Props ─────────────────────────────────────────────────────────────────────
+const ALL_ACTIONS = COMMAND_CATEGORIES.flatMap((c) => c.items);
 
 interface SlashCommandMenuProps {
   position: { top: number; left: number };
@@ -154,37 +232,52 @@ interface SlashCommandMenuProps {
   editor: any;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+function fuzzyMatch(text: string, query: string): boolean {
+  const lower = text.toLowerCase();
+  const q = query.toLowerCase();
+  let qi = 0;
+  for (let i = 0; i < lower.length && qi < q.length; i++) {
+    if (lower[i] === q[qi]) qi++;
+  }
+  return qi === q.length;
+}
 
-export function SlashCommandMenu({ position, slashPos, searchTerm, onClose, editor }: SlashCommandMenuProps) {
+export function SlashCommandMenu({
+  position,
+  slashPos,
+  searchTerm,
+  onClose,
+  editor,
+}: SlashCommandMenuProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Derived filtered categories
-  const filteredCategories = React.useMemo(() => {
+  const filteredCategories = useMemo(() => {
     if (!searchTerm) return COMMAND_CATEGORIES;
-    const lowerSearch = searchTerm.toLowerCase();
-    
-    return COMMAND_CATEGORIES.map(category => {
-      const filteredItems = category.items.filter(item => 
-        item.label.toLowerCase().includes(lowerSearch) ||
-        item.description.toLowerCase().includes(lowerSearch) ||
-        (item.shortcut && item.shortcut.toLowerCase().includes(lowerSearch))
-      );
-      return { ...category, items: filteredItems };
-    }).filter(category => category.items.length > 0);
+    const q = searchTerm.toLowerCase();
+    return COMMAND_CATEGORIES.map((cat) => {
+      const items = cat.items.filter((item) => {
+        const fields = [
+          item.label,
+          item.description,
+          item.shortcut ?? '',
+          ...(item.keywords ?? []),
+        ];
+        return fields.some((f) => fuzzyMatch(f, q));
+      });
+      return { ...cat, items };
+    }).filter((cat) => cat.items.length > 0);
   }, [searchTerm]);
 
-  const filteredActions = React.useMemo(() => 
-    filteredCategories.flatMap(c => c.items),
-  [filteredCategories]);
+  const filteredActions = useMemo(
+    () => filteredCategories.flatMap((c) => c.items),
+    [filteredCategories],
+  );
 
-  // Reset selected index when search term changes
   useEffect(() => {
     setSelectedIndex(0);
   }, [searchTerm]);
 
-  // Execute the selected action
   const executeAction = (action: CommandAction) => {
     const { state } = editor;
     const pos = state.selection.main.from;
@@ -192,11 +285,16 @@ export function SlashCommandMenu({ position, slashPos, searchTerm, onClose, edit
 
     if (block && block.type !== 'paragraph') {
       let transformationText = '';
-      if (action.id === 'insert-h1') transformationText = '# ' + state.doc.sliceString(block.from + 1, block.to).trim();
-      else if (action.id === 'insert-h2') transformationText = '## ' + state.doc.sliceString(block.from + 1, block.to).trim();
-      else if (action.id === 'insert-h3') transformationText = '### ' + state.doc.sliceString(block.from + 1, block.to).trim();
-      else if (action.id === 'insert-quote') transformationText = '> ' + state.doc.sliceString(block.from, block.to);
-      else if (action.id === 'insert-divider') transformationText = '---';
+      if (action.id === 'insert-h1')
+        transformationText = '# ' + state.doc.sliceString(block.from + 1, block.to).trim();
+      else if (action.id === 'insert-h2')
+        transformationText = '## ' + state.doc.sliceString(block.from + 1, block.to).trim();
+      else if (action.id === 'insert-h3')
+        transformationText = '### ' + state.doc.sliceString(block.from + 1, block.to).trim();
+      else if (action.id === 'insert-quote')
+        transformationText = '> ' + state.doc.sliceString(block.from, block.to);
+      else if (action.id === 'insert-divider')
+        transformationText = '---';
 
       if (transformationText) {
         editor.dispatch({
@@ -208,12 +306,18 @@ export function SlashCommandMenu({ position, slashPos, searchTerm, onClose, edit
       }
     }
 
-    let cursorOffset = action.content.length;
-    if (action.id === 'insert-code') cursorOffset -= 4;
+    const offset =
+      action.cursorOffset !== undefined
+        ? action.cursorOffset
+        : action.content.length;
 
     editor.dispatch({
-      changes: { from: slashPos, to: slashPos + 1 + searchTerm.length, insert: action.content },
-      selection: { anchor: slashPos + cursorOffset },
+      changes: {
+        from: slashPos,
+        to: slashPos + 1 + searchTerm.length,
+        insert: action.content,
+      },
+      selection: { anchor: slashPos + offset },
     });
     onClose();
   };
@@ -232,19 +336,11 @@ export function SlashCommandMenu({ position, slashPos, searchTerm, onClose, edit
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => {
-          const next = (prev + 1) % filteredActions.length;
-          scrollToIndex(next);
-          return next;
-        });
+        setSelectedIndex((prev) => (prev + 1) % filteredActions.length);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => {
-          const next = (prev - 1 + filteredActions.length) % filteredActions.length;
-          scrollToIndex(next);
-          return next;
-        });
+        setSelectedIndex((prev) => (prev - 1 + filteredActions.length) % filteredActions.length);
       } else if (e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation();
@@ -260,93 +356,114 @@ export function SlashCommandMenu({ position, slashPos, searchTerm, onClose, edit
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [selectedIndex, editor, onClose, slashPos, filteredActions, searchTerm]);
 
-  const scrollToIndex = (index: number) => {
+  useEffect(() => {
     if (!containerRef.current) return;
-    const button = containerRef.current.querySelector(`[data-index="${index}"]`) as HTMLElement;
-    if (button) {
-      button.scrollIntoView({ block: 'nearest' });
-    }
-  };
+    const btn = containerRef.current.querySelector(
+      `[data-index="${selectedIndex}"]`,
+    ) as HTMLElement;
+    btn?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex]);
 
   return (
     <div
-      className="fixed z-50 w-[320px] max-h-[360px] flex flex-col bg-card border border-border-default rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+      className="fixed z-50 w-72 rounded-xl border border-border bg-card shadow-xl overflow-hidden"
       style={{ top: position.top, left: position.left }}
     >
-      <div className="p-2 border-b border-border-default bg-muted">
-        <div className="text-xs font-medium text-muted-foreground px-1">
-          Type to filter or arrow keys to navigate
+      <div className="px-3 py-2 border-b border-border">
+        <div className="flex items-center gap-2">
+          <kbd className="inline-flex items-center justify-center rounded border border-border bg-muted px-1.5 h-5 text-[10px] font-mono text-muted-foreground">
+            /
+          </kbd>
+          <span className="text-xs text-muted-foreground">
+            {searchTerm ? `Filtering "${searchTerm}"` : 'Type to filter commands'}
+          </span>
         </div>
       </div>
-      
-      <div ref={containerRef} className="overflow-y-auto p-1.5 space-y-3">
+
+      <div ref={containerRef} className="max-h-72 overflow-y-auto py-1">
         {filteredCategories.length === 0 ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">
-            No matching commands found
+          <div className="py-8 text-center">
+            <p className="text-sm text-muted-foreground">No commands found</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">
+              Try a different search term
+            </p>
           </div>
         ) : (
-          filteredCategories.map((category, catIdx) => {
-            // Calculate the global index for the first item in this category
-            let globalIdxOffset = 0;
+          filteredCategories.map((cat, catIdx) => {
+            let offset = 0;
             for (let i = 0; i < catIdx; i++) {
-              globalIdxOffset += filteredCategories[i].items.length;
+              offset += filteredCategories[i].items.length;
             }
 
             return (
-              <div key={category.title}>
-                <div className="px-2 py-1 mb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  {category.title}
+              <div key={cat.title}>
+                <div className="px-3 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  {cat.title}
                 </div>
-                <div className="space-y-0.5">
-                  {category.items.map((action, idx) => {
-                    const globalIdx = globalIdxOffset + idx;
+                {cat.items.map((action, idx) => {
+                  const gi = offset + idx;
+                  const Icon = action.icon;
                   return (
                     <button
                       key={action.id}
-                      data-index={globalIdx}
+                      data-index={gi}
                       onClick={() => executeAction(action)}
                       className={cn(
-                        'w-full flex items-center justify-between px-2 py-1.5 rounded-md text-left transition-colors',
-                        selectedIndex === globalIdx
-                          ? 'bg-accent/15 text-accent-foreground'
-                          : 'text-text-2 hover:bg-accent hover:text-foreground',
+                        'flex w-full items-center gap-3 px-3 py-2 text-left transition-colors',
+                        selectedIndex === gi
+                          ? 'bg-accent text-accent-foreground'
+                          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
                       )}
                     >
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <div className={cn(
-                          "shrink-0 flex items-center justify-center w-8 h-8 rounded border",
-                          selectedIndex === globalIdx
-                            ? 'bg-background border-border-default'
-                            : 'bg-background border-transparent'
-                        )}>
-                          <action.icon className={cn(
-                            "h-4 w-4",
-                            selectedIndex === globalIdx ? "text-foreground" : "text-muted-foreground"
-                          )} />
+                      <div
+                        className={cn(
+                          'flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
+                          selectedIndex === gi ? 'bg-background' : 'bg-muted',
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          {action.label}
                         </div>
-                        <div className="flex flex-col overflow-hidden">
-                          <span className={cn(
-                            "text-sm font-medium truncate",
-                            selectedIndex === globalIdx ? "text-foreground" : ""
-                          )}>{action.label}</span>
-                          <span className="text-[11px] text-muted-foreground truncate">{action.description}</span>
+                        <div className="text-[11px] text-muted-foreground truncate">
+                          {action.description}
                         </div>
                       </div>
                       {action.shortcut && (
-                        <div className="shrink-0 pl-2">
-                          <kbd className="inline-flex items-center rounded border border-border-default bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-                            {action.shortcut}
-                          </kbd>
-                        </div>
+                        <kbd className="shrink-0 inline-flex items-center justify-center rounded border border-border bg-muted px-1.5 h-5 text-[10px] font-mono text-muted-foreground">
+                          {action.shortcut}
+                        </kbd>
                       )}
                     </button>
                   );
-                  })}
-                </div>
+                })}
               </div>
             );
           })
         )}
+      </div>
+
+      <div className="border-t border-border px-3 py-1.5 flex items-center gap-3">
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <kbd className="inline-flex items-center justify-center rounded border border-border bg-muted px-1 h-4 text-[9px] font-mono">
+            ↑↓
+          </kbd>
+          navigate
+        </div>
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <kbd className="inline-flex items-center justify-center rounded border border-border bg-muted px-1 h-4 text-[9px] font-mono">
+            ⏎
+          </kbd>
+          select
+        </div>
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <kbd className="inline-flex items-center justify-center rounded border border-border bg-muted px-1 h-4 text-[9px] font-mono">
+            esc
+          </kbd>
+          close
+        </div>
       </div>
     </div>
   );
