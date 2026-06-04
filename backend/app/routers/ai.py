@@ -376,6 +376,10 @@ async def stream_chat_message(
             user_message=body.message,
             db=db,
             user_id=current_user.id,
+            model_name=body.model_name,
+            temperature=body.temperature,
+            max_tokens=body.max_tokens,
+            references=body.references,
         )
         async for chunk in stream_gen:
             if chunk:

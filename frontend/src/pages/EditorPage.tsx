@@ -440,6 +440,7 @@ export const EditorPage: React.FC = () => {
             <RightPanel
               projectId={projectId}
               documentId={document?.document_id ?? 0}
+              sections={editorSections}
               activeSectionId={activeSectionId}
               activeSectionHeading={activeSection?.heading ?? null}
               activeSectionContent={activeSection?.content_md ?? ""}

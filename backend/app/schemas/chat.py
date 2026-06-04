@@ -45,3 +45,7 @@ class CreateThreadRequest(BaseModel):
 
 class SendMessageRequest(BaseModel):
     message: str
+    model_name: Optional[str] = None
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    references: Optional[List[str]] = None

@@ -32,9 +32,12 @@ class AIService:
     # ── Internal helpers ────────────────────────────────────────
 
     async def _get_anthropic_client(
-        self, db: AsyncSession, user_id: int
+        self, db: AsyncSession, user_id: int, model_name: str | None = None
     ) -> tuple[anthropic.AsyncAnthropic, str]:
-        """Return (async client, model_id) from the user's active credential."""
+        """Return (async client, model_id) from the user's active credential.
+
+        If model_name is provided, uses it instead of the credential's default.
+        """
         cred = await ai_credential_service.get_active_credential(db, user_id)
         if not cred:
             raise HTTPException(
@@ -50,7 +53,7 @@ class AIService:
                 ),
             )
         client = anthropic.AsyncAnthropic(api_key=cred.api_key)
-        return client, cred.model_id
+        return client, model_name or cred.model_id
 
     async def _fetch_project(self, db: AsyncSession, project_id: int) -> Project:
         result = await db.execute(
@@ -349,13 +352,20 @@ class AIService:
         user_message: str,
         db: AsyncSession,
         user_id: int,
+        model_name: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        references: list[str] | None = None,
     ) -> AsyncGenerator[str, None]:
         """Stream a chat response for the given thread.
 
         Saves user message before streaming, saves AI response after.
         Yields text chunks, then "data: [DONE]\\n\\n" at the end.
+
+        model_name, temperature, max_tokens override the credential defaults.
+        references: section headings to fetch and include as context.
         """
-        client, model_id = await self._get_anthropic_client(db, user_id)
+        client, model_id = await self._get_anthropic_client(db, user_id, model_name)
 
         # Fetch thread + project
         thread_result = await db.execute(
@@ -409,16 +419,39 @@ class AIService:
             template_system_prompt=template_prompt,
         )
 
+        # Inject referenced sections as context
+        if references:
+            resolved = []
+            for heading in references:
+                result = await db.execute(
+                    select(Section).where(
+                        Section.document_id == thread.document_id,
+                        Section.heading == heading,
+                        Section.lifecycle_status != "DELETED",
+                    )
+                )
+                section = result.scalar_one_or_none()
+                if section and section.content_md:
+                    resolved.append(f"### {heading}\n{section.content_md}")
+            if resolved:
+                system_prompt += "\n\n## Referenced Sections\n" + "\n\n".join(resolved)
+
         # Stream response
         full_response = []
+        effective_max_tokens = max_tokens or MAX_TOKENS_CHAT
+        effective_temperature = temperature
 
         async def _stream() -> AsyncGenerator[str, None]:
-            async with client.messages.stream(
-                model=model_id,
-                max_tokens=MAX_TOKENS_CHAT,
-                system=system_prompt,
-                messages=api_messages,
-            ) as stream:
+            kwargs = {
+                "model": model_id,
+                "max_tokens": effective_max_tokens,
+                "system": system_prompt,
+                "messages": api_messages,
+            }
+            if effective_temperature is not None:
+                kwargs["temperature"] = effective_temperature
+
+            async with client.messages.stream(**kwargs) as stream:
                 async for text in stream.text_stream:
                     full_response.append(text)
                     yield text
