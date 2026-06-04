@@ -1,9 +1,9 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpen, Shield, Zap, Sparkles, FileText, Users, Menu } from 'lucide-react';
+import { ArrowRight, BookOpen, Shield, Zap, Sparkles, FileText, Users, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PagemarkWordmark } from '@/components/layout/PagemarkWordmark';
-import { motion } from 'framer-motion';
+import { motion, useScroll, useTransform } from 'framer-motion';
 
 const features = [
   {
@@ -73,7 +73,7 @@ function StaggerChildren({ children, className }: { children: React.ReactNode; c
 function FadeUp({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <motion.div
-      variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }}
+      variants={{ hidden: { opacity: 0, y: 24 }, visible: { opacity: 1, y: 0 } }}
       className={className}
     >
       {children}
@@ -81,105 +81,197 @@ function FadeUp({ children, className }: { children: React.ReactNode; className?
   );
 }
 
+function FloatingOrbs() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+      <motion.div
+        className="absolute -top-24 -left-24 h-72 w-72 rounded-full bg-primary/5 blur-3xl"
+        animate={{ x: [0, 30, 0], y: [0, -20, 0] }}
+        transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute top-1/3 -right-32 h-96 w-96 rounded-full bg-[#1e3a5f]/20 blur-3xl"
+        animate={{ x: [0, -20, 0], y: [0, 30, 0] }}
+        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute -bottom-32 left-1/4 h-80 w-80 rounded-full bg-[#2d1b69]/15 blur-3xl"
+        animate={{ x: [0, 25, 0], y: [0, -15, 0] }}
+        transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
+      />
+    </div>
+  );
+}
+
+function GridPattern() {
+  return (
+    <div
+      className="absolute inset-0 opacity-[0.03] pointer-events-none"
+      style={{
+        backgroundImage: `
+          linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)
+        `,
+        backgroundSize: '48px 48px',
+      }}
+      aria-hidden
+    />
+  );
+}
+
+function NoiseOverlay() {
+  return (
+    <div
+      className="absolute inset-0 opacity-[0.015] pointer-events-none mix-blend-overlay"
+      style={{
+        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+        backgroundSize: '256px 256px',
+      }}
+      aria-hidden
+    />
+  );
+}
+
 export function LandingPage() {
+  const heroRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ['start start', 'end start'],
+  });
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0]);
+  const heroScale = useTransform(scrollYProgress, [0, 0.8], [1, 0.95]);
+
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* ── Nav ── */}
-      <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-sm">
-        <div className="flex items-center justify-between px-6 py-3 max-w-6xl mx-auto w-full">
-          <PagemarkWordmark className="h-7" />
-          <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
-            <a href="#how-it-works" className="hover:text-foreground transition-colors">How it works</a>
-            <a href="#features" className="hover:text-foreground transition-colors">Features</a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <Link to="/login">
-              <Button variant="ghost" size="sm">Sign in</Button>
-            </Link>
-            <Link to="/register">
-              <Button size="sm">Get started</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
       <main className="flex-1">
         {/* ── Hero ── */}
-        <section className="relative px-6 pt-20 pb-16 md:pt-28 md:pb-20 max-w-5xl mx-auto text-center overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--primary)_0%,transparent_65%)] opacity-[0.03] pointer-events-none" />
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-4 py-1 text-sm text-muted-foreground mb-6">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
-              AI-powered documentation for engineering teams
+        <section
+          ref={heroRef}
+          className="relative h-screen flex flex-col bg-[#0a0e1a] overflow-hidden"
+        >
+          <FloatingOrbs />
+          <GridPattern />
+          <NoiseOverlay />
+          <div className="absolute inset-0">
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_20%_50%,#1e3a5f_0%,transparent_60%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_80%_20%,#2d1b69_0%,transparent_50%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_80%,#0f2027_0%,transparent_50%)]" />
+          </div>
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+
+          {/* Nav inside hero */}
+          <div className="relative z-20 flex items-center justify-between px-6 py-4 max-w-6xl mx-auto w-full">
+            <PagemarkWordmark className="h-9" />
+            <nav className="hidden md:flex items-center gap-6 text-sm text-white/50">
+              <a href="#how-it-works" className="hover:text-white/80 transition-colors">How it works</a>
+              <a href="#features" className="hover:text-white/80 transition-colors">Features</a>
+            </nav>
+            <div className="flex items-center gap-3">
+              <Link to="/login">
+                <Button variant="ghost" size="sm" className="text-white/70 hover:text-white">Sign in</Button>
+              </Link>
+              <Link to="/register">
+                <Button size="sm" className="bg-primary hover:bg-primary/90">Get started</Button>
+              </Link>
             </div>
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-foreground leading-tight">
-              Documentation that{' '}
-              <span className="text-primary">writes itself</span>
-              <br />
-              and reads like a team effort.
-            </h1>
-            <p className="mt-5 text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              Pagemark turns source code into structured technical documentation
-              that developers refine section by section — with AI assistance,
-              quality gates, and a review workflow built for teams.
-            </p>
-          </motion.div>
+          </div>
+
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay: 0.2 }}
-            className="mt-10 flex items-center justify-center gap-4"
+            style={{ opacity: heroOpacity, scale: heroScale }}
+            className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 text-center"
           >
-            <Link to="/register">
-              <Button size="lg" className="gap-2 h-12 px-8 text-base shadow-md">
-                Start for free <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link to="/login">
-              <Button variant="outline" size="lg" className="h-12 px-8 text-base">
-                Sign in
-              </Button>
-            </Link>
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+            >
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-1 text-sm text-white/50 mb-8">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                AI-powered documentation for engineering teams
+              </div>
+              <h1 className="text-4xl md:text-7xl font-bold tracking-tight text-white leading-tight">
+                Documentation that{' '}
+                <span className="text-primary">writes itself</span>
+                <br />
+                and reads like a team effort.
+              </h1>
+              <p className="mt-6 text-lg md:text-xl text-white/50 max-w-3xl mx-auto leading-relaxed">
+                Pagemark turns source code into structured technical documentation
+                that developers refine section by section — with AI assistance,
+                quality gates, and a review workflow built for teams.
+              </p>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.25 }}
+              className="mt-10 flex items-center justify-center gap-4"
+            >
+              <Link to="/register">
+                <Button size="lg" className="gap-2 h-13 px-8 text-base shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
+                  Start for free <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+              <Link to="/login">
+                <Button variant="outline" size="lg" className="h-13 px-8 text-base border-white/15 text-white/70 hover:text-white hover:bg-white/[0.06]">
+                  Sign in
+                </Button>
+              </Link>
+            </motion.div>
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="mt-4 text-sm text-white/30"
+            >
+              No credit card required &middot; Export anytime
+            </motion.p>
           </motion.div>
-          <motion.p
+
+          {/* Scroll indicator */}
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.4, delay: 0.35 }}
-            className="mt-4 text-sm text-muted-foreground"
+            transition={{ delay: 0.8 }}
+            className="relative z-10 flex justify-center pb-8"
           >
-            No credit card required &middot; Export anytime
-          </motion.p>
+            <motion.div
+              animate={{ y: [0, 6, 0] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="text-white/20"
+            >
+              <ChevronDown className="h-5 w-5" />
+            </motion.div>
+          </motion.div>
         </section>
 
         {/* ── How it works ── */}
-        <section id="how-it-works" className="px-6 py-20 max-w-5xl mx-auto">
+        <section id="how-it-works" className="relative px-6 py-24 max-w-5xl mx-auto">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,var(--primary)_0%,transparent_60%)] opacity-[0.02] pointer-events-none" />
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView="visible"
             viewport={{ once: true }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center mb-14"
+            className="text-center mb-16"
           >
-            <h2 className="text-2xl md:text-3xl font-bold text-foreground">How it works</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground">How it works</h2>
             <p className="mt-3 text-muted-foreground max-w-2xl mx-auto">
               From codebase to polished documentation in three steps.
             </p>
           </motion.div>
-          <StaggerChildren className="grid gap-8 md:grid-cols-3">
+          <StaggerChildren className="grid gap-10 md:grid-cols-3">
             {steps.map((step, i) => (
               <FadeUp key={step.number}>
-                <div className="relative group">
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold text-sm">
+                <div className="relative group h-full">
+                  <div className="flex items-center gap-3 mb-5">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary font-bold text-sm group-hover:bg-primary/15 transition-colors">
                       {step.number}
                     </span>
                     {i < steps.length - 1 && (
-                      <div className="hidden md:block h-px flex-1 bg-border group-hover:bg-primary/20 transition-colors" />
-                    )}
+                      <div className="hidden md:block h-px flex-1 bg-border group-hover:bg-primary/30 transition-colors" />
+    )}
                   </div>
                   <h3 className="text-lg font-semibold text-foreground">{step.title}</h3>
                   <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{step.description}</p>
@@ -189,22 +281,18 @@ export function LandingPage() {
           </StaggerChildren>
         </section>
 
-        {/* ── Divider ── */}
-        <div className="px-6 max-w-5xl mx-auto">
-          <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent" />
-        </div>
-
         {/* ── Features ── */}
-        <section id="features" className="px-6 py-20 bg-muted/30">
-          <div className="max-w-5xl mx-auto">
+        <section id="features" className="relative px-6 py-24 bg-muted/30">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_100%,var(--primary)_0%,transparent_60%)] opacity-[0.02] pointer-events-none" />
+          <div className="max-w-5xl mx-auto relative">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView="visible"
               viewport={{ once: true }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-center mb-14"
+              className="text-center mb-16"
             >
-              <h2 className="text-2xl md:text-3xl font-bold text-foreground">Everything you need to document well</h2>
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground">Everything you need to document well</h2>
               <p className="mt-3 text-muted-foreground max-w-2xl mx-auto">
                 Built for engineering teams that take documentation seriously.
               </p>
@@ -212,8 +300,8 @@ export function LandingPage() {
             <StaggerChildren className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {features.map((f) => (
                 <FadeUp key={f.title}>
-                  <div className="group rounded-xl border border-border bg-card p-6 hover:shadow-md hover:border-primary/20 transition-all duration-200">
-                    <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 group-hover:bg-primary/15 transition-colors">
+                  <div className="group rounded-xl border border-border bg-card p-6 hover:shadow-lg hover:border-primary/20 hover:-translate-y-0.5 transition-all duration-200">
+                    <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 group-hover:bg-primary/15 group-hover:scale-110 transition-all duration-200">
                       <f.icon className="h-5 w-5 text-primary" />
                     </div>
                     <h3 className="font-semibold text-foreground">{f.title}</h3>
@@ -226,24 +314,28 @@ export function LandingPage() {
         </section>
 
         {/* ── CTA ── */}
-        <section className="relative px-6 py-24 max-w-3xl mx-auto text-center overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--primary)_0%,transparent_60%)] opacity-[0.04] pointer-events-none" />
+        <section className="relative px-6 py-24 overflow-hidden">
+          <div className="absolute inset-0 bg-[#0a0e1a]" />
+          <FloatingOrbs />
+          <GridPattern />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,var(--primary)_0%,transparent_60%)] opacity-[0.06] pointer-events-none" />
           <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
+            initial={{ opacity: 0, y: 20 }}
             whileInView="visible"
             viewport={{ once: true }}
-            animate={{ opacity: 1, scale: 1 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="relative z-10 max-w-3xl mx-auto text-center"
           >
-            <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+            <h2 className="text-3xl md:text-4xl font-bold text-white">
               Start documenting your codebase today
             </h2>
-            <p className="mt-3 text-muted-foreground max-w-xl mx-auto">
+            <p className="mt-4 text-white/50 max-w-xl mx-auto">
               Import a project, let AI generate the outline, and refine section by section.
               Free to start, no credit card required.
             </p>
             <div className="mt-8 flex items-center justify-center gap-4">
               <Link to="/register">
-                <Button size="lg" className="gap-2 h-12 px-8 text-base shadow-md">
+                <Button size="lg" className="gap-2 h-13 px-8 text-base shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
                   Get started free <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
@@ -255,7 +347,7 @@ export function LandingPage() {
       {/* ── Footer ── */}
       <footer className="border-t border-border px-6 py-10">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-          <PagemarkWordmark className="h-5" />
+          <PagemarkWordmark className="h-6" />
           <div className="flex items-center gap-6">
             <a href="#how-it-works" className="hover:text-foreground transition-colors">How it works</a>
             <a href="#features" className="hover:text-foreground transition-colors">Features</a>
