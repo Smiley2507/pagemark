@@ -22,6 +22,7 @@ const queryClient = new QueryClient();
 
 import { VerifyEmailPendingPage } from './pages/auth/VerifyEmailPendingPage';
 import { VerifyEmailPage } from './pages/auth/VerifyEmailPage';
+import { OrgInvitePage } from './pages/auth/OrgInvitePage';
 import { useOrgStore } from './store/orgStore';
 import { orgApi } from './api/org';
 import { MainLayout } from './components/layout/MainLayout';
@@ -113,6 +114,9 @@ const AppRoutes = () => {
           <Route path="/git-connect" element={<GitConnectPage />} />
         </Route>
       </Route>
+
+      {/* Invite: accept org invitation */}
+      <Route path="/org/invite/:token" element={<OrgInvitePage />} />
 
       {/* Root: redirect based on auth state */}
       <Route path="/" element={<RootRedirect />} />
