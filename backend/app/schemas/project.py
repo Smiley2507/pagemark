@@ -18,6 +18,22 @@ class SourceTypeEnum(str, Enum):
 
 # ── Request schemas ──────────────────────────────────────────────
 
+class ProjectSourceExclusionRequest(BaseModel):
+    pattern: str = Field(..., min_length=1, max_length=500)
+    reason: Optional[str] = None
+    enabled: bool = True
+
+
+class ProjectSourceExclusionResponse(ProjectSourceExclusionRequest):
+    id: int
+    project_id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class ProjectCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
@@ -30,6 +46,7 @@ class ProjectCreateRequest(BaseModel):
     source_visibility: Optional[str] = None
     source_metadata: Optional[dict] = None
     ignore_patterns: Optional[List[str]] = None
+    source_exclusions: Optional[List[ProjectSourceExclusionRequest]] = None
 
 
 class ProjectUpdateRequest(BaseModel):
@@ -57,6 +74,9 @@ class ProjectResponse(BaseModel):
     selected_branch: Optional[str]
     default_branch: Optional[str]
     source_visibility: Optional[str]
+    last_synced_commit: Optional[str] = None
+    source_metadata: Optional[dict] = None
+    source_exclusions: List[ProjectSourceExclusionResponse] = []
     starred: bool
     tags: List[str] = []
     documents_count: int = 0

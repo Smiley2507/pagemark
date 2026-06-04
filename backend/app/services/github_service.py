@@ -113,6 +113,34 @@ async def fetch_repo_branches(token: str, owner: str, repo: str) -> List[Dict[st
         ]
 
 
+async def fetch_repo_metadata(token: str, owner: str, repo: str) -> Dict[str, Any]:
+    """Fetch normalized metadata for one GitHub repository."""
+    url = f"{GITHUB_API_URL}/repos/{owner}/{repo}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url, headers=headers)
+        if response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Repository not found")
+        if response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Failed to fetch repository metadata")
+        repo_data = response.json()
+        return {
+            "id": repo_data.get("id"),
+            "name": repo_data.get("name"),
+            "full_name": repo_data.get("full_name"),
+            "private": bool(repo_data.get("private")),
+            "default_branch": repo_data.get("default_branch"),
+            "html_url": repo_data.get("html_url"),
+            "language": repo_data.get("language"),
+            "pushed_at": repo_data.get("pushed_at"),
+            "updated_at": repo_data.get("updated_at"),
+        }
+
+
 def build_authenticated_clone_url(token: str, owner: str, repo: str) -> str:
     """Builds a GitHub clone URL including the OAuth token for auth."""
     return f"https://{token}@github.com/{owner}/{repo}.git"

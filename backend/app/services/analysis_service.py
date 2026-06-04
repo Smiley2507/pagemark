@@ -16,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -25,7 +25,7 @@ from app.models.ai_credential import UserAiCredential
 from app.services import crypto_service
 from app.models.analysis import Analysis, AnalysisStatus
 from app.models.document import Document, Section, SectionStatus
-from app.models.project import Project
+from app.models.project import Project, ProjectSourceExclusion
 from app.models.template import Template
 from app.prompts.outline import OUTLINE_SYSTEM, build_outline_user_message
 from app.services import ai_service
@@ -112,6 +112,14 @@ STEP_NAMES = {
     7: "Finalizing results",
     8: "Generating documentation outline",
     9: "Analyzing readability & style",
+}
+
+ANALYSIS_FACT_KEYS = {
+    "file_tree_summary": "file_tree_json",
+    "stack_languages": "languages_json",
+    "endpoints": "endpoints_json",
+    "dependency_complexity": "complexity_json",
+    "dependencies": "dependencies_json",
 }
 
 IGNORE_DIR_NAMES = {
@@ -228,6 +236,88 @@ class AnalysisArtifacts:
     complexity_json: dict
     dependencies_json: list[dict] = field(default_factory=list)
     files: list[RepoFile] = field(default_factory=list)
+
+
+def normalize_exclusion_rules(rules: list[ProjectSourceExclusion]) -> list[dict]:
+    return [
+        {
+            "pattern": rule.pattern,
+            "reason": rule.reason,
+            "enabled": bool(rule.enabled),
+        }
+        for rule in rules
+        if rule.enabled
+    ]
+
+
+async def get_effective_exclusions(project_id: int, db: AsyncSession) -> list[dict]:
+    result = await db.execute(
+        select(ProjectSourceExclusion)
+        .where(ProjectSourceExclusion.project_id == project_id)
+        .order_by(ProjectSourceExclusion.created_at.asc(), ProjectSourceExclusion.id.asc())
+    )
+    return normalize_exclusion_rules(list(result.scalars().all()))
+
+
+def get_effective_exclusions_sync(project_id: int) -> list[dict]:
+    with SessionLocal() as db:
+        rules = (
+            db.query(ProjectSourceExclusion)
+            .filter(ProjectSourceExclusion.project_id == project_id)
+            .order_by(ProjectSourceExclusion.created_at.asc(), ProjectSourceExclusion.id.asc())
+            .all()
+        )
+        return normalize_exclusion_rules(rules)
+
+
+def exclusion_patterns(exclusions: list[dict] | None) -> list[str]:
+    return [
+        str(rule["pattern"])
+        for rule in exclusions or []
+        if rule.get("enabled", True) and rule.get("pattern")
+    ]
+
+
+def build_analysis_fact_status(analysis: Analysis) -> dict[str, dict]:
+    data = analysis.analysis_data or {}
+    unavailable = data.get("unavailable_facts") or []
+    partial_failures = data.get("partial_failures") or []
+    failed_by_fact = {
+        item.get("fact"): item
+        for item in partial_failures
+        if isinstance(item, dict) and item.get("fact")
+    }
+    facts: dict[str, dict] = {}
+    for fact, attr in ANALYSIS_FACT_KEYS.items():
+        available = getattr(analysis, attr, None)
+        if fact == "dependencies":
+            available = data.get("dependencies")
+        failure = failed_by_fact.get(fact)
+        facts[fact] = {
+            "available": available is not None and fact not in unavailable,
+            "unavailable_reason": failure.get("reason") if failure else None,
+        }
+    return facts
+
+
+def build_analysis_data(
+    artifacts: AnalysisArtifacts,
+    *,
+    unavailable_facts: list[str] | None = None,
+    partial_failures: list[dict] | None = None,
+) -> dict:
+    return {
+        "complexity_metrics": artifacts.complexity_json.get("complexity_metrics", []),
+        "dependencies": artifacts.dependencies_json,
+        "available_facts": [
+            fact
+            for fact in ANALYSIS_FACT_KEYS
+            if fact not in set(unavailable_facts or [])
+        ],
+        "unavailable_facts": unavailable_facts or [],
+        "partial_failures": partial_failures or [],
+        "partial_failure": bool(partial_failures or unavailable_facts),
+    }
 
 
 def _should_ignore_dir(name: str) -> bool:
@@ -529,6 +619,9 @@ async def update_analysis_step(
     outline_applied: bool | None = None,
     outline_skipped: bool | None = None,
     outline_skip_reason: str | None = None,
+    unavailable_facts: list[str] | None = None,
+    partial_failures: list[dict] | None = None,
+    source_commit: str | None = None,
 ) -> None:
     async with async_session() as db:
         result = await db.execute(select(Analysis).where(Analysis.id == analysis_id))
@@ -557,19 +650,23 @@ async def update_analysis_step(
             analysis.languages_json = artifacts.languages_json
             analysis.endpoints_json = artifacts.endpoints_json
             analysis.complexity_json = artifacts.complexity_json
-            analysis.analysis_data = {
-                "complexity_metrics": artifacts.complexity_json.get("complexity_metrics", []),
-                "dependencies": artifacts.dependencies_json,
-            }
+            analysis.analysis_data = build_analysis_data(
+                artifacts,
+                unavailable_facts=unavailable_facts,
+                partial_failures=partial_failures,
+            )
+
+        if source_commit is not None:
+            analysis.source_commit = source_commit
 
         if outline_json is not None:
-            analysis.outline_json = outline_json
+            setattr(analysis, "outline_json", outline_json)
         if outline_applied is not None:
-            analysis.outline_applied = outline_applied
+            setattr(analysis, "outline_applied", outline_applied)
         if outline_skipped is not None:
-            analysis.outline_skipped = outline_skipped
+            setattr(analysis, "outline_skipped", outline_skipped)
         if outline_skip_reason is not None:
-            analysis.outline_skip_reason = outline_skip_reason
+            setattr(analysis, "outline_skip_reason", outline_skip_reason)
 
         await db.commit()
 
@@ -587,6 +684,9 @@ def update_analysis_step_sync(
     outline_applied: bool | None = None,
     outline_skipped: bool | None = None,
     outline_skip_reason: str | None = None,
+    unavailable_facts: list[str] | None = None,
+    partial_failures: list[dict] | None = None,
+    source_commit: str | None = None,
 ) -> None:
     """Synchronous version of update_analysis_step for use in Celery workers."""
     with SessionLocal() as db:
@@ -615,20 +715,102 @@ def update_analysis_step_sync(
             analysis.languages_json = artifacts.languages_json
             analysis.endpoints_json = artifacts.endpoints_json
             analysis.complexity_json = artifacts.complexity_json
-            analysis.analysis_data = {
-                "complexity_metrics": artifacts.complexity_json.get("complexity_metrics", []),
-                "dependencies": artifacts.dependencies_json,
-            }
+            analysis.analysis_data = build_analysis_data(
+                artifacts,
+                unavailable_facts=unavailable_facts,
+                partial_failures=partial_failures,
+            )
+
+        if source_commit is not None:
+            analysis.source_commit = source_commit
 
         if outline_json is not None:
-            analysis.outline_json = outline_json
+            setattr(analysis, "outline_json", outline_json)
         if outline_applied is not None:
-            analysis.outline_applied = outline_applied
+            setattr(analysis, "outline_applied", outline_applied)
         if outline_skipped is not None:
-            analysis.outline_skipped = outline_skipped
+            setattr(analysis, "outline_skipped", outline_skipped)
         if outline_skip_reason is not None:
-            analysis.outline_skip_reason = outline_skip_reason
+            setattr(analysis, "outline_skip_reason", outline_skip_reason)
 
+        db.commit()
+
+
+async def create_analysis_snapshot(
+    db: AsyncSession,
+    project: Project,
+    *,
+    source_type: str,
+    source_path: str | None = None,
+    source_commit: str | None = None,
+    source_metadata: dict | None = None,
+) -> Analysis:
+    analysis = Analysis(
+        project_id=project.id,
+        status=AnalysisStatus.PENDING,
+        source_type=source_type,
+        source_path=source_path,
+        source_commit=source_commit,
+        source_metadata=source_metadata,
+        total_steps=TOTAL_STEPS,
+        effective_exclusions_json=await get_effective_exclusions(project.id, db),
+        is_current=False,
+    )
+    db.add(analysis)
+    await db.flush()
+    return analysis
+
+
+async def mark_analysis_current(db: AsyncSession, analysis: Analysis) -> None:
+    await db.execute(
+        update(Analysis)
+        .where(Analysis.project_id == analysis.project_id)
+        .values(is_current=False)
+    )
+    analysis.is_current = True
+
+
+def mark_analysis_current_sync(db, analysis: Analysis) -> None:
+    db.query(Analysis).filter(Analysis.project_id == analysis.project_id).update(
+        {Analysis.is_current: False}
+    )
+    analysis.is_current = True
+
+
+def complete_analysis_snapshot_sync(
+    analysis_id: int,
+    artifacts: AnalysisArtifacts,
+    *,
+    unavailable_facts: list[str] | None = None,
+    partial_failures: list[dict] | None = None,
+    source_commit: str | None = None,
+) -> None:
+    with SessionLocal() as db:
+        analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
+        if not analysis:
+            return
+
+        analysis.step_number = 7
+        analysis.current_step = STEP_NAMES[7]
+        analysis.step_detail = "Saved repository facts"
+        analysis.status = AnalysisStatus.COMPLETED
+        analysis.completed_at = datetime.utcnow()
+        analysis.file_tree_json = artifacts.file_tree_json
+        analysis.languages_json = artifacts.languages_json
+        analysis.endpoints_json = artifacts.endpoints_json
+        analysis.complexity_json = artifacts.complexity_json
+        analysis.analysis_data = build_analysis_data(
+            artifacts,
+            unavailable_facts=unavailable_facts,
+            partial_failures=partial_failures,
+        )
+        if source_commit is not None:
+            analysis.source_commit = source_commit
+
+        mark_analysis_current_sync(db, analysis)
+        project = db.query(Project).filter(Project.id == analysis.project_id).first()
+        if project and source_commit:
+            project.last_synced_commit = source_commit
         db.commit()
 
 
@@ -1020,6 +1202,15 @@ def elapsed_seconds(analysis: Analysis) -> int | None:
 
 
 async def get_latest_analysis(project_id: int, db: AsyncSession) -> Analysis | None:
+    current_result = await db.execute(
+        select(Analysis)
+        .where(Analysis.project_id == project_id, Analysis.is_current == True)  # noqa: E712
+        .order_by(Analysis.created_at.desc())
+        .limit(1)
+    )
+    current = current_result.scalar_one_or_none()
+    if current:
+        return current
     result = await db.execute(
         select(Analysis)
         .where(Analysis.project_id == project_id)
@@ -1031,7 +1222,8 @@ async def get_latest_analysis(project_id: int, db: AsyncSession) -> Analysis | N
 
 async def get_outline_diff(project_id: int, db: AsyncSession) -> dict:
     analysis = await get_latest_analysis(project_id, db)
-    if not analysis or not analysis.outline_json:
+    outline_json = getattr(analysis, "outline_json", None) if analysis else None
+    if not analysis or not outline_json:
         return {"current": [], "proposed": [], "has_changes": False}
 
     doc_result = await db.execute(
@@ -1045,6 +1237,6 @@ async def get_outline_diff(project_id: int, db: AsyncSession) -> dict:
         for s in sorted(doc.sections, key=lambda x: x.order_index):
             current.append(s.heading)
 
-    proposed = [x["heading"] for x in analysis.outline_json]
+    proposed = [x["heading"] for x in outline_json]
     has_changes = current != proposed
     return {"current": current, "proposed": proposed, "has_changes": has_changes}

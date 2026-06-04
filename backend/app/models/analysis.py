@@ -29,6 +29,7 @@ class Analysis(Base):
     source_commit = Column(String, nullable=True)
     is_current = Column(Boolean, nullable=False, default=False)
     effective_exclusions_json = Column(JSON, nullable=True)
+    source_metadata = Column(JSON, nullable=True)
     file_tree_json = Column(JSON, nullable=True)
     languages_json = Column(JSON, nullable=True)
     endpoints_json = Column(JSON, nullable=True)

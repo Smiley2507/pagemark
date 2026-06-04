@@ -32,12 +32,11 @@ from app.models.analysis import AnalysisStatus
 from app.services import git_service
 from app.services.analysis_service import (
     STEP_NAMES,
-    TOTAL_STEPS,
+    complete_analysis_snapshot_sync,
+    exclusion_patterns,
     extract_zip_archive,
+    get_effective_exclusions_sync,
     run_static_analysis,
-    run_outline_step,
-    run_outline_step_sync,
-    update_analysis_step,
     update_analysis_step_sync,
 )
 from app.models.document import Section, SectionStatus
@@ -69,8 +68,14 @@ def _fail(analysis_id: int, step_num: int, message: str, exc: Exception):
     )
 
 
-def _run_pipeline(project_id: int, analysis_id: int, root_path: str):
-    """Steps 3–8 after source is on disk."""
+def _run_pipeline(
+    project_id: int,
+    analysis_id: int,
+    root_path: str,
+    *,
+    source_commit: str | None = None,
+):
+    """Steps 3-7 after source is on disk."""
     detail_holder: list[str] = []
 
     def on_detail(msg: str):
@@ -132,17 +137,7 @@ def _run_pipeline(project_id: int, analysis_id: int, root_path: str):
         step_detail="Saving analysis results",
         artifacts=artifacts,
     )
-
-    update_analysis_step_sync(
-        analysis_id,
-        8,
-        STEP_NAMES[8],
-        step_detail="Calling AI to adapt template outline…",
-    )
-    run_outline_step_sync(project_id, analysis_id, artifacts)
-
-    update_analysis_step_sync(analysis_id, 9, STEP_NAMES[9], step_detail="Computing readability and style…")
-    _run_nlp_analysis(project_id, analysis_id)
+    complete_analysis_snapshot_sync(analysis_id, artifacts, source_commit=source_commit)
 
 
 @celery_app.task(bind=True, max_retries=3)
@@ -162,7 +157,8 @@ def analyze_project_task(self, project_id: int, analysis_id: int, source_path: s
             STEP_NAMES[2],
             step_detail="Extracting archive",
         )
-        root_path = extract_zip_archive(source_path, project_id, ignore_patterns=ignore_patterns)
+        effective_patterns = ignore_patterns or exclusion_patterns(get_effective_exclusions_sync(project_id))
+        root_path = extract_zip_archive(source_path, project_id, ignore_patterns=effective_patterns)
         _agent_log("A", "analysis_worker.py:analyze_project_task", "extract_ok", {"root_path": root_path})
         _run_pipeline(project_id, analysis_id, root_path)
         _agent_log("A", "analysis_worker.py:analyze_project_task", "task_done", {"analysis_id": analysis_id})
@@ -194,8 +190,16 @@ def clone_and_analyze_task(
             STEP_NAMES[2],
             step_detail=f"Cloning branch {branch}",
         )
-        cloned_path = git_service.clone_repo(repo_url, target_path, branch, depth=1)
-        _run_pipeline(project_id, analysis_id, cloned_path)
+        effective_patterns = exclusion_patterns(get_effective_exclusions_sync(project_id))
+        cloned_path = git_service.clone_repo(
+            repo_url,
+            target_path,
+            branch,
+            depth=1,
+            ignore_patterns=effective_patterns,
+        )
+        source_commit = git_service.get_head_commit(cloned_path)
+        _run_pipeline(project_id, analysis_id, cloned_path, source_commit=source_commit)
         _agent_log("A", "analysis_worker.py:clone_and_analyze_task", "task_done", {"analysis_id": analysis_id})
     except Exception as e:
         _agent_log("A", "analysis_worker.py:clone_and_analyze_task", "task_error", {"error_type": type(e).__name__, "error": str(e)[:300]})

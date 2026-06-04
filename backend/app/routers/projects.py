@@ -11,11 +11,13 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.models.organization import Organization, OrganizationMember, OrgMemberStatus
-from app.models.project import Project, ProjectStatus, SourceType
+from app.models.project import Project, ProjectSourceExclusion, ProjectStatus, SourceType
 from app.models.document import Document, Section, SectionStatus
 from typing import List
 from app.schemas.project import (
     ProjectCreateRequest,
+    ProjectSourceExclusionRequest,
+    ProjectSourceExclusionResponse,
     ProjectUpdateRequest,
     ProjectResponse,
     ProjectListResponse,
@@ -35,7 +37,12 @@ from app.schemas.analysis import (
     analysis_to_status_response,
     analysis_to_full_response,
 )
-from app.services.analysis_service import apply_outline_to_document, get_outline_diff, get_latest_analysis
+from app.services.analysis_service import (
+    apply_outline_to_document,
+    create_analysis_snapshot,
+    get_outline_diff,
+    get_latest_analysis,
+)
 from app.workers.analysis_worker import analyze_project_task, clone_and_analyze_task
 from app.services import git_service, github_service, crypto_service
 from app.models.oauth_token import OAuthToken
@@ -57,6 +64,7 @@ def _project_to_response(
     project: Project,
     sections: list[Section],
     documents_count: int = 0,
+    source_exclusions: list[ProjectSourceExclusion] | None = None,
 ) -> ProjectResponse:
     return ProjectResponse(
         id=project.id,
@@ -73,6 +81,12 @@ def _project_to_response(
         selected_branch=project.selected_branch,
         default_branch=project.default_branch,
         source_visibility=project.source_visibility,
+        last_synced_commit=project.last_synced_commit,
+        source_metadata=project.source_metadata,
+        source_exclusions=[
+            ProjectSourceExclusionResponse.model_validate(rule)
+            for rule in (source_exclusions or [])
+        ],
         starred=project.starred,
         tags=project.tags or [],
         documents_count=documents_count,
@@ -80,6 +94,36 @@ def _project_to_response(
         created_at=project.created_at,
         updated_at=project.updated_at,
     )
+
+
+async def _load_source_exclusions(project_id: int, db: AsyncSession) -> list[ProjectSourceExclusion]:
+    result = await db.execute(
+        select(ProjectSourceExclusion)
+        .where(ProjectSourceExclusion.project_id == project_id)
+        .order_by(ProjectSourceExclusion.created_at.asc(), ProjectSourceExclusion.id.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def _add_missing_exclusion_patterns(
+    project: Project,
+    patterns: list[str],
+    db: AsyncSession,
+    current_user: User,
+) -> None:
+    existing = {rule.pattern for rule in await _load_source_exclusions(project.id, db)}
+    for pattern in patterns:
+        if pattern and pattern not in existing:
+            db.add(
+                ProjectSourceExclusion(
+                    project_id=project.id,
+                    pattern=pattern,
+                    reason="User-provided source exclusion",
+                    enabled=True,
+                    created_by=current_user.id,
+                )
+            )
+            existing.add(pattern)
 
 
 async def _resolve_org_id(request: Request, current_user: User, db: AsyncSession) -> int:
@@ -210,6 +254,7 @@ async def list_projects(
                 proj,
                 sec_result.scalars().all(),
                 documents_count=doc_count_result.scalar_one(),
+                source_exclusions=await _load_source_exclusions(proj.id, db),
             )
         )
 
@@ -242,9 +287,26 @@ async def create_project(
         source_metadata=body.source_metadata,
     )
     db.add(project)
+    await db.flush()
+    for rule in body.source_exclusions or []:
+        db.add(
+            ProjectSourceExclusion(
+                project_id=project.id,
+                pattern=rule.pattern,
+                reason=rule.reason,
+                enabled=rule.enabled,
+                created_by=current_user.id,
+            )
+        )
     await db.commit()
     await db.refresh(project)
-    return _project_to_response(project, [], documents_count=0)
+    source_exclusions = await _load_source_exclusions(project.id, db)
+    return _project_to_response(
+        project,
+        [],
+        documents_count=0,
+        source_exclusions=source_exclusions,
+    )
 
 
 # ── GET /projects/{id} ───────────────────────────────────────────
@@ -266,6 +328,7 @@ async def get_project(
         project,
         sec_result.scalars().all(),
         documents_count=doc_count_result.scalar_one(),
+        source_exclusions=await _load_source_exclusions(project.id, db),
     )
 
 
@@ -305,7 +368,57 @@ async def update_project(
         project,
         sec_result.scalars().all(),
         documents_count=doc_count_result.scalar_one(),
+        source_exclusions=await _load_source_exclusions(project.id, db),
     )
+
+
+@router.get(
+    "/{project_id}/source/exclusions",
+    response_model=list[ProjectSourceExclusionResponse],
+)
+async def list_source_exclusions(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await _get_project(project_id, current_user, db)
+    return [
+        ProjectSourceExclusionResponse.model_validate(rule)
+        for rule in await _load_source_exclusions(project.id, db)
+    ]
+
+
+@router.put(
+    "/{project_id}/source/exclusions",
+    response_model=list[ProjectSourceExclusionResponse],
+)
+async def replace_source_exclusions(
+    project_id: int,
+    body: list[ProjectSourceExclusionRequest],
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await _get_project(project_id, current_user, db)
+    existing = await _load_source_exclusions(project.id, db)
+    for rule in existing:
+        await db.delete(rule)
+    await db.flush()
+    for rule in body:
+        db.add(
+            ProjectSourceExclusion(
+                project_id=project.id,
+                pattern=rule.pattern,
+                reason=rule.reason,
+                enabled=rule.enabled,
+                created_by=current_user.id,
+            )
+        )
+    project.updated_at = datetime.utcnow()
+    await db.commit()
+    return [
+        ProjectSourceExclusionResponse.model_validate(rule)
+        for rule in await _load_source_exclusions(project.id, db)
+    ]
 
 
 # ── DELETE /projects/{id} ────────────────────────────────────────
@@ -427,6 +540,7 @@ async def upload_zip(
 
     project = await _get_project(project_id, current_user, db)
     project.source_type = SourceType.ZIP
+    project.source_provider = None
 
     upload_dir = f"uploads/{project_id}"
     std_os.makedirs(upload_dir, exist_ok=True)
@@ -434,13 +548,23 @@ async def upload_zip(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    analysis = Analysis(project_id=project.id, source_type="zip", source_path=file_path, total_steps=8)
-    db.add(analysis)
+    patterns = [p.strip() for p in ignore_patterns.split(",") if p.strip()] if ignore_patterns else []
+    await _add_missing_exclusion_patterns(project, patterns, db, current_user)
+    await db.flush()
+    analysis = await create_analysis_snapshot(
+        db,
+        project,
+        source_type="zip",
+        source_path=file_path,
+        source_metadata={
+            "filename": file.filename,
+            "sync_supported": False,
+        },
+    )
     await db.commit()
     await db.refresh(analysis)
 
-    patterns = [p.strip() for p in ignore_patterns.split(",")] if ignore_patterns else None
-    task = analyze_project_task.delay(project.id, analysis.id, file_path, "zip", ignore_patterns=patterns)
+    task = analyze_project_task.delay(project.id, analysis.id, file_path, "zip", ignore_patterns=patterns or None)
     return {"job_id": task.id, "analysis_id": analysis.id}
 
 
@@ -464,13 +588,25 @@ async def connect_public_git(
     project.source_owner = owner
     project.source_repository = repo
     project.selected_branch = body.branch
+    project.default_branch = project.default_branch or body.branch
     project.source_metadata = {
         **(project.source_metadata or {}),
         "repo_url": body.repo_url,
+        "connection_method": "repository_url",
+        "sync_supported": True,
     }
 
-    analysis = Analysis(project_id=project.id, source_type="git", source_path=body.repo_url, total_steps=8)
-    db.add(analysis)
+    analysis = await create_analysis_snapshot(
+        db,
+        project,
+        source_type="git",
+        source_path=body.repo_url,
+        source_metadata={
+            "repo_url": body.repo_url,
+            "connection_method": "repository_url",
+            "sync_supported": True,
+        },
+    )
     await db.commit()
     await db.refresh(analysis)
 
@@ -498,6 +634,11 @@ async def connect_oauth_git(
 
     clone_url = github_service.build_authenticated_clone_url(decrypted_token, body.owner, body.repo)
     repo_url_display = f"https://github.com/{body.owner}/{body.repo}"
+    repo_metadata = await github_service.fetch_repo_metadata(
+        decrypted_token,
+        body.owner,
+        body.repo,
+    )
 
     project = await _get_project(project_id, current_user, db)
     project.source_type = SourceType.GIT
@@ -505,13 +646,28 @@ async def connect_oauth_git(
     project.source_owner = body.owner
     project.source_repository = body.repo
     project.selected_branch = body.branch
+    project.default_branch = repo_metadata.get("default_branch") or body.branch
+    project.source_visibility = "private" if repo_metadata.get("private") else "public"
     project.source_metadata = {
         **(project.source_metadata or {}),
         "repo_url": repo_url_display,
+        "github_id": repo_metadata.get("id"),
+        "html_url": repo_metadata.get("html_url"),
+        "connection_method": "github",
+        "sync_supported": True,
     }
 
-    analysis = Analysis(project_id=project.id, source_type="git", source_path=clone_url, total_steps=8)
-    db.add(analysis)
+    analysis = await create_analysis_snapshot(
+        db,
+        project,
+        source_type="git",
+        source_path=clone_url,
+        source_metadata={
+            "repo_url": repo_url_display,
+            "connection_method": "github",
+            "sync_supported": True,
+        },
+    )
     await db.commit()
     await db.refresh(analysis)
 
@@ -547,8 +703,17 @@ async def sync_git_repo(
             except Exception:
                 pass
 
-    analysis = Analysis(project_id=project.id, source_type="git", source_path=clone_url, total_steps=8)
-    db.add(analysis)
+    analysis = await create_analysis_snapshot(
+        db,
+        project,
+        source_type="git",
+        source_path=clone_url,
+        source_metadata={
+            "repo_url": repo_url,
+            "connection_method": "sync",
+            "sync_supported": True,
+        },
+    )
     await db.commit()
     await db.refresh(analysis)
 
@@ -572,6 +737,21 @@ async def get_analysis_status(
     if not analysis:
         raise HTTPException(status_code=404, detail="No analysis found for this project")
     return analysis_to_status_response(analysis)
+
+
+@router.get("/{project_id}/analysis/snapshots", response_model=list[AnalysisStatusResponse])
+async def list_analysis_snapshots(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _get_project(project_id, current_user, db)
+    result = await db.execute(
+        select(Analysis)
+        .where(Analysis.project_id == project_id)
+        .order_by(Analysis.created_at.desc(), Analysis.id.desc())
+    )
+    return [analysis_to_status_response(item) for item in result.scalars().all()]
 
 
 @router.get("/{project_id}/analysis/results", response_model=AnalysisResponse)
@@ -606,13 +786,14 @@ async def apply_analysis_outline(
 ):
     await _get_project(project_id, current_user, db)
     analysis = await get_latest_analysis(project_id, db)
-    if not analysis or not analysis.outline_json:
+    outline_json = getattr(analysis, "outline_json", None) if analysis else None
+    if not analysis or not outline_json:
         raise HTTPException(status_code=400, detail="No proposed outline available")
     if analysis.status != AnalysisStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Analysis is not complete yet")
 
-    await apply_outline_to_document(project_id, analysis.outline_json, db=db)
-    analysis.outline_applied = True
+    await apply_outline_to_document(project_id, outline_json, db=db)
+    setattr(analysis, "outline_applied", True)
     await db.commit()
 
     doc_result = await db.execute(

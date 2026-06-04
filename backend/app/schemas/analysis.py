@@ -26,6 +26,14 @@ class AnalysisStatusResponse(BaseModel):
     step_detail: Optional[str] = None
     total_steps: int
     source_type: str
+    source_commit: Optional[str] = None
+    is_current: bool = False
+    sync_supported: bool = False
+    effective_exclusions: List[Any] = []
+    facts: dict[str, Any] = {}
+    unavailable_facts: List[str] = []
+    partial_failures: List[Any] = []
+    source_metadata: Optional[dict[str, Any]] = None
     error_message: Optional[str]
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
@@ -105,8 +113,11 @@ def analysis_to_status_response(analysis: Analysis) -> AnalysisStatusResponse:
         if isinstance(analysis.status, AnalysisStatus)
         else AnalysisStatus(status_val),
         failed_step=failed_step,
-        outline_skipped=bool(analysis.outline_skipped),
+        outline_skipped=bool(getattr(analysis, "outline_skipped", False)),
     )
+    analysis_data = analysis.analysis_data or {}
+    from app.services.analysis_service import build_analysis_fact_status
+
     return AnalysisStatusResponse(
         id=analysis.id,
         project_id=analysis.project_id,
@@ -116,14 +127,22 @@ def analysis_to_status_response(analysis: Analysis) -> AnalysisStatusResponse:
         step_detail=analysis.step_detail,
         total_steps=analysis.total_steps or TOTAL_STEPS,
         source_type=analysis.source_type,
+        source_commit=analysis.source_commit,
+        is_current=bool(analysis.is_current),
+        sync_supported=analysis.source_type == "git",
+        effective_exclusions=analysis.effective_exclusions_json or [],
+        facts=build_analysis_fact_status(analysis),
+        unavailable_facts=analysis_data.get("unavailable_facts") or [],
+        partial_failures=analysis_data.get("partial_failures") or [],
+        source_metadata=analysis.source_metadata,
         error_message=analysis.error_message,
         started_at=analysis.started_at,
         completed_at=analysis.completed_at,
         steps=steps,
         elapsed_seconds=elapsed_seconds(analysis),
-        outline_applied=bool(analysis.outline_applied),
-        outline_skipped=bool(analysis.outline_skipped),
-        outline_skip_reason=analysis.outline_skip_reason,
+        outline_applied=bool(getattr(analysis, "outline_applied", False)),
+        outline_skipped=bool(getattr(analysis, "outline_skipped", False)),
+        outline_skip_reason=getattr(analysis, "outline_skip_reason", None),
     )
 
 
@@ -136,6 +155,6 @@ def analysis_to_full_response(analysis: Analysis) -> AnalysisResponse:
         languages_json=analysis.languages_json,
         endpoints_json=analysis.endpoints_json,
         complexity_json=analysis.complexity_json,
-        outline_json=analysis.outline_json,
+        outline_json=getattr(analysis, "outline_json", None),
         dependencies_json=deps,
     )

@@ -183,3 +183,83 @@ def test_migrations_apply_and_documents_share_project_analysis(migrated_database
         assert second_proposal.analysis_id == analysis.id
         assert first_proposal.analysis.project_id == project.id
         assert second_proposal.analysis.project_id == project.id
+
+
+def test_project_analysis_snapshots_are_immutable_and_single_current(migrated_database_url):
+    import app.models as models
+    from app.services.analysis_service import mark_analysis_current_sync
+
+    engine = create_engine(migrated_database_url)
+    with Session(engine) as session:
+        user = models.User(
+            email=f"owner-{uuid.uuid4().hex}@example.com",
+            password_hash="not-used",
+            name="Owner",
+            is_verified=True,
+        )
+        session.add(user)
+        session.flush()
+
+        org = models.Organization(
+            name="Owner Workspace",
+            slug=f"owner-{uuid.uuid4().hex[:8]}",
+            created_by=user.id,
+            personal=True,
+        )
+        session.add(org)
+        session.flush()
+
+        project = models.Project(
+            org_id=org.id,
+            created_by=user.id,
+            name="Pagemark",
+            source_type=models.SourceType.GIT,
+            source_provider="github",
+            source_owner="acme",
+            source_repository="pagemark",
+            selected_branch="main",
+        )
+        session.add(project)
+        session.flush()
+
+        first_exclusions = [{"pattern": "node_modules/**", "reason": "dependencies"}]
+        second_exclusions = [
+            {"pattern": "node_modules/**", "reason": "dependencies"},
+            {"pattern": "dist/**", "reason": "generated"},
+        ]
+        first = models.Analysis(
+            project_id=project.id,
+            status=models.AnalysisStatus.COMPLETED,
+            source_type="git",
+            source_commit="abc123",
+            is_current=True,
+            effective_exclusions_json=first_exclusions,
+        )
+        second = models.Analysis(
+            project_id=project.id,
+            status=models.AnalysisStatus.COMPLETED,
+            source_type="git",
+            source_commit="def456",
+            is_current=False,
+            effective_exclusions_json=second_exclusions,
+        )
+        session.add_all([first, second])
+        session.commit()
+
+        mark_analysis_current_sync(session, second)
+        session.commit()
+        session.refresh(first)
+        session.refresh(second)
+
+        snapshots = (
+            session.query(models.Analysis)
+            .filter(models.Analysis.project_id == project.id)
+            .order_by(models.Analysis.created_at.asc(), models.Analysis.id.asc())
+            .all()
+        )
+        assert len(snapshots) == 2
+        assert sum(1 for snapshot in snapshots if snapshot.is_current) == 1
+        assert first.is_current is False
+        assert second.is_current is True
+        assert first.effective_exclusions_json == first_exclusions
+        assert second.effective_exclusions_json == second_exclusions

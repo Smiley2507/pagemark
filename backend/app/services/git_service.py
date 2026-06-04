@@ -85,6 +85,14 @@ def clone_repo(url: str, target_path: str, branch: str = "main", depth: int = 1,
     return target_path
 
 
+def get_head_commit(path: str) -> str | None:
+    repo = git.Repo(path)
+    try:
+        return repo.head.commit.hexsha
+    except Exception:
+        return None
+
+
 def cleanup_repo(path: str):
     """Deletes a local repository clone."""
     if os.path.exists(path):
