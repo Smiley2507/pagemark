@@ -15,6 +15,8 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.project import Project
+from app.models.organization import OrgMemberStatus
+from app.models.organization import OrganizationMember
 from app.models.quality import QualityReport, QualityIssue, IssueSeverity
 from app.schemas.quality import QualityReportOut, QualityIssueOut, QualityRunResponse
 from app.workers.quality_worker import score_quality_task
@@ -26,13 +28,23 @@ async def _get_project_or_404(project_id: int, db: AsyncSession, user) -> Projec
     result = await db.execute(
         select(Project).where(
             Project.id == project_id,
-            Project.created_by == user.id,
             Project.deleted_at.is_(None),
         )
     )
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    member_res = await db.execute(
+        select(OrganizationMember).where(
+            OrganizationMember.org_id == project.org_id,
+            OrganizationMember.user_id == user.id,
+            OrganizationMember.status == OrgMemberStatus.ACTIVE,
+        )
+    )
+    if not member_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Project not found")
+
     return project
 
 
