@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { QualityModal } from '@/components/editor/QualityModal';
-import { GlobalSearchOverlay } from '@/components/dashboard/GlobalSearchOverlay';
 
 export const Dashboard: React.FC = () => {
   const [qualityProjectId, setQualityProjectId] = useState<number | null>(null);
@@ -9,7 +8,6 @@ export const Dashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-7xl px-6 pt-6">
-        <GlobalSearchOverlay />
         <Outlet
           context={{
             setQualityProjectId
