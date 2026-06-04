@@ -517,6 +517,7 @@ export const EditorPage: React.FC = () => {
         projectName={project?.name ?? 'Documentation'}
         open={exportOpen}
         onClose={() => setExportOpen(false)}
+        initialSettings={project?.export_settings}
       />
 
       {/* Quality modal */}

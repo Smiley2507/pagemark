@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   FileArchive,
   GitBranch,
+  LayoutTemplate,
   Loader2,
   Search,
   Star,
@@ -26,19 +27,18 @@ import { AnalysisProgress } from "@/components/analysis/AnalysisProgress";
 import { AiOutlineSkipBanner } from "@/components/analysis/AiOutlineSkipBanner";
 import {
   useGitHubStatus,
-  useGitLabStatus,
   useGitRepos,
   useRepoBranches,
   useDisconnectGitHub,
-  useDisconnectGitLab,
 } from "@/hooks/useGit";
 import {
   validateGitUrl,
   getOAuthAuthorizeUrl,
   parseOwnerRepo,
 } from "@/lib/git";
-import type { GitRepo, AnalysisStatus } from "@/types";
+import type { GitRepo, AnalysisStatus, Template } from "@/types";
 import { cn } from "@/lib/utils";
+import { TemplatePickerDialog } from "@/components/templates/TemplatePickerDialog";
 
 type SourceChoice = "zip" | "git" | "scratch";
 type GitTab = "url" | "account";
@@ -58,15 +58,14 @@ export const NewProject: React.FC = () => {
   const [gitTab, setGitTab] = useState<GitTab>("url");
   const [repoUrl, setRepoUrl] = useState("");
   const [urlBranch, setUrlBranch] = useState("main");
-  const [oauthProvider, setOauthProvider] = useState<"github" | "gitlab">(
-    "github",
-  );
   const [repoSearch, setRepoSearch] = useState("");
   const [selectedRepo, setSelectedRepo] = useState<GitRepo | null>(null);
   const [oauthBranch, setOauthBranch] = useState("main");
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [ignorePatterns, setIgnorePatterns] = useState("");
 
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [analysisProgress, setAnalysisProgress] =
@@ -74,38 +73,21 @@ export const NewProject: React.FC = () => {
   const [createdProjectId, setCreatedProjectId] = useState<number | null>(null);
 
   const { data: githubStatus } = useGitHubStatus();
-  const { data: gitlabStatus } = useGitLabStatus();
   const disconnectGithub = useDisconnectGitHub();
-  const disconnectGitlab = useDisconnectGitLab();
 
-  const oauthConnected =
-    oauthProvider === "github"
-      ? githubStatus?.connected
-      : gitlabStatus?.connected;
-  const oauthProfile = oauthProvider === "github" ? githubStatus : gitlabStatus;
+  const oauthConnected = githubStatus?.connected;
+  const oauthProfile = githubStatus;
 
   useEffect(() => {
     if (searchParams.get("connected") === "true") {
-      const provider =
-        (searchParams.get("provider") as "github" | "gitlab") || "github";
-      setOauthProvider(provider);
       setGitTab("account");
-      toast.success(`${provider === "gitlab" ? "GitLab" : "GitHub"} connected`);
+      toast.success("GitHub connected");
     }
   }, [searchParams]);
-
-  useEffect(() => {
-    if (githubStatus?.connected && !gitlabStatus?.connected) {
-      setOauthProvider("github");
-    } else if (gitlabStatus?.connected && !githubStatus?.connected) {
-      setOauthProvider("gitlab");
-    }
-  }, [githubStatus?.connected, gitlabStatus?.connected]);
 
   const urlValid = repoUrl.trim() ? validateGitUrl(repoUrl) : null;
 
   const { data: repos, isLoading: reposLoading } = useGitRepos(
-    oauthProvider,
     gitTab === "account" && !!oauthConnected,
   );
 
@@ -115,7 +97,6 @@ export const NewProject: React.FC = () => {
   const { data: branches, isLoading: branchesLoading } = useRepoBranches(
     selectedParts?.owner,
     selectedParts?.repo,
-    oauthProvider,
     !!selectedRepo,
   );
 
@@ -149,7 +130,7 @@ export const NewProject: React.FC = () => {
         name: name.trim(),
         description: description.trim() || undefined,
         source_type: sourceChoice,
-        template_id: templateId ? Number(templateId) : undefined,
+        template_id: selectedTemplate?.id ?? (templateId ? Number(templateId) : undefined),
       });
       setCreatedProjectId(project.id);
 
@@ -177,7 +158,7 @@ export const NewProject: React.FC = () => {
           owner,
           repo,
           branch: oauthBranch,
-          provider: oauthProvider,
+          provider: "github",
         });
       } else {
         throw new Error("Incomplete configuration");
@@ -235,35 +216,76 @@ export const NewProject: React.FC = () => {
         <StepIndicator current={step} />
 
         {step === 1 && (
-          <div className="space-y-4 rounded-lg border border-border bg-card p-6">
-            <div>
-              <Label htmlFor="project-name">Project name</Label>
-              <Input
-                id="project-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="My API Docs"
-                className="mt-1.5"
-                required
-              />
+          <>
+            <div className="space-y-4 rounded-lg border border-border bg-card p-6">
+              <div>
+                <Label htmlFor="project-name">Project name</Label>
+                <Input
+                  id="project-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="My API Docs"
+                  className="mt-1.5"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="project-desc">Description (optional)</Label>
+                <Input
+                  id="project-desc"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What does this project document?"
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label>Documentation template (optional)</Label>
+                <div className="mt-1.5 flex items-center gap-3">
+                  {selectedTemplate ? (
+                    <div className="flex flex-1 items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <LayoutTemplate className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">{selectedTemplate.name}</span>
+                        <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                          {selectedTemplate.category}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTemplate(null)}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setTemplatePickerOpen(true)}
+                      className="flex-1 justify-start gap-2 text-muted-foreground"
+                    >
+                      <LayoutTemplate className="h-4 w-4" />
+                      Browse templates
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="flex justify-end pt-2">
+                <Button disabled={!canNextStep1} onClick={() => setStep(2)}>
+                  Continue
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
             </div>
-            <div>
-              <Label htmlFor="project-desc">Description (optional)</Label>
-              <Input
-                id="project-desc"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="What does this project document?"
-                className="mt-1.5"
-              />
-            </div>
-            <div className="flex justify-end pt-2">
-              <Button disabled={!canNextStep1} onClick={() => setStep(2)}>
-                Continue
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+            <TemplatePickerDialog
+              open={templatePickerOpen}
+              onOpenChange={setTemplatePickerOpen}
+              onSelect={(t) => setSelectedTemplate(t)}
+              selected={selectedTemplate}
+            />
+          </>
         )}
 
         {step === 2 && (
@@ -274,17 +296,9 @@ export const NewProject: React.FC = () => {
             <div className="grid gap-3 sm:grid-cols-3">
               {(
                 [
-                  {
-                    id: "zip" as const,
-                    label: "Upload ZIP",
-                    icon: FileArchive,
-                  },
+                  { id: "zip" as const, label: "Upload ZIP", icon: FileArchive },
                   { id: "git" as const, label: "Connect Git", icon: GitBranch },
-                  {
-                    id: "scratch" as const,
-                    label: "Start Empty",
-                    icon: CheckCircle2,
-                  },
+                  { id: "scratch" as const, label: "Start Empty", icon: CheckCircle2 },
                 ] as const
               ).map(({ id, label, icon: Icon }) => (
                 <button
@@ -301,9 +315,7 @@ export const NewProject: React.FC = () => {
                   <Icon
                     className={cn(
                       "h-8 w-8",
-                      sourceChoice === id
-                        ? "text-foreground"
-                        : "text-muted-foreground",
+                      sourceChoice === id ? "text-foreground" : "text-muted-foreground",
                     )}
                   />
                   <span className="text-sm font-bold">{label}</span>
@@ -349,7 +361,7 @@ export const NewProject: React.FC = () => {
           >
             <TabsList>
               <TabsTrigger value="url">Paste URL</TabsTrigger>
-              <TabsTrigger value="account">Connect account</TabsTrigger>
+              <TabsTrigger value="account">Connect GitHub</TabsTrigger>
             </TabsList>
             <TabsContent
               value="url"
@@ -373,10 +385,7 @@ export const NewProject: React.FC = () => {
               className="data-[state=inactive]:hidden"
             >
               <GitAccountTab
-                oauthProvider={oauthProvider}
-                setOauthProvider={setOauthProvider}
                 githubConnected={!!githubStatus?.connected}
-                gitlabConnected={!!gitlabStatus?.connected}
                 profile={oauthProfile}
                 oauthConnected={!!oauthConnected}
                 reposLoading={reposLoading}
@@ -390,8 +399,7 @@ export const NewProject: React.FC = () => {
                 oauthBranch={oauthBranch}
                 setOauthBranch={setOauthBranch}
                 onDisconnect={() => {
-                  if (oauthProvider === "github") disconnectGithub.mutate();
-                  else disconnectGitlab.mutate();
+                  disconnectGithub.mutate();
                   setSelectedRepo(null);
                 }}
                 onBack={() => setStep(2)}
@@ -469,7 +477,7 @@ function GitUrlTab({
   return (
     <div className="space-y-4 rounded-lg border border-border bg-card p-6">
       <div>
-        <Label htmlFor="git-url">GitHub / GitLab / Bitbucket URL</Label>
+        <Label htmlFor="git-url">GitHub / Bitbucket URL</Label>
         <div className="relative mt-1.5">
           <Input
             id="git-url"
@@ -502,7 +510,6 @@ function GitUrlTab({
         <Button
           disabled={!urlValid || submitting}
           onClick={onSubmit}
-          className=""
         >
           {submitting ? "Starting…" : "Connect & Analyse"}
         </Button>
@@ -512,10 +519,7 @@ function GitUrlTab({
 }
 
 function GitAccountTab({
-  oauthProvider,
-  setOauthProvider,
   githubConnected,
-  gitlabConnected,
   profile,
   oauthConnected,
   reposLoading,
@@ -533,10 +537,7 @@ function GitAccountTab({
   onSubmit,
   submitting,
 }: {
-  oauthProvider: "github" | "gitlab";
-  setOauthProvider: (p: "github" | "gitlab") => void;
   githubConnected: boolean;
-  gitlabConnected: boolean;
   profile?: { username?: string; avatar?: string };
   oauthConnected: boolean;
   reposLoading: boolean;
@@ -558,31 +559,16 @@ function GitAccountTab({
     return (
       <div className="space-y-4 rounded-lg border border-border bg-card p-6">
         <p className="text-meta text-muted-foreground">
-          Connect your account to access private repositories.
+          Connect your GitHub account to access private repositories.
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Button
-            type="button"
-            onClick={() => {
-              window.location.href = getOAuthAuthorizeUrl("github");
-            }}
-            className="w-full"
-          >
-            <GitProviderIcon provider="github" />
-            Connect GitHub
-          </Button>
-          <Button
-            type="button"
-            onClick={() => {
-              window.location.href = getOAuthAuthorizeUrl("gitlab");
-            }}
-            variant="outline"
-            className="w-full"
-          >
-            <GitProviderIcon provider="gitlab" />
-            Connect GitLab
-          </Button>
-        </div>
+        <Button
+          type="button"
+          onClick={() => { window.location.href = getOAuthAuthorizeUrl("github"); }}
+          className="w-full"
+        >
+          <GitProviderIcon provider="github" />
+          Connect GitHub
+        </Button>
         <div className="flex justify-between pt-2">
           <Button variant="outline" onClick={onBack}>
             Back
@@ -606,49 +592,17 @@ function GitAccountTab({
           />
           <div>
             <p className="text-sm font-bold">{profile?.username}</p>
-            <p className="text-xs text-status-finalized-foreground">
-              {oauthProvider === "github" ? "GitHub" : "GitLab"} connected
-            </p>
+            <p className="text-xs text-status-finalized-foreground">GitHub connected</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          {githubConnected && (
-            <button
-              type="button"
-              onClick={() => setOauthProvider("github")}
-              className={cn(
-                "rounded-lg px-2 py-1 text-xs font-semibold",
-                oauthProvider === "github"
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground",
-              )}
-            >
-              GitHub
-            </button>
-          )}
-          {gitlabConnected && (
-            <button
-              type="button"
-              onClick={() => setOauthProvider("gitlab")}
-              className={cn(
-                "rounded-lg px-2 py-1 text-xs font-semibold",
-                oauthProvider === "gitlab"
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground",
-              )}
-            >
-              GitLab
-            </button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onDisconnect}
-            className="rounded-lg"
-          >
-            Disconnect
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onDisconnect}
+          className="rounded-lg"
+        >
+          Disconnect
+        </Button>
       </div>
 
       <div className="relative">
@@ -703,9 +657,7 @@ function GitAccountTab({
               )}
               <div className="mt-2 flex flex-wrap items-center gap-2 text-meta text-muted-foreground">
                 {repo.language && (
-                  <span className="rounded-full bg-muted px-2 py-0.5">
-                    {repo.language}
-                  </span>
+                  <span className="rounded-full bg-muted px-2 py-0.5">{repo.language}</span>
                 )}
                 <span className="inline-flex items-center gap-0.5">
                   <Star className="h-3 w-3" />
@@ -713,9 +665,7 @@ function GitAccountTab({
                 </span>
                 <span>
                   Updated{" "}
-                  {formatDistanceToNow(new Date(repo.updated_at), {
-                    addSuffix: true,
-                  })}
+                  {formatDistanceToNow(new Date(repo.updated_at), { addSuffix: true })}
                 </span>
               </div>
             </button>
@@ -735,14 +685,9 @@ function GitAccountTab({
               onChange={(e) => setOauthBranch(e.target.value)}
               className="mt-1.5 flex h-9 w-full rounded-md border border-input bg-background px-3 text-body"
             >
-              {(
-                branches ?? [
-                  { name: selectedRepo.default_branch, is_default: true },
-                ]
-              ).map((b) => (
+              {(branches ?? [{ name: selectedRepo.default_branch, is_default: true }]).map((b) => (
                 <option key={b.name} value={b.name}>
-                  {b.name}
-                  {b.is_default ? " (default)" : ""}
+                  {b.name}{b.is_default ? " (default)" : ""}
                 </option>
               ))}
             </select>
@@ -757,7 +702,6 @@ function GitAccountTab({
         <Button
           disabled={!selectedRepo || submitting}
           onClick={onSubmit}
-          className=""
         >
           {submitting ? "Starting…" : "Connect & Analyse"}
         </Button>
@@ -811,8 +755,7 @@ function ZipStep({
       />
       {zipFile && (
         <p className="text-meta text-muted-foreground">
-          Selected: {zipFile.name} ({(zipFile.size / 1024 / 1024).toFixed(2)}{" "}
-          MB)
+          Selected: {zipFile.name} ({(zipFile.size / 1024 / 1024).toFixed(2)} MB)
         </p>
       )}
       <div className="space-y-4">
@@ -836,23 +779,19 @@ function ZipStep({
               {p}
             </button>
           ))}
-        </div >
+        </div>
         <Input
           placeholder="Custom patterns (e.g. *.tmp, *.bak)"
           value={ignorePatterns}
           onChange={(e) => setIgnorePatterns(e.target.value)}
           className="mt-2"
         />
-      </div >
+      </div>
       <div className="flex justify-between pt-2">
         <Button variant="outline" onClick={onBack}>
           Back
         </Button>
-        <Button
-          disabled={!zipFile || submitting}
-          onClick={onSubmit}
-          className=""
-        >
+        <Button disabled={!zipFile || submitting} onClick={onSubmit}>
           Upload & Analyse
         </Button>
       </div>
@@ -878,7 +817,7 @@ function ScratchStep({
         <Button variant="outline" onClick={onBack}>
           Back
         </Button>
-        <Button disabled={submitting} onClick={onSubmit} className="">
+        <Button disabled={submitting} onClick={onSubmit}>
           Create Project
         </Button>
       </div>

@@ -38,12 +38,10 @@ def validate_git_url(url: str) -> Tuple[str, str, str]:
 
     if "github.com" in domain:
         provider = "github"
-    elif "gitlab.com" in domain:
-        provider = "gitlab"
     elif "bitbucket.org" in domain:
         provider = "bitbucket"
     else:
-        raise ValueError("Unsupported Git provider. Please use GitHub, GitLab, or Bitbucket.")
+        raise ValueError("Unsupported Git provider. Please use GitHub or Bitbucket.")
 
     return provider, owner, repo
 

@@ -21,6 +21,7 @@ class OrganizationResponse(BaseModel):
     personal: bool
     created_at: datetime
     quality_threshold: int = 70
+    ai_provider: Optional[str] = None
 
 
 # ── Member ────────────────────────────────────────────────────────────────────

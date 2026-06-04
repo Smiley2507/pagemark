@@ -9,28 +9,21 @@ export const useGitHubStatus = () =>
     queryFn: gitAuthApi.getGitHubStatus,
   });
 
-export const useGitLabStatus = () =>
+export const useGitRepos = (enabled = true) =>
   useQuery({
-    queryKey: ['git', 'gitlab', 'status'],
-    queryFn: gitAuthApi.getGitLabStatus,
-  });
-
-export const useGitRepos = (provider: 'github' | 'gitlab', enabled = true) =>
-  useQuery({
-    queryKey: ['git', 'repos', provider],
-    queryFn: () => analysisApi.getGitRepos(provider),
+    queryKey: ['git', 'repos', 'github'],
+    queryFn: () => analysisApi.getGitRepos('github'),
     enabled,
   });
 
 export const useRepoBranches = (
   owner: string | undefined,
   repo: string | undefined,
-  provider: 'github' | 'gitlab',
   enabled = true
 ) =>
   useQuery({
-    queryKey: ['git', 'branches', provider, owner, repo],
-    queryFn: () => analysisApi.getRepoBranches(owner!, repo!, provider),
+    queryKey: ['git', 'branches', 'github', owner, repo],
+    queryFn: () => analysisApi.getRepoBranches(owner!, repo!, 'github'),
     enabled: enabled && !!owner && !!repo,
   });
 
@@ -43,17 +36,5 @@ export const useDisconnectGitHub = () => {
       toast.success('GitHub disconnected');
     },
     onError: () => toast.error('Failed to disconnect GitHub'),
-  });
-};
-
-export const useDisconnectGitLab = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: gitAuthApi.disconnectGitLab,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['git', 'gitlab'] });
-      toast.success('GitLab disconnected');
-    },
-    onError: () => toast.error('Failed to disconnect GitLab'),
   });
 };

@@ -39,7 +39,7 @@ from app.schemas.analysis import (
 )
 from app.services.analysis_service import apply_outline_to_document, get_outline_diff, get_latest_analysis
 from app.workers.analysis_worker import analyze_project_task, clone_and_analyze_task
-from app.services import git_service, github_service, gitlab_service, crypto_service
+from app.services import git_service, github_service, crypto_service
 from app.models.oauth_token import OAuthToken
 
 
@@ -80,6 +80,7 @@ def _project_to_response(project: Project, sections: list[Section]) -> ProjectRe
         template_id=project.template_id,
         starred=project.starred,
         tags=project.tags or [],
+        export_settings=project.export_settings,
         sections_count=len(sections),
         created_at=project.created_at,
         updated_at=project.updated_at,
@@ -302,6 +303,8 @@ async def update_project(
         project.tags = body.tags
     if body.status is not None:
         project.status = ProjectStatus(body.status.value)
+    if body.export_settings is not None:
+        project.export_settings = body.export_settings
 
     project.updated_at = datetime.utcnow()
     await db.commit()
@@ -471,23 +474,17 @@ async def connect_oauth_git(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    provider = body.provider if body.provider in ("github", "gitlab") else "github"
+    provider = "github"
     result = await db.execute(
         select(OAuthToken).where(OAuthToken.user_id == current_user.id, OAuthToken.provider == provider)
     )
     token_obj = result.scalar_one_or_none()
     if not token_obj:
-        raise HTTPException(status_code=400, detail=f"No {provider} connection found.")
+        raise HTTPException(status_code=400, detail="No GitHub connection found.")
     decrypted_token = crypto_service.decrypt_token(token_obj.access_token_encrypted)
 
-    if provider == 'github':
-        clone_url = github_service.build_authenticated_clone_url(decrypted_token, body.owner, body.repo)
-        repo_url_display = f"https://github.com/{body.owner}/{body.repo}"
-    elif provider == 'gitlab':
-        clone_url = gitlab_service.build_authenticated_clone_url(decrypted_token, f"{body.owner}/{body.repo}")
-        repo_url_display = f"https://gitlab.com/{body.owner}/{body.repo}"
-    else:
-        raise HTTPException(status_code=400, detail="Unknown provider")
+    clone_url = github_service.build_authenticated_clone_url(decrypted_token, body.owner, body.repo)
+    repo_url_display = f"https://github.com/{body.owner}/{body.repo}"
 
     project = await _get_project(project_id, current_user, db)
     project.source_type = SourceType.GIT
@@ -528,8 +525,6 @@ async def sync_git_repo(
                 _, owner, repo = git_service.validate_git_url(project.git_repo_url)
                 if project.git_provider == 'github':
                     clone_url = github_service.build_authenticated_clone_url(decrypted, owner, repo)
-                elif project.git_provider == 'gitlab':
-                    clone_url = gitlab_service.build_authenticated_clone_url(decrypted, f"{owner}/{repo}")
             except Exception:
                 pass
 

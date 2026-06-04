@@ -16,7 +16,8 @@ import { Analysis } from './pages/Analysis';
 import { GitConnectPage } from './pages/GitConnectPage';
 import { useMe } from './hooks/useAuth';
 import { ProjectsView, TemplatesView } from './components/dashboard';
-import { OrgMembersView, OrgAuditLogView, OrgApiKeysView, OrgSettingsView } from './components/org';
+import { SettingsPage } from './pages/SettingsPage';
+import { NLPDashboard } from './pages/NLPDashboard';
 
 const queryClient = new QueryClient();
 
@@ -26,7 +27,6 @@ import { OrgInvitePage } from './pages/auth/OrgInvitePage';
 import { useOrgStore } from './store/orgStore';
 import { orgApi } from './api/org';
 import { MainLayout } from './components/layout/MainLayout';
-import { PermissionGate } from './components/shared/PermissionGate';
 
 const RootRedirect = () => {
   const user = useAuthStore((state) => state.user);
@@ -87,30 +87,12 @@ const AppRoutes = () => {
             <Route index element={<Navigate to="projects" replace />} />
             <Route path="projects" element={<ProjectsView />} />
             <Route path="templates" element={<TemplatesView />} />
-            <Route path="members" element={
-              <PermissionGate allowedRoles={['ADMIN', 'PROJECT_MANAGER']}>
-                <OrgMembersView />
-              </PermissionGate>
-            } />
-            <Route path="activity" element={
-              <PermissionGate allowedRoles={['ADMIN', 'PROJECT_MANAGER']}>
-                <OrgAuditLogView />
-              </PermissionGate>
-            } />
-            <Route path="keys" element={
-              <PermissionGate allowedRoles={['ADMIN', 'PROJECT_MANAGER']}>
-                <OrgApiKeysView />
-              </PermissionGate>
-            } />
-            <Route path="settings" element={
-              <PermissionGate allowedRoles={['ADMIN']}>
-                <OrgSettingsView />
-              </PermissionGate>
-            } />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
           <Route path="/new-project" element={<NewProject />} />
           <Route path="/editor/:id" element={<Editor />} />
           <Route path="/analysis/:id" element={<Analysis />} />
+          <Route path="/nlp/:projectId" element={<NLPDashboard />} />
           <Route path="/git-connect" element={<GitConnectPage />} />
         </Route>
       </Route>

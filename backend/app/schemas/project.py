@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, List
+from typing import Optional, List, List, Dict, Any
 from datetime import datetime
 from enum import Enum
 
@@ -34,6 +34,7 @@ class ProjectUpdateRequest(BaseModel):
     starred: Optional[bool] = None
     status: Optional[ProjectStatusEnum] = None
     tags: Optional[List[str]] = None
+    export_settings: Optional[Dict[str, Any]] = None
 
 
 # ── Response schemas ─────────────────────────────────────────────
@@ -52,6 +53,7 @@ class ProjectResponse(BaseModel):
     template_id: Optional[int]
     starred: bool
     tags: List[str] = []
+    export_settings: Optional[Dict[str, Any]] = None
     sections_count: int = 0
     created_at: datetime
     updated_at: datetime

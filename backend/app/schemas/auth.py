@@ -23,6 +23,11 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+class UpdateMeRequest(BaseModel):
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+    password: Optional[str] = Field(None, min_length=8)
+
 class MeResponse(BaseModel):
     id: int
     email: str

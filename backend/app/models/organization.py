@@ -30,6 +30,8 @@ class Organization(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     personal = Column(Boolean, default=False, nullable=False)
     quality_threshold = Column(Integer, default=70, nullable=False)
+    ai_provider = Column(String, nullable=True)
+    ai_key_encrypted = Column(String, nullable=True)
 
     members = relationship("OrganizationMember", back_populates="organization", cascade="all, delete-orphan")
     creator = relationship("User", foreign_keys=[created_by])

@@ -15,6 +15,7 @@ from app.models.audit import AuditLog
 from app.models.key import UserAPIKey
 from app.models.clarification import ClarificationRequest, ClarificationStatus
 from app.models.note import CollaborationNote
+from app.models.nlp import NLPReport
 
 __all__ = [
     "User",
@@ -42,4 +43,5 @@ __all__ = [
     "ClarificationRequest",
     "ClarificationStatus",
     "CollaborationNote",
+    "NLPReport",
 ]

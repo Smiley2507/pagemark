@@ -16,12 +16,12 @@ from app.database import get_db
 from app.config import settings
 from app.models.user import User, UserRole, UserSettings, RoleEnum
 from app.models.organization import Organization, OrganizationMember, OrgMemberRole, OrgMemberStatus
-from app.schemas.auth import RegisterRequest, LoginRequest, MeResponse, ForgotPasswordRequest, ResetPasswordRequest
+from app.schemas.auth import RegisterRequest, LoginRequest, MeResponse, UpdateMeRequest, ForgotPasswordRequest, ResetPasswordRequest
 from app.services import auth_service
 from app.dependencies import get_current_user
 from fastapi.responses import RedirectResponse
 from app.models.oauth_token import OAuthToken
-from app.services import github_service, gitlab_service, crypto_service
+from app.services import github_service, crypto_service
 from app.schemas.analysis import GitHubStatusResponse
 from app.ai_providers import PROVIDERS
 from app.schemas.ai_credential import (
@@ -195,6 +195,19 @@ async def me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.patch("/me", response_model=MeResponse)
+async def update_me(body: UpdateMeRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    if body.name is not None:
+        current_user.name = body.name
+    if body.avatar_url is not None:
+        current_user.avatar_url = body.avatar_url
+    if body.password is not None:
+        current_user.password_hash = auth_service.hash_password(body.password)
+    await db.commit()
+    await db.refresh(current_user)
+    return current_user
+
+
 @router.post("/forgot-password")
 async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.email == body.email))
@@ -268,53 +281,6 @@ async def github_status(current_user: User = Depends(get_current_user), db: Asyn
 @router.delete("/github/disconnect", status_code=status.HTTP_204_NO_CONTENT)
 async def github_disconnect(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(OAuthToken).where(OAuthToken.user_id == current_user.id, OAuthToken.provider == "github"))
-    tok = res.scalar_one_or_none()
-    if tok:
-        await db.delete(tok)
-        await db.commit()
-    return None
-
-
-# ── GitLab OAuth ───────────────────────────────────────────────
-
-@router.get("/gitlab/authorize")
-async def gitlab_authorize(current_user: User = Depends(get_current_user)):
-    return RedirectResponse(gitlab_service.get_authorize_url(auth_service.create_access_token(current_user.id)))
-
-
-@router.get("/gitlab/callback")
-async def gitlab_callback(code: str, state: str, db: AsyncSession = Depends(get_db)):
-    payload = auth_service.decode_token(state)
-    if not payload or payload.get("type") != "access":
-        raise HTTPException(status_code=400, detail="Invalid state token")
-    user_id = int(payload.get("sub"))
-    encrypted = crypto_service.encrypt_token(await gitlab_service.exchange_code_for_token(code))
-    res = await db.execute(select(OAuthToken).where(OAuthToken.user_id == user_id, OAuthToken.provider == "gitlab"))
-    tok = res.scalar_one_or_none()
-    if tok:
-        tok.access_token_encrypted = encrypted
-    else:
-        db.add(OAuthToken(user_id=user_id, provider="gitlab", access_token_encrypted=encrypted))
-    await db.commit()
-    return RedirectResponse(f"{settings.FRONTEND_URL}/git-connect?connected=true&provider=gitlab")
-
-
-@router.get("/gitlab/status", response_model=GitHubStatusResponse)
-async def gitlab_status(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(OAuthToken).where(OAuthToken.user_id == current_user.id, OAuthToken.provider == "gitlab"))
-    tok = res.scalar_one_or_none()
-    if not tok:
-        return {"connected": False}
-    try:
-        profile = await gitlab_service.fetch_user_profile(crypto_service.decrypt_token(tok.access_token_encrypted))
-        return {"connected": True, "username": profile.get("username"), "avatar": profile.get("avatar_url")}
-    except Exception:
-        return {"connected": False}
-
-
-@router.delete("/gitlab/disconnect", status_code=status.HTTP_204_NO_CONTENT)
-async def gitlab_disconnect(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(OAuthToken).where(OAuthToken.user_id == current_user.id, OAuthToken.provider == "gitlab"))
     tok = res.scalar_one_or_none()
     if tok:
         await db.delete(tok)

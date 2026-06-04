@@ -21,6 +21,11 @@ export const authApi = {
     return data;
   },
 
+  async updateMe(payload: { name?: string; avatar_url?: string; password?: string }): Promise<User> {
+    const { data } = await apiClient.patch('/auth/me', payload);
+    return data;
+  },
+
   async forgotPassword(email: string): Promise<void> {
     await apiClient.post('/auth/forgot-password', { email });
   },

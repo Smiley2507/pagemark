@@ -100,7 +100,7 @@ def extract_dependencies(files: list[RepoFile]) -> list[dict]:
 
 # ── Pipeline metadata ───────────────────────────────────────────
 
-TOTAL_STEPS = 8
+TOTAL_STEPS = 9
 
 STEP_NAMES = {
     1: "Connecting to source",
@@ -111,6 +111,7 @@ STEP_NAMES = {
     6: "Computing complexity",
     7: "Finalizing results",
     8: "Generating documentation outline",
+    9: "Analyzing readability & style",
 }
 
 IGNORE_DIR_NAMES = {

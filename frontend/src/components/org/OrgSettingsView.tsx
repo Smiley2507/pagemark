@@ -5,13 +5,22 @@ import { Label } from '@/components/ui/label';
 import { useOrgStore } from '@/store/orgStore';
 import { orgApi } from '@/api/org';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+
+const AI_PROVIDERS = [
+  { value: 'claude', label: 'Claude (Anthropic)' },
+  { value: 'gemini', label: 'Gemini (Google AI Studio)' },
+  { value: 'openai', label: 'OpenAI' },
+];
 
 export const OrgSettingsView: React.FC = () => {
-  const { activeOrgId, getActiveOrg } = useOrgStore();
+  const { activeOrgId, getActiveOrg, setOrganizations } = useOrgStore();
   const [isEditing, setIsEditing] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [orgAvatar, setOrgAvatar] = useState('');
   const [qualityThreshold, setQualityThreshold] = useState(70);
+  const [aiProvider, setAiProvider] = useState('');
+  const [aiKey, setAiKey] = useState('');
 
   const activeOrg = getActiveOrg();
 
@@ -19,6 +28,7 @@ export const OrgSettingsView: React.FC = () => {
     if (activeOrg) {
       setOrgName(activeOrg.name);
       setOrgAvatar(activeOrg.avatar_url || '');
+      setAiProvider((activeOrg as any).ai_provider || '');
     }
   }, [activeOrg]);
 
@@ -118,6 +128,68 @@ export const OrgSettingsView: React.FC = () => {
             </div>
           </form>
         )}
+      </div>
+
+      {/* AI Configuration */}
+      <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+        <div>
+          <h3 className="text-lg font-medium">AI Provider</h3>
+          <p className="text-meta text-muted-foreground">Set a default AI provider and API key for this organization. Per-user credentials will override this.</p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {AI_PROVIDERS.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => setAiProvider(p.value === aiProvider ? '' : p.value)}
+              className={cn(
+                'rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
+                aiProvider === p.value
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-background text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {aiProvider && (
+          <div className="space-y-2">
+            <Label htmlFor="org-ai-key">API Key</Label>
+            <Input
+              id="org-ai-key"
+              type="password"
+              value={aiKey}
+              onChange={(e) => setAiKey(e.target.value)}
+              placeholder="sk-…"
+            />
+            <p className="text-xs text-muted-foreground">
+              Key is encrypted at rest. Leave blank to keep the existing key.
+            </p>
+          </div>
+        )}
+
+        <div className="flex justify-end">
+          <Button
+            onClick={async () => {
+              try {
+                await orgApi.updateOrganization(activeOrgId!, {
+                  ai_provider: aiProvider || null,
+                  ai_key: aiKey || undefined,
+                });
+                toast.success('AI configuration updated');
+                setAiKey('');
+                const orgs = await orgApi.listOrganizations();
+                setOrganizations(orgs);
+              } catch {
+                toast.error('Failed to update AI configuration');
+              }
+            }}
+          >
+            Save AI Settings
+          </Button>
+        </div>
       </div>
 
       {/* Quality Threshold */}

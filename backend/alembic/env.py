@@ -24,6 +24,7 @@ from app.models.ai_credential import UserAiCredential
 from app.models.audit import AuditLog
 from app.models.key import UserAPIKey
 from app.models.note import CollaborationNote
+from app.models.nlp import NLPReport
 
 # Alembic Config object
 config = context.config

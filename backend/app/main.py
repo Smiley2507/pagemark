@@ -1,12 +1,13 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.future import select
 
 from app.config import settings
 from app.database import async_session
 from app.models.template import Template
-from app.routers import auth, projects, templates, git, documents, sections, versions, clarification, terminology, search as search_router, notes as notes_router
+from app.routers import auth, projects, templates, git, documents, sections, versions, clarification, terminology, search as search_router, notes as notes_router, nlp as nlp_router, uploads as uploads_router
 from app.routers import ai as ai_router
 from app.routers import quality as quality_router
 from app.routers import export as export_router
@@ -129,6 +130,10 @@ app.include_router(org_router.router)
 app.include_router(keys_router.router)
 app.include_router(search_router.router)
 app.include_router(notes_router.router)
+app.include_router(nlp_router.router)
+app.include_router(uploads_router.router)
+
+app.mount("/static", StaticFiles(directory=settings.UPLOAD_DIR), name="static")
 
 
 @app.get("/health")

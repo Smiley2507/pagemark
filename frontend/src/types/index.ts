@@ -19,10 +19,11 @@ export interface Project {
   source_type: "zip" | "git" | "scratch";
   git_repo_url?: string;
   git_branch?: string;
-  git_provider?: "github" | "gitlab" | "bitbucket";
+  git_provider?: "github" | "bitbucket";
   tags: string[];
   starred: boolean;
   context_md?: string;
+  export_settings?: ExportSettings;
   created_at: string;
   updated_at: string;
 }
@@ -360,6 +361,7 @@ export interface Organization {
   personal: boolean;
   created_at: string;
   quality_threshold: number;
+  ai_provider?: string;
 }
 
 export type OrgMemberRole = 'ADMIN' | 'PROJECT_MANAGER' | 'DEVELOPER' | 'TECHNICAL_WRITER' | 'VIEWER';
@@ -393,4 +395,20 @@ export interface APIKey {
   created_at: string;
   expires_at?: string;
   raw_key?: string;
+}
+
+export interface ExportSettings {
+  logo_url?: string;
+  primary_color?: string;
+  font_family?: string;
+}
+
+export interface NLPReport {
+  id: number;
+  project_id: number;
+  readability_score: number;
+  entities: any[];
+  style_analysis: Record<string, any>;
+  suggestions: any[];
+  created_at: string;
 }

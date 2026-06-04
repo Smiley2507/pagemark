@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     # Deprecated: AI uses BYOK user credentials in Settings. Optional legacy fallback only.
     ANTHROPIC_API_KEY: Optional[str] = None
     FRONTEND_URL: str
+    UPLOAD_DIR: str = "uploads"
 
     MAIL_USERNAME: str
     MAIL_PASSWORD: str

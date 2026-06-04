@@ -3,8 +3,9 @@ export_service.py — Markdown, HTML, and PDF export for project documentation.
 """
 from __future__ import annotations
 
+import json
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import markdown as md_lib
 
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
     from app.models.document import Section
 
 
-# ── HTML template ─────────────────────────────────────────────────────────────
+# ── HTML template (branding variables injected at render time) ────────────────
 
 _HTML_TEMPLATE = """\
 <!DOCTYPE html>
@@ -22,9 +23,13 @@ _HTML_TEMPLATE = """\
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{title}</title>
   <style>
+    :root {{
+      --primary-color: {primary_color};
+      --font-family: '{font_family}';
+    }}
     *, *::before, *::after {{ box-sizing: border-box; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      font-family: var(--font-family), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
                    Helvetica, Arial, sans-serif;
       font-size: 16px;
       line-height: 1.7;
@@ -33,12 +38,12 @@ _HTML_TEMPLATE = """\
       margin: 0 auto;
       padding: 2rem 2.5rem 4rem;
     }}
-    h1 {{ font-size: 2.2rem; border-bottom: 2px solid #e2e8f0; padding-bottom: .4rem; margin-top: 2rem; }}
-    h2 {{ font-size: 1.6rem; border-bottom: 1px solid #e2e8f0; padding-bottom: .3rem; margin-top: 2rem; }}
-    h3 {{ font-size: 1.25rem; margin-top: 1.5rem; }}
+    h1 {{ font-size: 2.2rem; border-bottom: 2px solid var(--primary-color); padding-bottom: .4rem; margin-top: 2rem; color: var(--primary-color); }}
+    h2 {{ font-size: 1.6rem; border-bottom: 1px solid var(--primary-color); padding-bottom: .3rem; margin-top: 2rem; color: var(--primary-color); }}
+    h3 {{ font-size: 1.25rem; margin-top: 1.5rem; color: var(--primary-color); }}
     h4, h5, h6 {{ margin-top: 1.25rem; }}
     p  {{ margin: .75rem 0; }}
-    a  {{ color: #3182ce; text-decoration: underline; }}
+    a  {{ color: var(--primary-color); text-decoration: underline; }}
     code {{
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
       font-size: .88em;
@@ -73,7 +78,7 @@ _HTML_TEMPLATE = """\
     th {{ background: #f7fafc; font-weight: 600; }}
     tr:nth-child(even) {{ background: #f7fafc; }}
     blockquote {{
-      border-left: 4px solid #a0aec0;
+      border-left: 4px solid var(--primary-color);
       margin: 1rem 0;
       padding: .5rem 1rem;
       color: #4a5568;
@@ -92,6 +97,7 @@ _HTML_TEMPLATE = """\
   </style>
 </head>
 <body>
+{logo_html}
 {body}
 </body>
 </html>
@@ -115,14 +121,30 @@ def export_html(
     sections: list["Section"],
     project_name: str,
     doc_title: str = "Documentation",
+    export_settings: Optional[dict] = None,
 ) -> bytes:
     """Convert sections → HTML using the markdown library."""
+    settings = export_settings or {}
+    primary_color = settings.get("primary_color", "#0F172A")
+    font_family = settings.get("font_family", "Inter")
+    logo_url = settings.get("logo_url")
+
+    logo_html = ""
+    if logo_url:
+        logo_html = f'<div style="text-align:center;margin-bottom:2rem;"><img src="{logo_url}" style="max-height:80px;" alt="logo"/></div>'
+
     md_text = export_markdown(sections, doc_title)
     body_html = md_lib.markdown(
         md_text,
         extensions=["fenced_code", "tables", "toc", "nl2br"],
     )
-    html = _HTML_TEMPLATE.format(title=project_name, body=body_html)
+    html = _HTML_TEMPLATE.format(
+        title=project_name,
+        primary_color=primary_color,
+        font_family=font_family,
+        logo_html=logo_html,
+        body=body_html,
+    )
     return html.encode("utf-8")
 
 
@@ -130,10 +152,11 @@ def export_pdf(
     sections: list["Section"],
     project_name: str,
     doc_title: str = "Documentation",
+    export_settings: Optional[dict] = None,
 ) -> bytes:
     """Convert sections → PDF via WeasyPrint."""
     from weasyprint import HTML as WeasyHTML  # local import – heavy dep
 
-    html_bytes = export_html(sections, project_name, doc_title)
+    html_bytes = export_html(sections, project_name, doc_title, export_settings)
     html_str = html_bytes.decode("utf-8")
     return WeasyHTML(string=html_str).write_pdf()

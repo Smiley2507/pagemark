@@ -155,6 +155,8 @@ class OrganizationUpdateRequest(BaseModel):
     name: Optional[str] = None
     avatar_url: Optional[str] = None
     quality_threshold: Optional[int] = None
+    ai_provider: Optional[str] = None
+    ai_key: Optional[str] = None
 
 
 @router.get("/{org_id}", response_model=OrganizationResponse)
@@ -193,6 +195,12 @@ async def update_organization(
         if body.quality_threshold < 0 or body.quality_threshold > 100:
             raise HTTPException(status_code=400, detail="Quality threshold must be between 0 and 100")
         org.quality_threshold = body.quality_threshold
+
+    if body.ai_provider is not None:
+        org.ai_provider = body.ai_provider if body.ai_provider else None
+    if body.ai_key is not None:
+        from app.services import crypto_service
+        org.ai_key_encrypted = crypto_service.encrypt_token(body.ai_key) if body.ai_key else None
 
     await _log(db, current_user.id, org_id, "update_organization", f"org:{org_id}")
     await db.commit()

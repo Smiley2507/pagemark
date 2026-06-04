@@ -141,6 +141,9 @@ def _run_pipeline(project_id: int, analysis_id: int, root_path: str):
     )
     run_outline_step_sync(project_id, analysis_id, artifacts)
 
+    update_analysis_step_sync(analysis_id, 9, STEP_NAMES[9], step_detail="Computing readability and style…")
+    _run_nlp_analysis(project_id, analysis_id)
+
 
 @celery_app.task(bind=True, max_retries=3)
 def analyze_project_task(self, project_id: int, analysis_id: int, source_path: str, source_type: str = "zip", ignore_patterns: list[str] = None):
@@ -200,6 +203,53 @@ def clone_and_analyze_task(
         raise self.retry(exc=e, countdown=10)
     finally:
         git_service.cleanup_repo(target_path)
+
+def _run_nlp_analysis(project_id: int, analysis_id: int):
+    from app.database import SessionLocal
+    from app.models.nlp import NLPReport
+    from app.models.document import Document, Section
+    from app.services.nlp_service import compute_readability, extract_entities, analyze_style, generate_suggestions
+
+    with SessionLocal() as db:
+        try:
+            doc = db.query(Document).filter(Document.project_id == project_id).first()
+            if not doc:
+                update_analysis_step_sync(analysis_id, 9, STEP_NAMES[9], status="failed", step_detail="No document found")
+                return
+
+            sections = db.query(Section).filter(
+                Section.document_id == doc.id,
+                Section.deleted_at.is_(None),
+            ).all()
+
+            all_text = "\n".join(s.content_md or "" for s in sections)
+
+            readability = compute_readability(all_text)
+            entities = extract_entities(all_text)
+            style = analyze_style(all_text)
+            suggestions = generate_suggestions(style)
+
+            report = NLPReport(
+                project_id=project_id,
+                readability_score=readability,
+                entities=entities,
+                style_analysis=style,
+                suggestions=suggestions,
+            )
+            db.add(report)
+            db.commit()
+
+            update_analysis_step_sync(
+                analysis_id, 9, STEP_NAMES[9],
+                step_detail=f"Readability: {readability}, entities: {len(entities)}, suggestions: {len(suggestions)}",
+            )
+        except Exception as e:
+            update_analysis_step_sync(
+                analysis_id, 9, STEP_NAMES[9],
+                status="failed",
+                step_detail=str(e)[:200],
+            )
+
 
 @celery_app.task(bind=True, max_retries=3)
 def generate_section_task(self, section_id: int, project_id: int, user_id: int):

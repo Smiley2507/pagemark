@@ -6,6 +6,7 @@ import type {
   AnalysisStatus,
   AnalysisResults,
   OutlineDiff,
+  NLPReport,
 } from '../types';
 
 export const analysisApi = {
@@ -22,7 +23,7 @@ export const analysisApi = {
 
   async connectGitOAuth(
     projectId: number,
-    data: { owner: string; repo: string; branch: string; provider: 'github' | 'gitlab' }
+    data: { owner: string; repo: string; branch: string; provider: 'github' }
   ): Promise<JobResponse> {
     const { data: res } = await apiClient.post(
       `/projects/${projectId}/git/connect-oauth`,
@@ -31,7 +32,7 @@ export const analysisApi = {
     return res;
   },
 
-  async getGitRepos(provider: 'github' | 'gitlab' = 'github'): Promise<GitRepo[]> {
+  async getGitRepos(provider: 'github' = 'github'): Promise<GitRepo[]> {
     const { data } = await apiClient.get('/projects/git/repos', {
       params: { provider },
     });
@@ -41,7 +42,7 @@ export const analysisApi = {
   async getRepoBranches(
     owner: string,
     repo: string,
-    provider: 'github' | 'gitlab' = 'github'
+    provider: 'github' = 'github'
   ): Promise<GitBranch[]> {
     const { data } = await apiClient.get(
       `/projects/git/repos/${owner}/${repo}/branches`,
@@ -96,6 +97,11 @@ export const analysisApi = {
 
   async getClarification(sectionId: number): Promise<{ question: string }> {
     const { data } = await apiClient.get(`/clarifications/${sectionId}`);
+    return data;
+  },
+
+  async getNLPReport(projectId: number): Promise<NLPReport> {
+    const { data } = await apiClient.get(`/projects/${projectId}/nlp-report`);
     return data;
   },
 };
