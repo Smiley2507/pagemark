@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -20,6 +20,7 @@ from app.schemas.section import (
     SectionTitleRequest,
     CustomSectionRequest,
 )
+from app.services import generation_service
 from app.services import section_service
 from app.services.version_service import create_version_snapshot
 
@@ -161,6 +162,21 @@ async def update_section_status(
         status=body.status,
         completion_pct=completion_pct,
     )
+
+
+@router.post("/{section_id}/accept-review", response_model=SectionResponse)
+async def accept_section_review(
+    section_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    section = await section_service.get_section_for_user(db, section_id, current_user.id)
+    section = await generation_service.accept_section_review(
+        db,
+        section,
+        user_id=current_user.id,
+    )
+    return section_service.section_to_response(section)
 
 
 @router.put("/reorder")

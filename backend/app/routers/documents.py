@@ -18,6 +18,7 @@ from app.models.document import (
     SectionStatus,
 )
 from app.models.clarification import ClarificationRequest
+from app.models.generation import GenerationMode, GenerationRun, GenerationSectionTask
 from app.models.outline_proposal import OutlineProposal, OutlineProposalBasis
 from app.models.project import Project
 from app.models.template import Template
@@ -27,6 +28,14 @@ from app.schemas.document import (
     ClarificationRequestCreateRequest,
     ClarificationRequestResponse,
     DocumentCreateRequest,
+    GenerationEstimateRequest,
+    GenerationEstimateResponse,
+    GenerationFailoverConfirmRequest,
+    GenerationModeEnum,
+    GenerationRunCreateRequest,
+    GenerationRunListResponse,
+    GenerationRunResponse,
+    GenerationSectionTaskResponse,
     DocumentListResponse,
     DocumentProgressResponse,
     DocumentResponse,
@@ -43,6 +52,8 @@ from app.schemas.document import (
 from app.schemas.section import CustomSectionRequest, SectionResponse, SectionTreeResponse, SectionUpdateRequest
 from app.schemas.template import TemplateResponse
 from app.services import section_service
+from app.services import ai_credential_service
+from app.services import generation_service
 from app.services import template_recommendation_service
 
 router = APIRouter(prefix="/projects", tags=["documents"])
@@ -195,6 +206,50 @@ def _clarification_to_response(request: ClarificationRequest) -> ClarificationRe
         created_at=request.created_at,
         resolved_at=request.resolved_at,
         skipped_at=request.skipped_at,
+    )
+
+
+def _task_to_response(task: GenerationSectionTask) -> GenerationSectionTaskResponse:
+    return GenerationSectionTaskResponse(
+        id=task.id,
+        generation_run_id=task.generation_run_id,
+        section_id=task.section_id,
+        status=task.status.value,
+        dependency_section_ids=task.dependency_section_ids or [],
+        actual_provider=task.actual_provider,
+        actual_model=task.actual_model,
+        prompt_tokens=task.prompt_tokens,
+        completion_tokens=task.completion_tokens,
+        cost=task.cost,
+        error_message=task.error_message,
+        task_metadata=task.task_metadata,
+        started_at=task.started_at,
+        completed_at=task.completed_at,
+    )
+
+
+def _generation_run_to_response(run: GenerationRun) -> GenerationRunResponse:
+    return GenerationRunResponse(
+        id=run.id,
+        document_id=run.document_id,
+        mode=GenerationModeEnum(run.mode.value),
+        intended_provider=run.intended_provider,
+        intended_model=run.intended_model,
+        status=run.status.value,
+        failover_state=run.failover_state.value,
+        estimated_prompt_tokens=run.estimated_prompt_tokens,
+        estimated_completion_tokens=run.estimated_completion_tokens,
+        estimated_cost=run.estimated_cost,
+        actual_prompt_tokens=run.actual_prompt_tokens,
+        actual_completion_tokens=run.actual_completion_tokens,
+        actual_cost=run.actual_cost,
+        error_message=run.error_message,
+        run_metadata=run.run_metadata,
+        section_tasks=[_task_to_response(task) for task in sorted(run.section_tasks, key=lambda item: item.id)],
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        created_at=run.created_at,
+        updated_at=run.updated_at,
     )
 
 
@@ -567,6 +622,114 @@ async def _load_document_response(
 ) -> DocumentResponse:
     document = await _get_document_for_project(db, project_id, document_id)
     return _document_to_response(document)
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/generation-estimate",
+    response_model=GenerationEstimateResponse,
+)
+async def estimate_document_generation(
+    document_id: int,
+    body: GenerationEstimateRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    active = await ai_credential_service.get_active_credential(db, current_user.id)
+    if active is None:
+        raise HTTPException(status_code=400, detail="Active provider credential required for generation estimates.")
+    estimate = await generation_service.estimate_usage(
+        db,
+        document,
+        mode=GenerationMode(body.mode.value),
+        section_ids=body.section_ids,
+        provider=active.provider,
+        model=active.model_id,
+    )
+    return GenerationEstimateResponse(**estimate)
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/generation-runs",
+    response_model=GenerationRunListResponse,
+)
+async def list_document_generation_runs(
+    document_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _get_document_for_project(db, project.id, document_id)
+    runs = await generation_service.list_generation_runs(db, document_id)
+    return GenerationRunListResponse(
+        generation_runs=[_generation_run_to_response(run) for run in runs]
+    )
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/generation-runs",
+    status_code=status.HTTP_201_CREATED,
+    response_model=GenerationRunResponse,
+)
+async def create_document_generation_run(
+    document_id: int,
+    body: GenerationRunCreateRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    run = await generation_service.create_generation_run(
+        db,
+        document,
+        user_id=current_user.id,
+        mode=GenerationMode(body.mode.value),
+        section_ids=body.section_ids,
+    )
+    if body.execute:
+        run = await generation_service.execute_generation_run(db, run, user_id=current_user.id)
+    return _generation_run_to_response(run)
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/generation-runs/{run_id}",
+    response_model=GenerationRunResponse,
+)
+async def get_document_generation_run(
+    document_id: int,
+    run_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _get_document_for_project(db, project.id, document_id)
+    run = await generation_service.get_generation_run(db, document_id, run_id)
+    return _generation_run_to_response(run)
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/generation-runs/{run_id}/confirm-failover",
+    response_model=GenerationRunResponse,
+)
+async def confirm_document_generation_failover(
+    document_id: int,
+    run_id: int,
+    body: GenerationFailoverConfirmRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    await _get_document_for_project(db, project.id, document_id)
+    run = await generation_service.get_generation_run(db, document_id, run_id)
+    run = await generation_service.confirm_failover(
+        db,
+        run,
+        user_id=current_user.id,
+        provider=body.provider,
+        model=body.model,
+    )
+    return _generation_run_to_response(run)
 
 
 @router.get("/{project_id}/documents/{document_id}/sections", response_model=SectionTreeResponse)

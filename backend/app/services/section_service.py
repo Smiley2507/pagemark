@@ -29,7 +29,11 @@ def section_to_response(section: Section, children: Optional[list[SectionRespons
         lifecycle_status=section.lifecycle_status.value,
         confidence_score=section.confidence_score,
         content_md=section.content_md or "",
+        content_lifecycle=section.content_lifecycle.value,
         status=SectionStatusEnum(section.status.value),
+        reviewed_by=section.reviewed_by,
+        reviewed_at=section.reviewed_at,
+        reviewed_against_analysis_id=section.reviewed_against_analysis_id,
         children=children or [],
     )
 

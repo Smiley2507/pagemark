@@ -172,3 +172,81 @@ class DocumentSetupStateResponse(BaseModel):
     outline_proposals: list[OutlineProposalResponse] = Field(default_factory=list)
     clarification_requests: list[ClarificationRequestResponse] = Field(default_factory=list)
     sections: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class GenerationModeEnum(str, Enum):
+    COMPLETE_DOCUMENT = "complete_document"
+    SECTION_ON_DEMAND = "section_on_demand"
+
+
+class GenerationEstimateRequest(BaseModel):
+    mode: GenerationModeEnum
+    section_ids: list[int] | None = None
+
+
+class GenerationEstimateResponse(BaseModel):
+    mode: GenerationModeEnum
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    relative_usage: str
+    estimated_prompt_tokens: int
+    estimated_completion_tokens: int
+    estimated_cost: float
+    uncertainty: str
+    section_breakdown: list[dict[str, Any]]
+    pricing_note: str
+
+
+class GenerationRunCreateRequest(BaseModel):
+    mode: GenerationModeEnum
+    section_ids: list[int] | None = None
+    execute: bool = True
+
+
+class GenerationSectionTaskResponse(BaseModel):
+    id: int
+    generation_run_id: int
+    section_id: int
+    status: str
+    dependency_section_ids: list[int] = Field(default_factory=list)
+    actual_provider: Optional[str] = None
+    actual_model: Optional[str] = None
+    prompt_tokens: Optional[int] = None
+    completion_tokens: Optional[int] = None
+    cost: Optional[float] = None
+    error_message: Optional[str] = None
+    task_metadata: Optional[dict[str, Any]] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+
+class GenerationRunResponse(BaseModel):
+    id: int
+    document_id: int
+    mode: GenerationModeEnum
+    intended_provider: Optional[str] = None
+    intended_model: Optional[str] = None
+    status: str
+    failover_state: str
+    estimated_prompt_tokens: Optional[int] = None
+    estimated_completion_tokens: Optional[int] = None
+    estimated_cost: Optional[float] = None
+    actual_prompt_tokens: Optional[int] = None
+    actual_completion_tokens: Optional[int] = None
+    actual_cost: Optional[float] = None
+    error_message: Optional[str] = None
+    run_metadata: Optional[dict[str, Any]] = None
+    section_tasks: list[GenerationSectionTaskResponse] = Field(default_factory=list)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+
+class GenerationRunListResponse(BaseModel):
+    generation_runs: list[GenerationRunResponse]
+
+
+class GenerationFailoverConfirmRequest(BaseModel):
+    provider: str
+    model: str

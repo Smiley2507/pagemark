@@ -23,7 +23,11 @@ class SectionResponse(BaseModel):
     lifecycle_status: str
     confidence_score: Optional[int] = None
     content_md: str
+    content_lifecycle: str = "empty"
     status: SectionStatusEnum
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
+    reviewed_against_analysis_id: Optional[int] = None
     children: List["SectionResponse"] = Field(default_factory=list)
 
     class Config:
