@@ -207,6 +207,8 @@ export const EditorPage: React.FC = () => {
         }}
         onQualityClick={() => setQualityOpen(true)}
         isGenerating={generateSection.isPending}
+        qualityScore={latestQualityScore}
+        issueCount={sections.filter(s => s.status === 'NEEDS_INPUT').length}
         userName={currentUser?.name}
         overflowActions={[
           ...(docStatus === 'DRAFT'

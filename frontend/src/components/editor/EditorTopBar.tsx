@@ -42,41 +42,87 @@ interface EditorTopBarProps {
   notesCount?: number;
   overflowActions?: OverflowAction[];
   userName?: string;
+  qualityScore?: number | null;
+  issueCount?: number;
 }
 
-function CompletionRing({ pct }: { pct: number }) {
+function CompletionRing({
+  pct,
+  qualityScore,
+  issueCount,
+}: {
+  pct: number;
+  qualityScore?: number | null;
+  issueCount?: number;
+}) {
   const r = 14;
   const circumference = 2 * Math.PI * r;
   const offset = circumference - (pct / 100) * circumference;
   const color = pct >= 80 ? 'stroke-success' : pct >= 40 ? 'stroke-warning' : 'stroke-destructive';
+  const [showHealth, setShowHealth] = useState(false);
+  const healthRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (healthRef.current && !healthRef.current.contains(e.target as Node))
+        setShowHealth(false);
+    };
+    if (showHealth) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showHealth]);
 
   return (
-    <div className="relative flex items-center justify-center">
-      <svg width="34" height="34" className="-rotate-90">
-        <circle
-          cx="17"
-          cy="17"
-          r={r}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3"
-          className="text-muted"
-        />
-        <circle
-          cx="17"
-          cy="17"
-          r={r}
-          fill="none"
-          strokeWidth="3"
-          strokeLinecap="round"
-          className={cn('transition-all duration-500', color)}
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-        />
-      </svg>
-      <span className="absolute text-[10px] font-mono font-medium text-muted-foreground">
-        {Math.round(pct)}
-      </span>
+    <div ref={healthRef} className="relative">
+      <button
+        onClick={() => setShowHealth(!showHealth)}
+        className="relative flex items-center justify-center cursor-pointer"
+      >
+        <svg width="34" height="34" className="-rotate-90">
+          <circle cx="17" cy="17" r={r} fill="none" stroke="currentColor" strokeWidth="3" className="text-muted" />
+          <circle
+            cx="17" cy="17" r={r} fill="none" strokeWidth="3" strokeLinecap="round"
+            className={cn('transition-all duration-500', color)}
+            strokeDasharray={circumference} strokeDashoffset={offset}
+          />
+        </svg>
+        <span className="absolute text-[10px] font-mono font-medium text-muted-foreground">
+          {Math.round(pct)}
+        </span>
+      </button>
+
+      {showHealth && (
+        <div className="absolute right-0 top-full mt-2 z-50 w-56 rounded-lg border border-border bg-card p-3 shadow-lg">
+          <h4 className="text-xs font-semibold text-foreground mb-3">Document Health</h4>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Sections complete</span>
+              <span className="font-medium">{Math.round(pct)}%</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Quality score</span>
+              <span
+                className={cn(
+                  'font-medium',
+                  qualityScore != null && (qualityScore >= 80 ? 'text-success' : qualityScore >= 60 ? 'text-warning' : 'text-destructive'),
+                )}
+              >
+                {qualityScore != null ? `${Math.round(qualityScore)}%` : '—'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Issues</span>
+              <span className={cn('font-medium', (issueCount ?? 0) > 0 ? 'text-warning' : 'text-muted-foreground')}>
+                {issueCount ?? '—'}
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 pt-2 border-t border-border">
+            <p className="text-[10px] text-muted-foreground">
+              Grammar & spelling checks coming soon
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -157,6 +203,8 @@ export function EditorTopBar({
   onQualityClick,
   isGenerating,
   notesCount = 0,
+  qualityScore,
+  issueCount,
 }: EditorTopBarProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -255,7 +303,7 @@ export function EditorTopBar({
 
       {/* Right */}
       <div className="flex items-center gap-1.5">
-        <CompletionRing pct={completionPct} />
+        <CompletionRing pct={completionPct} qualityScore={qualityScore} issueCount={issueCount} />
 
         <div className="w-px h-4 bg-border mx-1" />
 
