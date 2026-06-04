@@ -123,7 +123,15 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
     except Exception:
         pass
 
-    return user
+    return MeResponse(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        avatar_url=user.avatar_url,
+        is_verified=user.is_verified,
+        is_first_login=True,
+        created_at=user.created_at,
+    )
 
 
 @router.get("/verify-email")
@@ -158,13 +166,25 @@ async def login(request: LoginRequest, response: Response, db: AsyncSession = De
     if not user.is_verified:
         raise HTTPException(status_code=401, detail="Email not verified")
 
+    is_first_login = user.login_count == 0
+    user.login_count += 1
+    await db.commit()
+
     for key, value in [
         ("access_token", auth_service.create_access_token(user.id)),
         ("refresh_token", auth_service.create_refresh_token(user.id)),
     ]:
         response.set_cookie(key=key, value=value, httponly=True, secure=True, samesite="none")
 
-    return user
+    return MeResponse(
+        id=user.id,
+        email=user.email,
+        name=user.name,
+        avatar_url=user.avatar_url,
+        is_verified=user.is_verified,
+        is_first_login=is_first_login,
+        created_at=user.created_at,
+    )
 
 
 @router.post("/logout")

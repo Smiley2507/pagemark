@@ -34,6 +34,7 @@ class MeResponse(BaseModel):
     name: Optional[str]
     avatar_url: Optional[str]
     is_verified: bool
+    is_first_login: bool = False
     created_at: datetime
 
     class Config:

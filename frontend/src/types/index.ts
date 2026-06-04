@@ -4,6 +4,7 @@ export interface User {
   name: string;
   avatar_url?: string;
   is_verified: boolean;
+  is_first_login?: boolean;
   created_at: string;
 }
 

@@ -27,10 +27,12 @@ export const useLogin = () => {
     mutationFn: authApi.login,
     onSuccess: (user) => {
       useAuthStore.getState().setUser(user);
+      if (user.is_first_login) {
+        useAuthStore.getState().setShowWelcome(true);
+      }
       if (!user.is_verified) {
         navigate('/verify-email-pending');
       } else {
-        toast.success('Welcome back!');
         navigate('/dashboard');
       }
     },
@@ -46,10 +48,12 @@ export const useRegister = () => {
     mutationFn: authApi.register,
     onSuccess: (user) => {
       useAuthStore.getState().setUser(user);
+      if (user.is_first_login) {
+        useAuthStore.getState().setShowWelcome(true);
+      }
       if (!user.is_verified) {
         navigate('/verify-email-pending');
       } else {
-        toast.success('Account created successfully!');
         navigate('/dashboard');
       }
     },

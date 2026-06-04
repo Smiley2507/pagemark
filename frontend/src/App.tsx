@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { useAuthStore } from './store/authStore';
 
+import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
@@ -31,7 +32,7 @@ import { MainLayout } from './components/layout/MainLayout';
 
 const RootRedirect = () => {
   const user = useAuthStore((state) => state.user);
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <LandingPage />;
   if (!user.is_verified) return <Navigate to="/verify-email-pending" replace />;
   return <Navigate to="/dashboard" replace />;
 };
