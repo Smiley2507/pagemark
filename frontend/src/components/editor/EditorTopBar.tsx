@@ -205,6 +205,8 @@ export function EditorTopBar({
   notesCount = 0,
   qualityScore,
   issueCount,
+  overflowActions,
+  userName,
 }: EditorTopBarProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();

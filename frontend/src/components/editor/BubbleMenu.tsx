@@ -63,7 +63,7 @@ export function BubbleMenu({ position, editor, onPolish }: BubbleMenuProps) {
     
     if (isLink) {
       // Extract text from link
-      const match = text.match(/^\\[(.*)\\]\\((.*)\\)$/);
+      const match = text.match(/^\[(.*)\]\((.*)\)$/);
       if (match) {
         editor.dispatch({
           changes: { from: selection.from, to: selection.to, insert: match[1] },

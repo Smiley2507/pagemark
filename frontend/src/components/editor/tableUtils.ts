@@ -23,9 +23,9 @@ function isTableLine(line: string): boolean {
  * Parses a markdown table row into an array of cell strings.
  */
 function parseRow(line: string): string[] {
-  // Split by | but ignore escaped \|
-  const cells = line.split(/(?<!\\\\)\\|/);
-  // Remove the first and last empty elements that result from leading/trailing |
+  // Split by pipe character
+  const cells = line.split('|');
+  // Remove leading/trailing empty elements from surrounding pipes
   if (cells.length > 0 && cells[0].trim() === '') cells.shift();
   if (cells.length > 0 && cells[cells.length - 1].trim() === '') cells.pop();
   return cells.map(c => c.trim());
@@ -69,7 +69,7 @@ export function formatTable(rows: string[][], alignments: ('left' | 'center' | '
     });
 
     return '| ' + formattedCells.join(' | ') + ' |';
-  }).join('\\n');
+  }).join('\n');
 }
 
 export function getCellPos(doc: Text, ctx: TableContext, row: number, col: number): number {
@@ -80,20 +80,13 @@ export function getCellPos(doc: Text, ctx: TableContext, row: number, col: numbe
   let pipeCount = 0;
   for (let i = 0; i < text.length; i++) {
     if (text[i] === '|') {
-      let backslashes = 0;
-      for (let j = i - 1; j >= 0 && text[j] === '\\'; j--) {
-        backslashes++;
-      }
-
-      if (backslashes % 2 === 0) {
-        pipeCount++;
-        if (pipeCount === col + 1) {
-          let contentStart = i + 1;
-          if (contentStart < text.length && text[contentStart] === ' ') {
-            contentStart++;
-          }
-          return line.from + contentStart;
+      pipeCount++;
+      if (pipeCount === col + 1) {
+        let contentStart = i + 1;
+        if (contentStart < text.length && text[contentStart] === ' ') {
+          contentStart++;
         }
+        return line.from + contentStart;
       }
     }
   }
@@ -148,7 +141,7 @@ export function findTableAtCursor(doc: Text, pos: number): TableContext | null {
 
     if (n === currentLine.number) {
       const prefix = text.slice(0, pos - doc.line(n).from);
-      const pipes = (prefix.match(/(?<!\\\\)\\|/g) || []).length;
+      const pipes = (prefix.match(/\|/g) || []).length;
       cursorCol = Math.max(0, pipes - 1);
     }
   }
