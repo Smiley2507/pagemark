@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -5,6 +6,8 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.future import select
 
 from app.config import settings
+
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 from app.database import async_session
 from app.models.template import Template
 from app.routers import auth, projects, templates, git, documents, sections, versions, clarification, grammar, terminology, search as search_router, notes as notes_router, nlp as nlp_router, uploads as uploads_router
