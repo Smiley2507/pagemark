@@ -2,8 +2,10 @@ import { cn } from '@/lib/utils';
 
 export function PagemarkWordmark({ className }: { className?: string }) {
   return (
-    <span className={cn('text-title font-bold text-foreground', className)}>
-      Pagemark
-    </span>
+    <img
+      src="/pagemark-logo.svg"
+      alt="Pagemark"
+      className={cn('h-6 w-auto', className)}
+    />
   );
 }
