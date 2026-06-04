@@ -131,7 +131,7 @@ export function SidebarNavigation() {
       <div className="flex h-screen w-64 flex-col border-r border-border bg-card/50 backdrop-blur-sm">
         {/* Brand */}
         <div className="flex h-14 items-center border-b border-border px-4">
-          <PagemarkWordmark className="text-section" />
+          <PagemarkWordmark className="h-12" />
         </div>
 
         {/* Quick action: New Project */}
@@ -149,7 +149,6 @@ export function SidebarNavigation() {
         {/* Primary Navigation */}
         <nav className="flex-1 space-y-1 px-3 overflow-y-auto">
           <NavLink href="/dashboard" icon={LayoutDashboard} label="Dashboard" isActive={isActive('/dashboard')} />
-          <NavLink href="/dashboard/projects" icon={LayoutDashboard} label="Projects" isActive={isActive('/dashboard/projects')} />
           <NavLink href="/dashboard/templates" icon={LayoutTemplate} label="Templates" isActive={isActive('/dashboard/templates')} />
 
           {/* Tags */}
@@ -335,10 +334,10 @@ function NavLink({ href, icon: Icon, label, isActive }: { href: string; icon: an
     <Link
       to={href}
       className={cn(
-        'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+        'flex items-center gap-3 px-3 py-2 text-sm font-medium transition-colors border-l-2',
         isActive
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+          ? 'border-primary bg-primary/5 text-primary'
+          : 'border-transparent text-muted-foreground hover:bg-accent hover:text-accent-foreground'
       )}
     >
       <Icon className="h-4 w-4" />

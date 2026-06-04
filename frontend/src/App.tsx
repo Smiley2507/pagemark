@@ -91,8 +91,7 @@ const AppRoutes = () => {
         {/* Dashboard layout routes (sidebar + header) */}
         <Route element={<MainLayout />}>
           <Route path="/dashboard" element={<Dashboard />}>
-            <Route index element={<Navigate to="projects" replace />} />
-            <Route path="projects" element={<ProjectsView />} />
+            <Route index element={<ProjectsView />} />
             <Route path="templates" element={<TemplatesView />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
