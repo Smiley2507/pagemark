@@ -13,7 +13,7 @@ export function AuthLayout({
       <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center">
-            <PagemarkWordmark className="h-8 mx-auto" />
+            <PagemarkWordmark className="h-12 mx-auto" />
             {subtitle && (
               <p className="mt-2 text-meta text-muted-foreground">{subtitle}</p>
             )}

@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpen, Shield, Zap, Sparkles, FileText, Users, ChevronDown } from 'lucide-react';
+import { ArrowRight, BookOpen, Shield, Zap, Sparkles, FileText, Users, ChevronDown, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PagemarkWordmark } from '@/components/layout/PagemarkWordmark';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 
 const features = [
   {
@@ -132,6 +132,37 @@ function NoiseOverlay() {
   );
 }
 
+function FaqItem({ question, answer }: { question: string; answer: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <FadeUp>
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
+        <button
+          onClick={() => setOpen(!open)}
+          className="flex w-full items-center justify-between px-6 py-4 text-left text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
+        >
+          {question}
+          {open ? <X className="h-4 w-4 text-muted-foreground shrink-0" /> : <Plus className="h-4 w-4 text-muted-foreground shrink-0" />}
+        </button>
+        <AnimatePresence initial={false}>
+          {open && (
+            <motion.div
+              key="answer"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <p className="px-6 pb-4 text-sm text-muted-foreground leading-relaxed">{answer}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </FadeUp>
+  );
+}
+
 export function LandingPage() {
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
@@ -162,17 +193,18 @@ export function LandingPage() {
 
           {/* Nav inside hero */}
           <div className="relative z-20 flex items-center justify-between px-6 py-4 max-w-6xl mx-auto w-full">
-            <PagemarkWordmark className="h-9" />
+            <PagemarkWordmark className="h-12" />
             <nav className="hidden md:flex items-center gap-6 text-sm text-white/50">
               <a href="#how-it-works" className="hover:text-white/80 transition-colors">How it works</a>
               <a href="#features" className="hover:text-white/80 transition-colors">Features</a>
+              <a href="#faq" className="hover:text-white/80 transition-colors">FAQ</a>
             </nav>
             <div className="flex items-center gap-3">
               <Link to="/login">
                 <Button variant="ghost" size="sm" className="text-white/70 hover:text-white">Sign in</Button>
               </Link>
               <Link to="/register">
-                <Button size="sm" className="bg-primary hover:bg-primary/90">Get started</Button>
+                <Button size="sm">Get started</Button>
               </Link>
             </div>
           </div>
@@ -209,12 +241,12 @@ export function LandingPage() {
               className="mt-10 flex items-center justify-center gap-4"
             >
               <Link to="/register">
-                <Button size="lg" className="gap-2 h-13 px-8 text-base shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
+                <Button size="lg">
                   Start for free <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
               <Link to="/login">
-                <Button variant="outline" size="lg" className="h-13 px-8 text-base border-white/15 text-white/70 hover:text-white hover:bg-white/[0.06]">
+                <Button variant="outline" size="lg" className="border-white/15 text-white/70 hover:text-white hover:bg-white/[0.06]">
                   Sign in
                 </Button>
               </Link>
@@ -335,19 +367,62 @@ export function LandingPage() {
             </p>
             <div className="mt-8 flex items-center justify-center gap-4">
               <Link to="/register">
-                <Button size="lg" className="gap-2 h-13 px-8 text-base shadow-lg shadow-primary/20 bg-primary hover:bg-primary/90">
+                <Button size="lg">
                   Get started free <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
             </div>
           </motion.div>
         </section>
+
+        {/* ── FAQ ── */}
+        <section id="faq" className="relative px-6 py-24 max-w-3xl mx-auto">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_50%,var(--primary)_0%,transparent_60%)] opacity-[0.015] pointer-events-none" />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView="visible"
+            viewport={{ once: true }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center mb-16"
+          >
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground">Frequently asked questions</h2>
+            <p className="mt-3 text-muted-foreground max-w-2xl mx-auto">
+              Everything you need to know about Pagemark.
+            </p>
+          </motion.div>
+          <StaggerChildren className="space-y-3">
+            {[
+              {
+                q: 'How does Pagemark analyze my codebase?',
+                a: 'Pagemark accepts a ZIP upload or Git connection, then scans your file tree, identifies languages and frameworks, detects API endpoints and database models, and measures complexity. No code is stored — only the structural facts needed to generate documentation outlines.',
+              },
+              {
+                q: 'Do I need an API key to use AI features?',
+                a: 'Yes. Pagemark is bring-your-own-key — you configure a provider credential (e.g. Claude, Google AI Studio) in Settings. Your account can store multiple keys, and you pick one as your active provider. Static analysis (file tree, languages, endpoints) works without any AI key.',
+              },
+              {
+                q: 'Can I export my documentation?',
+                a: 'Yes. Export to Markdown, PDF, or DOCX anytime. Your content is never locked in — you own everything you write.',
+              },
+              {
+                q: 'Is there a free tier?',
+                a: 'Pagemark is free to start with no credit card required. You only pay for the AI provider credentials you bring — Pagemark itself does not charge for platform usage.',
+              },
+              {
+                q: 'Can my team collaborate on docs?',
+                a: 'Yes. Sections support a review workflow — submit for review, track quality scores, approve changes, and manage who can edit. Built for teams that care about documentation quality.',
+              },
+            ].map((faq) => (
+              <FaqItem key={faq.q} question={faq.q} answer={faq.a} />
+            ))}
+          </StaggerChildren>
+        </section>
       </main>
 
       {/* ── Footer ── */}
       <footer className="border-t border-border px-6 py-10">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-          <PagemarkWordmark className="h-6" />
+          <PagemarkWordmark className="h-9" />
           <div className="flex items-center gap-6">
             <a href="#how-it-works" className="hover:text-foreground transition-colors">How it works</a>
             <a href="#features" className="hover:text-foreground transition-colors">Features</a>
