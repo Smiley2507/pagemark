@@ -91,9 +91,8 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-40 h-12 border-b border-border bg-background/80 backdrop-blur-sm">
-      <div className="mx-auto flex h-full max-w-7xl items-center gap-4 px-4">
-        {/* Center: global search */}
-        <div ref={searchRef} className="relative flex-1 max-w-md">
+      <div className="mx-auto flex h-full max-w-7xl items-center justify-between px-4">
+        <div ref={searchRef} className="relative w-full max-w-md">
           <div
             className="relative cursor-text"
             onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
