@@ -1,0 +1,198 @@
+import { execSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+
+const repoRoot = path.resolve(process.cwd(), '..');
+const frontendRoot = process.cwd();
+
+const rawProductColorPattern =
+  /(?:className\s*=\s*["'][^"']*(?:bg|text|border|ring|from|to|via)-(?:red|orange|amber|yellow|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|white|black)-\d{2,3}[^"']*["'])|#[0-9a-fA-F]{3,8}\b|(?:rgb|hsl|oklch)\(/;
+const arbitraryVisualPattern =
+  /\b(?:bg|text|border|ring|shadow|rounded)-\[[^\]]+\]/;
+
+const allowedRawColorFiles = new Set([
+  'src/index.css',
+]);
+const legacyVisualDebtFiles = new Set([
+  'src/components/editor/MiddlePanel.tsx',
+]);
+
+function fail(message) {
+  console.error(`[design-system] ${message}`);
+  process.exitCode = 1;
+}
+
+function gitChangedFiles() {
+  try {
+    const output = execSync(
+      'git diff --name-only HEAD -- frontend/src frontend/tailwind.config.cjs frontend/eslint.config.js frontend/scripts',
+      { cwd: repoRoot, encoding: 'utf8' }
+    );
+    return output
+      .split('\n')
+      .filter(Boolean)
+      .map((file) => file.replace(/^frontend\//, ''));
+  } catch {
+    return [];
+  }
+}
+
+function checkedFiles() {
+  const changed = gitChangedFiles().filter((file) => /\.(tsx?|css|cjs|mjs)$/.test(file));
+  if (changed.length > 0) return changed;
+  return [
+    'src/components/ui/badge.tsx',
+    'src/components/ui/button.tsx',
+    'src/components/ui/dialog.tsx',
+    'src/components/ui/empty-state.tsx',
+    'src/components/ui/input.tsx',
+    'src/components/ui/notice.tsx',
+    'src/components/ui/popover.tsx',
+    'src/components/ui/progress.tsx',
+    'src/components/ui/select.tsx',
+    'src/components/ui/segmented-control.tsx',
+    'src/components/ui/surface.tsx',
+    'src/components/ui/tabs.tsx',
+    'src/components/ui/tooltip.tsx',
+  ];
+}
+
+function assertRawColorDetectorWorks() {
+  const bad = '<div className="bg-[#123456] text-red-500" style={{ color: "#fff" }} />';
+  if (!rawProductColorPattern.test(bad) && !arbitraryVisualPattern.test(bad)) {
+    fail('raw product UI color detector did not catch the fixture hardcoded color');
+  }
+}
+
+function assertNoRawVisualsInChangedFiles() {
+  for (const file of checkedFiles()) {
+    const absolute = path.join(frontendRoot, file);
+    if (!existsSync(absolute)) continue;
+    if (legacyVisualDebtFiles.has(file)) continue;
+    const source = readFileSync(absolute, 'utf8');
+    if (!allowedRawColorFiles.has(file) && rawProductColorPattern.test(source)) {
+      fail(`${file} contains raw product UI color; use semantic tokens or governed variants`);
+    }
+    if (!file.startsWith('src/components/ui/') && arbitraryVisualPattern.test(source)) {
+      fail(`${file} contains arbitrary visual Tailwind values outside governed primitives`);
+    }
+  }
+}
+
+function hexToRgb(hex) {
+  const value = hex.replace('#', '');
+  const full = value.length === 3
+    ? value.split('').map((char) => `${char}${char}`).join('')
+    : value.slice(0, 6);
+  return [
+    Number.parseInt(full.slice(0, 2), 16),
+    Number.parseInt(full.slice(2, 4), 16),
+    Number.parseInt(full.slice(4, 6), 16),
+  ];
+}
+
+function luminance([r, g, b]) {
+  const channels = [r, g, b].map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+}
+
+function contrast(foreground, background) {
+  const first = luminance(hexToRgb(foreground));
+  const second = luminance(hexToRgb(background));
+  const lighter = Math.max(first, second);
+  const darker = Math.min(first, second);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function cssVars() {
+  const css = readFileSync(path.join(frontendRoot, 'src/index.css'), 'utf8');
+  const vars = {};
+  for (const match of css.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-fA-F]{6})/g)) {
+    vars[match[1]] = match[2];
+  }
+  return vars;
+}
+
+function assertContrast() {
+  const vars = cssVars();
+  const pairs = [
+    ['text-primary', 'canvas'],
+    ['text-secondary', 'canvas'],
+    ['sidebar-foreground', 'sidebar'],
+    ['interaction-foreground', 'interaction'],
+    ['status-success-foreground', 'status-success'],
+    ['status-warning-foreground', 'status-warning'],
+    ['status-danger-foreground', 'status-danger'],
+    ['status-info-foreground', 'status-info'],
+    ['status-generation-foreground', 'status-generation'],
+    ['status-review-foreground', 'status-review'],
+    ['status-needs-input-foreground', 'status-needs-input'],
+  ];
+  for (const [foreground, background] of pairs) {
+    const ratio = contrast(vars[foreground], vars[background]);
+    if (ratio < 4.5) {
+      fail(`${foreground} on ${background} contrast is ${ratio.toFixed(2)}, below WCAG AA`);
+    }
+  }
+}
+
+function assertFocusHooks() {
+  const focusFiles = [
+    'src/components/ui/button.tsx',
+    'src/components/ui/dialog.tsx',
+    'src/components/ui/input.tsx',
+    'src/components/ui/popover.tsx',
+    'src/components/ui/segmented-control.tsx',
+    'src/components/ui/tabs.tsx',
+  ];
+  for (const file of focusFiles) {
+    const source = readFileSync(path.join(frontendRoot, file), 'utf8');
+    if (!source.includes('focus-visible')) {
+      fail(`${file} does not expose a visible keyboard focus style`);
+    }
+  }
+}
+
+function assertPrimitiveProofUsesVariants() {
+  const source = readFileSync(
+    path.join(frontendRoot, 'src/components/ui/design-system-proof.tsx'),
+    'utf8'
+  );
+  const required = [
+    '<Button',
+    '<Badge',
+    '<Notice',
+    '<Surface',
+    '<Input',
+    '<Select',
+    '<SegmentedControl',
+    '<Progress',
+    '<EmptyState',
+    '<Tooltip',
+    '<Popover',
+    '<Tabs',
+  ];
+  for (const marker of required) {
+    if (!source.includes(marker)) {
+      fail(`design-system proof does not render ${marker}`);
+    }
+  }
+  if (/\b(?:bg|border|shadow|rounded)-/.test(source)) {
+    fail('design-system proof uses local visual restyling instead of shared variants');
+  }
+}
+
+assertRawColorDetectorWorks();
+assertNoRawVisualsInChangedFiles();
+assertContrast();
+assertFocusHooks();
+assertPrimitiveProofUsesVariants();
+
+if (!process.exitCode) {
+  console.log('[design-system] checks passed');
+}

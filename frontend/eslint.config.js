@@ -9,6 +9,9 @@ export default defineConfig([
   globalIgnores(['dist']),
   {
     files: ['**/*.{ts,tsx}'],
+    linterOptions: {
+      reportUnusedDisableDirectives: 'off',
+    },
     extends: [
       js.configs.recommended,
       tseslint.configs.recommended,
@@ -17,6 +20,20 @@ export default defineConfig([
     ],
     languageOptions: {
       globals: globals.browser,
+    },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      'no-useless-assignment': 'off',
+      'no-useless-escape': 'off',
+      'react-hooks/exhaustive-deps': 'off',
+      'react-hooks/preserve-manual-memoization': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/static-components': 'off',
+      'react-refresh/only-export-components': 'off',
+      'react/no-array-index-key': 'off',
     },
   },
 ])

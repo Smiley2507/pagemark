@@ -5,8 +5,8 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-        mono: ['"JetBrains Mono"', "monospace"],
+        sans: ["var(--font-sans)", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        mono: ["var(--font-mono)", "monospace"],
       },
       fontSize: {
         hero: ["40px", { lineHeight: "1.15", fontWeight: "700" }],
@@ -23,6 +23,31 @@ module.exports = {
         ring: "var(--ring)",
         background: "var(--background)",
         foreground: "var(--foreground)",
+        canvas: "var(--canvas)",
+        workspace: "var(--workspace)",
+        panel: {
+          DEFAULT: "var(--panel)",
+          foreground: "var(--panel-foreground)",
+          muted: "var(--panel-muted)",
+        },
+        overlay: {
+          DEFAULT: "var(--overlay)",
+          foreground: "var(--overlay-foreground)",
+          backdrop: "var(--overlay-backdrop)",
+        },
+        separator: "var(--separator)",
+        text: {
+          primary: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+          muted: "var(--text-muted)",
+          inverse: "var(--text-inverse)",
+        },
+        interaction: {
+          DEFAULT: "var(--interaction)",
+          hover: "var(--interaction-hover)",
+          muted: "var(--interaction-muted)",
+          foreground: "var(--interaction-foreground)",
+        },
         surface: {
           DEFAULT: "var(--surface)",
           elevated: "var(--surface-elevated)",
@@ -90,12 +115,29 @@ module.exports = {
           "draft-foreground": "var(--status-draft-foreground)",
           finalized: "var(--status-finalized)",
           "finalized-foreground": "var(--status-finalized-foreground)",
+          success: "var(--status-success)",
+          "success-foreground": "var(--status-success-foreground)",
+          warning: "var(--status-warning)",
+          "warning-foreground": "var(--status-warning-foreground)",
+          danger: "var(--status-danger)",
+          "danger-foreground": "var(--status-danger-foreground)",
+          info: "var(--status-info)",
+          "info-foreground": "var(--status-info-foreground)",
+          generation: "var(--status-generation)",
+          "generation-foreground": "var(--status-generation-foreground)",
+          review: "var(--status-review)",
+          "review-foreground": "var(--status-review-foreground)",
+          "needs-input": "var(--status-needs-input)",
+          "needs-input-foreground": "var(--status-needs-input-foreground)",
         },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        overlay: "var(--shadow-overlay)",
       },
       keyframes: {
         "fade-in": {

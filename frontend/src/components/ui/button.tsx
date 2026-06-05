@@ -3,22 +3,18 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-body font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-body font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        success:
-          'border border-success/20 bg-success/10 text-success hover:bg-success/20',
-        warning:
-          'border border-warning/20 bg-warning/10 text-warning-foreground hover:bg-warning/20',
-        info:
-          'border border-info/20 bg-info/10 text-info hover:bg-info/20',
-        destructive:
-          'border border-destructive/20 bg-destructive/10 text-destructive hover:bg-destructive/20',
-        outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
+        default: 'bg-interaction text-interaction-foreground hover:bg-interaction-hover',
+        secondary: 'bg-panel-muted text-text-primary hover:bg-accent hover:text-accent-foreground',
+        success: 'border border-status-success-foreground/25 bg-status-success text-status-success-foreground hover:bg-status-success/80',
+        warning: 'border border-status-warning-foreground/25 bg-status-warning text-status-warning-foreground hover:bg-status-warning/80',
+        info: 'border border-status-info-foreground/25 bg-status-info text-status-info-foreground hover:bg-status-info/80',
+        destructive: 'border border-status-danger-foreground/25 bg-status-danger text-status-danger-foreground hover:bg-status-danger/80',
+        outline: 'border border-input bg-panel text-text-primary hover:bg-accent hover:text-accent-foreground',
+        ghost: 'text-text-secondary hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {

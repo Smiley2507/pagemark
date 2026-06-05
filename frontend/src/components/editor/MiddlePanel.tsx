@@ -902,7 +902,6 @@ function MiddlePanelImpl({
                 <div className="overflow-auto rounded-md border border-border">
                   {diffResult.left.map((line, idx) => (
                     <div
-                      // eslint-disable-next-line react/no-array-index-key
                       key={idx}
                       className={cn(
                         'border-l-2 px-3 py-0.5 font-mono text-sm leading-relaxed',
@@ -924,7 +923,6 @@ function MiddlePanelImpl({
                 <div className="overflow-auto rounded-md border border-border">
                   {diffResult.right.map((line, idx) => (
                     <div
-                      // eslint-disable-next-line react/no-array-index-key
                       key={idx}
                       className={cn(
                         'border-l-2 px-3 py-0.5 font-mono text-sm leading-relaxed',
