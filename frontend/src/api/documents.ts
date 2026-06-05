@@ -1,5 +1,6 @@
 import apiClient from './client';
 import type { CollaborationNote } from '../types';
+import type { TemplateRecommendation, OutlineProposal } from '@/types/document-setup';
 
 export interface DocumentProgress {
   total_sections: number;
@@ -40,6 +41,48 @@ export const documentsApi = {
   async listDocuments(projectId: number): Promise<DocumentListResponse> {
     const { data } = await apiClient.get(`/projects/${projectId}/documents`);
     return data;
+  },
+
+  async getTemplateRecommendations(projectId: number, documentId: number): Promise<{ recommendations: TemplateRecommendation[] }> {
+    const { data } = await apiClient.get(`/projects/${projectId}/documents/${documentId}/template-recommendations`);
+    return data;
+  },
+
+  async createTemplateRecommendations(
+    projectId: number,
+    documentId: number,
+    basis: 'rule_based' | 'ai_personalized',
+    refresh: boolean = false
+  ): Promise<{ recommendations: TemplateRecommendation[] }> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/template-recommendations`,
+      { basis, refresh }
+    );
+    return data;
+  },
+
+  async getOutlineProposals(projectId: number, documentId: number): Promise<{ proposals: OutlineProposal[] }> {
+    const { data } = await apiClient.get(`/projects/${projectId}/documents/${documentId}/outline-proposals`);
+    // Backend returns outline_json but frontend expects outline_json (same)
+    return data;
+  },
+
+  async createOutlineProposal(
+    projectId: number,
+    documentId: number,
+    proposal: {
+      template_id?: number;
+      outline?: any[];
+      basis: string;
+      explanation?: any;
+    }
+  ): Promise<{ proposal: OutlineProposal }> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/outline-proposals`,
+      proposal
+    );
+    // Wrap in object to match expected response shape
+    return { proposal: data };
   },
 
   async submitForReview(projectId: number, reviewerId: number): Promise<{ status: string; reviewer_id: number }> {

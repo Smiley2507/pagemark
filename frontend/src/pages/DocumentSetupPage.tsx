@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { projectsApi } from '@/api/projects';
 import { analysisApi } from '@/api/analysis';
 import { aiCredentialsApi } from '@/api/aiCredentials';
+import { documentsApi } from '@/api/documents';
 
 import { SetupSummaryRail } from '@/components/document-setup/SetupSummaryRail';
 import { SourceStep } from '@/components/document-setup/SourceStep';
@@ -279,36 +280,22 @@ export function DocumentSetupPage() {
     }));
   };
 
-  // Mock recommendations and estimates for demonstration
-  const mockRecommendations = templates.slice(0, 3).map((t, idx) => ({
-    id: idx + 1,
-    template_id: t.id,
-    document_id: 1,
-    basis: 'rule_based' as 'rule_based' | 'ai_personalized' | 'custom_outline_seeded',
-    score: 0.9 - idx * 0.1,
-    explanation: `This template matches your ${t.category} project structure.`,
-    template: {
-      id: t.id,
-      name: t.name,
-      description: t.description,
-      category: t.category,
-      sections_preview: t.sections_json?.map((s: string | { heading: string }) => 
-        typeof s === 'string' ? { heading: s } : s
-      ),
-    },
-  }));
+  // Fetch template recommendations for the document
+  const { data: recommendationsData } = useQuery({
+    queryKey: ['template-recommendations', setupState.projectId, setupState.documentId],
+    queryFn: () => documentsApi.getTemplateRecommendations(setupState.projectId!, setupState.documentId!),
+    enabled: !!setupState.projectId && !!setupState.documentId && setupState.stage === 'template-selection',
+  });
 
-  const mockProposal = {
-    id: 1,
-    document_id: 1,
-    basis: 'rule_based' as 'rule_based' | 'ai_personalized' | 'custom_outline_seeded',
-    status: 'draft' as 'draft' | 'approved' | 'superseded',
-    outline_json: [
-      { heading: 'Overview', description: 'Introduction and purpose', purpose: 'Explain the project', order_index: 0 },
-      { heading: 'Getting Started', description: 'Setup instructions', purpose: 'Help users begin', order_index: 1 },
-      { heading: 'API Reference', description: 'API documentation', purpose: 'Document the API', order_index: 2 },
-    ],
-  };
+  // Fetch outline proposals for the document
+  const { data: proposalsData } = useQuery({
+    queryKey: ['outline-proposals', setupState.projectId, setupState.documentId],
+    queryFn: () => documentsApi.getOutlineProposals(setupState.projectId!, setupState.documentId!),
+    enabled: !!setupState.projectId && !!setupState.documentId && setupState.stage === 'outline-review',
+  });
+
+  const recommendations = recommendationsData?.recommendations || [];
+  const currentProposal = proposalsData?.proposals?.[0] || null;
 
   const mockEstimate = {
     mode: 'on-demand' as 'on-demand' | 'complete',
@@ -369,7 +356,7 @@ export function DocumentSetupPage() {
 
               {setupState.stage === 'template-selection' && (
                 <TemplateRecommendationStep
-                  recommendations={mockRecommendations}
+                  recommendations={recommendations}
                   availableTemplates={templates}
                   hasActiveProvider={hasActiveProvider}
                   onSelectTemplate={handleSelectTemplate}
@@ -378,9 +365,9 @@ export function DocumentSetupPage() {
                 />
               )}
 
-              {setupState.stage === 'outline-review' && (
+              {setupState.stage === 'outline-review' && currentProposal && (
                 <OutlineReviewStep
-                  proposal={mockProposal}
+                  proposal={currentProposal}
                   clarificationRequests={[]}
                   onApprove={handleApproveOutline}
                 />
