@@ -1,121 +1,174 @@
 # Gap-Fill Execution Plan
 
-This plan closes the remaining product gaps introduced while the codebase was still being shaped by multiple sources of truth.
-It uses only `CONTEXT.md`, `frontend/VISUAL_SPEC.md`, and `docs/adr/0001-projects-contain-multiple-documents.md` as normative product sources.
+This plan closes the product gaps introduced while the codebase was still being shaped by multiple sources of truth.
 
-## Summary
+Normative product sources:
+- `CONTEXT.md`
+- `frontend/VISUAL_SPEC.md`
+- `docs/adr/0001-projects-contain-multiple-documents.md`
 
-The current backend is closer to the intended domain model than the frontend, but both still carry legacy assumptions.
-The highest-risk issue is not polish. It is that several screens and routes still behave like the older product, so the app reads as a set of good parts that do not yet form the calm, document-first workspace described in the canonical docs.
+Non-normative guidance:
+- `docs/CANONICAL_EXECUTION_PROMPT.md` defines how agents must use the canonical sources.
+- This file is the execution plan for the gap-fill work.
+- Older roadmap, architecture, phase, and copy docs are historical unless a prompt explicitly names them for a narrow mechanical task.
 
-This plan repairs the product in the order that reduces drift fastest:
-1. normalize backend contracts and remove stale assumptions,
-2. rebuild the authenticated dashboard/workspace shell,
-3. align public entry and onboarding surfaces,
-4. harmonize the remaining editor and utility surfaces,
-5. enforce the system so drift does not reappear.
+## Current Gap
+
+The backend mostly has the new domain nouns, but active contracts still expose legacy assumptions such as project-level completion truth and stale template ownership paths. The frontend is further from the intended product shape: the authenticated app still reads like a generic admin dashboard with individually styled screens rather than a calm, document-first developer workspace.
+
+The repair order is:
+1. normalize backend contracts,
+2. rebuild the authenticated shell and dashboard,
+3. align public entry and first-Document creation,
+4. harmonize editor and utility surfaces,
+5. strengthen enforcement and regression checks.
 
 ## Phase 1 - Backend Contract Cleanup
 
-Goal: remove stale data-model assumptions before more frontend work lands on them.
+Goal: make the API and service layer reflect the canonical Project and Document model before more UI work depends on it.
 
-Key changes:
-- Stop treating `completion_pct` as stored truth for Projects; derive Project summary state from Documents and Sections.
-- Remove or quarantine stale `project.template_id` assumptions from active services and routes.
-- Align project/document responses with the multi-Document model from the ADR.
-- Keep Section review, generation, and freshness state explicit and Document-scoped.
-- Preserve the backend as the contract source for the frontend, not a parallel design space.
+Primary outcomes:
+- Project is the source-connected workspace.
+- Document owns Template choice, setup stage, Outline, Sections, generation, quality, export, review, sharing, and freshness.
+- Project summaries expose derived resume-work signals, not stored document truth.
+- Active services no longer assume a single Document per Project.
 
-Implementation notes:
-- Update the Project and Document response schemas so they expose the derived state the UI actually needs.
-- Remove legacy singular-document assumptions from active API paths rather than extending them.
-- Make sure the domain names in `CONTEXT.md` are reflected in the API and service layers.
+Implementation requirements:
+- Remove active dependencies on stored `Project.completion_pct`; derive Project-level progress or attention summaries from current Documents and Sections.
+- Remove active `project.template_id` reads and writes; Template selection must be Document-scoped.
+- Replace frontend-facing Project response fields that imply single-document ownership with derived summaries such as document count, active generation, sections needing input, review state, freshness state, and recent activity when available.
+- Keep legacy adapters only if they are required by still-existing routes during the same phase, and mark them temporary in code comments.
+- Ensure generation, review, quality, export, and evidence paths resolve through Document ownership when they touch document content.
 
-Tests:
-- project summary values are derived rather than stored as a second truth,
-- stale template assumptions no longer appear in active generation/analysis paths,
-- nested Document access still respects Project membership and ownership.
+Implementation boundaries:
+- Do not redesign frontend screens in this phase except to update broken API contract usage.
+- Do not add new product concepts that are not present in the canonical docs.
+- Do not use `docs/REDESIGN_IMPLEMENTATION_PLAN.md` to justify API shape.
 
-## Phase 2 - Dashboard And Workspace Shell
+Verification:
+- Backend tests prove Project summary state is derived from Documents and Sections.
+- Backend tests prove active analysis/generation code no longer reads `project.template_id`.
+- API tests prove nested Document routes authorize through Project organization membership.
+- Existing backend tests still pass or failures are reported with exact failing tests.
 
-Goal: make the authenticated app feel like one governed system, not a collection of separately styled screens.
+## Phase 2 - Authenticated Shell, Dashboard, And Project Workspace
 
-Key changes:
-- Rebuild global home/dashboard around recent and active Projects, resume-work signals, and the searchable Project library.
-- Replace KPI-card framing and generic admin-dashboard composition with the calmer workspace hierarchy from `frontend/VISUAL_SPEC.md`.
-- Make the sidebar compact, dark-neutral, and stable across project contexts.
-- Make the Project workspace document-first, with Documents, Source, and Activity as the primary sub-navigation.
-- Replace ad hoc screen-level styling with governed primitives and semantic tokens.
+Goal: make the signed-in product feel like one governed, calm developer workspace.
 
-Implementation notes:
-- Home should prioritize recent work, active generation, sections needing input, and source changes.
-- Project views should surface document generation/review/freshness state before analytics noise.
-- Workspace chrome should be restrained; depth should come from tonal surfaces and separators, not decorative cards.
+Primary outcomes:
+- Global home prioritizes recent work, active Projects, and resume signals.
+- The Project workspace emphasizes Documents and source health before analytics.
+- Navigation is compact, stable, and context-aware.
+- Screen composition uses governed primitives and semantic tokens instead of local visual inventions.
 
-Tests:
-- dashboard and workspace render through shared primitives without local restyling,
-- keyboard focus and contrast remain acceptable in the shell surfaces,
-- list/grid, search, and navigation states still work after the shell refresh.
+Implementation requirements:
+- Rework the global home/dashboard so it is not KPI-led. It should lead with resume-work signals: recent Projects, active generation, Sections needing input, source changes, and the searchable Project library.
+- Replace generic card grids and admin-dashboard composition with dense but quiet list-first views. Grid view can remain as an alternate browsing mode.
+- Make global navigation contain Home, Projects, Templates, and Settings. Project-specific Documents, Source, and Activity belong inside Project workspace navigation.
+- Make the sidebar compact and dark neutral as described in `frontend/VISUAL_SPEC.md`, with restrained selection and focus states.
+- Rework Project workspace so Documents are the dominant tab/surface, Source and Activity are supporting views, and repository analytics never dominate the workspace.
+- Use shared primitives for Button, Badge/status, Notice/banner, Surface, Input/select, Tabs/segmented control, Progress, Empty state, Tooltip/popover/dialog.
+
+Implementation boundaries:
+- Do not rebuild the editor internals in this phase.
+- Do not add decorative dashboard charts unless they represent meaningful Activity or source health from the canonical docs.
+- Do not use raw product colors, arbitrary shadows, or one-off card radii.
+
+Verification:
+- Frontend lint passes, including design-system enforcement.
+- Frontend build passes or failures are reported exactly.
+- Shell, dashboard, and Project workspace support keyboard navigation and visible focus.
+- Tests or focused checks cover list/grid preference, search/filter behavior, and Project workspace navigation.
 
 ## Phase 3 - Public Entry And First-Document Journey
 
-Goal: align landing, login, and the initial create-project flow with the same professional SaaS direction.
+Goal: align landing, auth, and first-Document creation with the same product vision and visual system.
 
-Key changes:
-- Retune landing and auth pages so they match the product system, not a separate marketing layer.
-- Rebuild the first-Document journey as the real product flow: source connection, progressive Analysis, Template recommendation, Outline review, generation choice, and editor entry.
-- Keep the live summary rail and progressive trust-building behavior central.
-- Make provider usage and generation cost explicit before any credit-consuming action.
+Primary outcomes:
+- Public pages feel like the same professional SaaS product as the workspace.
+- The first-Document flow follows the canonical sequence: source connection, progressive Analysis, Template recommendation, Outline review, generation choice, editor entry.
+- Provider usage and cost are explicit before provider-consuming actions.
+- Source-less and provider-less paths remain useful but clearly limited.
 
-Implementation notes:
-- GitHub-first source connection remains primary, with URL, ZIP, and start-without-source fallback paths preserved where the canonical docs allow them.
-- The onboarding flow should reveal useful work as soon as possible instead of forcing a generic wizard rhythm.
-- Public pages should still share the same semantic tokens, typography, and spacing system as the authenticated workspace.
+Implementation requirements:
+- Retune landing and auth pages to use the same typography, tokens, spacing, and restraint as the authenticated workspace.
+- Landing copy must describe Pagemark as a source-connected Project workspace that creates multiple purpose-specific Documents.
+- Do not make the landing page feel like a separate decorative marketing site. Use product-specific surfaces or real product state as the visual proof.
+- Replace the generic new-project wizard rhythm with the first-Document journey described in `frontend/VISUAL_SPEC.md`.
+- Keep a persistent progress area and live summary rail on desktop; collapse the rail into an accessible review drawer on smaller screens.
+- Prefer GitHub source connection first. Repository URL, ZIP upload, and start-without-source remain fallback paths.
+- Show progressive Analysis facts and partial-failure messaging as they become available.
+- Template recommendations must distinguish rule-based from AI-personalized recommendations.
+- Embedded Provider credential setup appears only when the maintainer chooses an AI-powered action.
+- Generation mode choice must show relative usage, approximate cost, uncertainty, and Section-level breakdown.
 
-Tests:
-- onboarding flow reaches the editor through the intended sequence,
-- provider-less paths still allow static Analysis and rule-based recommendations,
-- landing and auth screens visually match the product system direction.
+Implementation boundaries:
+- Do not use old landing copy docs as product truth.
+- Do not use decorative animation, gradient orbs, or generic SaaS feature-card layouts.
+- Do not redirect away from the first-Document journey for Provider credential setup.
 
-## Phase 4 - Editor, Settings, And Utility Surfaces
+Verification:
+- Frontend checks prove the first-Document flow can reach the editor.
+- Reload/resume behavior follows persisted Document setup stage where available.
+- Provider-less flow allows static Analysis and rule-based recommendations.
+- Landing and auth pages pass lint/build and do not violate design-system checks.
 
-Goal: finish the remaining surfaces so the product feels cohesive rather than partially redesigned.
+## Phase 4 - Editor, Review States, Settings, And Utility Surfaces
 
-Key changes:
-- Bring the editor to the calm, document-first visual language from the spec.
-- Replace leftover amber/green review banners, status chips, and legacy panel treatment with governed states.
-- Align settings, templates, analysis, export, and activity views with the same token system and interaction rules.
-- Keep generated prose visibly reviewable until explicitly accepted.
+Goal: make the rest of the app consistent with the document-first workspace and explicit review model.
 
-Implementation notes:
-- The editor should continue to treat the Document as the dominant workspace and AI as a secondary tool.
-- Utility modals, overlays, and banners should use governed variants rather than one-off styling.
-- Maintain the non-color-only workflow status conventions defined in the visual spec.
+Primary outcomes:
+- The Document is visually dominant in the editor.
+- Outline and AI assistance remain secondary, contextual tools.
+- Generated Draft, Reviewed Section, Potentially Stale Section, needs-input, generating, and failed states are visible without visual noise.
+- Settings, templates, analysis, quality, export, and activity use the same governed system.
 
-Tests:
-- review state is explicit and not triggered by normal edits,
-- generated drafts remain reviewable until acceptance,
-- core utility surfaces render through shared primitives without reintroducing raw styling patterns.
+Implementation requirements:
+- Replace legacy amber/green banners, local status chips, and ad hoc panel treatments with governed Notice, Badge/status, Surface, Tabs, Dialog, Popover, and Progress variants.
+- Generated prose must enter as Generated Draft and remain reviewable until explicit acceptance.
+- Manual edits must not automatically mark content reviewed.
+- Explicit acceptance must record review metadata and Analysis snapshot where evidence exists.
+- The editor should preserve the existing CodeMirror live-preview strengths while changing layout, hierarchy, and chrome.
+- AI assistance should appear near active Section or selected text, with longer conversation in a collapsible assistant panel.
+- Activity should show meaningful workflow events and exclude autosave/edit noise.
+- Settings, templates, quality, export, and analysis screens should use compact work-focused layouts, not standalone card-heavy designs.
+
+Implementation boundaries:
+- Do not introduce full collaboration redesign in this phase.
+- Do not make AI visually dominate the Document.
+- Do not add source-grounded stale update diffs unless the backend contract already supports them and the phase explicitly scopes them.
+
+Verification:
+- Backend or frontend tests prove normal edits do not mark a draft reviewed.
+- Tests prove explicit acceptance marks generated or manual content reviewed.
+- Frontend lint/build passes.
+- Design-system checks reject new local raw colors and arbitrary visual values.
 
 ## Phase 5 - Enforcement And Regression Protection
 
-Goal: prevent the codebase from drifting back into multiple visual and product sources of truth.
+Goal: keep future implementation aligned with the canonical sources and the governed design system.
 
-Key changes:
-- Keep the canonical docs as the only normative references for product decisions.
-- Enforce raw product color bans, arbitrary visual values, arbitrary radii/shadows, and recurring pattern violations.
-- Preserve only narrow runtime inline-style exceptions such as progress widths, editor geometry, and export branding values.
-- Keep WCAG 2.2 AA checks in the normal verification path for core primitives.
+Primary outcomes:
+- Future work starts from the canonical prompt and canonical docs.
+- Raw product UI styling and repeated local patterns are caught automatically.
+- Accessibility checks remain part of normal frontend verification.
+- Tests protect the domain model and review lifecycle.
 
-Tests and checks:
-- lint catches hardcoded product UI colors in changed files,
-- governed primitives cover core states without local restyling,
-- focus, contrast, reduced motion, and status signaling remain acceptable.
+Implementation requirements:
+- Keep `docs/CANONICAL_EXECUTION_PROMPT.md` as the first document referenced by future phase prompts.
+- Add or tighten checks that reject hardcoded product UI colors, arbitrary visual values, arbitrary radii/shadows, and recurring local styling outside governed variants.
+- Preserve inline style exceptions only for runtime-computed values: progress width, editor geometry, and user-selected export branding.
+- Add focused tests around derived Project/Document state, explicit review state, provider usage visibility, and workspace navigation.
+- Document any unavoidable exception inline and keep it narrow.
 
-## Assumptions
+Implementation boundaries:
+- Do not create new source-of-truth docs.
+- Do not relax design-system checks to make a phase easier.
+- Do not let old roadmap or architecture docs become implementation references.
 
-- `docs/REDESIGN_PHASE_GAPS.md` now serves as the new execution plan, not as a gap analysis.
-- `docs/REDESIGN_IMPLEMENTATION_PLAN.md` remains historical guidance and does not override the canonical docs.
-- Backend cleanup comes before visible shell work because stale contract assumptions can otherwise keep leaking into the UI.
-- Public entry pages are in scope because the product mismatch is visible there as well, not only inside the authenticated app.
+Verification:
+- `npm run lint` catches hardcoded product UI colors in changed files.
+- Frontend build passes.
+- Relevant backend tests pass.
+- The final implementation report lists exactly what passed or failed.
 
