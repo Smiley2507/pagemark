@@ -93,7 +93,7 @@ export const sectionsApi = {
     return data;
   },
 
-  async generateAI(sectionId: number): Promise<{ content: string }> {
+  async generateAI(sectionId: number): Promise<Section> {
     const { data } = await apiClient.post(`/sections/${sectionId}/ai/generate`);
     return data;
   },

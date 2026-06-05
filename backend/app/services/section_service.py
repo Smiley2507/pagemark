@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime
 from typing import Optional
 
 from fastapi import HTTPException
@@ -44,9 +45,14 @@ def section_to_response(section: Section, children: Optional[list[SectionRespons
         content_md=section.content_md or "",
         content_lifecycle=section.content_lifecycle.value,
         status=SectionStatusEnum(section.status.value),
+        needs_input=section.needs_input,
+        is_generating=section.is_generating,
+        has_failed=section.has_failed,
+        is_potentially_stale=section.is_potentially_stale,
         reviewed_by=section.reviewed_by,
         reviewed_at=section.reviewed_at,
         reviewed_against_analysis_id=section.reviewed_against_analysis_id,
+        workflow_metadata=section.workflow_metadata,
         children=children or [],
     )
 
@@ -164,3 +170,50 @@ async def recompute_project_completion(
     )
     sections = list(result.scalars().all())
     return compute_completion_pct(sections)
+
+
+def clear_review_state_for_content_edit(
+    section: Section,
+    *,
+    edited_at: datetime | None = None,
+) -> None:
+    if (
+        section.content_lifecycle != SectionContentLifecycle.REVIEWED
+        and section.status != SectionStatus.FINALIZED
+        and section.reviewed_at is None
+    ):
+        return
+
+    now = edited_at or datetime.utcnow()
+    previous_review = (section.workflow_metadata or {}).get("review")
+    metadata = dict(section.workflow_metadata or {})
+    if previous_review is not None:
+        review_history = list(metadata.get("review_history") or [])
+        review_history.append(
+            {
+                **previous_review,
+                "superseded_at": now.isoformat(),
+                "superseded_reason": "content_edited",
+            }
+        )
+        metadata["review_history"] = review_history[-10:]
+        metadata.pop("review", None)
+    section.workflow_metadata = metadata or None
+
+    previous_lifecycle = None
+    if previous_review and isinstance(previous_review, dict):
+        previous_lifecycle = previous_review.get("content_lifecycle_before_review")
+
+    if previous_lifecycle == SectionContentLifecycle.GENERATED_DRAFT.value:
+        section.content_lifecycle = SectionContentLifecycle.GENERATED_DRAFT
+        section.status = SectionStatus.DRAFT
+    else:
+        section.content_lifecycle = SectionContentLifecycle.EMPTY
+        if section.needs_input:
+            section.status = SectionStatus.NEEDS_INPUT
+        else:
+            section.status = SectionStatus.PENDING
+
+    section.reviewed_by = None
+    section.reviewed_at = None
+    section.reviewed_against_analysis_id = None

@@ -245,6 +245,15 @@ export interface Section {
   is_custom?: boolean;
   lifecycle_status?: "active" | "deleted" | "archived";
   confidence_score?: number | null;
+  content_lifecycle?: 'empty' | 'generated_draft' | 'reviewed';
+  needs_input?: boolean;
+  is_generating?: boolean;
+  has_failed?: boolean;
+  is_potentially_stale?: boolean;
+  workflow_metadata?: Record<string, unknown> | null;
+  reviewed_by?: number | null;
+  reviewed_at?: string | null;
+  reviewed_against_analysis_id?: number | null;
   created_at?: string;
   updated_at?: string;
   children?: Section[];

@@ -26,9 +26,10 @@ export function DesignSystemPrimitiveProof() {
         <div className="mt-4 flex flex-wrap gap-2">
           <Badge>Queued</Badge>
           <Badge variant="generation">Generating</Badge>
-          <Badge variant="review">Review</Badge>
+          <Badge variant="generation">Generated Draft</Badge>
+          <Badge variant="review">Reviewed</Badge>
+          <Badge variant="warning">Potentially Stale</Badge>
           <Badge variant="needsInput">Needs input</Badge>
-          <Badge variant="success">Reviewed</Badge>
           <Badge variant="danger">Failed</Badge>
         </div>
 

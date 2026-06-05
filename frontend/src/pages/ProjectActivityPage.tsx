@@ -3,6 +3,7 @@ import { Activity, BookOpen, Check, Code, FileText, GitCommit, Layers, TriangleA
 import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Notice } from '@/components/ui/notice';
 import { Surface } from '@/components/ui/surface';
 import { projectsApi } from '@/api/projects';
 
@@ -52,13 +53,22 @@ export function ProjectActivityPage() {
   return (
     <div className="space-y-6">
       <Surface variant="panel" padding="lg" className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Activity className="h-5 w-5 text-text-secondary" aria-hidden="true" />
-          <h2 className="text-section font-semibold text-text-primary">Activity</h2>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-2">
+            <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Project Activity</p>
+            <div className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-text-secondary" aria-hidden="true" />
+              <h2 className="text-section font-semibold text-text-primary">Meaningful workflow history</h2>
+            </div>
+          </div>
+          <Badge variant="neutral">No autosave noise</Badge>
         </div>
         <p className="text-body text-text-secondary">
           Meaningful workflow events across source sync, Analysis, generation, review, and freshness changes.
         </p>
+        <Notice variant="info" title="Governed event stream">
+          Routine autosaves and granular edit churn stay out of this feed so review and source-health signals remain easy to scan.
+        </Notice>
 
         {heatmapEntries.length === 0 ? (
           <EmptyState

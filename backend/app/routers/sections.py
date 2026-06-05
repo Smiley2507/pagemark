@@ -66,6 +66,7 @@ async def autosave_section(
 
     section.content_md = body.content_md
     section.updated_at = datetime.utcnow()
+    section_service.clear_review_state_for_content_edit(section, edited_at=section.updated_at)
     await db.commit()
     await db.refresh(section)
 
@@ -94,6 +95,7 @@ async def update_section(
     if body.content_md is not None and body.content_md != old_content:
         content_changed = True
         section.content_md = body.content_md
+        section_service.clear_review_state_for_content_edit(section)
 
     if body.status is not None:
         new_status = SectionStatus(body.status.value)

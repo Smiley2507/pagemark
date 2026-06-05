@@ -185,6 +185,51 @@ function assertPrimitiveProofUsesVariants() {
   if (/\b(?:bg|border|shadow|rounded)-/.test(source)) {
     fail('design-system proof uses local visual restyling instead of shared variants');
   }
+  const requiredStatuses = [
+    'Generated Draft',
+    'Reviewed',
+    'Potentially Stale',
+    'Needs input',
+    'Generating',
+    'Failed',
+  ];
+  for (const label of requiredStatuses) {
+    if (!source.includes(label)) {
+      fail(`design-system proof does not show the "${label}" status label`);
+    }
+  }
+}
+
+function assertPhase4SurfacesUseGovernedPrimitives() {
+  const files = [
+    'src/pages/DocumentEditorPage.tsx',
+    'src/pages/ProjectActivityPage.tsx',
+    'src/pages/SettingsPage.tsx',
+    'src/pages/Analysis.tsx',
+    'src/components/dashboard/TemplatesView.tsx',
+  ];
+  for (const file of files) {
+    const source = readFileSync(path.join(frontendRoot, file), 'utf8');
+    if (!source.includes('<Surface')) {
+      fail(`${file} does not render through Surface primitives`);
+    }
+  }
+  const editorSource = readFileSync(
+    path.join(frontendRoot, 'src/pages/DocumentEditorPage.tsx'),
+    'utf8'
+  );
+  if (!editorSource.includes('<SectionStatusBadge')) {
+    fail('DocumentEditorPage does not use the governed section status badge');
+  }
+  const statusSource = readFileSync(
+    path.join(frontendRoot, 'src/lib/section-state.ts'),
+    'utf8'
+  );
+  for (const label of ['Generated Draft', 'Reviewed', 'Potentially Stale', 'Needs Input', 'Generating', 'Failed']) {
+    if (!statusSource.includes(label)) {
+      fail(`section-state.ts is missing the "${label}" non-color status label`);
+    }
+  }
 }
 
 assertRawColorDetectorWorks();
@@ -192,6 +237,7 @@ assertNoRawVisualsInChangedFiles();
 assertContrast();
 assertFocusHooks();
 assertPrimitiveProofUsesVariants();
+assertPhase4SurfacesUseGovernedPrimitives();
 
 if (!process.exitCode) {
   console.log('[design-system] checks passed');

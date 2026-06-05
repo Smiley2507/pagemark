@@ -1,283 +1,428 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Sparkles, AlertCircle, CheckCircle, Clock, Eye } from 'lucide-react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  Bot,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  PanelRightClose,
+  PanelRightOpen,
+  RefreshCw,
+  Save,
+  Sparkles,
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { MarkdownEditor } from '@/components/editor/MarkdownEditor';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/ui/notice';
+import { SectionStatusBadge } from '@/components/ui/section-status-badge';
+import { Surface } from '@/components/ui/surface';
+import { documentsApi } from '@/api/documents';
+import { sectionsApi } from '@/api/sections';
+import { useAutosave, useDocumentSections, useUpdateDocumentSection, useAcceptSectionReview } from '@/hooks/useSections';
+import { getSectionState } from '@/lib/section-state';
 import { cn } from '@/lib/utils';
 import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
-import { useDocument } from '@/hooks/useSections';
-import { documentsApi } from '@/api/documents';
+
+type AssistantEntry = {
+  id: string;
+  role: 'assistant' | 'user';
+  text: string;
+  refined?: string;
+};
+
+const QUICK_ACTIONS = [
+  { label: 'Generate Draft', mode: 'generate' as const },
+  { label: 'Improve Clarity', mode: 'refine' as const, prompt: 'Improve clarity and structure while keeping the technical meaning intact.' },
+  { label: 'Add Examples', mode: 'refine' as const, prompt: 'Add concrete examples and implementation details where they are missing.' },
+  { label: 'Tighten Language', mode: 'refine' as const, prompt: 'Tighten the prose for a concise technical audience.' },
+];
+
+function flattenSections<T extends { id: number; children?: T[] }>(sections: T[]): T[] {
+  return sections.flatMap((section) => [section, ...flattenSections(section.children || [])]);
+}
 
 export function DocumentEditorPage() {
   const { projectId, documentId } = useParams<{ projectId: string; documentId: string }>();
+  const pid = Number(projectId);
+  const did = Number(documentId);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const recordRecentWork = useViewPreferenceStore((s) => s.recordRecentWork);
   const getLastSection = useViewPreferenceStore((s) => s.getLastSection);
-  
+
   const [outlineOpen, setOutlineOpen] = useState(true);
-  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
   const [content, setContent] = useState('');
-  const [hasSourceChanges, setHasSourceChanges] = useState(false);
-  
-  const { data: document } = useDocument(Number(projectId));
-  const sections = document?.sections || [];
-  
-  // Resume to last active section
-  useEffect(() => {
-    if (sections.length > 0 && !activeSectionId) {
-      const lastSectionId = getLastSection(Number(projectId), Number(documentId));
-      const targetSection = lastSectionId 
-        ? sections.find((s) => s.id === lastSectionId)
-        : sections[0];
-      
-      if (targetSection) {
-        setActiveSectionId(targetSection.id);
-        setContent(targetSection.content_md);
-      }
-    }
-  }, [sections, activeSectionId, projectId, documentId, getLastSection]);
-  
-  // Record recent work when section changes
-  useEffect(() => {
-    if (activeSectionId) {
-      recordRecentWork({
-        projectId: Number(projectId),
-        documentId: Number(documentId),
-        sectionId: activeSectionId,
-      });
-    }
-  }, [activeSectionId, projectId, documentId, recordRecentWork]);
-  
-  // Freshness detection via API
+  const [assistantDraft, setAssistantDraft] = useState('');
+  const [assistantEntries, setAssistantEntries] = useState<AssistantEntry[]>([]);
+
+  const { data: document } = useQuery({
+    queryKey: ['document-meta', pid, did],
+    queryFn: () => documentsApi.getDocument(pid, did),
+    enabled: pid > 0 && did > 0,
+  });
+
+  const { data: sectionTree, isLoading } = useDocumentSections(pid, did);
+  const sections = useMemo(() => flattenSections(sectionTree?.sections || []), [sectionTree?.sections]);
+  const activeSection = sections.find((section) => section.id === activeSectionId) || null;
+  const activeState = activeSection ? getSectionState(activeSection) : null;
+
   const { data: freshnessData } = useQuery({
-    queryKey: ['freshness', projectId, documentId],
-    queryFn: () => documentsApi.getFreshness(Number(projectId), Number(documentId)),
-    enabled: !!projectId && !!documentId,
+    queryKey: ['freshness', pid, did],
+    queryFn: () => documentsApi.getFreshness(pid, did),
+    enabled: pid > 0 && did > 0,
     refetchInterval: 30000,
   });
 
-  useEffect(() => {
-    if (freshnessData && freshnessData.freshness === 'stale' && freshnessData.stale_count > 0) {
-      setHasSourceChanges(true);
-    }
-  }, [freshnessData]);
-  
-  // Accept review mutation
-  const acceptReviewMutation = useMutation({
-    mutationFn: (sectionId: number) => documentsApi.acceptSectionReview(sectionId),
-    onSuccess: () => {
-      toast.success('Section marked as reviewed');
+  const updateSection = useUpdateDocumentSection(pid, did);
+  const acceptReview = useAcceptSectionReview(pid, did);
+  const { isSaving, lastSaved, markPersisted } = useAutosave(activeSectionId, content);
+
+  const generateDraft = useMutation({
+    mutationFn: (sectionId: number) => sectionsApi.generateAI(sectionId),
+    onSuccess: (section) => {
+      void queryClient.invalidateQueries({ queryKey: ['document-sections', pid, did] });
+      void queryClient.invalidateQueries({ queryKey: ['document-meta', pid, did] });
+      setContent(section.content_md);
+      markPersisted(section.content_md, section.updated_at);
+      setAssistantEntries((entries) => [
+        ...entries,
+        {
+          id: `assistant-generate-${section.id}-${Date.now()}`,
+          role: 'assistant',
+          text: 'Generated Draft ready. Review it before accepting the section.',
+        },
+      ]);
+      toast.success('Generated Draft ready for review');
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
+    onError: () => toast.error('Draft generation failed'),
   });
 
-  const activeSection = sections.find((s) => s.id === activeSectionId);
-  
-  const getSectionStatus = (section: typeof sections[0]) => {
-    if (section.status === 'finalized') return { variant: 'success' as const, label: 'Reviewed', icon: CheckCircle };
-    if (section.status === 'NEEDS_INPUT') return { variant: 'needsInput' as const, label: 'Needs Input', icon: AlertCircle };
-    if (section.status === 'draft') return { variant: 'generation' as const, label: 'Draft', icon: Clock };
-    return { variant: 'neutral' as const, label: 'Pending', icon: Clock };
+  const refineDraft = useMutation({
+    mutationFn: ({
+      sectionId,
+      instruction,
+    }: {
+      sectionId: number;
+      instruction: string;
+    }) => sectionsApi.refineAI(sectionId, instruction),
+    onSuccess: (result, variables) => {
+      setAssistantEntries((entries) => [
+        ...entries,
+        { id: `user-${Date.now()}`, role: 'user', text: variables.instruction },
+        {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          text: 'Suggested revision prepared. Apply it to keep editing in the document surface.',
+          refined: result.refined,
+        },
+      ]);
+      setAssistantDraft('');
+      setAssistantOpen(true);
+    },
+    onError: () => toast.error('AI refinement failed'),
+  });
+
+  useEffect(() => {
+    if (sections.length === 0 || activeSectionId) return;
+    const lastSectionId = getLastSection(pid, did);
+    const nextSection = lastSectionId ? sections.find((section) => section.id === lastSectionId) : sections[0];
+    if (nextSection) {
+      setActiveSectionId(nextSection.id);
+      setContent(nextSection.content_md);
+      markPersisted(nextSection.content_md, nextSection.updated_at);
+    }
+  }, [sections, activeSectionId, getLastSection, pid, did, markPersisted]);
+
+  useEffect(() => {
+    if (!activeSection) return;
+    setContent(activeSection.content_md);
+    markPersisted(activeSection.content_md, activeSection.updated_at);
+    recordRecentWork({ projectId: pid, documentId: did, sectionId: activeSection.id });
+  }, [activeSectionId, activeSection, markPersisted, pid, did, recordRecentWork]);
+
+  const staleCount = freshnessData?.stale_count || 0;
+  const showSourceNotice = freshnessData?.freshness === 'stale' && staleCount > 0;
+
+  const handleSave = async () => {
+    if (!activeSection) return;
+    const section = await updateSection.mutateAsync({
+      id: activeSection.id,
+      data: { content_md: content },
+    });
+    markPersisted(section.content_md, section.updated_at);
+    toast.success('Section saved');
   };
-  
-  return (
-    <div className="h-screen flex flex-col bg-workspace">
-      {/* Editor Top Bar */}
-      <div className="border-b border-separator bg-panel px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate(`/projects/${projectId}`)}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="text-body-lg font-semibold text-text-primary">
-              {document?.sections?.[0]?.heading || 'Untitled Document'}
-            </h1>
-            <div className="text-meta text-text-muted">
-              {sections.length} sections
-            </div>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="gap-2">
-            <Eye className="h-4 w-4" />
-            Preview
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setAiPanelOpen(!aiPanelOpen)}
-            className="gap-2"
-          >
-            <Sparkles className="h-4 w-4" />
-            AI Assistant
-          </Button>
+
+  const handleAcceptReview = async () => {
+    if (!activeSection) return;
+    const section = await acceptReview.mutateAsync(activeSection.id);
+    setContent(section.content_md);
+    markPersisted(section.content_md);
+  };
+
+  const submitAssistantInstruction = () => {
+    if (!activeSection || !assistantDraft.trim()) return;
+    refineDraft.mutate({ sectionId: activeSection.id, instruction: assistantDraft.trim() });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-workspace">
+        <div className="flex items-center gap-3 text-body text-text-secondary">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading document workspace…
         </div>
       </div>
-      
-      {/* Source Change Notice */}
-      {hasSourceChanges && (
-        <div className="px-6 pt-4">
-          <Notice variant="info" title="Source Changes Detected">
-            The repository has been updated. Review changes to keep documentation fresh.
-            <div className="mt-2">
-              <Button size="sm" variant="outline" onClick={() => setHasSourceChanges(false)}>
-                Review Changes
-              </Button>
+    );
+  }
+
+  return (
+    <div className="flex min-h-screen flex-col bg-workspace text-text-primary">
+      <header className="border-b border-separator bg-panel/95 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-4 px-5 py-3">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="icon" onClick={() => navigate(`/projects/${pid}`)} aria-label="Back to project">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Document Workspace</p>
+              <h1 className="text-section font-semibold text-text-primary">
+                {document?.title || 'Untitled Document'}
+              </h1>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="hidden text-right md:block">
+              <p className="text-meta text-text-secondary">{sections.length} sections</p>
+              <p className="text-meta text-text-muted">
+                {isSaving ? 'Autosaving…' : lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : 'No saved changes yet'}
+              </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setOutlineOpen((open) => !open)} className="gap-2">
+              {outlineOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              Outline
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setAssistantOpen((open) => !open)} className="gap-2">
+              {assistantOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+              Assistant
+            </Button>
+          </div>
+        </div>
+      </header>
+
+      {showSourceNotice && (
+        <div className="mx-auto w-full max-w-[1600px] px-5 pt-4">
+          <Notice variant="warning" title="Potentially Stale Sections">
+            {staleCount} reviewed {staleCount === 1 ? 'section shows' : 'sections show'} source changes since acceptance.
+            Review them explicitly before trusting the current document.
           </Notice>
         </div>
       )}
-      
-      {/* Editor Layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Collapsible Outline */}
+
+      <div className="mx-auto flex w-full max-w-[1600px] flex-1 gap-4 overflow-hidden px-5 py-4">
         {outlineOpen && (
-          <div className="w-64 border-r border-separator bg-panel overflow-y-auto">
-            <div className="p-4 border-b border-separator flex items-center justify-between">
-              <h2 className="text-body font-semibold text-text-primary">Outline</h2>
-              <button
-                onClick={() => setOutlineOpen(false)}
-                className="text-text-muted hover:text-text-primary"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
+          <Surface variant="muted" padding="none" className="hidden w-72 shrink-0 overflow-hidden lg:flex lg:flex-col">
+            <div className="border-b border-separator px-4 py-3">
+              <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Outline</p>
+              <p className="mt-1 text-body text-text-secondary">Secondary navigation with section review state.</p>
             </div>
-            
-            <div className="p-2">
-              {sections.map((section) => {
-                const status = getSectionStatus(section);
-                const Icon = status.icon;
-                
-                return (
-                  <button
-                    key={section.id}
-                    onClick={() => {
-                      setActiveSectionId(section.id);
-                      setContent(section.content_md);
-                    }}
-                    className={cn(
-                      'w-full text-left p-3 rounded-md transition-colors mb-1',
-                      activeSectionId === section.id
-                        ? 'bg-interaction-muted text-text-primary'
-                        : 'hover:bg-panel-muted text-text-secondary'
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-body truncate">{section.heading}</span>
-                      <Icon className="h-4 w-4 shrink-0" />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        
-        {/* Toggle Outline Button */}
-        {!outlineOpen && (
-          <button
-            onClick={() => setOutlineOpen(true)}
-            className="absolute left-4 top-20 z-10 p-2 rounded-md border border-separator bg-panel text-text-muted hover:text-text-primary shadow-sm"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        )}
-        
-        {/* Main Editor */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto px-8 py-8">
-            {activeSection ? (
-              <div className="space-y-4">
-                <div className="flex items-start justify-between gap-4">
-                  <h2 className="text-title font-semibold text-text-primary">
-                    {activeSection.heading}
-                  </h2>
-                  <Badge variant={getSectionStatus(activeSection).variant}>
-                    {getSectionStatus(activeSection).label}
-                  </Badge>
-                </div>
-                
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  className="w-full min-h-[500px] p-4 rounded-md border border-input bg-canvas text-body text-text-primary font-mono focus:outline-none focus:ring-2 focus:ring-ring resize-y"
-                  placeholder="Start writing..."
-                />
-                
-                <div className="flex items-center gap-2">
-                  <Button size="sm">Save</Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => acceptReviewMutation.mutate(activeSection.id)}
-                    disabled={acceptReviewMutation.isPending}
-                  >
-                    {acceptReviewMutation.isPending ? 'Marking...' : 'Mark as Reviewed'}
-                  </Button>
-                  {activeSection.status === 'draft' && (
-                    <Button size="sm" variant="outline" className="gap-2">
-                      <Sparkles className="h-4 w-4" />
-                      Regenerate
-                    </Button>
+            <nav aria-label="Document outline" className="flex-1 space-y-1 overflow-y-auto p-2">
+              {sections.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => setActiveSectionId(section.id)}
+                  className={cn(
+                    'w-full rounded-md border px-3 py-3 text-left transition-colors',
+                    activeSectionId === section.id
+                      ? 'border-interaction bg-panel text-text-primary'
+                      : 'border-transparent bg-transparent text-text-secondary hover:border-separator hover:bg-panel'
                   )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-body font-medium">{section.heading}</p>
+                      <p className="mt-1 text-meta text-text-muted">{getSectionState(section).label}</p>
+                    </div>
+                    <SectionStatusBadge section={section} compact />
+                  </div>
+                </button>
+              ))}
+            </nav>
+          </Surface>
+        )}
+
+        <div className="min-w-0 flex-1 overflow-y-auto">
+          {activeSection ? (
+            <article className="mx-auto max-w-5xl">
+              <Surface variant="canvas" padding="lg" className="min-h-[calc(100vh-11rem)] border border-separator">
+                <div className="mx-auto max-w-3xl space-y-5">
+                  <div className="space-y-3 border-b border-separator pb-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-2">
+                        <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Active Section</p>
+                        <h2 className="text-title font-semibold text-text-primary">{activeSection.heading}</h2>
+                      </div>
+                      <SectionStatusBadge section={activeSection} />
+                    </div>
+
+                    <p className="max-w-2xl text-body text-text-secondary">{activeState?.summary}</p>
+
+                    <div className="flex flex-wrap gap-2">
+                      {QUICK_ACTIONS.map((action) => (
+                        <Button
+                          key={action.label}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (!activeSection) return;
+                            if (action.mode === 'generate') {
+                              void generateDraft.mutateAsync(activeSection.id);
+                              return;
+                            }
+                            setAssistantDraft(action.prompt || '');
+                            setAssistantOpen(true);
+                          }}
+                          disabled={generateDraft.isPending || refineDraft.isPending || activeSection.is_generating}
+                          className="gap-2"
+                        >
+                          {action.mode === 'generate' ? <Sparkles className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                          {action.label}
+                        </Button>
+                      ))}
+                    </div>
+
+                    {activeSection.reviewed_at && (
+                      <Notice variant="success" title="Review Metadata Recorded">
+                        Accepted {new Date(activeSection.reviewed_at).toLocaleString()}
+                        {activeSection.reviewed_against_analysis_id
+                          ? ` against Analysis snapshot #${activeSection.reviewed_against_analysis_id}.`
+                          : '.'}
+                      </Notice>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg bg-canvas">
+                    <MarkdownEditor value={content} onChange={setContent} />
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-separator pt-4">
+                    <div className="text-meta text-text-muted">
+                      {isSaving ? 'Autosaving changes…' : lastSaved ? `Last saved at ${lastSaved.toLocaleTimeString()}` : 'Edits remain local until the first save.'}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAssistantOpen(true)}
+                        className="gap-2"
+                      >
+                        <Bot className="h-4 w-4" />
+                        Ask Assistant
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAcceptReview}
+                        disabled={acceptReview.isPending}
+                        className="gap-2"
+                      >
+                        {acceptReview.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        Accept Review
+                      </Button>
+                      <Button size="sm" onClick={handleSave} disabled={updateSection.isPending} className="gap-2">
+                        {updateSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        Save
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="text-center py-12 text-text-muted">
-                Select a section to start editing
-              </div>
-            )}
-          </div>
+              </Surface>
+            </article>
+          ) : (
+            <Surface variant="panel" padding="lg">
+              <p className="text-body text-text-secondary">Select a section to start working in the document surface.</p>
+            </Surface>
+          )}
         </div>
-        
-        {/* AI Assistant Panel */}
-        {aiPanelOpen && (
-          <div className="w-80 border-l border-separator bg-panel overflow-y-auto">
-            <div className="p-4 border-b border-separator flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-interaction" />
-                <h2 className="text-body font-semibold text-text-primary">AI Assistant</h2>
+
+        {assistantOpen && (
+          <Surface variant="panel" padding="none" className="flex w-full max-w-sm shrink-0 flex-col overflow-hidden">
+            <div className="border-b border-separator px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Assistant Panel</p>
+                  <h3 className="text-body font-semibold text-text-primary">Longer AI conversation</h3>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setAssistantOpen(false)} aria-label="Close assistant panel">
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
-              <button
-                onClick={() => setAiPanelOpen(false)}
-                className="text-text-muted hover:text-text-primary"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
+              <p className="mt-2 text-body text-text-secondary">
+                Longer requests and suggested revisions for the active Section.
+              </p>
             </div>
-            
-            <div className="p-4 space-y-4">
-              <div className="text-body text-text-secondary">
-                Ask me to help with this section, suggest improvements, or generate new content.
-              </div>
-              
+
+            <div className="flex-1 space-y-3 overflow-y-auto p-4">
+              {assistantEntries.length === 0 ? (
+                <Surface variant="muted" padding="default" className="text-body text-text-secondary">
+                  No assistant messages for this Section yet.
+                </Surface>
+              ) : (
+                assistantEntries.map((entry) => (
+                  <Surface
+                    key={entry.id}
+                    variant={entry.role === 'assistant' ? 'muted' : 'panel'}
+                    padding="default"
+                    className="space-y-3"
+                  >
+                    <p className="text-meta uppercase tracking-[0.18em] text-text-muted">
+                      {entry.role === 'assistant' ? 'Assistant' : 'Instruction'}
+                    </p>
+                    <p className="whitespace-pre-wrap text-body text-text-primary">{entry.text}</p>
+                    {entry.refined && (
+                      <>
+                        <div className="rounded-md border border-separator bg-canvas p-3 text-body text-text-secondary">
+                          {entry.refined}
+                        </div>
+                        <Button type="button" size="sm" onClick={() => setContent(entry.refined || '')}>
+                          Apply Suggested Draft
+                        </Button>
+                      </>
+                    )}
+                  </Surface>
+                ))
+              )}
+            </div>
+
+            <div className="border-t border-separator p-4">
               <div className="space-y-2">
-                <Button variant="outline" size="sm" className="w-full justify-start gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  Improve clarity
-                </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  Add examples
-                </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start gap-2">
-                  <Sparkles className="h-4 w-4" />
-                  Check grammar
+                <Input
+                  value={assistantDraft}
+                  onChange={(event) => setAssistantDraft(event.target.value)}
+                  placeholder="Ask for a revision, expansion, or wording change…"
+                  aria-label="Assistant instruction"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={submitAssistantInstruction}
+                  disabled={!activeSection || !assistantDraft.trim() || refineDraft.isPending}
+                  className="w-full gap-2"
+                >
+                  {refineDraft.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+                  Send to Assistant
                 </Button>
               </div>
             </div>
-          </div>
+          </Surface>
         )}
       </div>
     </div>

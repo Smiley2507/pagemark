@@ -9,6 +9,8 @@ import { toast } from 'sonner';
 import { projectsApi } from '@/api/projects';
 import { cn } from '@/lib/utils';
 import { LogoUploader } from '@/components/ui/LogoUploader';
+import { Notice } from '@/components/ui/notice';
+import { Surface } from '@/components/ui/surface';
 import type { Project, ExportSettings } from '@/types';
 
 const FONTS = [
@@ -27,6 +29,12 @@ const LOGO_POSITIONS = [
 ];
 
 const VISUAL_KEYS = new Set(['h1_color', 'h2_color', 'primary_color', 'font_family', 'logo_url']);
+
+function resolveHexColorVar(variableName: string, fallback: string): string {
+  if (typeof window === 'undefined') return fallback;
+  const value = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+  return /^([\x23][0-9a-fA-F]{6})$/.test(value) ? value : fallback;
+}
 
 function useProject(projectId: number) {
   return useQuery<Project>({
@@ -72,6 +80,8 @@ export function ExportPage() {
   const prevSk = useRef('');
 
   const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+  const defaultHeadingColor = resolveHexColorVar('--text-primary', 'black');
+  const defaultAccentColor = resolveHexColorVar('--interaction', 'navy');
 
   useEffect(() => {
     if (savedSettings) setSettings((s) => ({ ...s, ...savedSettings }));
@@ -179,9 +189,9 @@ export function ExportPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="flex h-screen flex-col bg-workspace">
       {/* Top bar */}
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-separator bg-panel px-4">
         <Link to={`/editor/${pid}`} className="flex items-center gap-1.5 text-meta text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" />
           Back to editor
@@ -210,17 +220,20 @@ export function ExportPage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Settings sidebar */}
-        <aside className="w-80 shrink-0 overflow-y-auto border-r border-border bg-card p-5 space-y-6">
+        <aside className="w-80 shrink-0 overflow-y-auto border-r border-separator bg-panel-muted p-5 space-y-6">
+          <Notice variant="info" title="Document Export">
+            Export applies to one Document at a time. Choose the format, branding, and page options before downloading.
+          </Notice>
           {/* Branding */}
-          <section>
+          <Surface variant="panel" padding="default" as="section">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
               <Palette className="h-4 w-4" />
               Branding
             </h2>
             <div className="space-y-3">
-              <ColorField label="Heading 1" value={settings.h1_color || '#0F172A'} onChange={(v) => updateSetting('h1_color', v)} />
-              <ColorField label="Heading 2" value={settings.h2_color || '#0F172A'} onChange={(v) => updateSetting('h2_color', v)} />
-              <ColorField label="Accent" value={settings.primary_color || '#6366f1'} onChange={(v) => updateSetting('primary_color', v)} />
+              <ColorField label="Heading 1" value={settings.h1_color || defaultHeadingColor} onChange={(v) => updateSetting('h1_color', v)} />
+              <ColorField label="Heading 2" value={settings.h2_color || defaultHeadingColor} onChange={(v) => updateSetting('h2_color', v)} />
+              <ColorField label="Accent" value={settings.primary_color || defaultAccentColor} onChange={(v) => updateSetting('primary_color', v)} />
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1">Font</label>
                 <select value={settings.font_family || 'Inter, sans-serif'} onChange={(e) => updateSetting('font_family', e.target.value)} className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs">
@@ -240,10 +253,10 @@ export function ExportPage() {
                 </div>
               )}
             </div>
-          </section>
+          </Surface>
 
           {/* Header / Footer */}
-          <section>
+          <Surface variant="panel" padding="default" as="section">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
               <BookOpen className="h-4 w-4" />
               Header &amp; Footer
@@ -254,10 +267,10 @@ export function ExportPage() {
               <TextInput label="Header right" value={settings.header_right || ''} onChange={(v) => updateSetting('header_right', v)} />
               <ToggleField label="Page numbers" value={settings.page_numbers ?? false} onChange={(v) => updateSetting('page_numbers', v)} />
             </div>
-          </section>
+          </Surface>
 
           {/* Layout */}
-          <section>
+          <Surface variant="panel" padding="default" as="section">
             <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
               <Ruler className="h-4 w-4" />
               Layout
@@ -279,22 +292,22 @@ export function ExportPage() {
                 </select>
               </div>
             </div>
-          </section>
+          </Surface>
         </aside>
 
         {/* Preview */}
         <main className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-border px-4 py-2">
+          <div className="flex items-center gap-2 border-b border-separator bg-panel px-4 py-2">
             <Eye className="h-4 w-4 text-muted-foreground" />
             <span className="text-xs font-medium text-muted-foreground">Preview</span>
             {previewLoading && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-muted-foreground" />}
           </div>
-          <div className="flex-1 overflow-auto bg-muted/30 p-4">
+          <div className="flex-1 overflow-auto bg-workspace p-4">
             {previewHtml ? (
               <iframe
                 ref={iframeRef}
                 srcDoc={previewHtml}
-                className="mx-auto h-full w-full max-w-[900px] rounded-lg border border-border bg-white shadow-sm"
+                className="mx-auto h-full w-full max-w-[900px] rounded-lg border border-border bg-panel shadow-sm"
                 title="Export preview"
                 sandbox="allow-same-origin allow-scripts"
               />
@@ -339,7 +352,7 @@ function ToggleField({ label, value, onChange }: { label: string; value: boolean
     <div className="flex items-center justify-between">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       <button onClick={() => onChange(!value)} className={cn('relative h-5 w-9 rounded-full transition-colors', value ? 'bg-primary' : 'bg-border')}>
-        <span className={cn('absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white transition-transform', value && 'translate-x-4')} />
+        <span className={cn('absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-panel transition-transform', value && 'translate-x-4')} />
       </button>
     </div>
   );

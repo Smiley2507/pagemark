@@ -1,108 +1,123 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Activity, Bot, Building2, Key, Search, User, Users } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Notice } from '@/components/ui/notice';
+import { Surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
-import { Separator } from '@/components/ui/separator';
 import { ProfileSection } from '@/components/settings/ProfileSection';
 import { AiProvidersSection } from '@/components/settings/AiProvidersSection';
-import { OrgSettingsView, OrgMembersView, OrgAuditLogView, OrgApiKeysView } from '@/components/org';
-import {
-  User,
-  Building2,
-  Users,
-  Bot,
-  Key,
-  Activity,
-  Search,
-} from 'lucide-react';
+import { OrgApiKeysView, OrgAuditLogView, OrgMembersView, OrgSettingsView } from '@/components/org';
 
 const SECTIONS = [
-  { id: 'profile', label: 'Profile', icon: User, admin: false, keywords: ['password', 'name', 'avatar', 'email', 'display'] },
-  { id: 'organization', label: 'Organization', icon: Building2, admin: true, keywords: ['org', 'threshold', 'quality', 'settings', 'team'] },
-  { id: 'members', label: 'Members', icon: Users, admin: false, keywords: ['people', 'invite', 'role', 'team', 'user'] },
-  { id: 'ai-providers', label: 'AI Providers', icon: Bot, admin: false, keywords: ['claude', 'gemini', 'anthropic', 'google', 'model', 'key', 'credential'] },
-  { id: 'api-keys', label: 'API Keys', icon: Key, admin: false, keywords: ['token', 'secret', 'authentication', 'api'] },
-  { id: 'activity', label: 'Activity Log', icon: Activity, admin: false, keywords: ['audit', 'log', 'history', 'events', 'changes'] },
-];
+  { id: 'profile', label: 'Profile', icon: User, summary: 'Identity, email, password, and avatar.' },
+  { id: 'organization', label: 'Organization', icon: Building2, summary: 'Shared workspace defaults and governance.' },
+  { id: 'members', label: 'Members', icon: Users, summary: 'Invites, roles, and team access.' },
+  { id: 'ai-providers', label: 'AI Providers', icon: Bot, summary: 'Provider credentials and active model selection.' },
+  { id: 'api-keys', label: 'API Keys', icon: Key, summary: 'Programmatic access for integrations.' },
+  { id: 'activity', label: 'Activity Log', icon: Activity, summary: 'Meaningful admin and membership changes.' },
+] as const;
 
 export function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [filter, setFilter] = useState('');
   const activeTab = searchParams.get('tab') || 'profile';
-  const [sectionSearch, setSectionSearch] = useState('');
+
+  const activeSection = SECTIONS.find((section) => section.id === activeTab) || SECTIONS[0];
+  const filteredSections = useMemo(() => {
+    const query = filter.trim().toLowerCase();
+    if (!query) return SECTIONS;
+    return SECTIONS.filter((section) => {
+      return (
+        section.label.toLowerCase().includes(query) ||
+        section.summary.toLowerCase().includes(query)
+      );
+    });
+  }, [filter]);
 
   const setTab = (tab: string) => {
-    searchParams.set('tab', tab);
-    setSearchParams(searchParams);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', tab);
+    setSearchParams(next);
   };
 
-  const filtered = SECTIONS.filter((s) => {
-    const q = sectionSearch.toLowerCase();
-    return (
-      s.label.toLowerCase().includes(q) ||
-      s.keywords.some((k) => k.toLowerCase().includes(q))
-    );
-  });
-
   return (
-    <div className="flex h-full">
-      {/* Sidebar */}
-      <aside className="w-56 shrink-0 border-r border-border bg-card/40 p-4 flex flex-col gap-1">
-        <div className="relative mb-2">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Filter sections…"
-            value={sectionSearch}
-            onChange={(e) => setSectionSearch(e.target.value)}
-            className="w-full rounded-md border border-border bg-background pl-7 pr-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-          />
+    <div className="space-y-5">
+      <Surface variant="panel" padding="lg" className="space-y-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Settings</p>
+            <h1 className="text-section font-semibold text-text-primary">Workspace preferences</h1>
+            <p className="mt-1 max-w-2xl text-body text-text-secondary">
+              Compact controls for credentials, organization defaults, and admin workflows. Keep the work surface close and the chrome quiet.
+            </p>
+          </div>
+          <div className="w-full max-w-sm">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+              <Input
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                placeholder="Filter settings surfaces"
+                className="pl-9"
+                aria-label="Filter settings sections"
+              />
+            </div>
+          </div>
         </div>
-        <nav className="flex flex-col gap-0.5">
-          {filtered.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setTab(s.id)}
-              className={cn(
-                'flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm text-left transition-colors',
-                activeTab === s.id
-                  ? 'bg-primary/10 text-primary font-medium'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-              )}
-            >
-              <s.icon className="h-4 w-4 shrink-0" />
-              <span>{s.label}</span>
-            </button>
-          ))}
-        </nav>
-      </aside>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        {activeTab === 'profile' && <ProfileSection />}
-        {activeTab === 'organization' && (
-          <div className="p-6">
-            <OrgSettingsView />
+        <Notice variant="info" title="Workspace Scope">
+          Provider credentials affect future AI work. Organization and member changes affect access across Projects and Documents.
+        </Notice>
+      </Surface>
+
+      <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <Surface variant="muted" padding="default" className="space-y-2 self-start">
+          {filteredSections.map((section) => {
+            const Icon = section.icon;
+            const selected = section.id === activeSection.id;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => setTab(section.id)}
+                className={cn(
+                  'w-full rounded-md border px-3 py-3 text-left transition-colors',
+                  selected
+                    ? 'border-interaction bg-panel text-text-primary'
+                    : 'border-transparent bg-transparent text-text-secondary hover:border-separator hover:bg-panel'
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-3">
+                    <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>
+                      <p className="text-body font-medium">{section.label}</p>
+                      <p className="mt-1 text-meta text-text-muted">{section.summary}</p>
+                    </div>
+                  </div>
+                  {selected && <Badge variant="review">Active</Badge>}
+                </div>
+              </button>
+            );
+          })}
+        </Surface>
+
+        <Surface variant="panel" padding="lg" className="space-y-5">
+          <div className="border-b border-separator pb-4">
+            <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Current Surface</p>
+            <h2 className="text-section font-semibold text-text-primary">{activeSection.label}</h2>
+            <p className="mt-1 text-body text-text-secondary">{activeSection.summary}</p>
           </div>
-        )}
-        {activeTab === 'members' && (
-          <div className="p-6">
-            <OrgMembersView />
-          </div>
-        )}
-        {activeTab === 'ai-providers' && (
-          <div className="p-6 max-w-2xl">
-            <AiProvidersSection />
-          </div>
-        )}
-        {activeTab === 'api-keys' && (
-          <div className="p-6">
-            <OrgApiKeysView />
-          </div>
-        )}
-        {activeTab === 'activity' && (
-          <div className="p-6">
-            <OrgAuditLogView />
-          </div>
-        )}
+
+          {activeSection.id === 'profile' && <ProfileSection />}
+          {activeSection.id === 'organization' && <OrgSettingsView />}
+          {activeSection.id === 'members' && <OrgMembersView />}
+          {activeSection.id === 'ai-providers' && <AiProvidersSection />}
+          {activeSection.id === 'api-keys' && <OrgApiKeysView />}
+          {activeSection.id === 'activity' && <OrgAuditLogView />}
+        </Surface>
       </div>
     </div>
   );

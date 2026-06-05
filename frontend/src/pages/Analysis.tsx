@@ -8,7 +8,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Notice } from '@/components/ui/notice';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Surface } from '@/components/ui/surface';
 import { GitProviderIcon } from '@/components/git/GitProviderIcon';
 import { AnalysisProgress } from '@/components/analysis/AnalysisProgress';
 import { AnalysisResults } from '@/components/analysis/AnalysisResults';
@@ -82,9 +84,9 @@ export const Analysis: React.FC = () => {
     analysisStatus?.outline_skip_reason === 'no_ai_credential';
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-5xl flex-col gap-4 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-6">
+      <Surface variant="panel" padding="lg" className="space-y-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
             <button
               type="button"
@@ -138,9 +140,12 @@ export const Analysis: React.FC = () => {
             )}
           </div>
         </div>
-      </header>
+        <Notice variant="info" title="Shared Project Analysis">
+          This snapshot is reused across Documents in the Project. Treat it as supporting evidence, not the dominant workspace.
+        </Notice>
+      </Surface>
 
-      <main className="mx-auto max-w-5xl space-y-8 px-6 py-8">
+      <div className="space-y-8">
         <AnalysisProgress
           status={analysisStatus}
           syncing={syncing}
@@ -169,7 +174,7 @@ export const Analysis: React.FC = () => {
             />
           </>
         )}
-      </main>
+      </div>
     </div>
   );
 };

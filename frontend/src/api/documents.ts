@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { CollaborationNote } from '../types';
+import type { CollaborationNote, Section, SectionTreeResponse } from '../types';
 import type {
   TemplateRecommendation,
   OutlineProposal,
@@ -244,6 +244,24 @@ export const documentsApi = {
   async acceptSectionReview(sectionId: number): Promise<any> {
     const { data } = await apiClient.post(
       `/sections/${sectionId}/accept-review`
+    );
+    return data;
+  },
+
+  async getSections(projectId: number, documentId: number): Promise<SectionTreeResponse> {
+    const { data } = await apiClient.get(`/projects/${projectId}/documents/${documentId}/sections`);
+    return data;
+  },
+
+  async updateDocumentSection(
+    projectId: number,
+    documentId: number,
+    sectionId: number,
+    payload: { content_md?: string; status?: Section['status'] }
+  ): Promise<Section> {
+    const { data } = await apiClient.patch(
+      `/projects/${projectId}/documents/${documentId}/sections/${sectionId}`,
+      payload
     );
     return data;
   },

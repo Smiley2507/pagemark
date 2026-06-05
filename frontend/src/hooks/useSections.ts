@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { sectionsApi } from '@/api/sections';
+import { documentsApi } from '@/api/documents';
 import type { Section } from '@/types';
 
 export const useDocument = (projectId: number) =>
@@ -16,6 +17,13 @@ export const useSection = (sectionId: number | null) =>
     queryKey: ['section', sectionId],
     queryFn: () => sectionsApi.getSection(sectionId!),
     enabled: sectionId !== null && sectionId > 0,
+  });
+
+export const useDocumentSections = (projectId: number, documentId: number) =>
+  useQuery({
+    queryKey: ['document-sections', projectId, documentId],
+    queryFn: () => documentsApi.getSections(projectId, documentId),
+    enabled: projectId > 0 && documentId > 0,
   });
 
 export function useAutosave(sectionId: number | null, content: string) {
@@ -83,6 +91,42 @@ export const useUpdateSection = (projectId: number) => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
     onError: () => toast.error('Failed to update section'),
+  });
+};
+
+export const useUpdateDocumentSection = (projectId: number, documentId: number) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: number;
+      data: { content_md?: string; status?: Section['status'] };
+    }) => documentsApi.updateDocumentSection(projectId, documentId, id, data),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: ['document-sections', projectId, documentId] });
+      queryClient.invalidateQueries({ queryKey: ['section', id] });
+      queryClient.invalidateQueries({ queryKey: ['document', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['freshness', projectId, documentId] });
+    },
+    onError: () => toast.error('Failed to update section'),
+  });
+};
+
+export const useAcceptSectionReview = (projectId: number, documentId: number) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (sectionId: number) => documentsApi.acceptSectionReview(sectionId),
+    onSuccess: (section) => {
+      queryClient.invalidateQueries({ queryKey: ['document-sections', projectId, documentId] });
+      queryClient.invalidateQueries({ queryKey: ['section', section.id] });
+      queryClient.invalidateQueries({ queryKey: ['document', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['activity', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['freshness', projectId, documentId] });
+      toast.success('Section accepted as reviewed');
+    },
+    onError: (error: Error) => toast.error(error.message),
   });
 };
 

@@ -417,3 +417,105 @@ async def test_reviewed_state_is_explicit_and_not_triggered_by_edits(
     finally:
         app.dependency_overrides.clear()
         await engine.dispose()
+
+
+@pytest.mark.anyio
+async def test_explicit_acceptance_marks_manual_content_reviewed(
+    migrated_async_database_url,
+):
+    from app.models.document import Section, SectionContentLifecycle
+
+    engine = create_async_engine(migrated_async_database_url)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    ids = await _seed_generation_workspace(session_factory)
+
+    app, client = await _client(session_factory, ids["owner_id"])
+    try:
+        async with client:
+            edited = await client.patch(
+                f"/projects/{ids['project_id']}/documents/{ids['document_id']}/sections/{ids['appendix_id']}",
+                json={"content_md": "Manual section content"},
+            )
+            assert edited.status_code == 200
+            assert edited.json()["content_lifecycle"] == "empty"
+            assert edited.json()["reviewed_at"] is None
+
+            accepted = await client.post(f"/sections/{ids['appendix_id']}/accept-review")
+            assert accepted.status_code == 200
+            accepted_section = accepted.json()
+            assert accepted_section["content_lifecycle"] == "reviewed"
+            assert accepted_section["reviewed_by"] == ids["owner_id"]
+            assert accepted_section["reviewed_against_analysis_id"] == ids["analysis_id"]
+            assert accepted_section["workflow_metadata"]["review"]["analysis_snapshot"]["analysis_id"] == ids["analysis_id"]
+
+        async with session_factory() as session:
+            section = await session.get(Section, ids["appendix_id"])
+            assert section.content_lifecycle == SectionContentLifecycle.REVIEWED
+            assert section.reviewed_by == ids["owner_id"]
+            assert section.reviewed_against_analysis_id == ids["analysis_id"]
+    finally:
+        app.dependency_overrides.clear()
+        await engine.dispose()
+
+
+@pytest.mark.anyio
+async def test_editing_reviewed_content_clears_current_review_state(
+    migrated_async_database_url,
+    monkeypatch,
+):
+    from app.models.document import Section, SectionContentLifecycle, SectionStatus
+    from app.services import generation_service
+    from app.services.generation_service import GeneratedSection
+
+    engine = create_async_engine(migrated_async_database_url)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    ids = await _seed_generation_workspace(session_factory)
+
+    async def fake_generate(db, run, section, *, user_id, provider, model):
+        return GeneratedSection(
+            content_md="Generated draft content",
+            confidence_score=88,
+            prompt_tokens=70,
+            completion_tokens=20,
+            cost=0.001,
+            provider=provider,
+            model=model,
+        )
+
+    monkeypatch.setattr(generation_service, "_generate_section_content", fake_generate)
+
+    app, client = await _client(session_factory, ids["owner_id"])
+    try:
+        async with client:
+            generated = await client.post(
+                f"/projects/{ids['project_id']}/documents/{ids['document_id']}/generation-runs",
+                json={"mode": "section_on_demand", "section_ids": [ids["overview_id"]], "execute": True},
+            )
+            assert generated.status_code == 201
+
+            accepted = await client.post(f"/sections/{ids['overview_id']}/accept-review")
+            assert accepted.status_code == 200
+            assert accepted.json()["content_lifecycle"] == "reviewed"
+
+            edited = await client.patch(
+                f"/projects/{ids['project_id']}/documents/{ids['document_id']}/sections/{ids['overview_id']}",
+                json={"content_md": "Edited after review"},
+            )
+            assert edited.status_code == 200
+            edited_section = edited.json()
+            assert edited_section["content_lifecycle"] == "generated_draft"
+            assert edited_section["status"] == "draft"
+            assert edited_section["reviewed_at"] is None
+            assert edited_section["reviewed_by"] is None
+            assert edited_section["reviewed_against_analysis_id"] is None
+            assert "review" not in (edited_section["workflow_metadata"] or {})
+
+        async with session_factory() as session:
+            section = await session.get(Section, ids["overview_id"])
+            assert section.content_lifecycle == SectionContentLifecycle.GENERATED_DRAFT
+            assert section.status == SectionStatus.DRAFT
+            assert section.reviewed_at is None
+            assert section.workflow_metadata["review_history"][0]["superseded_reason"] == "content_edited"
+    finally:
+        app.dependency_overrides.clear()
+        await engine.dispose()

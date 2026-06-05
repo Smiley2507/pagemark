@@ -25,9 +25,14 @@ class SectionResponse(BaseModel):
     content_md: str
     content_lifecycle: str = "empty"
     status: SectionStatusEnum
+    needs_input: bool = False
+    is_generating: bool = False
+    has_failed: bool = False
+    is_potentially_stale: bool = False
     reviewed_by: Optional[int] = None
     reviewed_at: Optional[datetime] = None
     reviewed_against_analysis_id: Optional[int] = None
+    workflow_metadata: Optional[dict] = None
     children: List["SectionResponse"] = Field(default_factory=list)
 
     class Config:

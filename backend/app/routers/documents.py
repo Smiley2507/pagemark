@@ -844,8 +844,9 @@ async def update_document_section(
     if document.status == DocumentStatus.APPROVED:
         raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
 
-    if body.content_md is not None:
+    if body.content_md is not None and body.content_md != (section.content_md or ""):
         section.content_md = body.content_md
+        section_service.clear_review_state_for_content_edit(section)
     if body.status is not None:
         section.status = SectionStatus(body.status.value)
     section.updated_at = datetime.utcnow()
