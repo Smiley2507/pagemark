@@ -5,8 +5,8 @@ import { cn } from '@/lib/utils';
 import type { GenerationEstimate } from '@/types/document-setup';
 
 interface GenerationChoiceStepProps {
-  onDemandEstimate: GenerationEstimate;
-  completeEstimate: GenerationEstimate;
+  onDemandEstimate: GenerationEstimate | undefined;
+  completeEstimate: GenerationEstimate | undefined;
   onChoose: (mode: 'on-demand' | 'complete') => void;
   hasActiveProvider: boolean;
   onConfigureProvider?: () => void;
@@ -109,9 +109,9 @@ export function GenerationChoiceStep({
             <div className="space-y-1">
               <div className="text-meta text-text-muted uppercase tracking-wide">Provider</div>
               <div className="text-body-lg font-semibold text-text-primary">
-                {estimate.provider}
+                {estimate.provider || 'Not configured'}
               </div>
-              <div className="text-meta text-text-secondary">{estimate.model}</div>
+              <div className="text-meta text-text-secondary">{estimate.model || ''}</div>
             </div>
 
             <div className="space-y-1">
@@ -119,7 +119,7 @@ export function GenerationChoiceStep({
                 Estimated Tokens
               </div>
               <div className="text-body-lg font-semibold text-text-primary">
-                ~{estimate.estimated_tokens.toLocaleString()}
+                ~{(estimate.estimated_prompt_tokens + estimate.estimated_completion_tokens).toLocaleString()}
               </div>
             </div>
 
@@ -128,7 +128,7 @@ export function GenerationChoiceStep({
                 Approximate Cost
               </div>
               <div className="text-body-lg font-semibold text-text-primary">
-                {estimate.currency}{estimate.approximate_cost.toFixed(2)}
+                ${estimate.estimated_cost.toFixed(4)}
               </div>
             </div>
           </div>
@@ -152,10 +152,10 @@ export function GenerationChoiceStep({
                     <span className="text-body text-text-primary">{section.heading}</span>
                     <div className="flex items-center gap-4">
                       <span className="text-meta text-text-secondary">
-                        ~{section.estimated_tokens.toLocaleString()} tokens
+                        ~{(section.estimated_prompt_tokens + section.estimated_completion_tokens).toLocaleString()} tokens
                       </span>
                       <span className="text-meta text-text-secondary">
-                        {estimate.currency}{section.approximate_cost.toFixed(2)}
+                        ${section.estimated_cost.toFixed(4)}
                       </span>
                     </div>
                   </div>
@@ -185,7 +185,7 @@ interface GenerationModeCardProps {
   icon: React.ElementType;
   isSelected: boolean;
   onSelect: () => void;
-  estimate: GenerationEstimate;
+  estimate: GenerationEstimate | undefined;
   isRecommended?: boolean;
 }
 
@@ -224,17 +224,19 @@ function GenerationModeCard({
           <h4 className="text-body-lg font-semibold text-text-primary">{title}</h4>
           <p className="text-body text-text-secondary">{description}</p>
 
-          <div className="flex items-center gap-4 pt-2">
-            <div className="flex items-center gap-1 text-text-secondary">
-              <DollarSign className="h-4 w-4" />
-              <span className="text-meta">
-                {estimate.currency}{estimate.approximate_cost.toFixed(2)}
-              </span>
+          {estimate && (
+            <div className="flex items-center gap-4 pt-2">
+              <div className="flex items-center gap-1 text-text-secondary">
+                <DollarSign className="h-4 w-4" />
+                <span className="text-meta">
+                  ${estimate.estimated_cost.toFixed(4)}
+                </span>
+              </div>
+              <div className="text-meta text-text-muted">
+                ~{(estimate.estimated_prompt_tokens + estimate.estimated_completion_tokens).toLocaleString()} tokens
+              </div>
             </div>
-            <div className="text-meta text-text-muted">
-              ~{estimate.estimated_tokens.toLocaleString()} tokens
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </button>

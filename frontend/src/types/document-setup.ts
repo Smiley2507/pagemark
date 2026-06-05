@@ -103,18 +103,27 @@ export interface ClarificationRequest {
 }
 
 export interface GenerationEstimate {
-  mode: 'on-demand' | 'complete';
-  estimated_tokens: number;
-  approximate_cost: number;
-  currency: string;
+  mode: string;
+  provider: string | null;
+  model: string | null;
+  relative_usage: string;
+  estimated_prompt_tokens: number;
+  estimated_completion_tokens: number;
+  estimated_cost: number;
   uncertainty: string;
+  pricing_note: string;
   section_breakdown?: Array<{
+    section_id: number;
     heading: string;
-    estimated_tokens: number;
-    approximate_cost: number;
+    estimated_prompt_tokens: number;
+    estimated_completion_tokens: number;
+    estimated_cost: number;
+    uncertainty: string;
   }>;
-  provider: string;
-  model: string;
+  // Legacy fields for backwards compatibility
+  estimated_tokens?: number;
+  approximate_cost?: number;
+  currency?: string;
 }
 
 export interface AnalysisFact {

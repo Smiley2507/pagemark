@@ -92,6 +92,71 @@ export const documentsApi = {
     return { proposal: data };
   },
 
+  async estimateGeneration(
+    projectId: number,
+    documentId: number,
+    mode: 'on-demand' | 'complete',
+    section_ids?: number[]
+  ): Promise<{
+    mode: string;
+    provider: string | null;
+    model: string | null;
+    relative_usage: string;
+    estimated_prompt_tokens: number;
+    estimated_completion_tokens: number;
+    estimated_cost: number;
+    uncertainty: string;
+    section_breakdown: Array<{
+      section_id: number;
+      heading: string;
+      estimated_prompt_tokens: number;
+      estimated_completion_tokens: number;
+      estimated_cost: number;
+      uncertainty: string;
+    }>;
+    pricing_note: string;
+  }> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/generation-estimate`,
+      { mode, section_ids }
+    );
+    return data;
+  },
+
+  async createGenerationRun(
+    projectId: number,
+    documentId: number,
+    mode: 'on-demand' | 'complete',
+    section_ids?: number[]
+  ): Promise<any> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/generation-runs`,
+      { mode, section_ids }
+    );
+    return data;
+  },
+
+  async listGenerationRuns(projectId: number, documentId: number): Promise<any> {
+    const { data } = await apiClient.get(
+      `/projects/${projectId}/documents/${documentId}/generation-runs`
+    );
+    return data;
+  },
+
+  async getGenerationRun(projectId: number, documentId: number, runId: number): Promise<any> {
+    const { data } = await apiClient.get(
+      `/projects/${projectId}/documents/${documentId}/generation-runs/${runId}`
+    );
+    return data;
+  },
+
+  async acceptSectionReview(sectionId: number): Promise<any> {
+    const { data } = await apiClient.post(
+      `/sections/${sectionId}/accept-review`
+    );
+    return data;
+  },
+
   async submitForReview(projectId: number, reviewerId: number): Promise<{ status: string; reviewer_id: number }> {
     const { data } = await apiClient.post(`/projects/${projectId}/document/submit-review`, { reviewer_id: reviewerId });
     return data;

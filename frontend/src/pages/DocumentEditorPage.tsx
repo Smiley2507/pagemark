@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Sparkles, AlertCircle, CheckCircle, Clock, Eye } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Notice } from '@/components/ui/notice';
 import { cn } from '@/lib/utils';
 import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
 import { useDocument } from '@/hooks/useSections';
+import { documentsApi } from '@/api/documents';
 
 export function DocumentEditorPage() {
   const { projectId, documentId } = useParams<{ projectId: string; documentId: string }>();
@@ -57,6 +59,17 @@ export function DocumentEditorPage() {
     return () => clearTimeout(timer);
   }, []);
   
+  // Accept review mutation
+  const acceptReviewMutation = useMutation({
+    mutationFn: (sectionId: number) => documentsApi.acceptSectionReview(sectionId),
+    onSuccess: () => {
+      toast.success('Section marked as reviewed');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
   const activeSection = sections.find((s) => s.id === activeSectionId);
   
   const getSectionStatus = (section: typeof sections[0]) => {
@@ -197,7 +210,14 @@ export function DocumentEditorPage() {
                 
                 <div className="flex items-center gap-2">
                   <Button size="sm">Save</Button>
-                  <Button size="sm" variant="outline">Mark as Reviewed</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => acceptReviewMutation.mutate(activeSection.id)}
+                    disabled={acceptReviewMutation.isPending}
+                  >
+                    {acceptReviewMutation.isPending ? 'Marking...' : 'Mark as Reviewed'}
+                  </Button>
                   {activeSection.status === 'draft' && (
                     <Button size="sm" variant="outline" className="gap-2">
                       <Sparkles className="h-4 w-4" />

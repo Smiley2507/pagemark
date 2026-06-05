@@ -285,19 +285,6 @@ export function DocumentSetupPage() {
     }
   };
 
-  const handleChooseGeneration = (mode: 'on-demand' | 'complete') => {
-    setSetupState((prev) => ({
-      ...prev,
-      generationMode: mode,
-      stage: 'editor-ready',
-    }));
-
-    // Navigate to editor
-    if (setupState.projectId) {
-      navigate(`/editor/${setupState.projectId}`);
-    }
-  };
-
   const handleProviderComplete = () => {
     setShowProviderSetup(false);
     setSetupState((prev) => ({
@@ -354,21 +341,54 @@ export function DocumentSetupPage() {
   const recommendations = recommendationsData?.recommendations || [];
   const currentProposal = proposalsData?.proposals?.[0] || null;
 
-  const mockEstimate = {
-    mode: 'on-demand' as 'on-demand' | 'complete',
-    estimated_tokens: 5000,
-    approximate_cost: 0.15,
-    currency: '$',
-    uncertainty: 'Estimates may vary by ±30%.',
-    provider: 'Claude',
-    model: 'claude-3-5-sonnet',
-  };
+  // Fetch generation estimates when stage reaches generation-mode
+  const { data: onDemandEstimate } = useQuery({
+    queryKey: ['generation-estimate', 'on-demand', setupState.projectId, setupState.documentId],
+    queryFn: () =>
+      documentsApi.estimateGeneration(
+        setupState.projectId!,
+        setupState.documentId!,
+        'on-demand',
+      ),
+    enabled: !!setupState.projectId && !!setupState.documentId && setupState.stage === 'generation-mode',
+  });
 
-  const mockCompleteEstimate = {
-    ...mockEstimate,
-    mode: 'complete' as 'on-demand' | 'complete',
-    estimated_tokens: 15000,
-    approximate_cost: 0.45,
+  const { data: completeEstimate } = useQuery({
+    queryKey: ['generation-estimate', 'complete', setupState.projectId, setupState.documentId],
+    queryFn: () =>
+      documentsApi.estimateGeneration(
+        setupState.projectId!,
+        setupState.documentId!,
+        'complete',
+      ),
+    enabled: !!setupState.projectId && !!setupState.documentId && setupState.stage === 'generation-mode',
+  });
+
+  // Create generation run when user chooses mode
+  const createRunMutation = useMutation({
+    mutationFn: (mode: 'on-demand' | 'complete') =>
+      documentsApi.createGenerationRun(
+        setupState.projectId!,
+        setupState.documentId!,
+        mode,
+      ),
+    onSuccess: (data, mode) => {
+      setSetupState((prev) => ({
+        ...prev,
+        generationMode: mode,
+        stage: 'editor-ready',
+      }));
+      if (setupState.projectId) {
+        navigate(`/editor/${setupState.projectId}`);
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const handleChooseGeneration = (mode: 'on-demand' | 'complete') => {
+    createRunMutation.mutate(mode);
   };
 
   return (
@@ -432,8 +452,8 @@ export function DocumentSetupPage() {
 
               {setupState.stage === 'generation-mode' && (
                 <GenerationChoiceStep
-                  onDemandEstimate={mockEstimate}
-                  completeEstimate={mockCompleteEstimate}
+                  onDemandEstimate={onDemandEstimate}
+                  completeEstimate={completeEstimate}
                   hasActiveProvider={hasActiveProvider}
                   onChoose={handleChooseGeneration}
                   onConfigureProvider={() => setShowProviderSetup(true)}
