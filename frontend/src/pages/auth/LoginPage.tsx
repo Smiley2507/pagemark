@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +10,7 @@ export const LoginPage = () => {
   const { mutate: login, isPending } = useLogin();
 
   return (
-    <AuthLayout subtitle="Sign in to your account">
+    <AuthLayout subtitle="Welcome back">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -27,20 +28,20 @@ export const LoginPage = () => {
             <Label htmlFor="password">Password</Label>
             <Link
               to="/forgot-password"
-              className="text-meta text-primary hover:underline"
+              className="text-meta text-interaction hover:underline"
             >
               Forgot password?
             </Link>
           </div>
           <Input id="password" type="password" name="password" required />
         </div>
-        <Button type="submit" className="h-10 w-full" disabled={isPending}>
+        <Button type="submit" className="h-10 w-full bg-interaction text-interaction-foreground hover:bg-interaction-hover" disabled={isPending}>
           {isPending ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
-      <p className="mt-6 text-center text-meta text-muted-foreground">
+      <p className="mt-6 text-center text-meta text-text-muted">
         Don&apos;t have an account?{' '}
-        <Link to="/register" className="text-primary hover:underline">
+        <Link to="/register" className="text-interaction hover:underline font-medium">
           Sign up
         </Link>
       </p>

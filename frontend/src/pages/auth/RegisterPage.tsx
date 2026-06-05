@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -39,7 +40,7 @@ export const RegisterPage = () => {
           <Input id="name" name="name" placeholder="John Doe" required />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="organization_name">Organization name (Optional)</Label>
+          <Label htmlFor="organization_name">Organization name <span className="text-text-muted">(optional)</span></Label>
           <Input id="organization_name" name="organization_name" placeholder="Acme Corp" />
         </div>
         <div className="space-y-2">
@@ -56,25 +57,25 @@ export const RegisterPage = () => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-panel-muted">
             <div
-              className="h-full rounded-full bg-primary transition-all duration-300"
+              className="h-full rounded-full bg-interaction transition-all duration-300"
               style={{ width: strength.width }}
             />
           </div>
-          <p className="text-meta-sm text-muted-foreground">Strength: {strength.label}</p>
+          <p className="text-meta-sm text-text-muted">Strength: {strength.label}</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="confirmPassword">Confirm password</Label>
           <Input id="confirmPassword" type="password" name="confirmPassword" required />
         </div>
-        <Button type="submit" className="h-10 w-full" disabled={isPending}>
+        <Button type="submit" className="h-10 w-full bg-interaction text-interaction-foreground hover:bg-interaction-hover" disabled={isPending}>
           {isPending ? 'Creating account…' : 'Sign up'}
         </Button>
       </form>
-      <p className="mt-6 text-center text-meta text-muted-foreground">
+      <p className="mt-6 text-center text-meta text-text-muted">
         Already have an account?{' '}
-        <Link to="/login" className="text-primary hover:underline">
+        <Link to="/login" className="text-interaction hover:underline font-medium">
           Sign in
         </Link>
       </p>
