@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,14 +9,17 @@ export const LoginPage = () => {
   const { mutate: login, isPending } = useLogin();
 
   return (
-    <AuthLayout subtitle="Welcome back">
+    <AuthLayout
+      title="Welcome back"
+      subtitle="Return to your Projects, resume active generation, and review Sections that need attention."
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
           const formData = new FormData(e.currentTarget);
           login(Object.fromEntries(formData) as { email: string; password: string });
         }}
-        className="space-y-4"
+        className="space-y-5"
       >
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
@@ -35,7 +37,7 @@ export const LoginPage = () => {
           </div>
           <Input id="password" type="password" name="password" required />
         </div>
-        <Button type="submit" className="h-10 w-full bg-interaction text-interaction-foreground hover:bg-interaction-hover" disabled={isPending}>
+        <Button type="submit" className="h-10 w-full" disabled={isPending}>
           {isPending ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
