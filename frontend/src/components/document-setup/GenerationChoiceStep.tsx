@@ -1,244 +1,239 @@
-import React, { useState } from 'react';
-import { Zap, Clock, DollarSign, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { useMemo, useState, type ElementType } from 'react';
+import {
+  BadgeDollarSign,
+  ChevronDown,
+  ChevronUp,
+  FilePenLine,
+  Sparkles,
+  Zap,
+} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Notice } from '@/components/ui/notice';
+import { Surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
 import type { GenerationEstimate } from '@/types/document-setup';
 
 interface GenerationChoiceStepProps {
-  onDemandEstimate: GenerationEstimate | undefined;
-  completeEstimate: GenerationEstimate | undefined;
-  onChoose: (mode: 'on-demand' | 'complete') => void;
+  onDemandEstimate?: GenerationEstimate;
+  completeEstimate?: GenerationEstimate;
   hasActiveProvider: boolean;
+  onChoose: (mode: 'on-demand' | 'complete' | 'manual') => void;
   onConfigureProvider?: () => void;
 }
+
+type ChoiceMode = 'on-demand' | 'complete' | 'manual';
 
 export function GenerationChoiceStep({
   onDemandEstimate,
   completeEstimate,
-  onChoose,
   hasActiveProvider,
+  onChoose,
   onConfigureProvider,
 }: GenerationChoiceStepProps) {
-  const [selectedMode, setSelectedMode] = useState<'on-demand' | 'complete' | null>('on-demand');
-  const [showBreakdown, setShowBreakdown] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<ChoiceMode>(
+    hasActiveProvider ? 'on-demand' : 'manual',
+  );
+  const [showBreakdown, setShowBreakdown] = useState(true);
 
-  const estimate = selectedMode === 'on-demand' ? onDemandEstimate : completeEstimate;
+  const selectedEstimate = useMemo(() => {
+    if (selectedMode === 'on-demand') return onDemandEstimate;
+    if (selectedMode === 'complete') return completeEstimate;
+    return undefined;
+  }, [completeEstimate, onDemandEstimate, selectedMode]);
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
-      <div className="space-y-2">
-        <h2 className="text-title font-semibold text-text-primary">Choose Generation Mode</h2>
-        <p className="text-body text-text-secondary">
-          Select how you want to generate section content. On-demand is recommended for most cases.
+    <div className="mx-auto flex max-w-5xl flex-col gap-8">
+      <div className="max-w-3xl">
+        <h1 className="text-title text-text-primary">Choose how to enter the Document</h1>
+        <p className="mt-3 text-body text-text-secondary">
+          Generation choices compare relative usage, approximate cost, uncertainty, and Section-level
+          breakdown before provider-consuming work begins.
         </p>
       </div>
 
       {!hasActiveProvider && (
-        <div className="rounded-lg border border-status-warning bg-status-warning p-4">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-status-warning-foreground shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <div className="text-body font-medium text-status-warning-foreground">
-                AI Provider Required
-              </div>
-              <p className="text-body text-status-warning-foreground/80 mt-1">
-                You need to configure an AI provider before generating content. Your API key is
-                encrypted and stored securely.
-              </p>
-              {onConfigureProvider && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onConfigureProvider}
-                  className="mt-3"
-                >
-                  Configure Provider
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
+        <Notice variant="warning" title="No active provider is configured">
+          You can still enter the editor immediately and write manually. Configure a provider only
+          when you choose an AI-powered generation action.
+        </Notice>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <GenerationModeCard
-          mode="on-demand"
-          title="Generate On Demand"
-          description="Generate each section individually as you need them. Recommended for most projects."
-          icon={Clock}
-          isSelected={selectedMode === 'on-demand'}
-          onSelect={() => setSelectedMode('on-demand')}
-          estimate={onDemandEstimate}
-          isRecommended
+      <div className="grid gap-4 lg:grid-cols-3">
+        <ModeCard
+          selected={selectedMode === 'manual'}
+          title="Enter editor without generation"
+          subtitle="No provider usage"
+          description="Create the Section structure now and start writing manually. AI generation remains available later."
+          badge={!hasActiveProvider ? 'Recommended now' : undefined}
+          icon={FilePenLine}
+          onClick={() => setSelectedMode('manual')}
         />
-
-        <GenerationModeCard
-          mode="complete"
-          title="Complete Document"
-          description="Generate all sections at once in the background. Faster but uses more AI credits upfront."
+        <ModeCard
+          selected={selectedMode === 'on-demand'}
+          title="Generate Sections on demand"
+          subtitle="Lower relative usage"
+          description="Recommended when a provider is configured. Generate only the Sections you want, when you want them."
+          badge={hasActiveProvider ? 'Recommended' : 'Provider required'}
+          icon={Sparkles}
+          onClick={() => setSelectedMode('on-demand')}
+        />
+        <ModeCard
+          selected={selectedMode === 'complete'}
+          title="Generate the complete Document"
+          subtitle="Higher relative usage"
+          description="Start a background run for the whole approved Outline and enter the editor while Sections progress."
+          badge="Higher upfront usage"
           icon={Zap}
-          isSelected={selectedMode === 'complete'}
-          onSelect={() => setSelectedMode('complete')}
-          estimate={completeEstimate}
+          onClick={() => setSelectedMode('complete')}
         />
       </div>
 
-      {selectedMode && estimate && (
-        <div className="rounded-lg border border-separator bg-panel p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-section font-semibold text-text-primary">Usage Estimate</h3>
-            <button
-              onClick={() => setShowBreakdown(!showBreakdown)}
-              className="text-body text-interaction hover:text-interaction-hover transition-colors flex items-center gap-1"
-            >
+      {selectedMode !== 'manual' && selectedEstimate && (
+        <Surface variant="panel" padding="lg" className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-body font-semibold text-text-primary">Usage estimate</h2>
+              <p className="mt-1 text-meta text-text-secondary">
+                Approximate provider usage before {selectedMode === 'complete' ? 'complete-Document generation' : 'Section generation'}.
+              </p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setShowBreakdown((value) => !value)}>
               {showBreakdown ? (
                 <>
                   <ChevronUp className="h-4 w-4" />
-                  Hide Details
+                  Hide breakdown
                 </>
               ) : (
                 <>
                   <ChevronDown className="h-4 w-4" />
-                  Show Details
+                  Show breakdown
                 </>
               )}
-            </button>
+            </Button>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-1">
-              <div className="text-meta text-text-muted uppercase tracking-wide">Provider</div>
-              <div className="text-body-lg font-semibold text-text-primary">
-                {estimate.provider || 'Not configured'}
-              </div>
-              <div className="text-meta text-text-secondary">{estimate.model || ''}</div>
-            </div>
-
-            <div className="space-y-1">
-              <div className="text-meta text-text-muted uppercase tracking-wide">
-                Estimated Tokens
-              </div>
-              <div className="text-body-lg font-semibold text-text-primary">
-                ~{(estimate.estimated_prompt_tokens + estimate.estimated_completion_tokens).toLocaleString()}
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <div className="text-meta text-text-muted uppercase tracking-wide">
-                Approximate Cost
-              </div>
-              <div className="text-body-lg font-semibold text-text-primary">
-                ${estimate.estimated_cost.toFixed(4)}
-              </div>
-            </div>
+          <div className="grid gap-4 md:grid-cols-4">
+            <EstimateMetric label="Provider" value={selectedEstimate.provider || 'Not configured'} hint={selectedEstimate.model || ''} />
+            <EstimateMetric label="Relative usage" value={selectedEstimate.relative_usage} />
+            <EstimateMetric
+              label="Estimated tokens"
+              value={`~${(selectedEstimate.estimated_prompt_tokens + selectedEstimate.estimated_completion_tokens).toLocaleString()}`}
+            />
+            <EstimateMetric
+              label="Approximate cost"
+              value={`$${selectedEstimate.estimated_cost.toFixed(4)}`}
+              hint="Not guaranteed billing"
+            />
           </div>
 
-          <div className="rounded-md bg-status-info p-3">
-            <p className="text-body text-status-info-foreground">
-              <strong>Note:</strong> {estimate.uncertainty} Actual usage may vary based on section
-              complexity and AI responses. Costs shown are estimates, not guaranteed billing amounts.
-            </p>
-          </div>
+          <Notice variant="generation" title="Estimate uncertainty remains explicit">
+            {selectedEstimate.uncertainty} {selectedEstimate.pricing_note || 'Actual provider billing may differ from these estimates.'}
+          </Notice>
 
-          {showBreakdown && estimate.section_breakdown && (
-            <div className="space-y-2 pt-4 border-t border-separator">
-              <div className="text-body font-medium text-text-primary">Section Breakdown</div>
-              <div className="space-y-1 max-h-64 overflow-y-auto">
-                {estimate.section_breakdown.map((section, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-2 rounded bg-panel-muted"
-                  >
-                    <span className="text-body text-text-primary">{section.heading}</span>
-                    <div className="flex items-center gap-4">
-                      <span className="text-meta text-text-secondary">
-                        ~{(section.estimated_prompt_tokens + section.estimated_completion_tokens).toLocaleString()} tokens
-                      </span>
-                      <span className="text-meta text-text-secondary">
-                        ${section.estimated_cost.toFixed(4)}
-                      </span>
+          {showBreakdown && selectedEstimate.section_breakdown && selectedEstimate.section_breakdown.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <BadgeDollarSign className="h-4 w-4 text-interaction" />
+                <h3 className="text-body font-semibold text-text-primary">Section-level breakdown</h3>
+              </div>
+              <div className="space-y-2">
+                {selectedEstimate.section_breakdown.map((section) => (
+                  <Surface key={section.section_id} variant="muted" padding="default">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-body font-semibold text-text-primary">{section.heading}</h4>
+                        <p className="mt-1 text-meta text-text-secondary">{section.uncertainty}</p>
+                      </div>
+                      <div className="text-right text-meta text-text-secondary">
+                        <div>~{(section.estimated_prompt_tokens + section.estimated_completion_tokens).toLocaleString()} tokens</div>
+                        <div>${section.estimated_cost.toFixed(4)}</div>
+                      </div>
                     </div>
-                  </div>
+                  </Surface>
                 ))}
               </div>
             </div>
           )}
+        </Surface>
+      )}
+
+      {selectedMode !== 'manual' && !hasActiveProvider && (
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={onConfigureProvider}>Configure provider for this AI action</Button>
+          <Button variant="outline" onClick={() => setSelectedMode('manual')}>
+            Enter editor without generation
+          </Button>
         </div>
       )}
 
-      <div className="flex gap-3 pt-4">
+      <div className="flex flex-wrap gap-3">
         <Button
-          onClick={() => selectedMode && onChoose(selectedMode)}
-          disabled={!selectedMode || !hasActiveProvider}
+          disabled={selectedMode !== 'manual' && !hasActiveProvider}
+          onClick={() => onChoose(selectedMode)}
         >
-          Continue to Editor
+          {selectedMode === 'manual' ? 'Enter editor now' : 'Start generation and enter editor'}
         </Button>
       </div>
     </div>
   );
 }
 
-interface GenerationModeCardProps {
-  mode: 'on-demand' | 'complete';
-  title: string;
-  description: string;
-  icon: React.ElementType;
-  isSelected: boolean;
-  onSelect: () => void;
-  estimate: GenerationEstimate | undefined;
-  isRecommended?: boolean;
-}
-
-function GenerationModeCard({
-  mode,
+function ModeCard({
+  selected,
   title,
+  subtitle,
   description,
+  badge,
   icon: Icon,
-  isSelected,
-  onSelect,
-  estimate,
-  isRecommended,
-}: GenerationModeCardProps) {
+  onClick,
+}: {
+  selected: boolean;
+  title: string;
+  subtitle: string;
+  description: string;
+  badge?: string;
+  icon: ElementType;
+  onClick: () => void;
+}) {
   return (
     <button
-      onClick={onSelect}
+      type="button"
+      onClick={onClick}
       className={cn(
-        'relative rounded-lg border p-6 text-left transition-all hover:border-interaction',
-        isSelected ? 'border-interaction bg-interaction-muted ring-2 ring-interaction ring-opacity-20' : 'border-separator bg-panel'
+        'rounded-lg border p-5 text-left transition-colors',
+        selected
+          ? 'border-interaction bg-interaction-muted'
+          : 'border-border bg-panel hover:bg-panel-muted',
       )}
     >
-      {isRecommended && (
-        <div className="absolute -top-2 right-4">
-          <span className="px-2 py-0.5 rounded-full bg-interaction text-interaction-foreground text-meta-sm font-medium">
-            Recommended
-          </span>
-        </div>
-      )}
-
-      <div className="flex items-start gap-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-interaction-muted">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-panel-muted">
           <Icon className="h-5 w-5 text-interaction" />
         </div>
-
-        <div className="flex-1 min-w-0 space-y-2">
-          <h4 className="text-body-lg font-semibold text-text-primary">{title}</h4>
-          <p className="text-body text-text-secondary">{description}</p>
-
-          {estimate && (
-            <div className="flex items-center gap-4 pt-2">
-              <div className="flex items-center gap-1 text-text-secondary">
-                <DollarSign className="h-4 w-4" />
-                <span className="text-meta">
-                  ${estimate.estimated_cost.toFixed(4)}
-                </span>
-              </div>
-              <div className="text-meta text-text-muted">
-                ~{(estimate.estimated_prompt_tokens + estimate.estimated_completion_tokens).toLocaleString()} tokens
-              </div>
-            </div>
-          )}
-        </div>
+        {badge && <Badge variant="neutral">{badge}</Badge>}
       </div>
+      <h2 className="mt-4 text-body font-semibold text-text-primary">{title}</h2>
+      <p className="mt-1 text-meta-sm uppercase tracking-wide text-text-muted">{subtitle}</p>
+      <p className="mt-3 text-meta text-text-secondary">{description}</p>
     </button>
+  );
+}
+
+function EstimateMetric({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <Surface variant="muted" padding="default">
+      <div className="text-meta-sm uppercase tracking-wide text-text-muted">{label}</div>
+      <div className="mt-2 text-body font-semibold text-text-primary">{value}</div>
+      {hint && <div className="mt-1 text-meta text-text-secondary">{hint}</div>}
+    </Surface>
   );
 }

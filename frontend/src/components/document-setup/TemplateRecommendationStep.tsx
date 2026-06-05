@@ -1,275 +1,268 @@
-import React, { useState } from 'react';
-import { FileText, Sparkles, Plus, ChevronRight, Info } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useMemo, useState } from 'react';
+import { ChevronRight, FileText, Plus, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Notice } from '@/components/ui/notice';
+import { Surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
-import type { TemplateRecommendation } from '@/types/document-setup';
 import type { Template } from '@/types';
+import type { TemplateRecommendation, SourceConnectionType } from '@/types/document-setup';
 
 interface TemplateRecommendationStepProps {
   recommendations: TemplateRecommendation[];
   availableTemplates?: Template[];
   hasActiveProvider: boolean;
+  sourceType?: SourceConnectionType;
+  requestingAiRecommendations?: boolean;
   onSelectTemplate: (templateId: number, recommendation?: TemplateRecommendation) => void;
   onCreateCustom: () => void;
   onConfigureProvider?: () => void;
+  onRequestAiRecommendations?: () => void;
 }
 
 export function TemplateRecommendationStep({
   recommendations,
   availableTemplates = [],
   hasActiveProvider,
+  sourceType,
+  requestingAiRecommendations = false,
   onSelectTemplate,
   onCreateCustom,
   onConfigureProvider,
+  onRequestAiRecommendations,
 }: TemplateRecommendationStepProps) {
   const [showAllTemplates, setShowAllTemplates] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
 
-  const ruleBasedRecs = recommendations.filter((r) => r.basis === 'rule_based');
-  const aiRecs = recommendations.filter((r) => r.basis === 'ai_personalized');
+  const ruleBased = recommendations.filter((item) => item.basis === 'rule_based');
+  const aiPersonalized = recommendations.filter((item) => item.basis === 'ai_personalized');
+  const sourceConnected = sourceType !== 'none';
 
-  const topRecommendation = [...aiRecs, ...ruleBasedRecs][0];
-
-  const otherTemplates = availableTemplates.filter(
-    (t) => !recommendations.find((r) => r.template_id === t.id)
+  const hiddenTemplateIds = new Set(recommendations.map((item) => item.template_id).filter(Boolean));
+  const fallbackTemplates = useMemo(
+    () => availableTemplates.filter((template) => !hiddenTemplateIds.has(template.id)),
+    [availableTemplates, hiddenTemplateIds],
   );
 
-  const handleSelect = (templateId: number) => {
+  const handleSelect = (templateId: number, recommendation?: TemplateRecommendation) => {
     setSelectedTemplateId(templateId);
-    const recommendation = recommendations.find((r) => r.template_id === templateId);
     onSelectTemplate(templateId, recommendation);
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
-      <div className="space-y-2">
-        <h2 className="text-title font-semibold text-text-primary">Choose Documentation Template</h2>
-        <p className="text-body text-text-secondary">
-          Based on your repository analysis, we recommend templates that match your documentation
-          needs. You can also create a custom outline from scratch.
+    <div className="mx-auto flex max-w-5xl flex-col gap-8">
+      <div className="max-w-3xl">
+        <h1 className="text-title text-text-primary">Choose the first Document structure</h1>
+        <p className="mt-3 text-body text-text-secondary">
+          Recommendations stay explainable. Rule-based recommendations cite repository traits when
+          available, while AI-personalized recommendations explicitly disclose provider usage.
         </p>
       </div>
 
-      {!hasActiveProvider && aiRecs.length === 0 && (
-        <div className="rounded-lg border border-status-info bg-status-info p-4">
-          <div className="flex items-start gap-3">
-            <Info className="h-5 w-5 text-status-info-foreground shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <div className="text-body font-medium text-status-info-foreground">
-                AI-Personalized Recommendations Available
+      {!sourceConnected && (
+        <Notice variant="warning" title="No source connected">
+          Analysis-grounded recommendations and repository evidence are unavailable. You can still
+          choose a reusable Template or create a Custom Outline, but the structure will not be tied
+          to repository facts yet.
+        </Notice>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="space-y-6">
+          <Surface variant="panel" padding="lg" className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-body font-semibold text-text-primary">Rule-based recommendations</h2>
+                <p className="mt-1 text-meta text-text-secondary">
+                  Available without a provider credential.
+                </p>
               </div>
-              <p className="text-body text-status-info-foreground/80 mt-1">
-                Configure an AI provider to receive personalized template recommendations and
-                AI-powered outline adaptation based on your specific codebase.
-              </p>
-              {onConfigureProvider && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onConfigureProvider}
-                  className="mt-3 gap-2"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  Configure AI Provider
-                </Button>
-              )}
+              <Badge variant="neutral">No provider usage</Badge>
             </div>
-          </div>
+
+            {ruleBased.length > 0 ? (
+              <div className="grid gap-3">
+                {ruleBased.map((recommendation) => (
+                  <TemplateCard
+                    key={recommendation.id}
+                    template={recommendation.template}
+                    recommendation={recommendation}
+                    selected={selectedTemplateId === recommendation.template_id}
+                    onSelect={() => handleSelect(recommendation.template_id!, recommendation)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-meta text-text-secondary">
+                Rule-based recommendations will appear here after Template recommendation generation completes.
+              </p>
+            )}
+          </Surface>
+
+          <Surface variant="panel" padding="lg" className="space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-body font-semibold text-text-primary">AI-personalized recommendation</h2>
+                <p className="mt-1 text-meta text-text-secondary">
+                  Uses the maintainer&apos;s active provider to adapt the recommendation to this Project.
+                </p>
+              </div>
+              <Badge variant="generation">Provider-consuming action</Badge>
+            </div>
+
+            {!sourceConnected ? (
+              <Notice variant="warning" title="Source connection required">
+                AI-personalized recommendations remain disabled until source code is connected because there is no Analysis to personalize from.
+              </Notice>
+            ) : aiPersonalized.length > 0 ? (
+              <div className="grid gap-3">
+                {aiPersonalized.map((recommendation) => (
+                  <TemplateCard
+                    key={recommendation.id}
+                    template={recommendation.template}
+                    recommendation={recommendation}
+                    selected={selectedTemplateId === recommendation.template_id}
+                    onSelect={() => handleSelect(recommendation.template_id!, recommendation)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <>
+                <Notice variant="generation" title="Approximate provider usage">
+                  Creating an AI-personalized recommendation uses your active provider and may
+                  consume tokens. The resulting recommendation remains explainable and persisted.
+                </Notice>
+                <div className="flex flex-wrap gap-3">
+                  {hasActiveProvider ? (
+                    <Button
+                      variant="outline"
+                      disabled={requestingAiRecommendations}
+                      onClick={onRequestAiRecommendations}
+                    >
+                      {requestingAiRecommendations ? 'Generating recommendation…' : 'Generate AI-personalized recommendation'}
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={onConfigureProvider}>
+                      Configure provider for AI recommendation
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
+          </Surface>
+
+          <Surface variant="panel" padding="lg" className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-body font-semibold text-text-primary">Other Templates</h2>
+                <p className="mt-1 text-meta text-text-secondary">
+                  Browse built-in alternatives when the top recommendations are close but not quite right.
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowAllTemplates((value) => !value)}>
+                {showAllTemplates ? 'Hide' : 'Show'} list
+              </Button>
+            </div>
+
+            {showAllTemplates && fallbackTemplates.length > 0 && (
+              <div className="grid gap-3">
+                {fallbackTemplates.map((template) => (
+                  <TemplateCard
+                    key={template.id}
+                    template={{
+                      ...template,
+                      sections_preview: Array.isArray(template.sections_json)
+                        ? template.sections_json.map((section) =>
+                            typeof section === 'string'
+                              ? { heading: section }
+                              : { heading: section.heading, description: section.description },
+                          )
+                        : undefined,
+                    }}
+                    selected={selectedTemplateId === template.id}
+                    onSelect={() => handleSelect(template.id)}
+                  />
+                ))}
+              </div>
+            )}
+
+            <Button variant="outline" className="w-full justify-center gap-2" onClick={onCreateCustom}>
+              <Plus className="h-4 w-4" />
+              Create Custom Outline
+            </Button>
+          </Surface>
         </div>
-      )}
 
-      {topRecommendation && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <h3 className="text-section font-semibold text-text-primary">Recommended</h3>
-            <Badge variant={topRecommendation.basis === 'ai_personalized' ? 'info' : 'neutral'}>
-              {topRecommendation.basis === 'ai_personalized' ? (
-                <span className="flex items-center gap-1">
-                  <Sparkles className="h-3 w-3" />
-                  AI-Personalized
-                </span>
-              ) : (
-                'Rule-Based'
-              )}
-            </Badge>
-          </div>
-
-          <TemplateCard
-            template={topRecommendation.template!}
-            recommendation={topRecommendation}
-            isSelected={selectedTemplateId === topRecommendation.template_id}
-            onSelect={() => handleSelect(topRecommendation.template_id!)}
-            isHighlighted
-          />
-        </div>
-      )}
-
-      {(ruleBasedRecs.length > 1 || aiRecs.length > 1) && (
-        <div className="space-y-3">
-          <h3 className="text-section font-semibold text-text-primary">Other Recommendations</h3>
-          <div className="grid gap-3">
-            {[...aiRecs.slice(1), ...ruleBasedRecs.slice(1)].map((rec) => (
-              <TemplateCard
-                key={rec.id}
-                template={rec.template!}
-                recommendation={rec}
-                isSelected={selectedTemplateId === rec.template_id}
-                onSelect={() => handleSelect(rec.template_id!)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-3 pt-4 border-t border-separator">
-        <div className="flex items-center justify-between">
-          <h3 className="text-section font-semibold text-text-primary">All Templates</h3>
-          <button
-            onClick={() => setShowAllTemplates(!showAllTemplates)}
-            className="text-body text-interaction hover:text-interaction-hover transition-colors"
-          >
-            {showAllTemplates ? 'Hide' : 'Show All'}
-          </button>
-        </div>
-
-        {showAllTemplates && otherTemplates.length > 0 && (
-          <div className="grid gap-3">
-            {otherTemplates.map((template) => (
-              <TemplateCard
-                key={template.id}
-                template={template}
-                isSelected={selectedTemplateId === template.id}
-                onSelect={() => handleSelect(template.id)}
-              />
-            ))}
-          </div>
-        )}
-
-        <Button
-          variant="outline"
-          onClick={onCreateCustom}
-          className="w-full gap-2 justify-center"
-        >
-          <Plus className="h-4 w-4" />
-          Create Custom Outline
-        </Button>
+        <Surface variant="muted" padding="lg">
+          <h2 className="text-body font-semibold text-text-primary">Selection rules</h2>
+          <ul className="mt-3 space-y-2 text-meta text-text-secondary">
+            <li>Rule-based recommendations can work without a provider.</li>
+            <li>AI-personalized recommendations require provider usage disclosure first.</li>
+            <li>Custom Outline starts from project-specific intent when no Template fits.</li>
+          </ul>
+        </Surface>
       </div>
     </div>
   );
 }
 
-interface TemplateCardProps {
-  template: {
-    id: number;
-    name: string;
-    description?: string;
-    category?: string;
-    purpose?: string;
-    intended_audience?: string;
-    expected_outcome?: string;
-    sections_preview?: Array<{
-      heading: string;
-      description?: string;
-    }>;
-  };
-  recommendation?: TemplateRecommendation;
-  isSelected: boolean;
-  onSelect: () => void;
-  isHighlighted?: boolean;
-}
-
 function TemplateCard({
   template,
   recommendation,
-  isSelected,
+  selected,
   onSelect,
-  isHighlighted,
-}: TemplateCardProps) {
-  const [showSections, setShowSections] = useState(false);
+}: {
+  template?: TemplateRecommendation['template'] | (Template & { sections_preview?: Array<{ heading: string; description?: string }> });
+  recommendation?: TemplateRecommendation;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  if (!template) return null;
 
   return (
     <button
+      type="button"
       onClick={onSelect}
       className={cn(
-        'w-full text-left rounded-lg border p-4 transition-all hover:border-interaction',
-        isSelected ? 'border-interaction bg-interaction-muted' : 'border-separator bg-panel',
-        isHighlighted && 'ring-2 ring-interaction ring-opacity-20'
+        'rounded-lg border p-4 text-left transition-colors',
+        selected
+          ? 'border-interaction bg-interaction-muted'
+          : 'border-border bg-panel hover:bg-panel-muted',
       )}
     >
       <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="flex items-start gap-3">
-            <FileText className="h-5 w-5 text-text-secondary shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h4 className="text-body-lg font-semibold text-text-primary">{template.name}</h4>
-                {template.category && (
-                  <Badge variant="neutral" className="text-meta">
-                    {template.category}
-                  </Badge>
-                )}
-              </div>
-
-              {template.description && (
-                <p className="text-body text-text-secondary mt-1">{template.description}</p>
-              )}
-
-              {recommendation && (
-                <div className="mt-3 p-3 rounded-md bg-panel-muted">
-                  <div className="text-meta font-medium text-text-primary mb-1">
-                    Why this template?
-                  </div>
-                  <p className="text-body text-text-secondary">{recommendation.explanation}</p>
-                  {recommendation.basis === 'ai_personalized' && recommendation.provider_usage && (
-                    <div className="text-meta text-text-muted mt-2">
-                      Analysis used {recommendation.provider_usage.tokens} tokens
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {template.sections_preview && template.sections_preview.length > 0 && (
-                <div className="mt-3">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowSections(!showSections);
-                    }}
-                    className="text-body text-interaction hover:text-interaction-hover transition-colors flex items-center gap-1"
-                  >
-                    <ChevronRight
-                      className={cn(
-                        'h-4 w-4 transition-transform',
-                        showSections && 'rotate-90'
-                      )}
-                    />
-                    {showSections ? 'Hide' : 'Show'} sections ({template.sections_preview.length})
-                  </button>
-
-                  {showSections && (
-                    <div className="mt-2 space-y-1 pl-5">
-                      {template.sections_preview.map((section, idx) => (
-                        <div key={idx} className="text-body text-text-secondary">
-                          <span className="font-medium">{section.heading}</span>
-                          {section.description && (
-                            <span className="text-text-muted"> — {section.description}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-interaction" />
+            <h3 className="text-body font-semibold text-text-primary">{template.name}</h3>
+            {recommendation && (
+              <Badge variant={recommendation.basis === 'ai_personalized' ? 'generation' : 'neutral'}>
+                {recommendation.basis === 'ai_personalized' ? 'AI-personalized' : 'Rule-based'}
+              </Badge>
+            )}
+          </div>
+          {template.description && (
+            <p className="mt-2 text-meta text-text-secondary">{template.description}</p>
+          )}
+          {recommendation?.explanation && (
+            <p className="mt-3 text-meta text-text-secondary">{recommendation.explanation}</p>
+          )}
+          {recommendation?.provider_usage && (
+            <p className="mt-2 text-meta text-text-muted">
+              Approximate provider usage: {recommendation.provider_usage.tokens.toLocaleString()} tokens.
+            </p>
+          )}
+          {template.sections_preview && template.sections_preview.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {template.sections_preview.slice(0, 4).map((section) => (
+                <Badge key={section.heading} variant="neutral">
+                  {section.heading}
+                </Badge>
+              ))}
             </div>
-          </div>
+          )}
         </div>
-
-        {isSelected && (
-          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-interaction">
-            <ChevronRight className="h-4 w-4 text-interaction-foreground" />
-          </div>
-        )}
+        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-text-muted" />
       </div>
     </button>
   );

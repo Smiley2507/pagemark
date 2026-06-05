@@ -21,7 +21,10 @@ export const RegisterPage = () => {
           : { label: 'Strong', width: '100%' };
 
   return (
-    <AuthLayout subtitle="Create your account">
+    <AuthLayout
+      title="Create your workspace access"
+      subtitle="Set up your account now. Provider credentials remain optional until you choose an AI-powered action."
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();

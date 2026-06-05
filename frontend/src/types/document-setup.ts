@@ -1,5 +1,3 @@
-// Types for the first-Document journey (Phase 8)
-
 export type DocumentSetupStage =
   | 'source'
   | 'analysis'
@@ -8,15 +6,43 @@ export type DocumentSetupStage =
   | 'generation-mode'
   | 'editor-ready';
 
+export type PersistedDocumentSetupStage =
+  | 'purpose'
+  | 'template_selection'
+  | 'outline_review'
+  | 'generation_mode'
+  | 'editor_ready';
+
 export type SourceConnectionType = 'github-oauth' | 'git-url' | 'zip' | 'none';
 
-export type RecommendationBasis = 'rule_based' | 'ai_personalized' | 'custom_outline_seeded';
+export type RecommendationBasis =
+  | 'rule_based'
+  | 'ai_personalized'
+  | 'custom_outline_seeded';
+
+export interface SetupSectionEvidence {
+  type: string;
+  path?: string;
+  description: string;
+}
+
+export interface SetupSectionSummary {
+  heading: string;
+  description?: string;
+  purpose?: string;
+  evidence?: SetupSectionEvidence[];
+  order_index: number;
+}
 
 export interface DocumentSetupState {
   projectId?: number;
   documentId?: number;
   stage: DocumentSetupStage;
   sourceType?: SourceConnectionType;
+  projectName?: string;
+  projectContext?: string;
+  sourceLabel?: string;
+  sourceLimitations?: string[];
   repoMetadata?: {
     owner: string;
     repo: string;
@@ -27,17 +53,56 @@ export interface DocumentSetupState {
     language?: string;
     lastUpdated?: string;
   };
-  projectName?: string;
-  projectContext?: string;
   analysisId?: number;
   analysisComplete: boolean;
   analysisPartial: boolean;
   selectedTemplateId?: number;
+  selectedTemplateName?: string;
   customOutline?: boolean;
   outlineProposalId?: number;
   outlineApproved: boolean;
-  generationMode?: 'on-demand' | 'complete';
+  generationMode?: 'on-demand' | 'complete' | 'manual';
   providerConfigured: boolean;
+  analysisUnavailableReason?: string;
+  ruleBasedRecommendationCount?: number;
+  aiRecommendationCount?: number;
+  lastCompletedStep?: DocumentSetupStage;
+}
+
+export interface SetupDocument {
+  id: number;
+  project_id: number;
+  title: string;
+  setup_stage: PersistedDocumentSetupStage;
+  status: string;
+  freshness: string;
+  progress: {
+    total_sections: number;
+    reviewed_sections: number;
+    generated_sections: number;
+    pct: number;
+  };
+  template?: {
+    id: number;
+    name: string;
+    description?: string;
+  };
+  template_id?: number;
+  purpose?: string;
+  audience?: string;
+  context?: string;
+  custom_outline_metadata?: Record<string, unknown>;
+  last_activity_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentSetupStateResponse {
+  document: SetupDocument;
+  recommendations: TemplateRecommendation[];
+  outline_proposals: OutlineProposal[];
+  clarification_requests: ClarificationRequest[];
+  sections: SetupSectionRecord[];
 }
 
 export interface TemplateRecommendation {
@@ -74,18 +139,8 @@ export interface OutlineProposal {
   analysis_id?: number;
   basis: RecommendationBasis;
   status: 'draft' | 'approved' | 'superseded';
-  outline_json: Array<{
-    heading: string;
-    description?: string;
-    purpose?: string;
-    evidence?: Array<{
-      type: string;
-      path?: string;
-      description: string;
-    }>;
-    order_index: number;
-  }>;
-  explanation?: string;
+  outline_json: SetupSectionSummary[];
+  explanation?: string | Record<string, unknown>;
   approved_at?: string;
   approved_by?: number;
 }
@@ -97,9 +152,11 @@ export interface ClarificationRequest {
   question: string;
   context: string;
   affected_sections: string[];
+  confidence_tradeoff?: string;
   skippable: boolean;
   answered_at?: string;
   answer?: string;
+  skipped_at?: string;
 }
 
 export interface GenerationEstimate {
@@ -120,7 +177,6 @@ export interface GenerationEstimate {
     estimated_cost: number;
     uncertainty: string;
   }>;
-  // Legacy fields for backwards compatibility
   estimated_tokens?: number;
   approximate_cost?: number;
   currency?: string;
@@ -132,4 +188,12 @@ export interface AnalysisFact {
   summary?: string;
   data?: unknown;
   error?: string;
+}
+
+export interface SetupSectionRecord {
+  id: number;
+  heading: string;
+  order_index: number;
+  content_lifecycle: string;
+  status: string;
 }

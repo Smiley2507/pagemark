@@ -1,119 +1,315 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Menu, X } from 'lucide-react';
 import { toast } from 'sonner';
-
-import { projectsApi } from '@/api/projects';
 import { analysisApi } from '@/api/analysis';
 import { aiCredentialsApi } from '@/api/aiCredentials';
 import { documentsApi } from '@/api/documents';
-
+import { projectsApi } from '@/api/projects';
+import { AnalysisFactsStep } from '@/components/document-setup/AnalysisFactsStep';
+import { GenerationChoiceStep } from '@/components/document-setup/GenerationChoiceStep';
+import { OutlineReviewStep } from '@/components/document-setup/OutlineReviewStep';
+import { ProviderCredentialSetup } from '@/components/document-setup/ProviderCredentialSetup';
 import { SetupSummaryRail } from '@/components/document-setup/SetupSummaryRail';
 import { SourceStep } from '@/components/document-setup/SourceStep';
-import { AnalysisFactsStep } from '@/components/document-setup/AnalysisFactsStep';
 import { TemplateRecommendationStep } from '@/components/document-setup/TemplateRecommendationStep';
-import { OutlineReviewStep } from '@/components/document-setup/OutlineReviewStep';
-import { GenerationChoiceStep } from '@/components/document-setup/GenerationChoiceStep';
-import { ProviderCredentialSetup } from '@/components/document-setup/ProviderCredentialSetup';
 import { Button } from '@/components/ui/button';
+import { Notice } from '@/components/ui/notice';
+import { Surface } from '@/components/ui/surface';
+import type { AnalysisStatus } from '@/types';
+import type {
+  DocumentSetupState,
+  DocumentSetupStage,
+  OutlineProposal,
+  PersistedDocumentSetupStage,
+  SetupSectionSummary,
+  SourceConnectionType,
+  TemplateRecommendation,
+} from '@/types/document-setup';
 
-import type { DocumentSetupState, DocumentSetupStage } from '@/types/document-setup';
-import type { AnalysisStatus, AnalysisResults, Template } from '@/types';
+const INITIAL_STATE: DocumentSetupState = {
+  stage: 'source',
+  analysisComplete: false,
+  analysisPartial: false,
+  outlineApproved: false,
+  providerConfigured: false,
+  sourceLimitations: [],
+};
+
+function sourceTypeFromProject(sourceType?: string, gitRepoUrl?: string): SourceConnectionType | undefined {
+  if (sourceType === 'scratch') return 'none';
+  if (sourceType === 'zip') return 'zip';
+  if (gitRepoUrl?.includes('github.com')) return 'github-oauth';
+  if (gitRepoUrl) return 'git-url';
+  return undefined;
+}
+
+function describeSource(
+  sourceType?: SourceConnectionType,
+  repoFullName?: string,
+): { label?: string; limitations: string[] } {
+  if (sourceType === 'github-oauth') {
+    return {
+      label: repoFullName || 'GitHub repository',
+      limitations: [],
+    };
+  }
+  if (sourceType === 'git-url') {
+    return {
+      label: 'Repository URL fallback',
+      limitations: ['Automatic synchronization is weaker than the GitHub source path.'],
+    };
+  }
+  if (sourceType === 'zip') {
+    return {
+      label: 'ZIP snapshot',
+      limitations: ['Automatic synchronization and freshness updates are unavailable for ZIP Projects.'],
+    };
+  }
+  if (sourceType === 'none') {
+    return {
+      label: 'No source connected',
+      limitations: [
+        'Analysis-grounded recommendations and repository evidence remain disabled until source is connected.',
+      ],
+    };
+  }
+  return { limitations: [] };
+}
+
+function deriveUiStage(
+  persistedStage: PersistedDocumentSetupStage,
+  sourceType?: SourceConnectionType,
+  analysisStatus?: AnalysisStatus | null,
+): DocumentSetupStage {
+  if (persistedStage === 'template_selection') return 'template-selection';
+  if (persistedStage === 'outline_review') return 'outline-review';
+  if (persistedStage === 'generation_mode') return 'generation-mode';
+  if (persistedStage === 'editor_ready') return 'editor-ready';
+  if (sourceType && sourceType !== 'none') {
+    if (!analysisStatus || analysisStatus.status === 'pending' || analysisStatus.status === 'running') {
+      return 'analysis';
+    }
+    if (analysisStatus.status === 'completed' || analysisStatus.status === 'failed') {
+      return 'analysis';
+    }
+  }
+  return 'source';
+}
 
 export function DocumentSetupPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const resumeProjectId = searchParams.get('projectId');
+  const resumeDocumentId = searchParams.get('documentId');
 
+  const [setupState, setSetupState] = useState<DocumentSetupState>(INITIAL_STATE);
   const [showRailDrawer, setShowRailDrawer] = useState(false);
-  const [showProviderSetup, setShowProviderSetup] = useState(false);
-  
-  const [setupState, setSetupState] = useState<DocumentSetupState>({
-    stage: 'source',
-    analysisComplete: false,
-    analysisPartial: false,
-    outlineApproved: false,
-    providerConfigured: false,
-  });
+  const [providerContext, setProviderContext] = useState<'recommendation' | 'generation' | null>(null);
+  const [resumeLoaded, setResumeLoaded] = useState(false);
 
-  // Check if user has active provider
-  const { data: credentialsData } = useQuery({
+  const { data: credentialList } = useQuery({
     queryKey: ['ai-credentials'],
     queryFn: () => aiCredentialsApi.list(),
   });
 
-  const hasActiveProvider = credentialsData?.has_active ?? false;
+  const hasActiveProvider = credentialList?.has_active ?? false;
 
-  // Poll analysis status if in analysis stage
-  const { data: analysisStatus, refetch: refetchAnalysis } = useQuery({
-    queryKey: ['analysis-status', setupState.projectId],
-    queryFn: () => analysisApi.getAnalysisStatus(setupState.projectId!),
-    enabled: !!setupState.projectId && setupState.stage === 'analysis',
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status === 'running' || status === 'pending' ? 2000 : false;
-    },
-  });
-
-  const { data: analysisResults } = useQuery({
-    queryKey: ['analysis-results', setupState.projectId],
-    queryFn: () => analysisApi.getAnalysisResults(setupState.projectId!),
-    enabled: !!setupState.projectId && analysisStatus?.status === 'completed',
-  });
-
-  // Fetch available templates
   const { data: templates = [] } = useQuery({
     queryKey: ['templates'],
     queryFn: () => projectsApi.getTemplates(),
-    enabled: setupState.stage === 'template-selection',
+    enabled: setupState.stage === 'template-selection' || setupState.stage === 'outline-review',
   });
 
-  // Create project mutation
-  const createProjectMutation = useMutation({
-    mutationFn: (data: {
-      name: string;
-      description?: string;
-      source_type: 'zip' | 'git' | 'scratch';
-      git_repo_url?: string;
-      git_branch?: string;
-    }) => projectsApi.createProject(data),
-    onSuccess: (project) => {
-      setSetupState((prev) => ({
-        ...prev,
-        projectId: project.id,
-        projectName: project.name,
-      }));
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to create project: ${error.message}`);
+  const sourceConnected = !!setupState.projectId && setupState.sourceType !== 'none';
+
+  const analysisStatusQuery = useQuery({
+    queryKey: ['analysis-status', setupState.projectId],
+    queryFn: () => analysisApi.getAnalysisStatus(setupState.projectId!),
+    enabled: !!setupState.projectId && sourceConnected,
+    retry: false,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'running' || status === 'pending' ? 1500 : false;
     },
   });
 
-  // Monitor analysis completion
-  useEffect(() => {
-    if (analysisStatus?.status === 'completed') {
-      setSetupState((prev) => ({
-        ...prev,
-        analysisComplete: true,
-        analysisId: analysisStatus.id,
-        stage: 'template-selection',
-      }));
-    } else if (analysisStatus?.status === 'failed') {
-      toast.error('Analysis failed. You can retry or continue without analysis.');
-    }
-  }, [analysisStatus]);
+  const analysisResultsQuery = useQuery({
+    queryKey: ['analysis-results', setupState.projectId],
+    queryFn: () => analysisApi.getAnalysisResults(setupState.projectId!),
+    enabled: !!setupState.projectId && sourceConnected && analysisStatusQuery.data?.status === 'completed',
+    retry: false,
+  });
 
-  // Update provider status in state
+  const setupSnapshotQuery = useQuery({
+    queryKey: ['document-setup', setupState.projectId, setupState.documentId],
+    queryFn: () => documentsApi.getSetupState(setupState.projectId!, setupState.documentId!),
+    enabled: !!setupState.projectId && !!setupState.documentId,
+  });
+
   useEffect(() => {
-    setSetupState((prev) => ({
-      ...prev,
+    setSetupState((current) => ({
+      ...current,
       providerConfigured: hasActiveProvider,
     }));
   }, [hasActiveProvider]);
 
-  const handleSourceConnect = async (data: {
+  useEffect(() => {
+    if (!resumeProjectId || resumeLoaded) return;
+
+    let active = true;
+
+    const loadResume = async () => {
+      try {
+        const projectId = Number(resumeProjectId);
+        const project = await projectsApi.getProject(projectId);
+        const list = await documentsApi.listDocuments(projectId);
+        const documentId = resumeDocumentId
+          ? Number(resumeDocumentId)
+          : list.documents.find((item) => item.setup_stage !== 'editor_ready')?.id ?? list.documents[0]?.id;
+
+        if (!documentId || !active) {
+          setResumeLoaded(true);
+          return;
+        }
+
+        const document = await documentsApi.getDocument(projectId, documentId);
+        const sourceType = sourceTypeFromProject(project.source_type, project.git_repo_url);
+        const sourceSummary = describeSource(sourceType, project.git_repo_url || undefined);
+
+        setSetupState((current) => ({
+          ...current,
+          projectId,
+          documentId,
+          projectName: project.name,
+          projectContext: document.context || project.context_md,
+          sourceType,
+          sourceLabel: sourceSummary.label,
+          sourceLimitations: sourceSummary.limitations,
+        }));
+      } catch (error) {
+        toast.error('Unable to resume the Document setup flow.');
+      } finally {
+        if (active) setResumeLoaded(true);
+      }
+    };
+
+    void loadResume();
+
+    return () => {
+      active = false;
+    };
+  }, [resumeDocumentId, resumeLoaded, resumeProjectId]);
+
+  useEffect(() => {
+    const snapshot = setupSnapshotQuery.data;
+    if (!snapshot) return;
+
+    const analysisStatus = analysisStatusQuery.data;
+    const sourceType = setupState.sourceType;
+    const sourceSummary = describeSource(sourceType, setupState.repoMetadata?.fullName);
+    const firstRecommendation = snapshot.recommendations[0];
+    const currentProposal = snapshot.outline_proposals[0];
+
+    setSetupState((current) => ({
+      ...current,
+      stage: deriveUiStage(snapshot.document.setup_stage, sourceType, analysisStatus),
+      outlineApproved:
+        snapshot.document.setup_stage === 'generation_mode' ||
+        snapshot.document.setup_stage === 'editor_ready',
+      analysisComplete: analysisStatus?.status === 'completed',
+      analysisPartial:
+        analysisStatus?.status === 'completed' &&
+        !!analysisStatus.steps?.some((step) => step.status === 'failed' || step.status === 'skipped'),
+      selectedTemplateId: snapshot.document.template_id ?? current.selectedTemplateId,
+      selectedTemplateName:
+        snapshot.document.template?.name ??
+        firstRecommendation?.template?.name ??
+        current.selectedTemplateName,
+      customOutline: Boolean(snapshot.document.custom_outline_metadata),
+      outlineProposalId: currentProposal?.id,
+      sourceLabel: sourceSummary.label,
+      sourceLimitations: sourceSummary.limitations,
+      ruleBasedRecommendationCount: snapshot.recommendations.filter((item) => item.basis === 'rule_based').length,
+      aiRecommendationCount: snapshot.recommendations.filter((item) => item.basis === 'ai_personalized').length,
+    }));
+
+    if (snapshot.document.setup_stage === 'editor_ready') {
+      navigate(`/projects/${snapshot.document.project_id}/documents/${snapshot.document.id}`, {
+        replace: true,
+      });
+    }
+  }, [
+    analysisStatusQuery.data,
+    navigate,
+    setupSnapshotQuery.data,
+    setupState.repoMetadata?.fullName,
+    setupState.sourceType,
+  ]);
+
+  useEffect(() => {
+    const status = analysisStatusQuery.data;
+    if (!status) return;
+    if (status.status === 'failed') {
+      setSetupState((current) => ({
+        ...current,
+        stage: 'analysis',
+      }));
+    }
+  }, [analysisStatusQuery.data]);
+
+  const recommendations = setupSnapshotQuery.data?.recommendations ?? [];
+  const outlineProposal =
+    setupSnapshotQuery.data?.outline_proposals.find((item) => item.status === 'draft') ||
+    setupSnapshotQuery.data?.outline_proposals[0] ||
+    null;
+  const clarificationRequests = setupSnapshotQuery.data?.clarification_requests ?? [];
+
+  const onDemandEstimateQuery = useQuery({
+    queryKey: ['generation-estimate', setupState.projectId, setupState.documentId, 'on-demand'],
+    queryFn: () => documentsApi.estimateGeneration(setupState.projectId!, setupState.documentId!, 'on-demand'),
+    enabled:
+      !!setupState.projectId &&
+      !!setupState.documentId &&
+      setupState.stage === 'generation-mode' &&
+      hasActiveProvider,
+    retry: false,
+  });
+
+  const completeEstimateQuery = useQuery({
+    queryKey: ['generation-estimate', setupState.projectId, setupState.documentId, 'complete'],
+    queryFn: () => documentsApi.estimateGeneration(setupState.projectId!, setupState.documentId!, 'complete'),
+    enabled:
+      !!setupState.projectId &&
+      !!setupState.documentId &&
+      setupState.stage === 'generation-mode' &&
+      hasActiveProvider,
+    retry: false,
+  });
+
+  const requestAiRecommendationMutation = useMutation({
+    mutationFn: () =>
+      documentsApi.createTemplateRecommendations(
+        setupState.projectId!,
+        setupState.documentId!,
+        'ai_personalized',
+        true,
+      ),
+    onSuccess: async () => {
+      await setupSnapshotQuery.refetch();
+      setProviderContext(null);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const connectSource = async (payload: {
     type: 'github-oauth' | 'git-url' | 'zip' | 'none';
+    projectName: string;
+    projectContext?: string;
     repoData?: {
       owner: string;
       repo: string;
@@ -122,312 +318,299 @@ export function DocumentSetupPage() {
       fullName: string;
       visibility: 'public' | 'private';
       language?: string;
+      lastUpdated?: string;
     };
     gitUrl?: string;
     gitBranch?: string;
     zipFile?: File;
   }) => {
     try {
-      let projectData: Parameters<typeof projectsApi.createProject>[0];
+      const project = await projectsApi.createProject({
+        name: payload.projectName,
+        description: payload.projectContext,
+        source_type: payload.type === 'zip' ? 'zip' : payload.type === 'none' ? 'scratch' : 'git',
+        git_repo_url:
+          payload.type === 'github-oauth'
+            ? `https://github.com/${payload.repoData?.fullName}`
+            : payload.gitUrl,
+        git_branch:
+          payload.type === 'github-oauth'
+            ? payload.repoData?.branch
+            : payload.gitBranch,
+      });
 
-      if (data.type === 'github-oauth' && data.repoData) {
-        const repoMeta = data.repoData;
-        projectData = {
-          name: repoMeta.fullName,
-          source_type: 'git',
-          git_repo_url: `https://github.com/${repoMeta.fullName}`,
-          git_branch: repoMeta.branch,
-        };
+      const document = await documentsApi.createDocument(project.id, {
+        title: `${payload.projectName} overview`,
+        context: payload.projectContext,
+        setup_stage: 'purpose',
+      });
 
-        const project = await createProjectMutation.mutateAsync(projectData);
+      const sourceType =
+        payload.type === 'github-oauth'
+          ? 'github-oauth'
+          : payload.type === 'git-url'
+            ? 'git-url'
+            : payload.type === 'zip'
+              ? 'zip'
+              : 'none';
 
-        // Connect via OAuth
+      const sourceSummary = describeSource(sourceType, payload.repoData?.fullName);
+
+      setSetupState((current) => ({
+        ...current,
+        projectId: project.id,
+        documentId: document.id,
+        projectName: project.name,
+        projectContext: payload.projectContext,
+        repoMetadata: payload.repoData,
+        sourceType,
+        sourceLabel: sourceSummary.label,
+        sourceLimitations: sourceSummary.limitations,
+      }));
+
+      if (payload.type === 'github-oauth' && payload.repoData) {
         await analysisApi.connectGitOAuth(project.id, {
-          owner: repoMeta.owner,
-          repo: repoMeta.repo,
-          branch: repoMeta.branch,
+          owner: payload.repoData.owner,
+          repo: payload.repoData.repo,
+          branch: payload.repoData.branch,
           provider: 'github',
         });
-
-        setSetupState((prev) => ({
-          ...prev,
-          sourceType: 'github-oauth',
-          repoMetadata: repoMeta,
-          stage: 'analysis',
-        }));
-      } else if (data.type === 'git-url' && data.gitUrl) {
-        projectData = {
-          name: data.gitUrl.split('/').pop()?.replace('.git', '') || 'New Project',
-          source_type: 'git',
-          git_repo_url: data.gitUrl,
-          git_branch: data.gitBranch || 'main',
-        };
-
-        const project = await createProjectMutation.mutateAsync(projectData);
-
+        setSetupState((current) => ({ ...current, stage: 'analysis' }));
+      } else if (payload.type === 'git-url' && payload.gitUrl) {
         await analysisApi.connectGitUrl(project.id, {
-          repo_url: data.gitUrl,
-          branch: data.gitBranch || 'main',
+          repo_url: payload.gitUrl,
+          branch: payload.gitBranch || 'main',
         });
-
-        setSetupState((prev) => ({
-          ...prev,
-          sourceType: 'git-url',
-          stage: 'analysis',
-        }));
-      } else if (data.type === 'zip' && data.zipFile) {
-        projectData = {
-          name: data.zipFile.name.replace('.zip', ''),
-          source_type: 'zip',
-        };
-
-        const project = await createProjectMutation.mutateAsync(projectData);
-
-        await analysisApi.uploadZip(project.id, data.zipFile);
-
-        setSetupState((prev) => ({
-          ...prev,
-          sourceType: 'zip',
-          stage: 'analysis',
-        }));
+        setSetupState((current) => ({ ...current, stage: 'analysis' }));
+      } else if (payload.type === 'zip' && payload.zipFile) {
+        await analysisApi.uploadZip(project.id, payload.zipFile);
+        setSetupState((current) => ({ ...current, stage: 'analysis' }));
       } else {
-        // No source
-        projectData = {
-          name: 'New Documentation Project',
-          source_type: 'scratch',
-        };
-
-        await createProjectMutation.mutateAsync(projectData);
-
-        setSetupState((prev) => ({
-          ...prev,
-          sourceType: 'none',
-          stage: 'template-selection',
-        }));
+        await documentsApi.updateDocument(project.id, document.id, {
+          setup_stage: 'template_selection',
+          context: payload.projectContext,
+        });
+        await queryClient.invalidateQueries({ queryKey: ['document-setup', project.id, document.id] });
+        setSetupState((current) => ({ ...current, stage: 'template-selection' }));
       }
+
+      navigate(`/document-setup?projectId=${project.id}&documentId=${document.id}`, { replace: true });
     } catch (error) {
-      console.error('Failed to connect source:', error);
-      toast.error('Failed to connect source');
+      toast.error('Unable to start the first-Document flow.');
     }
   };
 
-  const handleSourceSkip = async () => {
-    const projectData: Parameters<typeof projectsApi.createProject>[0] = {
-      name: 'New Documentation Project',
-      source_type: 'scratch',
-    };
-
-    await createProjectMutation.mutateAsync(projectData);
-
-    setSetupState((prev) => ({
-      ...prev,
-      sourceType: 'none',
-      stage: 'template-selection',
-    }));
+  const continueFromAnalysis = async () => {
+    if (!setupState.projectId || !setupState.documentId) return;
+    await documentsApi.updateDocument(setupState.projectId, setupState.documentId, {
+      setup_stage: 'template_selection',
+    });
+    await setupSnapshotQuery.refetch();
+    setSetupState((current) => ({ ...current, stage: 'template-selection' }));
   };
 
-  const handleAnalysisContinue = () => {
-    setSetupState((prev) => ({
-      ...prev,
-      stage: 'template-selection',
-    }));
+  const selectTemplate = async (
+    templateId: number,
+    recommendation?: TemplateRecommendation,
+  ) => {
+    if (!setupState.projectId || !setupState.documentId) return;
+    try {
+      await documentsApi.updateDocument(setupState.projectId, setupState.documentId, {
+        template_id: templateId,
+        setup_stage: 'outline_review',
+      });
+      await documentsApi.createOutlineProposal(setupState.projectId, setupState.documentId, {
+        template_id: templateId,
+        basis: recommendation?.basis === 'ai_personalized' ? 'analysis_adapted' : 'template',
+        explanation: recommendation
+          ? {
+              recommendation_id: recommendation.id,
+              recommendation_basis: recommendation.basis,
+            }
+          : undefined,
+      });
+      await setupSnapshotQuery.refetch();
+      setSetupState((current) => ({
+        ...current,
+        stage: 'outline-review',
+        selectedTemplateId: templateId,
+        selectedTemplateName:
+          recommendation?.template?.name ||
+          templates.find((item) => item.id === templateId)?.name ||
+          current.selectedTemplateName,
+      }));
+    } catch (error) {
+      toast.error('Unable to create the Outline proposal.');
+    }
   };
 
-  const handleSelectTemplate = (templateId: number) => {
-    setSetupState((prev) => ({
-      ...prev,
-      selectedTemplateId: templateId,
-      customOutline: false,
-      stage: 'outline-review',
-    }));
+  const createCustomOutline = async () => {
+    if (!setupState.projectId || !setupState.documentId) return;
+    try {
+      const outline: SetupSectionSummary[] = [
+        {
+          heading: 'Overview',
+          description: 'Explain the Document purpose and what this project does.',
+          purpose: 'Orient the maintainer or reader quickly.',
+          order_index: 0,
+        },
+        {
+          heading: 'Core concepts',
+          description: 'Introduce the most important concepts, modules, or workflows.',
+          purpose: 'Capture project-specific domain ideas.',
+          order_index: 1,
+        },
+        {
+          heading: 'Key workflows',
+          description: 'Document the main operational or implementation paths.',
+          purpose: 'Make the first Document immediately useful.',
+          order_index: 2,
+        },
+      ];
+      await documentsApi.updateDocument(setupState.projectId, setupState.documentId, {
+        setup_stage: 'outline_review',
+        custom_outline_metadata: { seeded: true },
+      });
+      await documentsApi.createOutlineProposal(setupState.projectId, setupState.documentId, {
+        outline,
+        basis: 'custom_outline',
+        explanation: {
+          source_connected: setupState.sourceType !== 'none',
+        },
+      });
+      await setupSnapshotQuery.refetch();
+      setSetupState((current) => ({
+        ...current,
+        stage: 'outline-review',
+        customOutline: true,
+        selectedTemplateName: 'Custom Outline',
+      }));
+    } catch (error) {
+      toast.error('Unable to create the Custom Outline.');
+    }
   };
 
-  const handleCreateCustom = () => {
-    setSetupState((prev) => ({
-      ...prev,
-      customOutline: true,
-      stage: 'outline-review',
-    }));
-  };
-
-  const approveMutation = useMutation({
-    mutationFn: (proposalId: number) =>
-      documentsApi.approveOutlineProposal(
-        setupState.projectId!,
-        setupState.documentId!,
-        proposalId,
-      ),
-    onSuccess: () => {
-      setSetupState((prev) => ({
-        ...prev,
-        outlineApproved: true,
+  const approveOutline = async (outline: SetupSectionSummary[]) => {
+    if (!setupState.projectId || !setupState.documentId || !outlineProposal) return;
+    try {
+      await documentsApi.updateOutlineProposal(
+        setupState.projectId,
+        setupState.documentId,
+        outlineProposal.id,
+        { outline },
+      );
+      await documentsApi.approveOutlineProposal(
+        setupState.projectId,
+        setupState.documentId,
+        outlineProposal.id,
+      );
+      await documentsApi.updateDocument(setupState.projectId, setupState.documentId, {
+        setup_stage: 'generation_mode',
+      });
+      await setupSnapshotQuery.refetch();
+      setSetupState((current) => ({
+        ...current,
         stage: 'generation-mode',
-      }));
-      toast.success('Outline approved! Sections have been created.');
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
-
-  const handleApproveOutline = (outline: unknown[]) => {
-    // Get the current proposal id to approve
-    const proposalId = currentProposal?.id;
-    if (proposalId) {
-      approveMutation.mutate(proposalId);
-    } else {
-      // Fallback: advance stage without API (for documents without proposals)
-      setSetupState((prev) => ({
-        ...prev,
         outlineApproved: true,
-        stage: 'generation-mode',
       }));
+    } catch (error) {
+      toast.error('Unable to approve the Outline.');
     }
   };
 
-  const handleProviderComplete = () => {
-    setShowProviderSetup(false);
-    setSetupState((prev) => ({
-      ...prev,
-      providerConfigured: true,
-    }));
+  const skipClarification = async (requestId: number) => {
+    if (!setupState.projectId || !setupState.documentId) return;
+    try {
+      await documentsApi.skipClarificationRequest(setupState.projectId, setupState.documentId, requestId);
+      await setupSnapshotQuery.refetch();
+    } catch (error) {
+      toast.error('Unable to skip that clarification.');
+    }
   };
 
-  // Fetch template recommendations for the document
-  const { data: recommendationsData, refetch: refetchRecommendations } = useQuery({
-    queryKey: ['template-recommendations', setupState.projectId, setupState.documentId],
-    queryFn: () => documentsApi.getTemplateRecommendations(setupState.projectId!, setupState.documentId!),
-    enabled: !!setupState.projectId && !!setupState.documentId && setupState.stage === 'template-selection',
-  });
-
-  // Create rule-based recommendations when entering template selection
-  const createRecommendationsMutation = useMutation({
-    mutationFn: () =>
-      documentsApi.createTemplateRecommendations(
-        setupState.projectId!,
-        setupState.documentId!,
-        'rule_based',
-        false,
-      ),
-    onSuccess: () => {
-      refetchRecommendations();
-    },
-    onError: () => {
-      // Silently handle - we may be offline but still want to show UI
-    },
-  });
-
-  // Trigger recommendation creation when stage reaches template-selection
-  const prevStageRef = useRef(setupState.stage);
-  React.useEffect(() => {
-    if (
-      setupState.stage === 'template-selection' &&
-      prevStageRef.current !== 'template-selection' &&
-      setupState.projectId &&
-      setupState.documentId
-    ) {
-      createRecommendationsMutation.mutate();
-    }
-    prevStageRef.current = setupState.stage;
-  }, [setupState.stage, setupState.projectId, setupState.documentId]);
-
-  // Fetch outline proposals for the document
-  const { data: proposalsData } = useQuery({
-    queryKey: ['outline-proposals', setupState.projectId, setupState.documentId],
-    queryFn: () => documentsApi.getOutlineProposals(setupState.projectId!, setupState.documentId!),
-    enabled: !!setupState.projectId && !!setupState.documentId && setupState.stage === 'outline-review',
-  });
-
-  const recommendations = recommendationsData?.recommendations || [];
-  const currentProposal = proposalsData?.proposals?.[0] || null;
-
-  // Fetch generation estimates when stage reaches generation-mode
-  const { data: onDemandEstimate } = useQuery({
-    queryKey: ['generation-estimate', 'on-demand', setupState.projectId, setupState.documentId],
-    queryFn: () =>
-      documentsApi.estimateGeneration(
-        setupState.projectId!,
-        setupState.documentId!,
-        'on-demand',
-      ),
-    enabled: !!setupState.projectId && !!setupState.documentId && setupState.stage === 'generation-mode',
-  });
-
-  const { data: completeEstimate } = useQuery({
-    queryKey: ['generation-estimate', 'complete', setupState.projectId, setupState.documentId],
-    queryFn: () =>
-      documentsApi.estimateGeneration(
-        setupState.projectId!,
-        setupState.documentId!,
-        'complete',
-      ),
-    enabled: !!setupState.projectId && !!setupState.documentId && setupState.stage === 'generation-mode',
-  });
-
-  // Create generation run when user chooses mode
-  const createRunMutation = useMutation({
-    mutationFn: (mode: 'on-demand' | 'complete') =>
-      documentsApi.createGenerationRun(
-        setupState.projectId!,
-        setupState.documentId!,
-        mode,
-      ),
-    onSuccess: (data, mode) => {
-      setSetupState((prev) => ({
-        ...prev,
-        generationMode: mode,
-        stage: 'editor-ready',
-      }));
-      if (setupState.projectId) {
-        navigate(`/editor/${setupState.projectId}`);
+  const chooseGeneration = async (mode: 'on-demand' | 'complete' | 'manual') => {
+    if (!setupState.projectId || !setupState.documentId) return;
+    try {
+      setSetupState((current) => ({ ...current, generationMode: mode }));
+      if (mode === 'manual') {
+        await documentsApi.updateDocument(setupState.projectId, setupState.documentId, {
+          setup_stage: 'editor_ready',
+        });
+      } else {
+        await documentsApi.createGenerationRun(setupState.projectId, setupState.documentId, mode);
+        await documentsApi.updateDocument(setupState.projectId, setupState.documentId, {
+          setup_stage: 'editor_ready',
+        });
       }
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
-
-  const handleChooseGeneration = (mode: 'on-demand' | 'complete') => {
-    createRunMutation.mutate(mode);
+      navigate(`/projects/${setupState.projectId}/documents/${setupState.documentId}`);
+    } catch (error) {
+      toast.error('Unable to enter the editor.');
+    }
   };
+
+  const providerActionLabel =
+    providerContext === 'recommendation'
+      ? 'AI-personalized recommendations'
+      : 'AI-powered generation';
+
+  const loadingResume = !!resumeProjectId && !resumeLoaded;
+
+  if (loadingResume) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-workspace px-4">
+        <Surface variant="panel" padding="lg">
+          <p className="text-body text-text-secondary">Resuming the first-Document journey…</p>
+        </Surface>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-screen bg-workspace overflow-hidden">
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="min-h-full p-8">
-          {/* Mobile drawer toggle */}
-          <div className="lg:hidden mb-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowRailDrawer(true)}
-              className="gap-2"
-            >
-              <Menu className="h-4 w-4" />
-              View Progress
-            </Button>
-          </div>
+    <div className="flex min-h-screen bg-workspace text-text-primary">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="border-b border-border bg-canvas px-4 py-3 lg:hidden">
+          <Button variant="outline" size="sm" onClick={() => setShowRailDrawer(true)}>
+            <Menu className="h-4 w-4" />
+            Review progress
+          </Button>
+        </div>
 
-          {showProviderSetup ? (
-            <div className="max-w-3xl">
+        <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+          {providerContext ? (
+            <div className="mx-auto max-w-3xl">
               <ProviderCredentialSetup
-                onComplete={handleProviderComplete}
-                onCancel={() => setShowProviderSetup(false)}
+                actionLabel={providerActionLabel}
+                onCancel={() => setProviderContext(null)}
+                onComplete={() => {
+                  if (providerContext === 'recommendation') {
+                    void requestAiRecommendationMutation.mutateAsync();
+                  } else {
+                    setProviderContext(null);
+                  }
+                }}
               />
             </div>
           ) : (
             <>
               {setupState.stage === 'source' && (
-                <SourceStep onConnect={handleSourceConnect} onSkip={handleSourceSkip} />
+                <SourceStep
+                  onConnect={(payload) => void connectSource(payload)}
+                  onSkip={(payload) =>
+                    void connectSource({
+                      type: 'none',
+                      projectName: payload.projectName,
+                      projectContext: payload.projectContext,
+                    })
+                  }
+                />
               )}
 
               {setupState.stage === 'analysis' && (
                 <AnalysisFactsStep
-                  analysisStatus={analysisStatus || null}
-                  analysisResults={analysisResults}
-                  onContinue={handleAnalysisContinue}
-                  onRetry={() => refetchAnalysis()}
+                  analysisStatus={analysisStatusQuery.data || null}
+                  analysisResults={analysisResultsQuery.data}
+                  onContinue={() => void continueFromAnalysis()}
+                  onRetry={() => void analysisStatusQuery.refetch()}
                 />
               )}
 
@@ -436,27 +619,47 @@ export function DocumentSetupPage() {
                   recommendations={recommendations}
                   availableTemplates={templates}
                   hasActiveProvider={hasActiveProvider}
-                  onSelectTemplate={handleSelectTemplate}
-                  onCreateCustom={handleCreateCustom}
-                  onConfigureProvider={() => setShowProviderSetup(true)}
+                  sourceType={setupState.sourceType}
+                  requestingAiRecommendations={requestAiRecommendationMutation.isPending}
+                  onSelectTemplate={(templateId, recommendation) =>
+                    void selectTemplate(templateId, recommendation)
+                  }
+                  onCreateCustom={() => void createCustomOutline()}
+                  onConfigureProvider={() => setProviderContext('recommendation')}
+                  onRequestAiRecommendations={() => {
+                    if (!hasActiveProvider) {
+                      setProviderContext('recommendation');
+                      return;
+                    }
+                    void requestAiRecommendationMutation.mutateAsync();
+                  }}
                 />
               )}
 
-              {setupState.stage === 'outline-review' && currentProposal && (
+              {setupState.stage === 'outline-review' && outlineProposal && (
                 <OutlineReviewStep
-                  proposal={currentProposal}
-                  clarificationRequests={[]}
-                  onApprove={handleApproveOutline}
+                  proposal={outlineProposal as OutlineProposal}
+                  clarificationRequests={clarificationRequests}
+                  onApprove={(outline) => void approveOutline(outline)}
+                  onSkipClarification={(requestId) => void skipClarification(requestId)}
                 />
+              )}
+
+              {setupState.stage === 'outline-review' && !outlineProposal && (
+                <div className="mx-auto max-w-3xl">
+                  <Notice variant="warning" title="Outline proposal is still loading">
+                    Return to Template selection if this state persists, then choose the Template again.
+                  </Notice>
+                </div>
               )}
 
               {setupState.stage === 'generation-mode' && (
                 <GenerationChoiceStep
-                  onDemandEstimate={onDemandEstimate}
-                  completeEstimate={completeEstimate}
+                  onDemandEstimate={onDemandEstimateQuery.data}
+                  completeEstimate={completeEstimateQuery.data}
                   hasActiveProvider={hasActiveProvider}
-                  onChoose={handleChooseGeneration}
-                  onConfigureProvider={() => setShowProviderSetup(true)}
+                  onConfigureProvider={() => setProviderContext('generation')}
+                  onChoose={(mode) => void chooseGeneration(mode)}
                 />
               )}
             </>
@@ -464,32 +667,31 @@ export function DocumentSetupPage() {
         </div>
       </div>
 
-      {/* Desktop Summary Rail */}
       <div className="hidden lg:block">
         <SetupSummaryRail state={setupState} />
       </div>
 
-      {/* Mobile Summary Drawer */}
       {showRailDrawer && (
-        <div
-          className="fixed inset-0 z-50 lg:hidden"
-          onClick={() => setShowRailDrawer(false)}
-        >
-          <div className="absolute inset-0 bg-overlay-backdrop" />
-          <div
-            className="absolute right-0 top-0 bottom-0 w-80 bg-panel shadow-overlay"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-4 border-b border-separator">
-              <h3 className="text-body font-semibold text-text-primary">Setup Progress</h3>
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Setup summary">
+          <button
+            type="button"
+            className="absolute inset-0 bg-overlay-backdrop"
+            onClick={() => setShowRailDrawer(false)}
+            aria-label="Close review drawer"
+          />
+          <div className="absolute right-0 top-0 h-full w-full max-w-sm border-l border-border bg-canvas">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="text-body font-semibold text-text-primary">Review progress</h2>
               <button
+                type="button"
                 onClick={() => setShowRailDrawer(false)}
-                className="text-text-secondary hover:text-text-primary transition-colors"
+                className="rounded-md p-1 text-text-muted transition-colors hover:text-text-primary"
+                aria-label="Close review drawer"
               >
-                <X className="h-5 w-5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="overflow-y-auto" style={{ height: 'calc(100vh - 60px)' }}>
+            <div className="h-[calc(100%-3.5rem)] overflow-y-auto">
               <SetupSummaryRail state={setupState} isDrawer />
             </div>
           </div>

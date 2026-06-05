@@ -1,6 +1,12 @@
 import apiClient from './client';
 import type { CollaborationNote } from '../types';
-import type { TemplateRecommendation, OutlineProposal } from '@/types/document-setup';
+import type {
+  TemplateRecommendation,
+  OutlineProposal,
+  ClarificationRequest,
+  DocumentSetupStateResponse,
+  SetupSectionSummary,
+} from '@/types/document-setup';
 
 export interface DocumentProgress {
   total_sections: number;
@@ -38,8 +44,55 @@ export interface DocumentListResponse {
 }
 
 export const documentsApi = {
+  async createDocument(
+    projectId: number,
+    payload: {
+      title: string;
+      template_id?: number;
+      purpose?: string;
+      audience?: string;
+      context?: string;
+      setup_stage: string;
+      tags?: string[];
+    }
+  ): Promise<Document> {
+    const { data } = await apiClient.post(`/projects/${projectId}/documents`, payload);
+    return data;
+  },
+
   async listDocuments(projectId: number): Promise<DocumentListResponse> {
     const { data } = await apiClient.get(`/projects/${projectId}/documents`);
+    return data;
+  },
+
+  async getDocument(projectId: number, documentId: number): Promise<Document> {
+    const { data } = await apiClient.get(`/projects/${projectId}/documents/${documentId}`);
+    return data;
+  },
+
+  async updateDocument(
+    projectId: number,
+    documentId: number,
+    payload: {
+      title?: string;
+      template_id?: number;
+      purpose?: string;
+      audience?: string;
+      context?: string;
+      setup_stage?: string;
+      tags?: string[];
+      custom_outline_metadata?: Record<string, unknown>;
+    }
+  ): Promise<Document> {
+    const { data } = await apiClient.patch(`/projects/${projectId}/documents/${documentId}`, payload);
+    return data;
+  },
+
+  async getSetupState(
+    projectId: number,
+    documentId: number,
+  ): Promise<DocumentSetupStateResponse> {
+    const { data } = await apiClient.get(`/projects/${projectId}/documents/${documentId}/setup`);
     return data;
   },
 
@@ -79,9 +132,9 @@ export const documentsApi = {
     documentId: number,
     proposal: {
       template_id?: number;
-      outline?: any[];
+      outline?: SetupSectionSummary[];
       basis: string;
-      explanation?: any;
+      explanation?: Record<string, unknown>;
     }
   ): Promise<{ proposal: OutlineProposal }> {
     const { data } = await apiClient.post(
@@ -90,6 +143,44 @@ export const documentsApi = {
     );
     // Wrap in object to match expected response shape
     return { proposal: data };
+  },
+
+  async updateOutlineProposal(
+    projectId: number,
+    documentId: number,
+    proposalId: number,
+    proposal: {
+      outline: SetupSectionSummary[];
+      explanation?: Record<string, unknown>;
+    }
+  ): Promise<{ proposal: OutlineProposal }> {
+    const { data } = await apiClient.patch(
+      `/projects/${projectId}/documents/${documentId}/outline-proposals/${proposalId}`,
+      proposal
+    );
+    return { proposal: data };
+  },
+
+  async listClarificationRequests(
+    projectId: number,
+    documentId: number,
+    proposalId: number,
+  ): Promise<{ clarification_requests: ClarificationRequest[] }> {
+    const { data } = await apiClient.get(
+      `/projects/${projectId}/documents/${documentId}/outline-proposals/${proposalId}/clarification-requests`
+    );
+    return data;
+  },
+
+  async skipClarificationRequest(
+    projectId: number,
+    documentId: number,
+    requestId: number,
+  ): Promise<ClarificationRequest> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/clarification-requests/${requestId}/skip`
+    );
+    return data;
   },
 
   async estimateGeneration(

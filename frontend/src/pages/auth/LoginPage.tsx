@@ -11,7 +11,7 @@ export const LoginPage = () => {
   return (
     <AuthLayout
       title="Welcome back"
-      subtitle="Return to your Projects, resume active generation, and review Sections that need attention."
+      subtitle="Return to your Projects, resume Document setup, and review Sections that need attention."
     >
       <form
         onSubmit={(e) => {
