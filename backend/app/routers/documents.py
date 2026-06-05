@@ -55,6 +55,7 @@ from app.services import section_service
 from app.services import ai_credential_service
 from app.services import generation_service
 from app.services import template_recommendation_service
+from app.services import freshness_service, activity_service
 
 router = APIRouter(prefix="/projects", tags=["documents"])
 
@@ -319,6 +320,18 @@ async def create_document(
     db.add(document)
     await db.commit()
     await db.refresh(document)
+
+    await activity_service.record_event(
+        db,
+        project_id=project.id,
+        document_id=document.id,
+        event_type="document_created",
+        message=f"Created document \"{document.title}\"",
+        metadata={"document_id": document.id, "setup_stage": body.setup_stage.value},
+        weight=2.0,
+    )
+    await db.commit()
+
     return await _load_document_response(db, project.id, document.id)
 
 
@@ -561,6 +574,18 @@ async def approve_outline_proposal(
         proposal,
         current_user.id,
     )
+
+    await activity_service.record_event(
+        db,
+        project_id=project.id,
+        document_id=document.id,
+        event_type="outline_approved",
+        message=f"Approved outline for \"{document.title}\"",
+        metadata={"proposal_id": proposal.id, "section_count": len(proposal.outline_json or [])},
+        weight=3.0,
+    )
+    await db.commit()
+
     return _outline_proposal_to_response(proposal)
 
 
@@ -687,6 +712,18 @@ async def create_document_generation_run(
         mode=GenerationMode(body.mode.value),
         section_ids=body.section_ids,
     )
+
+    await activity_service.record_event(
+        db,
+        project_id=project.id,
+        document_id=document.id,
+        event_type="generation_run_started",
+        message=f"Generation started for \"{document.title}\"",
+        metadata={"run_id": run.id, "mode": body.mode.value},
+        weight=2.0,
+    )
+    await db.commit()
+
     if body.execute:
         run = await generation_service.execute_generation_run(db, run, user_id=current_user.id)
     return _generation_run_to_response(run)
@@ -819,3 +856,76 @@ async def update_document_section(
     await db.commit()
     await db.refresh(section)
     return section_service.section_to_response(section)
+
+
+# ── Freshness Endpoints ──────────────────────────────────────────────
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/freshness",
+)
+async def get_document_freshness(
+    document_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    status = await freshness_service.get_document_freshness_status(db, document.id)
+    return status
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/sections/{section_id}/freshness/accept",
+)
+async def accept_freshness_update(
+    document_id: int,
+    section_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    section = await freshness_service.apply_freshness_update(db, section_id, accept=True)
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    await activity_service.record_event(
+        db,
+        project_id=project.id,
+        document_id=document.id,
+        event_type="freshness_accepted",
+        message=f"Accepted freshness update for \"{document.title}\"",
+        metadata={"section_id": section_id},
+        weight=2.0,
+    )
+    await db.commit()
+    return {"message": "Freshness update accepted", "section_id": section_id}
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/sections/{section_id}/freshness/reject",
+)
+async def reject_freshness_update(
+    document_id: int,
+    section_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    section = await freshness_service.apply_freshness_update(db, section_id, accept=False)
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    await activity_service.record_event(
+        db,
+        project_id=project.id,
+        document_id=document.id,
+        event_type="freshness_rejected",
+        message=f"Rejected freshness update for \"{document.title}\"",
+        metadata={"section_id": section_id},
+        weight=1.0,
+    )
+    await db.commit()
+    return {"message": "Freshness update rejected", "section_id": section_id}

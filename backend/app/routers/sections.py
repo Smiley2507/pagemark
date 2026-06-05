@@ -22,6 +22,7 @@ from app.schemas.section import (
 )
 from app.services import generation_service
 from app.services import section_service
+from app.services import activity_service
 from app.services.version_service import create_version_snapshot
 
 router = APIRouter(prefix="/sections", tags=["sections"])
@@ -176,6 +177,18 @@ async def accept_section_review(
         section,
         user_id=current_user.id,
     )
+
+    await activity_service.record_event(
+        db,
+        project_id=section.document.project_id,
+        document_id=section.document_id,
+        event_type="section_reviewed",
+        message=f"Reviewed section \"{section.heading}\"",
+        metadata={"section_id": section.id},
+        weight=2.5,
+    )
+    await db.commit()
+
     return section_service.section_to_response(section)
 
 

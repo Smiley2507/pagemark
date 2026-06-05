@@ -44,7 +44,7 @@ from app.services.analysis_service import (
     get_latest_analysis,
 )
 from app.workers.analysis_worker import analyze_project_task, clone_and_analyze_task
-from app.services import git_service, github_service, crypto_service
+from app.services import git_service, github_service, crypto_service, activity_service
 from app.models.oauth_token import OAuthToken
 
 
@@ -565,6 +565,16 @@ async def upload_zip(
     await db.refresh(analysis)
 
     task = analyze_project_task.delay(project.id, analysis.id, file_path, "zip", ignore_patterns=patterns or None)
+
+    await activity_service.record_event(
+        db,
+        project_id=project.id,
+        event_type="analysis_started",
+        message=f"Started analysis for {project.name}",
+        metadata={"analysis_id": analysis.id, "source_type": "zip"},
+        weight=3.0,
+    )
+    await db.commit()
     return {"job_id": task.id, "analysis_id": analysis.id}
 
 
@@ -611,6 +621,16 @@ async def connect_public_git(
     await db.refresh(analysis)
 
     task = clone_and_analyze_task.delay(project.id, analysis.id, body.repo_url, body.branch)
+
+    await activity_service.record_event(
+        db,
+        project_id=project.id,
+        event_type="analysis_started",
+        message=f"Started Git analysis for {body.repo_url}",
+        metadata={"analysis_id": analysis.id, "repo_url": body.repo_url},
+        weight=3.0,
+    )
+    await db.commit()
     return {"job_id": task.id, "analysis_id": analysis.id}
 
 
@@ -672,6 +692,16 @@ async def connect_oauth_git(
     await db.refresh(analysis)
 
     task = clone_and_analyze_task.delay(project.id, analysis.id, clone_url, body.branch)
+
+    await activity_service.record_event(
+        db,
+        project_id=project.id,
+        event_type="analysis_started",
+        message=f"Started GitHub analysis for {body.owner}/{body.repo}",
+        metadata={"analysis_id": analysis.id, "repo": f"{body.owner}/{body.repo}"},
+        weight=3.0,
+    )
+    await db.commit()
     return {"job_id": task.id, "analysis_id": analysis.id}
 
 
@@ -718,6 +748,16 @@ async def sync_git_repo(
     await db.refresh(analysis)
 
     task = clone_and_analyze_task.delay(project.id, analysis.id, clone_url, project.selected_branch)
+
+    await activity_service.record_event(
+        db,
+        project_id=project.id,
+        event_type="analysis_started",
+        message=f"Re-analysis triggered via sync for {project.name}",
+        metadata={"analysis_id": analysis.id},
+        weight=3.0,
+    )
+    await db.commit()
     return {"job_id": task.id, "analysis_id": analysis.id}
 
 
@@ -802,3 +842,46 @@ async def apply_analysis_outline(
     doc = doc_result.scalar_one_or_none()
     count = len(doc.sections) if doc else 0
     return ApplyOutlineResponse(applied=True, section_count=count)
+
+
+# ── Activity Endpoints ────────────────────────────────────────────────
+
+
+@router.get("/{project_id}/activity")
+async def get_project_activity(
+    project_id: int,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    event_type: str | None = Query(None),
+    days: int | None = Query(None, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await _get_project(project_id, current_user, db)
+    events = await activity_service.get_timeline(
+        db, project.id,
+        limit=limit, offset=offset,
+        event_type=event_type, days=days,
+    )
+    return {"events": events, "total": len(events)}
+
+
+@router.get("/{project_id}/activity/heatmap")
+async def get_project_activity_heatmap(
+    project_id: int,
+    days: int = Query(365, ge=1, le=730),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await _get_project(project_id, current_user, db)
+    heatmap = await activity_service.get_heatmap_data(db, project.id, days=days)
+    return heatmap
+
+
+@router.get("/{project_id}/activity/event-types")
+async def get_project_activity_event_types(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    types = await activity_service.get_event_types(db)
+    return {"event_types": types}

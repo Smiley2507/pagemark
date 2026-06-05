@@ -1,4 +1,16 @@
 import apiClient from './client';
+
+export interface ActivityEvent {
+  id: number;
+  event_type: string;
+  weight: number;
+  message: string;
+  document_title: string | null;
+  section_heading: string | null;
+  analysis_status: string | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+}
 import type { Project, Template } from '../types';
 
 export const projectsApi = {
@@ -89,5 +101,22 @@ export const projectsApi = {
   }): Promise<Template> {
     const res = await apiClient.patch(`/templates/${id}`, data);
     return res.data;
+  },
+
+  async getActivity(projectId: number, params?: {
+    limit?: number;
+    offset?: number;
+    event_type?: string;
+    days?: number;
+  }): Promise<{ events: ActivityEvent[]; total: number }> {
+    const { data } = await apiClient.get(`/projects/${projectId}/activity`, { params });
+    return data;
+  },
+
+  async getActivityHeatmap(projectId: number, days?: number): Promise<Record<string, number>> {
+    const { data } = await apiClient.get(`/projects/${projectId}/activity/heatmap`, {
+      params: { days },
+    });
+    return data;
   },
 };

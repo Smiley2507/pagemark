@@ -52,12 +52,19 @@ export function DocumentEditorPage() {
     }
   }, [activeSectionId, projectId, documentId, recordRecentWork]);
   
-  // Mock source change detection
+  // Freshness detection via API
+  const { data: freshnessData } = useQuery({
+    queryKey: ['freshness', projectId, documentId],
+    queryFn: () => documentsApi.getFreshness(Number(projectId), Number(documentId)),
+    enabled: !!projectId && !!documentId,
+    refetchInterval: 30000,
+  });
+
   useEffect(() => {
-    // Simulate source change notification
-    const timer = setTimeout(() => setHasSourceChanges(true), 5000);
-    return () => clearTimeout(timer);
-  }, []);
+    if (freshnessData && freshnessData.freshness === 'stale' && freshnessData.stale_count > 0) {
+      setHasSourceChanges(true);
+    }
+  }, [freshnessData]);
   
   // Accept review mutation
   const acceptReviewMutation = useMutation({

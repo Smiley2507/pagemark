@@ -262,9 +262,3 @@ async def test_document_belongs_to_project(
     )
     assert response.status_code == 404
 
-
-# ── Test Fixtures ────────────────────────────────────────────────────
-
-
-@pytest.fixture
-async def test_org(db: AsyncSession, test_user: User) -> Organization:

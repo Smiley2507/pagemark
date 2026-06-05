@@ -181,4 +181,29 @@ export const documentsApi = {
     const { data } = await apiClient.post(`/documents/${docId}/notes`, { content });
     return data;
   },
+
+  async getFreshness(projectId: number, documentId: number): Promise<{
+    document_id: number;
+    freshness: string;
+    stale_sections: Array<{ id: number; heading: string; reviewed_at: string | null }>;
+    total_sections: number;
+    stale_count: number;
+  }> {
+    const { data } = await apiClient.get(`/projects/${projectId}/documents/${documentId}/freshness`);
+    return data;
+  },
+
+  async acceptFreshnessUpdate(projectId: number, documentId: number, sectionId: number): Promise<void> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/sections/${sectionId}/freshness/accept`
+    );
+    return data;
+  },
+
+  async rejectFreshnessUpdate(projectId: number, documentId: number, sectionId: number): Promise<void> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/sections/${sectionId}/freshness/reject`
+    );
+    return data;
+  },
 };
