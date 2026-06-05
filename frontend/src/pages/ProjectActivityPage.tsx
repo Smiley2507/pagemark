@@ -77,8 +77,9 @@ export function ProjectActivityPage() {
             <div className="flex items-center gap-3 text-text-muted">
               <Activity className="h-5 w-5" />
               <span className="text-body">No activity data yet</span>
+            </div>
           </div>
-        </div>
+        )}
       </section>
       
       {/* Activity Timeline */}

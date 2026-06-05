@@ -571,8 +571,7 @@ async def upload_zip(
         project_id=project.id,
         event_type="analysis_started",
         message=f"Started analysis for {project.name}",
-        metadata={"analysis_id": analysis.id, "source_type": "zip"},
-        weight=3.0,
+        payload={"analysis_id": analysis.id, "source_type": "zip"},
     )
     await db.commit()
     return {"job_id": task.id, "analysis_id": analysis.id}
@@ -627,8 +626,7 @@ async def connect_public_git(
         project_id=project.id,
         event_type="analysis_started",
         message=f"Started Git analysis for {body.repo_url}",
-        metadata={"analysis_id": analysis.id, "repo_url": body.repo_url},
-        weight=3.0,
+        payload={"analysis_id": analysis.id, "repo_url": body.repo_url},
     )
     await db.commit()
     return {"job_id": task.id, "analysis_id": analysis.id}
@@ -698,8 +696,7 @@ async def connect_oauth_git(
         project_id=project.id,
         event_type="analysis_started",
         message=f"Started GitHub analysis for {body.owner}/{body.repo}",
-        metadata={"analysis_id": analysis.id, "repo": f"{body.owner}/{body.repo}"},
-        weight=3.0,
+        payload={"analysis_id": analysis.id, "repo": f"{body.owner}/{body.repo}"},
     )
     await db.commit()
     return {"job_id": task.id, "analysis_id": analysis.id}
@@ -754,8 +751,7 @@ async def sync_git_repo(
         project_id=project.id,
         event_type="analysis_started",
         message=f"Re-analysis triggered via sync for {project.name}",
-        metadata={"analysis_id": analysis.id},
-        weight=3.0,
+        payload={"analysis_id": analysis.id},
     )
     await db.commit()
     return {"job_id": task.id, "analysis_id": analysis.id}

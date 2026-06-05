@@ -184,8 +184,7 @@ async def accept_section_review(
         document_id=section.document_id,
         event_type="section_reviewed",
         message=f"Reviewed section \"{section.heading}\"",
-        metadata={"section_id": section.id},
-        weight=2.5,
+        payload={"section_id": section.id},
     )
     await db.commit()
 

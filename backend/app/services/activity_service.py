@@ -15,6 +15,7 @@ from app.models.activity import ActivityEvent
 EVENT_WEIGHTS: dict[str, float] = {
     "source_sync": 2.0,
     "analysis_complete": 3.0,
+    "analysis_started": 3.0,
     "analysis_failed": 2.0,
     "document_created": 2.5,
     "outline_approved": 2.0,
@@ -34,6 +35,7 @@ EVENT_WEIGHTS: dict[str, float] = {
 EVENT_MESSAGES: dict[str, str] = {
     "source_sync": "Source code synced",
     "analysis_complete": "Analysis completed",
+    "analysis_started": "Analysis started",
     "analysis_failed": "Analysis failed",
     "document_created": "Document created",
     "outline_approved": "Outline approved",
@@ -60,6 +62,7 @@ async def record_event(
     document_id: int | None = None,
     section_id: int | None = None,
     generation_run_id: int | None = None,
+    message: str | None = None,
     payload: dict[str, Any] | None = None,
 ) -> ActivityEvent:
     """
@@ -69,6 +72,10 @@ async def record_event(
     if event_type not in EVENT_WEIGHTS:
         return None
 
+    merged_payload = dict(payload or {})
+    if message:
+        merged_payload["message"] = message
+
     event = ActivityEvent(
         project_id=project_id,
         event_type=event_type,
@@ -77,7 +84,7 @@ async def record_event(
         document_id=document_id,
         section_id=section_id,
         generation_run_id=generation_run_id,
-        payload=payload,
+        payload=merged_payload if merged_payload else None,
     )
     db.add(event)
     await db.commit()
@@ -126,7 +133,7 @@ async def get_timeline(
             "id": event.id,
             "event_type": event.event_type,
             "weight": event.weight,
-            "message": EVENT_MESSAGES.get(event.event_type, event.event_type),
+            "message": (event.payload or {}).get("message") or EVENT_MESSAGES.get(event.event_type, event.event_type),
             "document_title": event.document.title if event.document else None,
             "section_heading": event.section.heading if event.section else None,
             "analysis_status": event.analysis.status.value if event.analysis else None,

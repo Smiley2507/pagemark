@@ -1,9 +1,7 @@
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'motion/react';
 import { PagemarkWordmark } from './PagemarkWordmark';
-import { ArrowLeft, CheckCircle, FileCheck2, GitBranch, KeyRound } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Surface } from '@/components/ui/surface';
-import heroImage from '@/assets/hero.png';
+import { ArrowLeft } from 'lucide-react';
 
 export function AuthLayout({
   children,
@@ -33,15 +31,15 @@ export function AuthLayout({
             {subtitle && <p className="mt-2 text-body text-text-secondary">{subtitle}</p>}
           </div>
 
-          <Surface variant="panel" padding="lg">
+          <div className="rounded-lg border border-border bg-panel p-6">
             {children}
-          </Surface>
+          </div>
 
           <div className="mt-4 text-center">
             <button
               type="button"
               onClick={() => navigate('/')}
-              className="inline-flex items-center gap-1 text-meta text-text-muted hover:text-text-primary transition-colors"
+              className="inline-flex items-center gap-1 text-meta text-text-muted transition-colors hover:text-text-primary"
             >
               <ArrowLeft className="h-3 w-3" />
               Back to home
@@ -50,47 +48,20 @@ export function AuthLayout({
         </div>
       </div>
 
-      <div className="relative hidden overflow-hidden border-l border-sidebar-border bg-sidebar p-12 text-sidebar-foreground lg:flex lg:flex-col lg:justify-center">
-        <img
-          src={heroImage}
-          alt=""
-          aria-hidden="true"
-          className="pointer-events-none absolute bottom-8 right-8 h-72 w-auto opacity-10"
-        />
-        <div className="relative z-10 max-w-lg">
-          <Badge variant="generation">Maintainer workspace</Badge>
-          <h2 className="mt-6 text-title text-sidebar-foreground">
-            Keep documentation close to the code.
-          </h2>
-          <p className="mt-4 text-body text-sidebar-foreground/75">
-            Return to your Projects, resume active generation, and review Sections that need attention.
-          </p>
-          <div className="mt-8 space-y-3">
-            {[
-              {
-                icon: GitBranch,
-                label: 'Project-level Analysis is reused across every Document.',
-              },
-              {
-                icon: FileCheck2,
-                label: 'Generated drafts stay separate from reviewed content.',
-              },
-              {
-                icon: KeyRound,
-                label: 'Provider usage and generation status remain durable.',
-              },
-            ].map((item) => (
-              <div key={item.label} className="flex items-start gap-3 border-b border-sidebar-border pb-3">
-                <item.icon className="mt-0.5 h-4 w-4 text-sidebar-foreground" aria-hidden="true" />
-                <span className="text-body text-sidebar-foreground/85">{item.label}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-8 inline-flex items-center gap-2 text-meta text-sidebar-foreground/70">
-            <CheckCircle className="h-4 w-4" aria-hidden="true" />
-            Reviewed Sections stay editable after acceptance.
-          </div>
-        </div>
+      <div className="relative hidden overflow-hidden border-l border-sidebar-border lg:flex">
+        <motion.div
+          className="absolute inset-0"
+          initial={{ scale: 1.2 }}
+          animate={{ scale: 1 }}
+          transition={{ duration: 20, ease: 'easeOut', repeat: Infinity, repeatType: 'reverse' }}
+        >
+          <img
+            src="https://images.unsplash.com/photo-1673526759327-54f1f5b27322?q=80&w=2064&auto=format&fit=crop"
+            alt=""
+            className="h-full w-full object-cover"
+            aria-hidden="true"
+          />
+        </motion.div>
       </div>
     </div>
   );

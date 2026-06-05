@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
 
 from app.models.document import Document, Section, SectionStatus, LifecycleStatus
 from app.models.project import Project
@@ -98,6 +99,7 @@ async def get_section_for_user(
 ) -> Section:
     result = await db.execute(
         select(Section)
+        .options(selectinload(Section.document))
         .join(Document)
         .join(Project)
         .where(

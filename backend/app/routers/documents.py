@@ -327,8 +327,7 @@ async def create_document(
         document_id=document.id,
         event_type="document_created",
         message=f"Created document \"{document.title}\"",
-        metadata={"document_id": document.id, "setup_stage": body.setup_stage.value},
-        weight=2.0,
+        payload={"document_id": document.id, "setup_stage": body.setup_stage.value},
     )
     await db.commit()
 
@@ -581,8 +580,7 @@ async def approve_outline_proposal(
         document_id=document.id,
         event_type="outline_approved",
         message=f"Approved outline for \"{document.title}\"",
-        metadata={"proposal_id": proposal.id, "section_count": len(proposal.outline_json or [])},
-        weight=3.0,
+        payload={"proposal_id": proposal.id, "section_count": len(proposal.outline_json or [])},
     )
     await db.commit()
 
@@ -719,8 +717,7 @@ async def create_document_generation_run(
         document_id=document.id,
         event_type="generation_run_started",
         message=f"Generation started for \"{document.title}\"",
-        metadata={"run_id": run.id, "mode": body.mode.value},
-        weight=2.0,
+        payload={"run_id": run.id, "mode": body.mode.value},
     )
     await db.commit()
 
@@ -896,8 +893,7 @@ async def accept_freshness_update(
         document_id=document.id,
         event_type="freshness_accepted",
         message=f"Accepted freshness update for \"{document.title}\"",
-        metadata={"section_id": section_id},
-        weight=2.0,
+        payload={"section_id": section_id},
     )
     await db.commit()
     return {"message": "Freshness update accepted", "section_id": section_id}
@@ -924,8 +920,7 @@ async def reject_freshness_update(
         document_id=document.id,
         event_type="freshness_rejected",
         message=f"Rejected freshness update for \"{document.title}\"",
-        metadata={"section_id": section_id},
-        weight=1.0,
+        payload={"section_id": section_id},
     )
     await db.commit()
     return {"message": "Freshness update rejected", "section_id": section_id}

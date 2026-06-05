@@ -69,7 +69,7 @@ export const RegisterPage = () => {
           <Label htmlFor="confirmPassword">Confirm password</Label>
           <Input id="confirmPassword" type="password" name="confirmPassword" required />
         </div>
-        <Button type="submit" className="h-10 w-full bg-interaction text-interaction-foreground hover:bg-interaction-hover" disabled={isPending}>
+        <Button type="submit" className="h-10 w-full" disabled={isPending}>
           {isPending ? 'Creating account…' : 'Sign up'}
         </Button>
       </form>
