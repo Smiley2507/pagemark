@@ -2,6 +2,8 @@
 
 This plan implements the product direction captured in `CONTEXT.md`, `frontend/VISUAL_SPEC.md`, and `docs/adr/0001-projects-contain-multiple-documents.md`.
 
+This document is implementation guidance, not an additional source of product truth. If it conflicts with the canonical docs above, the canonical docs win.
+
 The core shift is from a single-document project editor to a source-connected Project workspace containing multiple purpose-specific Documents. Implement backend schema and contracts first, then rebuild the first-Document journey and design system on top of them.
 
 ## Guiding Constraints
@@ -546,4 +548,3 @@ Manual smoke:
 - Automatic provider failover without confirmation.
 - Paragraph-level freshness lifecycle.
 - Decorative animation or marketing-style motion inside the authenticated workspace.
-

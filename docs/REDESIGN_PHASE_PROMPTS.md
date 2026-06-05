@@ -2,17 +2,19 @@
 
 Use these prompts one phase at a time. Do not ask an agent to implement the whole redesign in a single run.
 
-Each prompt assumes the agent is working from the repository root and must read these files before editing code:
+These prompts are secondary to the canonical execution prompt in `docs/CANONICAL_EXECUTION_PROMPT.md`.
+When using any prompt below, treat only these files as normative sources of product truth:
 
 - `CONTEXT.md`
 - `frontend/VISUAL_SPEC.md`
 - `docs/adr/0001-projects-contain-multiple-documents.md`
-- `docs/REDESIGN_IMPLEMENTATION_PLAN.md`
+
+Do not use `docs/REDESIGN_IMPLEMENTATION_PLAN.md`, `docs/MASTER_ROADMAP.md`, or any other markdown file as a decision source unless the phase prompt explicitly names it for a narrow, mechanical reason.
 
 ## Phase 1 — Domain Schema Foundation
 
 ```text
-Read CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_IMPLEMENTATION_PLAN.md.
+Read CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md.
 
 Implement Phase 1 only: Domain Schema Foundation.
 
@@ -39,7 +41,7 @@ Run the relevant backend tests and report exactly what passed or failed.
 ## Phase 2 — Project And Nested Document APIs
 
 ```text
-Read CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_IMPLEMENTATION_PLAN.md.
+Read CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md.
 
 Implement Phase 2 only: Project And Nested Document APIs.
 
@@ -65,7 +67,7 @@ Run the relevant backend tests and report exactly what passed or failed.
 ## Phase 3 — Shared Analysis And Source Health
 
 ```text
-Read CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_IMPLEMENTATION_PLAN.md.
+Read CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md.
 
 Implement Phase 3 only: Shared Analysis And Source Health.
 
@@ -93,7 +95,7 @@ Run the relevant backend tests and report exactly what passed or failed.
 ## Phase 4 — Template Recommendations And Document Setup
 
 ```text
-Read CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_IMPLEMENTATION_PLAN.md.
+Read CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md.
 
 Implement Phase 4 only: Template Recommendations And Document Setup.
 
@@ -122,7 +124,7 @@ Run the relevant backend tests and report exactly what passed or failed.
 ## Phase 5 — Generation Runs, Usage, And Review States
 
 ```text
-Read CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_IMPLEMENTATION_PLAN.md.
+Read CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md.
 
 Implement Phase 5 only: Generation Runs, Usage, And Review States.
 
@@ -153,7 +155,7 @@ Run the relevant backend tests and report exactly what passed or failed.
 ## Phase 6 — Freshness, Evidence, Activity, Quality, Export
 
 ```text
-Read CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_IMPLEMENTATION_PLAN.md.
+Read CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md.
 
 Implement Phase 6 only: Freshness, Evidence, Activity, Quality, Export.
 
@@ -185,7 +187,7 @@ Run the relevant backend tests and report exactly what passed or failed.
 ## Phase 7 — Design System Foundation
 
 ```text
-Read CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_IMPLEMENTATION_PLAN.md.
+Read CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md.
 
 Implement Phase 7 only: Design System Foundation.
 
@@ -211,7 +213,7 @@ Run frontend lint/build or the closest available verification and report exactly
 ## Phase 8 — First-Document Journey Frontend
 
 ```text
-Read CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_IMPLEMENTATION_PLAN.md.
+Read CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md.
 
 Implement Phase 8 only: First-Document Journey Frontend.
 
@@ -243,7 +245,7 @@ Run frontend lint/build or the closest available verification and report exactly
 ## Phase 9 — Project Workspace And Editor Integration
 
 ```text
-Read CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_IMPLEMENTATION_PLAN.md.
+Read CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md.
 
 Implement Phase 9 only: Project Workspace And Editor Integration.
 
@@ -275,4 +277,3 @@ Add frontend tests or flow checks proving:
 
 Run frontend lint/build or the closest available verification and report exactly what passed or failed.
 ```
-
