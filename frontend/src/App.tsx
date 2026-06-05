@@ -20,6 +20,7 @@ import { ProjectsView, TemplatesView } from './components/dashboard';
 import { SettingsPage } from './pages/SettingsPage';
 import { NLPDashboard } from './pages/NLPDashboard';
 import { ExportPage } from './pages/ExportPage';
+import { DocumentSetupPage } from './pages/DocumentSetupPage';
 
 const queryClient = new QueryClient();
 
@@ -87,6 +88,7 @@ const AppRoutes = () => {
         {/* Full-screen routes (no sidebar/header) */}
         <Route path="/editor/:id" element={<Editor />} />
         <Route path="/export/:projectId" element={<ExportPage />} />
+        <Route path="/document-setup" element={<DocumentSetupPage />} />
 
         {/* Dashboard layout routes (sidebar + header) */}
         <Route element={<MainLayout />}>

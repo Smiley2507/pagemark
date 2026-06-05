@@ -1,0 +1,436 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Menu, X } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { projectsApi } from '@/api/projects';
+import { analysisApi } from '@/api/analysis';
+import { aiCredentialsApi } from '@/api/aiCredentials';
+
+import { SetupSummaryRail } from '@/components/document-setup/SetupSummaryRail';
+import { SourceStep } from '@/components/document-setup/SourceStep';
+import { AnalysisFactsStep } from '@/components/document-setup/AnalysisFactsStep';
+import { TemplateRecommendationStep } from '@/components/document-setup/TemplateRecommendationStep';
+import { OutlineReviewStep } from '@/components/document-setup/OutlineReviewStep';
+import { GenerationChoiceStep } from '@/components/document-setup/GenerationChoiceStep';
+import { ProviderCredentialSetup } from '@/components/document-setup/ProviderCredentialSetup';
+import { Button } from '@/components/ui/button';
+
+import type { DocumentSetupState, DocumentSetupStage } from '@/types/document-setup';
+import type { AnalysisStatus, AnalysisResults, Template } from '@/types';
+
+export function DocumentSetupPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const resumeProjectId = searchParams.get('projectId');
+
+  const [showRailDrawer, setShowRailDrawer] = useState(false);
+  const [showProviderSetup, setShowProviderSetup] = useState(false);
+  
+  const [setupState, setSetupState] = useState<DocumentSetupState>({
+    stage: 'source',
+    analysisComplete: false,
+    analysisPartial: false,
+    outlineApproved: false,
+    providerConfigured: false,
+  });
+
+  // Check if user has active provider
+  const { data: credentialsData } = useQuery({
+    queryKey: ['ai-credentials'],
+    queryFn: () => aiCredentialsApi.list(),
+  });
+
+  const hasActiveProvider = credentialsData?.has_active ?? false;
+
+  // Poll analysis status if in analysis stage
+  const { data: analysisStatus, refetch: refetchAnalysis } = useQuery({
+    queryKey: ['analysis-status', setupState.projectId],
+    queryFn: () => analysisApi.getAnalysisStatus(setupState.projectId!),
+    enabled: !!setupState.projectId && setupState.stage === 'analysis',
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'running' || status === 'pending' ? 2000 : false;
+    },
+  });
+
+  const { data: analysisResults } = useQuery({
+    queryKey: ['analysis-results', setupState.projectId],
+    queryFn: () => analysisApi.getAnalysisResults(setupState.projectId!),
+    enabled: !!setupState.projectId && analysisStatus?.status === 'completed',
+  });
+
+  // Fetch available templates
+  const { data: templates = [] } = useQuery({
+    queryKey: ['templates'],
+    queryFn: () => projectsApi.getTemplates(),
+    enabled: setupState.stage === 'template-selection',
+  });
+
+  // Create project mutation
+  const createProjectMutation = useMutation({
+    mutationFn: (data: {
+      name: string;
+      description?: string;
+      source_type: 'zip' | 'git' | 'scratch';
+      git_repo_url?: string;
+      git_branch?: string;
+    }) => projectsApi.createProject(data),
+    onSuccess: (project) => {
+      setSetupState((prev) => ({
+        ...prev,
+        projectId: project.id,
+        projectName: project.name,
+      }));
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to create project: ${error.message}`);
+    },
+  });
+
+  // Monitor analysis completion
+  useEffect(() => {
+    if (analysisStatus?.status === 'completed') {
+      setSetupState((prev) => ({
+        ...prev,
+        analysisComplete: true,
+        analysisId: analysisStatus.id,
+        stage: 'template-selection',
+      }));
+    } else if (analysisStatus?.status === 'failed') {
+      toast.error('Analysis failed. You can retry or continue without analysis.');
+    }
+  }, [analysisStatus]);
+
+  // Update provider status in state
+  useEffect(() => {
+    setSetupState((prev) => ({
+      ...prev,
+      providerConfigured: hasActiveProvider,
+    }));
+  }, [hasActiveProvider]);
+
+  const handleSourceConnect = async (data: {
+    type: 'github-oauth' | 'git-url' | 'zip' | 'none';
+    repoData?: {
+      owner: string;
+      repo: string;
+      branch: string;
+      provider: 'github';
+      fullName: string;
+      visibility: 'public' | 'private';
+      language?: string;
+    };
+    gitUrl?: string;
+    gitBranch?: string;
+    zipFile?: File;
+  }) => {
+    try {
+      let projectData: Parameters<typeof projectsApi.createProject>[0];
+
+      if (data.type === 'github-oauth' && data.repoData) {
+        const repoMeta = data.repoData;
+        projectData = {
+          name: repoMeta.fullName,
+          source_type: 'git',
+          git_repo_url: `https://github.com/${repoMeta.fullName}`,
+          git_branch: repoMeta.branch,
+        };
+
+        const project = await createProjectMutation.mutateAsync(projectData);
+
+        // Connect via OAuth
+        await analysisApi.connectGitOAuth(project.id, {
+          owner: repoMeta.owner,
+          repo: repoMeta.repo,
+          branch: repoMeta.branch,
+          provider: 'github',
+        });
+
+        setSetupState((prev) => ({
+          ...prev,
+          sourceType: 'github-oauth',
+          repoMetadata: repoMeta,
+          stage: 'analysis',
+        }));
+      } else if (data.type === 'git-url' && data.gitUrl) {
+        projectData = {
+          name: data.gitUrl.split('/').pop()?.replace('.git', '') || 'New Project',
+          source_type: 'git',
+          git_repo_url: data.gitUrl,
+          git_branch: data.gitBranch || 'main',
+        };
+
+        const project = await createProjectMutation.mutateAsync(projectData);
+
+        await analysisApi.connectGitUrl(project.id, {
+          repo_url: data.gitUrl,
+          branch: data.gitBranch || 'main',
+        });
+
+        setSetupState((prev) => ({
+          ...prev,
+          sourceType: 'git-url',
+          stage: 'analysis',
+        }));
+      } else if (data.type === 'zip' && data.zipFile) {
+        projectData = {
+          name: data.zipFile.name.replace('.zip', ''),
+          source_type: 'zip',
+        };
+
+        const project = await createProjectMutation.mutateAsync(projectData);
+
+        await analysisApi.uploadZip(project.id, data.zipFile);
+
+        setSetupState((prev) => ({
+          ...prev,
+          sourceType: 'zip',
+          stage: 'analysis',
+        }));
+      } else {
+        // No source
+        projectData = {
+          name: 'New Documentation Project',
+          source_type: 'scratch',
+        };
+
+        await createProjectMutation.mutateAsync(projectData);
+
+        setSetupState((prev) => ({
+          ...prev,
+          sourceType: 'none',
+          stage: 'template-selection',
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to connect source:', error);
+      toast.error('Failed to connect source');
+    }
+  };
+
+  const handleSourceSkip = async () => {
+    const projectData: Parameters<typeof projectsApi.createProject>[0] = {
+      name: 'New Documentation Project',
+      source_type: 'scratch',
+    };
+
+    await createProjectMutation.mutateAsync(projectData);
+
+    setSetupState((prev) => ({
+      ...prev,
+      sourceType: 'none',
+      stage: 'template-selection',
+    }));
+  };
+
+  const handleAnalysisContinue = () => {
+    setSetupState((prev) => ({
+      ...prev,
+      stage: 'template-selection',
+    }));
+  };
+
+  const handleSelectTemplate = (templateId: number) => {
+    setSetupState((prev) => ({
+      ...prev,
+      selectedTemplateId: templateId,
+      customOutline: false,
+      stage: 'outline-review',
+    }));
+  };
+
+  const handleCreateCustom = () => {
+    setSetupState((prev) => ({
+      ...prev,
+      customOutline: true,
+      stage: 'outline-review',
+    }));
+  };
+
+  const handleApproveOutline = (outline: unknown[]) => {
+    // In real implementation, save outline proposal
+    setSetupState((prev) => ({
+      ...prev,
+      outlineApproved: true,
+      stage: 'generation-mode',
+    }));
+  };
+
+  const handleChooseGeneration = (mode: 'on-demand' | 'complete') => {
+    setSetupState((prev) => ({
+      ...prev,
+      generationMode: mode,
+      stage: 'editor-ready',
+    }));
+
+    // Navigate to editor
+    if (setupState.projectId) {
+      navigate(`/editor/${setupState.projectId}`);
+    }
+  };
+
+  const handleProviderComplete = () => {
+    setShowProviderSetup(false);
+    setSetupState((prev) => ({
+      ...prev,
+      providerConfigured: true,
+    }));
+  };
+
+  // Mock recommendations and estimates for demonstration
+  const mockRecommendations = templates.slice(0, 3).map((t, idx) => ({
+    id: idx + 1,
+    template_id: t.id,
+    document_id: 1,
+    basis: 'rule_based' as 'rule_based' | 'ai_personalized' | 'custom_outline_seeded',
+    score: 0.9 - idx * 0.1,
+    explanation: `This template matches your ${t.category} project structure.`,
+    template: {
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      category: t.category,
+      sections_preview: t.sections_json?.map((s: string | { heading: string }) => 
+        typeof s === 'string' ? { heading: s } : s
+      ),
+    },
+  }));
+
+  const mockProposal = {
+    id: 1,
+    document_id: 1,
+    basis: 'rule_based' as 'rule_based' | 'ai_personalized' | 'custom_outline_seeded',
+    status: 'draft' as 'draft' | 'approved' | 'superseded',
+    outline_json: [
+      { heading: 'Overview', description: 'Introduction and purpose', purpose: 'Explain the project', order_index: 0 },
+      { heading: 'Getting Started', description: 'Setup instructions', purpose: 'Help users begin', order_index: 1 },
+      { heading: 'API Reference', description: 'API documentation', purpose: 'Document the API', order_index: 2 },
+    ],
+  };
+
+  const mockEstimate = {
+    mode: 'on-demand' as 'on-demand' | 'complete',
+    estimated_tokens: 5000,
+    approximate_cost: 0.15,
+    currency: '$',
+    uncertainty: 'Estimates may vary by ±30%.',
+    provider: 'Claude',
+    model: 'claude-3-5-sonnet',
+  };
+
+  const mockCompleteEstimate = {
+    ...mockEstimate,
+    mode: 'complete' as 'on-demand' | 'complete',
+    estimated_tokens: 15000,
+    approximate_cost: 0.45,
+  };
+
+  return (
+    <div className="flex h-screen bg-workspace overflow-hidden">
+      {/* Main Content Area */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="min-h-full p-8">
+          {/* Mobile drawer toggle */}
+          <div className="lg:hidden mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRailDrawer(true)}
+              className="gap-2"
+            >
+              <Menu className="h-4 w-4" />
+              View Progress
+            </Button>
+          </div>
+
+          {showProviderSetup ? (
+            <div className="max-w-3xl">
+              <ProviderCredentialSetup
+                onComplete={handleProviderComplete}
+                onCancel={() => setShowProviderSetup(false)}
+              />
+            </div>
+          ) : (
+            <>
+              {setupState.stage === 'source' && (
+                <SourceStep onConnect={handleSourceConnect} onSkip={handleSourceSkip} />
+              )}
+
+              {setupState.stage === 'analysis' && (
+                <AnalysisFactsStep
+                  analysisStatus={analysisStatus || null}
+                  analysisResults={analysisResults}
+                  onContinue={handleAnalysisContinue}
+                  onRetry={() => refetchAnalysis()}
+                />
+              )}
+
+              {setupState.stage === 'template-selection' && (
+                <TemplateRecommendationStep
+                  recommendations={mockRecommendations}
+                  availableTemplates={templates}
+                  hasActiveProvider={hasActiveProvider}
+                  onSelectTemplate={handleSelectTemplate}
+                  onCreateCustom={handleCreateCustom}
+                  onConfigureProvider={() => setShowProviderSetup(true)}
+                />
+              )}
+
+              {setupState.stage === 'outline-review' && (
+                <OutlineReviewStep
+                  proposal={mockProposal}
+                  clarificationRequests={[]}
+                  onApprove={handleApproveOutline}
+                />
+              )}
+
+              {setupState.stage === 'generation-mode' && (
+                <GenerationChoiceStep
+                  onDemandEstimate={mockEstimate}
+                  completeEstimate={mockCompleteEstimate}
+                  hasActiveProvider={hasActiveProvider}
+                  onChoose={handleChooseGeneration}
+                  onConfigureProvider={() => setShowProviderSetup(true)}
+                />
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Desktop Summary Rail */}
+      <div className="hidden lg:block">
+        <SetupSummaryRail state={setupState} />
+      </div>
+
+      {/* Mobile Summary Drawer */}
+      {showRailDrawer && (
+        <div
+          className="fixed inset-0 z-50 lg:hidden"
+          onClick={() => setShowRailDrawer(false)}
+        >
+          <div className="absolute inset-0 bg-overlay-backdrop" />
+          <div
+            className="absolute right-0 top-0 bottom-0 w-80 bg-panel shadow-overlay"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-4 border-b border-separator">
+              <h3 className="text-body font-semibold text-text-primary">Setup Progress</h3>
+              <button
+                onClick={() => setShowRailDrawer(false)}
+                className="text-text-secondary hover:text-text-primary transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="overflow-y-auto" style={{ height: 'calc(100vh - 60px)' }}>
+              <SetupSummaryRail state={setupState} isDrawer />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
