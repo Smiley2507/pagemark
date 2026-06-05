@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
+import { documentsApi, type Document } from '@/api/documents';
 
-// Mock Document type until backend ready
 interface DocumentItem {
   id: number;
   project_id: number;
@@ -29,29 +29,31 @@ export function DocumentLibraryPage() {
   const viewMode = useViewPreferenceStore((s) => s.getViewMode('project-documents', projectId));
   const setViewMode = useViewPreferenceStore((s) => s.setViewMode);
   
-  // Mock data - replace with real API call
-  const documents: DocumentItem[] = [
-    {
-      id: 1,
-      project_id: Number(projectId),
-      title: 'API Reference',
-      template_name: 'API Documentation',
-      status: 'in-progress',
-      progress: 65,
-      last_updated: '2026-06-05T10:30:00Z',
-      tags: ['api', 'reference'],
-    },
-    {
-      id: 2,
-      project_id: Number(projectId),
-      title: 'User Guide',
-      template_name: 'Tutorial',
-      status: 'draft',
-      progress: 20,
-      last_updated: '2026-06-04T14:20:00Z',
-      tags: ['tutorial'],
-    },
-  ];
+  // Fetch documents from API
+  const { data: documentsResponse, isLoading, error } = useQuery({
+    queryKey: ['documents', projectId],
+    queryFn: () => documentsApi.listDocuments(Number(projectId)),
+    enabled: !!projectId,
+  });
+  
+  // Map backend documents to frontend DocumentItem format
+  const documents: DocumentItem[] = (documentsResponse?.documents || []).map((doc: Document) => ({
+    id: doc.id,
+    project_id: doc.project_id,
+    title: doc.title,
+    template_name: doc.template?.name,
+    status: mapBackendStatusToFrontend(doc.status),
+    progress: doc.progress.pct,
+    last_updated: doc.last_activity_at,
+    tags: doc.tags,
+  }));
+  
+  function mapBackendStatusToFrontend(status: string): 'draft' | 'in-progress' | 'complete' | 'stale' {
+    if (status === 'potentially_stale') return 'stale';
+    if (status === 'reviewed') return 'complete';
+    if (status === 'generating' || status === 'draft') return 'in-progress';
+    return 'draft';
+  }
   
   const filteredDocuments = documents
     .filter((doc) => doc.title.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -69,6 +71,27 @@ export function DocumentLibraryPage() {
   const handleDocumentClick = (documentId: number) => {
     navigate(`/projects/${projectId}/documents/${documentId}`);
   };
+  
+  // Handle loading and error states
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-text-secondary">Loading documents...</div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center space-y-2">
+          <AlertCircle className="h-8 w-8 text-text-danger mx-auto" />
+          <p className="text-body text-text-secondary">Failed to load documents</p>
+          <p className="text-meta text-text-muted">{error instanceof Error ? error.message : 'Unknown error'}</p>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="space-y-6">
