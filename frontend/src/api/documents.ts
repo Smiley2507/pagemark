@@ -67,6 +67,13 @@ export const documentsApi = {
     return data;
   },
 
+  async approveOutlineProposal(projectId: number, documentId: number, proposalId: number): Promise<{ proposal: OutlineProposal }> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/outline-proposals/${proposalId}/approve`
+    );
+    return { proposal: data };
+  },
+
   async createOutlineProposal(
     projectId: number,
     documentId: number,

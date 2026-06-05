@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Menu, X } from 'lucide-react';
@@ -250,13 +250,39 @@ export function DocumentSetupPage() {
     }));
   };
 
+  const approveMutation = useMutation({
+    mutationFn: (proposalId: number) =>
+      documentsApi.approveOutlineProposal(
+        setupState.projectId!,
+        setupState.documentId!,
+        proposalId,
+      ),
+    onSuccess: () => {
+      setSetupState((prev) => ({
+        ...prev,
+        outlineApproved: true,
+        stage: 'generation-mode',
+      }));
+      toast.success('Outline approved! Sections have been created.');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
   const handleApproveOutline = (outline: unknown[]) => {
-    // In real implementation, save outline proposal
-    setSetupState((prev) => ({
-      ...prev,
-      outlineApproved: true,
-      stage: 'generation-mode',
-    }));
+    // Get the current proposal id to approve
+    const proposalId = currentProposal?.id;
+    if (proposalId) {
+      approveMutation.mutate(proposalId);
+    } else {
+      // Fallback: advance stage without API (for documents without proposals)
+      setSetupState((prev) => ({
+        ...prev,
+        outlineApproved: true,
+        stage: 'generation-mode',
+      }));
+    }
   };
 
   const handleChooseGeneration = (mode: 'on-demand' | 'complete') => {
@@ -281,11 +307,42 @@ export function DocumentSetupPage() {
   };
 
   // Fetch template recommendations for the document
-  const { data: recommendationsData } = useQuery({
+  const { data: recommendationsData, refetch: refetchRecommendations } = useQuery({
     queryKey: ['template-recommendations', setupState.projectId, setupState.documentId],
     queryFn: () => documentsApi.getTemplateRecommendations(setupState.projectId!, setupState.documentId!),
     enabled: !!setupState.projectId && !!setupState.documentId && setupState.stage === 'template-selection',
   });
+
+  // Create rule-based recommendations when entering template selection
+  const createRecommendationsMutation = useMutation({
+    mutationFn: () =>
+      documentsApi.createTemplateRecommendations(
+        setupState.projectId!,
+        setupState.documentId!,
+        'rule_based',
+        false,
+      ),
+    onSuccess: () => {
+      refetchRecommendations();
+    },
+    onError: () => {
+      // Silently handle - we may be offline but still want to show UI
+    },
+  });
+
+  // Trigger recommendation creation when stage reaches template-selection
+  const prevStageRef = useRef(setupState.stage);
+  React.useEffect(() => {
+    if (
+      setupState.stage === 'template-selection' &&
+      prevStageRef.current !== 'template-selection' &&
+      setupState.projectId &&
+      setupState.documentId
+    ) {
+      createRecommendationsMutation.mutate();
+    }
+    prevStageRef.current = setupState.stage;
+  }, [setupState.stage, setupState.projectId, setupState.documentId]);
 
   // Fetch outline proposals for the document
   const { data: proposalsData } = useQuery({
