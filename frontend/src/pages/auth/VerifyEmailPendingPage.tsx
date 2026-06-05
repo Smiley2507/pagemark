@@ -14,7 +14,7 @@ export const VerifyEmailPendingPage = () => {
   }
 
   if (user.is_verified) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/home" replace />;
   }
 
   return (

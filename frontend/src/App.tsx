@@ -10,18 +10,18 @@ import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
-import { Dashboard } from './pages/Dashboard';
 import { NewProject } from './pages/NewProject';
 import { Editor } from './pages/Editor';
 import { Analysis } from './pages/Analysis';
 import { GitConnectPage } from './pages/GitConnectPage';
 import { useMe } from './hooks/useAuth';
-import { ProjectsView, TemplatesView } from './components/dashboard';
+import { TemplatesView } from './components/dashboard';
 import { SettingsPage } from './pages/SettingsPage';
 import { NLPDashboard } from './pages/NLPDashboard';
 import { ExportPage } from './pages/ExportPage';
 import { DocumentSetupPage } from './pages/DocumentSetupPage';
 import { HomePage } from './pages/HomePage';
+import { ProjectsPage } from './pages/ProjectsPage';
 import { ProjectWorkspacePage } from './pages/ProjectWorkspacePage';
 import { DocumentLibraryPage } from './pages/DocumentLibraryPage';
 import { ProjectSourcePage } from './pages/ProjectSourcePage';
@@ -100,15 +100,16 @@ const AppRoutes = () => {
         {/* Main application routes */}
         <Route element={<MainLayout />}>
           <Route path="/home" element={<HomePage />} />
-          <Route path="/dashboard" element={<Dashboard />}>
-            <Route index element={<ProjectsView />} />
-            <Route path="templates" element={<TemplatesView />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
+          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/templates" element={<TemplatesView />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="/new-project" element={<NewProject />} />
           <Route path="/analysis/:id" element={<Analysis />} />
           <Route path="/nlp/:projectId" element={<NLPDashboard />} />
           <Route path="/git-connect" element={<GitConnectPage />} />
+          <Route path="/dashboard" element={<Navigate to="/home" replace />} />
+          <Route path="/dashboard/templates" element={<Navigate to="/templates" replace />} />
+          <Route path="/dashboard/settings" element={<Navigate to="/settings" replace />} />
           
           {/* Project Workspace */}
           <Route path="/projects/:projectId" element={<ProjectWorkspacePage />}>

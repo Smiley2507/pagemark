@@ -1,147 +1,156 @@
-import React from 'react';
 import { useParams } from 'react-router-dom';
-import { Activity, GitCommit, FileText, Check, AlertCircle, Code, Layers, BookOpen } from 'lucide-react';
+import { Activity, BookOpen, Check, Code, FileText, GitCommit, Layers, TriangleAlert } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Surface } from '@/components/ui/surface';
 import { projectsApi } from '@/api/projects';
 
 const EVENT_ICONS: Record<string, React.ElementType> = {
   source_sync: GitCommit,
   analysis_complete: Code,
-  analysis_failed: AlertCircle,
+  analysis_failed: TriangleAlert,
   document_created: FileText,
   outline_approved: Layers,
   generation_run_completed: BookOpen,
   section_reviewed: Check,
 };
 
-const EVENT_COLORS: Record<string, string> = {
-  source_sync: 'bg-blue-100 text-blue-700',
-  analysis_complete: 'bg-purple-100 text-purple-700',
-  analysis_failed: 'bg-red-100 text-red-700',
-  document_created: 'bg-green-100 text-green-700',
-  outline_approved: 'bg-indigo-100 text-indigo-700',
-  generation_run_completed: 'bg-teal-100 text-teal-700',
-  section_reviewed: 'bg-emerald-100 text-emerald-700',
-};
+const HEATMAP_CLASSES = [
+  'bg-panel-muted',
+  'bg-interaction-muted',
+  'bg-status-generation',
+  'bg-interaction',
+];
 
 export function ProjectActivityPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  
+
   const { data: activityData, isLoading } = useQuery({
     queryKey: ['activity', projectId],
     queryFn: () => projectsApi.getActivity(Number(projectId)),
     enabled: !!projectId,
   });
-  
+
   const { data: heatmapData } = useQuery({
     queryKey: ['activity-heatmap', projectId],
     queryFn: () => projectsApi.getActivityHeatmap(Number(projectId)),
     enabled: !!projectId,
   });
 
-  const activities = activityData?.events || [];
-  
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-text-secondary">Loading activity...</div>
-      </div>
+      <Surface variant="muted" padding="lg">
+        <p className="text-body text-text-secondary">Loading Activity…</p>
+      </Surface>
     );
   }
-  
+
+  const activities = activityData?.events || [];
+  const heatmapEntries = Object.entries(heatmapData || {}).slice(-84);
+
   return (
-    <div className="space-y-8">
-      {/* Activity Heatmap */}
-      <section className="space-y-4">
-        <h2 className="text-section font-semibold text-text-primary">Activity Overview</h2>
-        {heatmapData && Object.keys(heatmapData).length > 0 ? (
-          <div className="rounded-lg border border-separator bg-panel p-6">
-            <div className="flex flex-wrap gap-1">
-              {Object.entries(heatmapData).slice(-90).map(([date, count]) => (
-                <div
-                  key={date}
-                  className="w-3 h-3 rounded-sm"
-                  style={{
-                    backgroundColor: count > 0
-                      ? `rgba(59, 130, 246, ${Math.min(count / 10, 1)})`
-                      : 'rgb(229, 231, 235)',
-                  }}
-                  title={`${date}: ${count.toFixed(1)} activity`}
-                />
-              ))}
-            </div>
-          </div>
+    <div className="space-y-6">
+      <Surface variant="panel" padding="lg" className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Activity className="h-5 w-5 text-text-secondary" aria-hidden="true" />
+          <h2 className="text-section font-semibold text-text-primary">Activity</h2>
+        </div>
+        <p className="text-body text-text-secondary">
+          Meaningful workflow events across source sync, Analysis, generation, review, and freshness changes.
+        </p>
+
+        {heatmapEntries.length === 0 ? (
+          <EmptyState
+            title="No Activity yet"
+            description="Meaningful Project events will appear after source sync, generation, and review."
+          />
         ) : (
-          <div className="rounded-lg border border-separator bg-panel p-6">
-            <div className="flex items-center gap-3 text-text-muted">
-              <Activity className="h-5 w-5" />
-              <span className="text-body">No activity data yet</span>
-            </div>
+          <div className="flex flex-wrap gap-1" aria-label="Activity heatmap">
+            {heatmapEntries.map(([date, weight]) => (
+              <div
+                key={date}
+                title={`${date}: ${weight.toFixed(1)} weighted activity`}
+                className={`h-3 w-3 rounded-sm ${heatmapClass(weight)}`}
+                aria-hidden="true"
+              />
+            ))}
           </div>
         )}
-      </section>
-      
-      {/* Activity Timeline */}
-      <section className="space-y-4">
-        <h2 className="text-section font-semibold text-text-primary">Recent Activity</h2>
-        
+      </Surface>
+
+      {activities.length === 0 ? (
+        <EmptyState
+          title="No recent Activity"
+          description="Project events will appear here when work progresses."
+        />
+      ) : (
         <div className="space-y-3">
-          {activities.map((activity, index) => (
-            <ActivityItem key={activity.id} activity={activity} isLast={index === activities.length - 1} />
+          {activities.map((activity) => (
+            <ActivityRow key={activity.id} activity={activity} />
           ))}
         </div>
-      </section>
+      )}
     </div>
   );
 }
 
-function ActivityItem({ activity, isLast }: {
-  activity: { event_type: string; message: string; created_at: string; document_title?: string | null; section_heading?: string | null };
-  isLast: boolean;
+function ActivityRow({
+  activity,
+}: {
+  activity: {
+    event_type: string;
+    message: string;
+    created_at: string;
+    document_title?: string | null;
+    section_heading?: string | null;
+  };
 }) {
   const Icon = EVENT_ICONS[activity.event_type] || Activity;
-  const colorClasses = EVENT_COLORS[activity.event_type] || 'bg-gray-100 text-gray-700';
-  
+
   return (
-    <div className="flex gap-4">
-      <div className="flex flex-col items-center">
-        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${colorClasses}`}>
-          <Icon className="h-4 w-4" />
-        </div>
-        {!isLast && <div className="w-px flex-1 bg-separator mt-2" />}
+    <Surface variant="panel" padding="default" className="flex items-start gap-3">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-panel-muted text-text-secondary">
+        <Icon className="h-4 w-4" aria-hidden="true" />
       </div>
-      
-      <div className="flex-1 pb-6">
-        <div className="rounded-lg border border-separator bg-panel p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <p className="text-body text-text-primary">{activity.message}</p>
-              <p className="text-meta text-text-muted mt-1">
-                {new Date(activity.created_at).toLocaleString()}
-              </p>
-              {(activity.document_title || activity.section_heading) && (
-                <div className="flex gap-2 mt-1">
-                  {activity.document_title && (
-                    <Badge variant="info" showIcon={false}>
-                      {activity.document_title}
-                    </Badge>
-                  )}
-                  {activity.section_heading && (
-                    <Badge variant="neutral" showIcon={false}>
-                      {activity.section_heading}
-                    </Badge>
-                  )}
-                </div>
-              )}
-            </div>
-            
-            <Badge variant="neutral" showIcon={false}>
-              {activity.event_type.replace(/_/g, ' ')}
-            </Badge>
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <p className="text-body text-text-primary">{activity.message}</p>
+            <p className="text-meta text-text-muted">
+              {new Date(activity.created_at).toLocaleString()}
+            </p>
           </div>
+          <Badge variant="neutral" showIcon={false}>
+            {activity.event_type.replace(/_/g, ' ')}
+          </Badge>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {activity.document_title && (
+            <Badge variant="info" showIcon={false}>
+              {activity.document_title}
+            </Badge>
+          )}
+          {activity.section_heading && (
+            <Badge variant="neutral" showIcon={false}>
+              {activity.section_heading}
+            </Badge>
+          )}
         </div>
       </div>
-    </div>
+    </Surface>
   );
+}
+
+function heatmapClass(weight: number) {
+  if (weight <= 0) {
+    return HEATMAP_CLASSES[0];
+  }
+  if (weight < 2) {
+    return HEATMAP_CLASSES[1];
+  }
+  if (weight < 5) {
+    return HEATMAP_CLASSES[2];
+  }
+  return HEATMAP_CLASSES[3];
 }

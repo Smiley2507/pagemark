@@ -275,7 +275,7 @@ export function EditorTopBar({
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate('/home')}
           aria-label="Back to dashboard"
         >
           <ArrowLeft className="h-4 w-4" />

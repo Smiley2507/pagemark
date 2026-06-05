@@ -88,7 +88,7 @@ export const Analysis: React.FC = () => {
           <div className="flex items-start gap-3">
             <button
               type="button"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/home')}
               className="mt-1 text-muted-foreground hover:text-foreground"
               aria-label="Back to dashboard"
             >
@@ -149,7 +149,7 @@ export const Analysis: React.FC = () => {
 
         {showOutlineSkipBanner && (
           <AiOutlineSkipBanner
-            onOpenSettings={() => navigate('/dashboard?tab=settings')}
+            onOpenSettings={() => navigate('/settings')}
           />
         )}
 

@@ -5,7 +5,7 @@ import { AppHeader } from './AppHeader';
 
 export const MainLayout: React.FC = () => {
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-workspace text-text-primary">
       <SidebarNavigation />
       <div className="flex-1 flex flex-col overflow-hidden">
         <AppHeader />

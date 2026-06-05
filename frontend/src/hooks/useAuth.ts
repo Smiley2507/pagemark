@@ -33,7 +33,7 @@ export const useLogin = () => {
       if (!user.is_verified) {
         navigate('/verify-email-pending');
       } else {
-        navigate('/dashboard');
+        navigate('/home');
       }
     },
     onError: (error: any) => {
@@ -54,7 +54,7 @@ export const useRegister = () => {
       if (!user.is_verified) {
         navigate('/verify-email-pending');
       } else {
-        navigate('/dashboard');
+        navigate('/home');
       }
     },
     onError: (error: any) => {

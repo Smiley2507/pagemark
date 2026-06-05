@@ -29,7 +29,7 @@ export const GitConnectPage: React.FC = () => {
         <div className="mx-auto flex h-12 max-w-3xl items-center gap-4 px-6">
           <button
             type="button"
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/home')}
             className="flex items-center gap-2 text-meta text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />

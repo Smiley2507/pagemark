@@ -12,7 +12,7 @@ interface PermissionGateProps {
 export const PermissionGate: React.FC<PermissionGateProps> = ({
   children,
   allowedRoles,
-  fallbackPath = '/dashboard/projects',
+  fallbackPath = '/projects',
 }) => {
   const currentRole = useOrgStore((state) => state.currentRole);
   const location = useLocation();

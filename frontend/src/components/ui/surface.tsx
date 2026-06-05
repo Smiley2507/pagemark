@@ -26,17 +26,22 @@ const surfaceVariants = cva('rounded-lg text-text-primary', {
 });
 
 export interface SurfaceProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof surfaceVariants> {}
+  extends React.HTMLAttributes<HTMLElement>,
+    VariantProps<typeof surfaceVariants> {
+  as?: React.ElementType;
+}
 
-const Surface = React.forwardRef<HTMLDivElement, SurfaceProps>(
-  ({ className, variant, padding, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn(surfaceVariants({ variant, padding }), className)}
-      {...props}
-    />
-  )
+const Surface = React.forwardRef<HTMLElement, SurfaceProps>(
+  ({ className, variant, padding, as, ...props }, ref) => {
+    const Comp = (as || 'div') as React.ElementType;
+    return (
+      <Comp
+        ref={ref}
+        className={cn(surfaceVariants({ variant, padding }), className)}
+        {...(props as Record<string, unknown>)}
+      />
+    );
+  }
 );
 Surface.displayName = 'Surface';
 

@@ -62,7 +62,7 @@ export const OrgInvitePage: React.FC = () => {
             <CheckCircle2 className="h-16 w-16 text-emerald-500" />
             <h2 className="text-xl font-semibold">Invitation Accepted</h2>
             <p className="text-muted-foreground">{message}</p>
-            <Button className="mt-4" onClick={() => navigate('/dashboard')}>
+            <Button className="mt-4" onClick={() => navigate('/home')}>
               Go to Dashboard
             </Button>
           </div>
@@ -89,7 +89,7 @@ export const OrgInvitePage: React.FC = () => {
             <XCircle className="h-16 w-16 text-red-500" />
             <h2 className="text-xl font-semibold">Invitation Failed</h2>
             <p className="text-muted-foreground">{message}</p>
-            <Button variant="outline" className="mt-4" onClick={() => navigate('/dashboard')}>
+            <Button variant="outline" className="mt-4" onClick={() => navigate('/home')}>
               Go to Dashboard
             </Button>
           </div>

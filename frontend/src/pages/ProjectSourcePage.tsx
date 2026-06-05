@@ -1,129 +1,118 @@
-import React from 'react';
 import { useParams } from 'react-router-dom';
-import { GitBranch, RefreshCw, FileCode2, AlertCircle } from 'lucide-react';
+import { GitBranch, RefreshCw, SearchCode, ShieldCheck } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Notice } from '@/components/ui/notice';
+import { Surface } from '@/components/ui/surface';
 import { analysisApi } from '@/api/analysis';
 import { projectsApi } from '@/api/projects';
 
 export function ProjectSourcePage() {
   const { projectId } = useParams<{ projectId: string }>();
-  
+
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => projectsApi.getProject(Number(projectId)),
     enabled: !!projectId,
   });
-  
+
   const { data: analysisStatus } = useQuery({
     queryKey: ['analysis-status', projectId],
     queryFn: () => analysisApi.getAnalysisStatus(Number(projectId)),
     enabled: !!projectId,
   });
-  
+
+  if (!project) {
+    return (
+      <EmptyState
+        title="Project source unavailable"
+        description="The source connection details could not be loaded."
+      />
+    );
+  }
+
   return (
-    <div className="space-y-8">
-      {/* Repository Metadata */}
-      <section className="space-y-4">
-        <h2 className="text-section font-semibold text-text-primary">Repository</h2>
-        
-        <div className="rounded-lg border border-separator bg-panel p-6 space-y-4">
-          <div className="flex items-start justify-between">
-            <div className="space-y-3 flex-1">
-              <div className="flex items-center gap-3">
-                <GitBranch className="h-5 w-5 text-text-secondary" />
-                <div>
-                  <div className="text-body font-medium text-text-primary">
-                    {project?.git_repo_url || 'No source connected'}
-                  </div>
-                  {project?.git_branch && (
-                    <div className="text-meta text-text-muted mt-1">
-                      Branch: {project.git_branch}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {project?.source_type && (
-                <div className="flex items-center gap-2">
-                  <span className="text-meta text-text-muted">Source Type:</span>
-                  <Badge variant="neutral" showIcon={false}>{project.source_type}</Badge>
-                </div>
-              )}
+    <div className="space-y-6">
+      <Surface variant="panel" padding="lg" className="space-y-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <GitBranch className="h-5 w-5 text-text-secondary" aria-hidden="true" />
+              <h2 className="text-section font-semibold text-text-primary">Source</h2>
             </div>
-            
-            <Button variant="outline" size="sm" className="gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Sync
-            </Button>
+            <p className="text-body text-text-secondary">
+              Shared source connection and Analysis context support every Document in this Project.
+            </p>
           </div>
+          <Button type="button" variant="outline" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Sync source
+          </Button>
         </div>
-      </section>
-      
-      {/* Analysis Snapshots */}
-      <section className="space-y-4">
-        <h2 className="text-section font-semibold text-text-primary">Analysis</h2>
-        
-        {analysisStatus ? (
-          <div className="rounded-lg border border-separator bg-panel p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FileCode2 className="h-5 w-5 text-text-secondary" />
-                <div>
-                  <div className="text-body font-medium text-text-primary">
-                    {analysisStatus.status === 'completed' ? 'Analysis Complete' : `Analysis ${analysisStatus.status}`}
-                  </div>
-                  {analysisStatus.completed_at && (
-                    <div className="text-meta text-text-muted mt-1">
-                      Last updated: {new Date(analysisStatus.completed_at).toLocaleString()}
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              <Badge 
-                variant={
-                  analysisStatus.status === 'completed' ? 'success' : 
-                  analysisStatus.status === 'failed' ? 'danger' : 
-                  'info'
-                }
-              >
-                {analysisStatus.status}
-              </Badge>
+
+        <div className="grid gap-4 xl:grid-cols-2">
+          <Surface variant="muted" padding="default" className="space-y-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-text-secondary" aria-hidden="true" />
+              <h3 className="text-body font-semibold text-text-primary">Connection</h3>
             </div>
-            
-            {analysisStatus.steps && (
-              <div className="space-y-2 pt-4 border-t border-separator">
-                <div className="text-body font-medium text-text-primary">Analysis Steps</div>
-                <div className="grid gap-2">
-                  {analysisStatus.steps.map((step) => (
-                    <div key={step.number} className="flex items-center justify-between text-body text-text-secondary">
-                      <span>{step.name}</span>
-                      <Badge 
-                        variant={
-                          step.status === 'done' ? 'success' : 
-                          step.status === 'failed' ? 'danger' : 
-                          step.status === 'running' ? 'info' :
-                          'neutral'
-                        }
-                        showIcon={false}
-                      >
-                        {step.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
+            <div className="grid gap-2 text-body text-text-secondary">
+              <span>{project.git_repo_url || 'No source connected'}</span>
+              <span>Branch: {project.git_branch || 'Unknown'}</span>
+              <span>Source type: {project.source_type}</span>
+            </div>
+          </Surface>
+
+          <Surface variant="muted" padding="default" className="space-y-3">
+            <div className="flex items-center gap-2">
+              <SearchCode className="h-4 w-4 text-text-secondary" aria-hidden="true" />
+              <h3 className="text-body font-semibold text-text-primary">Analysis</h3>
+            </div>
+            {analysisStatus ? (
+              <div className="space-y-3">
+                <Badge variant={analysisStatus.status === 'completed' ? 'success' : analysisStatus.status === 'failed' ? 'danger' : 'info'}>
+                  {analysisStatus.status === 'completed' ? 'Analysis complete' : `Analysis ${analysisStatus.status}`}
+                </Badge>
+                <p className="text-body text-text-secondary">
+                  {analysisStatus.completed_at
+                    ? `Updated ${new Date(analysisStatus.completed_at).toLocaleString()}`
+                    : 'Analysis is still in progress.'}
+                </p>
               </div>
+            ) : (
+              <p className="text-body text-text-secondary">No Analysis snapshot is available yet.</p>
             )}
+          </Surface>
+        </div>
+      </Surface>
+
+      {analysisStatus?.steps && analysisStatus.steps.length > 0 && (
+        <Surface variant="panel" padding="lg" className="space-y-4">
+          <h3 className="text-section font-semibold text-text-primary">Analysis workflow</h3>
+          <div className="space-y-3">
+            {analysisStatus.steps.map((step) => (
+              <Surface key={step.number} variant="muted" padding="default" className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-body font-medium text-text-primary">{step.name}</p>
+                  <p className="text-meta text-text-muted">Step {step.number}</p>
+                </div>
+                <Badge
+                  variant={step.status === 'done' ? 'success' : step.status === 'failed' ? 'danger' : step.status === 'running' ? 'generation' : 'neutral'}
+                  showIcon={false}
+                >
+                  {step.status}
+                </Badge>
+              </Surface>
+            ))}
           </div>
-        ) : (
-          <div className="rounded-lg border border-separator bg-panel p-12 text-center">
-            <AlertCircle className="h-12 w-12 text-text-muted mx-auto mb-4" />
-            <p className="text-body text-text-secondary">No analysis available</p>
-          </div>
-        )}
-      </section>
+        </Surface>
+      )}
+
+      <Notice variant="info" title="Supporting view">
+        Source health stays available here, but Document generation and review remain the primary Project workflow.
+      </Notice>
     </div>
   );
 }
