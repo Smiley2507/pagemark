@@ -147,14 +147,7 @@ async def update_section_status(
         )
         completion_pct = await _recompute_project_for_section(db, section)
     else:
-        doc_result = await db.execute(
-            select(Document).where(Document.id == section.document_id)
-        )
-        document = doc_result.scalar_one()
-        proj = await section_service.get_project_for_user(
-            db, document.project_id, current_user.id
-        )
-        completion_pct = proj.completion_pct
+        completion_pct = await _recompute_project_for_section(db, section)
 
     await db.commit()
     await db.refresh(section)

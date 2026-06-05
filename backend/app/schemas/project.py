@@ -81,6 +81,11 @@ class ProjectResponse(BaseModel):
     tags: List[str] = []
     documents_count: int = 0
     sections_count: int = 0
+    active_generation: bool = False
+    sections_needing_input: int = 0
+    review_state: str = "not_started"
+    freshness_state: str = "fresh"
+    recent_activity_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

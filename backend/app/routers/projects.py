@@ -45,6 +45,7 @@ from app.services.analysis_service import (
 )
 from app.workers.analysis_worker import analyze_project_task, clone_and_analyze_task
 from app.services import git_service, github_service, crypto_service, activity_service
+from app.services.project_summary_service import summarize_project
 from app.models.oauth_token import OAuthToken
 
 
@@ -53,19 +54,12 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 # ── Helpers ───────────────────────────────────────────────────────
 
 
-def _compute_completion_pct(sections: list[Section]) -> float:
-    if not sections:
-        return 0.0
-    finalized = sum(1 for s in sections if s.status == SectionStatus.FINALIZED)
-    return round(finalized / len(sections) * 100, 1)
-
-
-def _project_to_response(
+async def _project_to_response(
     project: Project,
-    sections: list[Section],
-    documents_count: int = 0,
+    db: AsyncSession,
     source_exclusions: list[ProjectSourceExclusion] | None = None,
 ) -> ProjectResponse:
+    summary = await summarize_project(db, project)
     return ProjectResponse(
         id=project.id,
         org_id=project.org_id,
@@ -73,7 +67,7 @@ def _project_to_response(
         name=project.name,
         description=project.description,
         status=project.status.value,
-        completion_pct=_compute_completion_pct(sections),
+        completion_pct=summary.completion_pct,
         source_type=project.source_type.value,
         source_provider=project.source_provider,
         source_owner=project.source_owner,
@@ -89,8 +83,13 @@ def _project_to_response(
         ],
         starred=project.starred,
         tags=project.tags or [],
-        documents_count=documents_count,
-        sections_count=len(sections),
+        documents_count=summary.documents_count,
+        sections_count=summary.sections_count,
+        active_generation=summary.active_generation,
+        sections_needing_input=summary.sections_needing_input,
+        review_state=summary.review_state,
+        freshness_state=summary.freshness_state,
+        recent_activity_at=summary.recent_activity_at,
         created_at=project.created_at,
         updated_at=project.updated_at,
     )
@@ -243,17 +242,10 @@ async def list_projects(
 
     responses = []
     for proj in projects:
-        sec_result = await db.execute(
-            select(Section).join(Document).where(Document.project_id == proj.id)
-        )
-        doc_count_result = await db.execute(
-            select(func.count(Document.id)).where(Document.project_id == proj.id)
-        )
         responses.append(
-            _project_to_response(
+            await _project_to_response(
                 proj,
-                sec_result.scalars().all(),
-                documents_count=doc_count_result.scalar_one(),
+                db,
                 source_exclusions=await _load_source_exclusions(proj.id, db),
             )
         )
@@ -301,10 +293,9 @@ async def create_project(
     await db.commit()
     await db.refresh(project)
     source_exclusions = await _load_source_exclusions(project.id, db)
-    return _project_to_response(
+    return await _project_to_response(
         project,
-        [],
-        documents_count=0,
+        db,
         source_exclusions=source_exclusions,
     )
 
@@ -318,16 +309,9 @@ async def get_project(
     current_user: User = Depends(get_current_user),
 ):
     project = await _get_project(project_id, current_user, db)
-    sec_result = await db.execute(
-        select(Section).join(Document).where(Document.project_id == project.id)
-    )
-    doc_count_result = await db.execute(
-        select(func.count(Document.id)).where(Document.project_id == project.id)
-    )
-    return _project_to_response(
+    return await _project_to_response(
         project,
-        sec_result.scalars().all(),
-        documents_count=doc_count_result.scalar_one(),
+        db,
         source_exclusions=await _load_source_exclusions(project.id, db),
     )
 
@@ -358,16 +342,9 @@ async def update_project(
     await db.commit()
     await db.refresh(project)
 
-    sec_result = await db.execute(
-        select(Section).join(Document).where(Document.project_id == project.id)
-    )
-    doc_count_result = await db.execute(
-        select(func.count(Document.id)).where(Document.project_id == project.id)
-    )
-    return _project_to_response(
+    return await _project_to_response(
         project,
-        sec_result.scalars().all(),
-        documents_count=doc_count_result.scalar_one(),
+        db,
         source_exclusions=await _load_source_exclusions(project.id, db),
     )
 
@@ -453,16 +430,9 @@ async def update_project_context(
     await db.commit()
     await db.refresh(project)
 
-    sec_result = await db.execute(
-        select(Section).join(Document).where(Document.project_id == project.id)
-    )
-    doc_count_result = await db.execute(
-        select(func.count(Document.id)).where(Document.project_id == project.id)
-    )
-    return _project_to_response(
+    return await _project_to_response(
         project,
-        sec_result.scalars().all(),
-        documents_count=doc_count_result.scalar_one(),
+        db,
     )
 
 
@@ -518,10 +488,9 @@ async def duplicate_project(
 
     await db.commit()
     await db.refresh(new_project)
-    return _project_to_response(
+    return await _project_to_response(
         new_project,
-        all_new_sections,
-        documents_count=len(original_documents),
+        db,
     )
 
 

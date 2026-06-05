@@ -74,6 +74,13 @@ class AIService:
             raise HTTPException(status_code=404, detail="Section not found")
         return section
 
+    async def _fetch_document(self, db: AsyncSession, document_id: int) -> Document:
+        result = await db.execute(select(Document).where(Document.id == document_id))
+        document = result.scalar_one_or_none()
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return document
+
     async def _fetch_latest_analysis(
         self, db: AsyncSession, project_id: int
     ) -> Analysis | None:
@@ -189,15 +196,32 @@ class AIService:
         }
 
     async def _get_template_prompt(
-        self, db: AsyncSession, project_id: int
+        self,
+        db: AsyncSession,
+        *,
+        project_id: int,
+        document_id: int | None = None,
     ) -> str | None:
-        """Return the system_prompt from the project's template, if any."""
-        project = await self._fetch_project(db, project_id)
-        if not project.template_id:
+        """Return the system_prompt from the relevant document template, if any."""
+        document: Document | None = None
+        if document_id is not None:
+            document = await self._fetch_document(db, document_id)
+            if document.project_id != project_id:
+                raise HTTPException(status_code=404, detail="Document not found")
+        else:
+            # Temporary fallback for project-scoped chat threads that have not yet
+            # been migrated to explicit document ownership.
+            result = await db.execute(
+                select(Document)
+                .where(Document.project_id == project_id)
+                .order_by(Document.updated_at.desc(), Document.id.desc())
+                .limit(1)
+            )
+            document = result.scalar_one_or_none()
+
+        if document is None or document.template_id is None:
             return None
-        result = await db.execute(
-            select(Template).where(Template.id == project.template_id)
-        )
+        result = await db.execute(select(Template).where(Template.id == document.template_id))
         template = result.scalar_one_or_none()
         return template.system_prompt if template else None
 
@@ -219,11 +243,18 @@ class AIService:
         client, model_id = await self._get_anthropic_client(db, user_id)
         project = await self._fetch_project(db, project_id)
         section = await self._fetch_section(db, section_id)
+        document = await self._fetch_document(db, section.document_id)
+        if document.project_id != project_id:
+            raise HTTPException(status_code=404, detail="Section not found")
         analysis = await self._fetch_latest_analysis(db, project_id)
 
         project_ctx = self._project_context(project)
         analysis_detail = self._analysis_detail(analysis)
-        template_prompt = await self._get_template_prompt(db, project_id)
+        template_prompt = await self._get_template_prompt(
+            db,
+            project_id=project_id,
+            document_id=document.id,
+        )
 
         prompt = build_section_prompt(
             section_heading=section.heading,
@@ -276,7 +307,15 @@ class AIService:
         project = await self._fetch_project(db, document.project_id) if document else None
 
         project_ctx = self._project_context(project) if project else {}
-        template_prompt = await self._get_template_prompt(db, document.project_id) if project else None
+        template_prompt = (
+            await self._get_template_prompt(
+                db,
+                project_id=document.project_id,
+                document_id=document.id,
+            )
+            if project and document
+            else None
+        )
         original = section.content_md or ""
 
         prompt = build_refine_prompt(
@@ -404,7 +443,7 @@ class AIService:
 
         project_ctx = self._project_context(project)
         analysis_summary = self._analysis_summary(analysis)
-        template_prompt = await self._get_template_prompt(db, thread.project_id)
+        template_prompt = await self._get_template_prompt(db, project_id=thread.project_id)
 
         # Determine current section from thread title (best-effort)
         current_section_heading = thread.title

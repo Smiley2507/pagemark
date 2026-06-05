@@ -6,16 +6,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
-from app.models.document import Document, Section, SectionStatus, LifecycleStatus
+from app.models.document import (
+    Document,
+    Section,
+    SectionContentLifecycle,
+    SectionStatus,
+    LifecycleStatus,
+)
 from app.models.project import Project
+from app.models.organization import OrganizationMember, OrgMemberStatus
 from app.schemas.section import SectionResponse, SectionStatusEnum
 
 
 def compute_completion_pct(sections: list[Section]) -> float:
     if not sections:
         return 0.0
-    finalized = sum(1 for s in sections if s.status == SectionStatus.FINALIZED)
-    return round(finalized / len(sections) * 100, 1)
+    reviewed = sum(
+        1
+        for section in sections
+        if section.content_lifecycle == SectionContentLifecycle.REVIEWED
+        or section.status == SectionStatus.FINALIZED
+    )
+    return round(reviewed / len(sections) * 100, 1)
 
 
 def section_to_response(section: Section, children: Optional[list[SectionResponse]] = None) -> SectionResponse:
@@ -65,10 +77,16 @@ async def get_project_for_user(
     user_id: int,
 ) -> Project:
     result = await db.execute(
-        select(Project).where(
+        select(Project)
+        .join(
+            OrganizationMember,
+            OrganizationMember.org_id == Project.org_id,
+        )
+        .where(
             Project.id == project_id,
-            Project.created_by == user_id,
             Project.deleted_at.is_(None),
+            OrganizationMember.user_id == user_id,
+            OrganizationMember.status == OrgMemberStatus.ACTIVE,
         )
     )
     project = result.scalar_one_or_none()
@@ -102,9 +120,11 @@ async def get_section_for_user(
         .options(selectinload(Section.document))
         .join(Document)
         .join(Project)
+        .join(OrganizationMember, OrganizationMember.org_id == Project.org_id)
         .where(
             Section.id == section_id,
-            Project.created_by == user_id,
+            OrganizationMember.user_id == user_id,
+            OrganizationMember.status == OrgMemberStatus.ACTIVE,
             Project.deleted_at.is_(None),
         )
     )
@@ -143,9 +163,4 @@ async def recompute_project_completion(
         )
     )
     sections = list(result.scalars().all())
-    pct = compute_completion_pct(sections)
-
-    proj_result = await db.execute(select(Project).where(Project.id == project_id))
-    project = proj_result.scalar_one()
-    project.completion_pct = pct
-    return pct
+    return compute_completion_pct(sections)

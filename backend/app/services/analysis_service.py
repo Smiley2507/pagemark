@@ -834,34 +834,66 @@ def get_active_credential_sync(user_id: int):
         )
 
 
+def _default_template_sections() -> list[dict]:
+    return [
+        {"heading": heading, "description": "", "order_index": index}
+        for index, heading in enumerate(DEFAULT_SECTION_HEADINGS)
+    ]
+
+
+def _normalize_template_sections(raw_sections: list) -> list[dict]:
+    normalized = []
+    for index, raw_section in enumerate(raw_sections):
+        if isinstance(raw_section, dict):
+            normalized.append(
+                {
+                    "heading": raw_section.get("heading", f"Section {index + 1}"),
+                    "description": raw_section.get("description", ""),
+                    "order_index": index,
+                }
+            )
+        else:
+            normalized.append(
+                {
+                    "heading": str(raw_section),
+                    "description": "",
+                    "order_index": index,
+                }
+            )
+    return normalized
+
+
+def _template_sections_from_document_sync(db, document: Document | None) -> list[dict]:
+    if document is None or document.template_id is None:
+        return _default_template_sections()
+    template = db.query(Template).filter(Template.id == document.template_id).first()
+    if template and template.sections_json:
+        return _normalize_template_sections(template.sections_json)
+    return _default_template_sections()
+
+
+async def _template_sections_from_document_async(
+    db: AsyncSession,
+    document: Document | None,
+) -> list[dict]:
+    if document is None or document.template_id is None:
+        return _default_template_sections()
+    template = await db.get(Template, document.template_id)
+    if template and template.sections_json:
+        return _normalize_template_sections(template.sections_json)
+    return _default_template_sections()
+
+
 def get_template_sections_for_project_sync(project_id: int) -> list[dict]:
-    """Synchronous version of get_template_sections_for_project for Celery workers."""
+    """Temporary legacy adapter for project-scoped outline generation workers."""
     with SessionLocal() as db:
-        project = db.query(Project).filter(Project.id == project_id).first()
-        if not project:
-            return [{"heading": h} for h in DEFAULT_SECTION_HEADINGS]
-
-        if project.template_id:
-            tmpl = db.query(Template).filter(Template.id == project.template_id).first()
-            if tmpl and tmpl.sections_json:
-                out = []
-                for i, s in enumerate(tmpl.sections_json):
-                    if isinstance(s, dict):
-                        out.append(
-                            {
-                                "heading": s.get("heading", f"Section {i + 1}"),
-                                "description": s.get("description", ""),
-                                "order_index": i,
-                            }
-                        )
-                    else:
-                        out.append({"heading": str(s), "description": "", "order_index": i})
-                return out
-
-        return [
-            {"heading": h, "description": "", "order_index": i}
-            for i, h in enumerate(DEFAULT_SECTION_HEADINGS)
-        ]
+        document = (
+            db.query(Document)
+            .filter(Document.project_id == project_id)
+            .order_by(Document.updated_at.desc(), Document.id.desc())
+            .first()
+        )
+        return _template_sections_from_document_sync(db, document)
 
 
 def sections_are_untouched_sync(project_id: int) -> bool:
@@ -965,32 +997,16 @@ def run_outline_step_sync(
 
 
 async def get_template_sections_for_project(project_id: int, db: AsyncSession) -> list[dict]:
-    result = await db.execute(select(Project).where(Project.id == project_id))
-    project = result.scalar_one_or_none()
-    if not project:
-        return [{"heading": h} for h in DEFAULT_SECTION_HEADINGS]
-
-    if project.template_id:
-        tmpl = await db.get(Template, project.template_id)
-        if tmpl and tmpl.sections_json:
-            out = []
-            for i, s in enumerate(tmpl.sections_json):
-                if isinstance(s, dict):
-                    out.append(
-                        {
-                            "heading": s.get("heading", f"Section {i + 1}"),
-                            "description": s.get("description", ""),
-                            "order_index": i,
-                        }
-                    )
-                else:
-                    out.append({"heading": str(s), "description": "", "order_index": i})
-            return out
-
-    return [
-        {"heading": h, "description": "", "order_index": i}
-        for i, h in enumerate(DEFAULT_SECTION_HEADINGS)
-    ]
+    # Temporary legacy adapter for project-scoped analysis routes.
+    # Active template ownership is document-scoped; this falls back to the most
+    # recently updated document until the legacy project-level outline flow is removed.
+    result = await db.execute(
+        select(Document)
+        .where(Document.project_id == project_id)
+        .order_by(Document.updated_at.desc(), Document.id.desc())
+    )
+    document = result.scalar_one_or_none()
+    return await _template_sections_from_document_async(db, document)
 
 
 def generate_outline_with_ai(
