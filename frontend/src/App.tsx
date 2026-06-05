@@ -21,6 +21,12 @@ import { SettingsPage } from './pages/SettingsPage';
 import { NLPDashboard } from './pages/NLPDashboard';
 import { ExportPage } from './pages/ExportPage';
 import { DocumentSetupPage } from './pages/DocumentSetupPage';
+import { HomePage } from './pages/HomePage';
+import { ProjectWorkspacePage } from './pages/ProjectWorkspacePage';
+import { DocumentLibraryPage } from './pages/DocumentLibraryPage';
+import { ProjectSourcePage } from './pages/ProjectSourcePage';
+import { ProjectActivityPage } from './pages/ProjectActivityPage';
+import { DocumentEditorPage } from './pages/DocumentEditorPage';
 
 const queryClient = new QueryClient();
 
@@ -35,7 +41,7 @@ const RootRedirect = () => {
   const user = useAuthStore((state) => state.user);
   if (!user) return <LandingPage />;
   if (!user.is_verified) return <Navigate to="/verify-email-pending" replace />;
-  return <Navigate to="/dashboard" replace />;
+  return <Navigate to="/home" replace />;
 };
 
 const AppRoutes = () => {
@@ -89,9 +95,11 @@ const AppRoutes = () => {
         <Route path="/editor/:id" element={<Editor />} />
         <Route path="/export/:projectId" element={<ExportPage />} />
         <Route path="/document-setup" element={<DocumentSetupPage />} />
+        <Route path="/projects/:projectId/documents/:documentId" element={<DocumentEditorPage />} />
 
-        {/* Dashboard layout routes (sidebar + header) */}
+        {/* Main application routes */}
         <Route element={<MainLayout />}>
+          <Route path="/home" element={<HomePage />} />
           <Route path="/dashboard" element={<Dashboard />}>
             <Route index element={<ProjectsView />} />
             <Route path="templates" element={<TemplatesView />} />
@@ -101,6 +109,13 @@ const AppRoutes = () => {
           <Route path="/analysis/:id" element={<Analysis />} />
           <Route path="/nlp/:projectId" element={<NLPDashboard />} />
           <Route path="/git-connect" element={<GitConnectPage />} />
+          
+          {/* Project Workspace */}
+          <Route path="/projects/:projectId" element={<ProjectWorkspacePage />}>
+            <Route index element={<DocumentLibraryPage />} />
+            <Route path="source" element={<ProjectSourcePage />} />
+            <Route path="activity" element={<ProjectActivityPage />} />
+          </Route>
         </Route>
       </Route>
 
