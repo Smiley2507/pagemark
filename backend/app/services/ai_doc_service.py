@@ -1,5 +1,6 @@
 """Core AI service — section generation, refinement, and streaming chat."""
 
+import asyncio
 import difflib
 import json
 from typing import AsyncGenerator
@@ -18,6 +19,7 @@ from app.prompts.chat import build_chat_prompt
 from app.prompts.refine import build_refine_prompt
 from app.prompts.section import build_section_prompt
 from app.services import ai_credential_service
+from app.services.ai_service import AiServiceError, complete_text
 from app.exceptions import NeedsClarificationException
 
 CLAUDE_MODEL = "claude-sonnet-4-5"
@@ -27,7 +29,7 @@ MAX_TOKENS_CHAT = 1500
 
 
 class AIService:
-    """Async AI service backed by the user's active BYOK Anthropic credential."""
+    """Async AI service backed by the user's active BYOK provider credential."""
 
     # ── Internal helpers ────────────────────────────────────────
 
@@ -54,6 +56,43 @@ class AIService:
             )
         client = anthropic.AsyncAnthropic(api_key=cred.api_key)
         return client, model_name or cred.model_id
+
+    async def _get_active_credential(
+        self, db: AsyncSession, user_id: int, model_name: str | None = None
+    ) -> ai_credential_service.ActiveCredential:
+        cred = await ai_credential_service.get_active_credential(db, user_id)
+        if not cred:
+            raise HTTPException(
+                status_code=400,
+                detail="No active AI credential found. Add an AI provider in Settings.",
+            )
+        if model_name:
+            cred.model_id = model_name
+        return cred
+
+    async def _complete_with_active_provider(
+        self,
+        db: AsyncSession,
+        user_id: int,
+        *,
+        system: str,
+        user: str,
+        max_tokens: int,
+        model_name: str | None = None,
+    ) -> str:
+        cred = await self._get_active_credential(db, user_id, model_name)
+        try:
+            return await asyncio.to_thread(
+                complete_text,
+                system,
+                user,
+                cred.provider,
+                cred.api_key,
+                cred.model_id,
+                max_tokens=max_tokens,
+            )
+        except AiServiceError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     async def _fetch_project(self, db: AsyncSession, project_id: int) -> Project:
         result = await db.execute(
@@ -235,12 +274,11 @@ class AIService:
         user_id: int,
         answer: str | None = None,
     ) -> tuple[str, int]:
-        """Generate content and confidence score for a section using Claude.
+        """Generate content and confidence score for a section using the active provider.
 
         Returns (content_markdown, confidence_score).
         Does NOT save to DB — caller is responsible.
         """
-        client, model_id = await self._get_anthropic_client(db, user_id)
         project = await self._fetch_project(db, project_id)
         section = await self._fetch_section(db, section_id)
         document = await self._fetch_document(db, section.document_id)
@@ -264,12 +302,13 @@ class AIService:
             template_system_prompt=template_prompt,
         )
 
-        response = await client.messages.create(
-            model=model_id,
+        content = await self._complete_with_active_provider(
+            db,
+            user_id,
+            system="Return valid JSON for the requested documentation section.",
+            user=prompt,
             max_tokens=MAX_TOKENS_SECTION,
-            messages=[{"role": "user", "content": prompt}],
         )
-        content = response.content[0].text.strip()
 
         try:
             data = json.loads(content)
@@ -296,7 +335,6 @@ class AIService:
         Returns {original, refined, added, removed, diff_lines}.
         Does NOT save to DB — caller decides whether to accept.
         """
-        client, model_id = await self._get_anthropic_client(db, user_id)
         section = await self._fetch_section(db, section_id)
 
         # Resolve project for context
@@ -326,12 +364,13 @@ class AIService:
             template_system_prompt=template_prompt,
         )
 
-        response = await client.messages.create(
-            model=model_id,
+        refined = await self._complete_with_active_provider(
+            db,
+            user_id,
+            system="Refine the section content according to the user instruction.",
+            user=prompt,
             max_tokens=MAX_TOKENS_REFINE,
-            messages=[{"role": "user", "content": prompt}],
         )
-        refined = response.content[0].text.strip()
 
         # Compute diff stats
         old_lines = original.splitlines()
@@ -404,7 +443,7 @@ class AIService:
         model_name, temperature, max_tokens override the credential defaults.
         references: section headings to fetch and include as context.
         """
-        client, model_id = await self._get_anthropic_client(db, user_id, model_name)
+        cred = await self._get_active_credential(db, user_id, model_name)
 
         # Fetch thread + project
         thread_result = await db.execute(
@@ -481,8 +520,38 @@ class AIService:
         effective_temperature = temperature
 
         async def _stream() -> AsyncGenerator[str, None]:
+            if cred.provider != "anthropic":
+                transcript = "\n".join(
+                    f"{message['role']}: {message['content']}" for message in api_messages
+                )
+                try:
+                    ai_content = await asyncio.to_thread(
+                        complete_text,
+                        system_prompt,
+                        transcript,
+                        cred.provider,
+                        cred.api_key,
+                        cred.model_id,
+                        max_tokens=effective_max_tokens,
+                    )
+                except AiServiceError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+                full_response.append(ai_content)
+                yield ai_content
+
+                ai_msg = ChatMessage(
+                    thread_id=thread_id,
+                    role=MessageRole.AI,
+                    content=ai_content,
+                )
+                db.add(ai_msg)
+                await db.commit()
+                return
+
+            client = anthropic.AsyncAnthropic(api_key=cred.api_key)
             kwargs = {
-                "model": model_id,
+                "model": cred.model_id,
                 "max_tokens": effective_max_tokens,
                 "system": system_prompt,
                 "messages": api_messages,
@@ -515,7 +584,6 @@ class AIService:
         user_id: int,
     ) -> list[str]:
         """Generate 3 phrasing alternatives for a text fragment."""
-        client, model_id = await self._get_anthropic_client(db, user_id)
         section = await self._fetch_section(db, section_id)
 
         prompt = (
@@ -529,13 +597,13 @@ class AIService:
             f"Return the result as a JSON array of strings: [\"Professional variant...\", \"Academic variant...\", \"Concise variant...\"]"
         )
 
-        response = await client.messages.create(
-            model=model_id,
+        content = await self._complete_with_active_provider(
+            db,
+            user_id,
+            system="Return exactly a JSON array of three strings.",
+            user=prompt,
             max_tokens=1000,
-            messages=[{"role": "user", "content": prompt}],
         )
-
-        content = response.content[0].text.strip()
         try:
             suggestions = json.loads(content)
             if isinstance(suggestions, list):

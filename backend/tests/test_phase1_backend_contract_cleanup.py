@@ -21,6 +21,8 @@ from app.models.project import Project
 from app.models.template import Template
 from app.models.user import User
 from app.services import analysis_service
+from app.services import ai_doc_service as ai_doc_service_module
+from app.services.ai_credential_service import ActiveCredential
 from app.services.ai_doc_service import ai_service
 
 
@@ -322,23 +324,10 @@ async def test_analysis_and_generation_paths_use_document_template(
     template_sections = await analysis_service.get_template_sections_for_project(test_project.id, db)
     assert [item["heading"] for item in template_sections] == ["Overview", "Endpoints"]
 
-    class _FakeMessages:
-        async def create(self, **kwargs):
-            class _Text:
-                text = '{"content":"Generated section","confidence_score":87}'
+    async def fake_complete(*args, **kwargs):
+        return '{"content":"Generated section","confidence_score":87}'
 
-            class _Response:
-                content = [_Text()]
-
-            return _Response()
-
-    class _FakeClient:
-        messages = _FakeMessages()
-
-    async def fake_get_client(_db, _user_id, model_name=None):
-        return _FakeClient(), "fake-model"
-
-    monkeypatch.setattr(ai_service, "_get_anthropic_client", fake_get_client)
+    monkeypatch.setattr(ai_service, "_complete_with_active_provider", fake_complete)
 
     content, confidence = await ai_service.generate_section(
         test_project.id,
@@ -348,6 +337,54 @@ async def test_analysis_and_generation_paths_use_document_template(
     )
     assert content == "Generated section"
     assert confidence == 87
+
+
+@pytest.mark.asyncio
+async def test_ai_doc_service_uses_active_provider_adapter(monkeypatch):
+    async def fake_active_credential(_db, _user_id, model_name=None):
+        return ActiveCredential(
+            id=1,
+            provider="google",
+            model_id=model_name or "gemini-2.0-flash",
+            api_key="test-google-key",
+        )
+
+    calls = {}
+
+    def fake_complete_text(system, user, provider, api_key, model_id, *, max_tokens):
+        calls.update(
+            {
+                "system": system,
+                "user": user,
+                "provider": provider,
+                "api_key": api_key,
+                "model_id": model_id,
+                "max_tokens": max_tokens,
+            }
+        )
+        return "provider response"
+
+    monkeypatch.setattr(ai_service, "_get_active_credential", fake_active_credential)
+    monkeypatch.setattr(ai_doc_service_module, "complete_text", fake_complete_text)
+
+    response = await ai_service._complete_with_active_provider(
+        None,
+        42,
+        system="system prompt",
+        user="user prompt",
+        max_tokens=123,
+        model_name="gemini-1.5-flash",
+    )
+
+    assert response == "provider response"
+    assert calls == {
+        "system": "system prompt",
+        "user": "user prompt",
+        "provider": "google",
+        "api_key": "test-google-key",
+        "model_id": "gemini-1.5-flash",
+        "max_tokens": 123,
+    }
 
 
 @pytest.mark.asyncio
