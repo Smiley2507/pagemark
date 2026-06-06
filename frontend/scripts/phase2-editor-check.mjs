@@ -54,6 +54,10 @@ assertContains(
   'documentStatusLabel(document)',
   'data-toc-item="true"',
   'useTocKeyboardNavigation',
+  'lg:grid-cols-[18rem_minmax(0,1fr)_3rem]',
+  'col-start-1 row-start-2 hidden',
+  'col-start-1 row-start-2 min-h-0 overflow-y-auto bg-canvas lg:col-start-2',
+  'col-start-2 row-start-2 flex min-h-0 flex-col',
   'Grammar/style',
   'Reserved Tools',
 ].forEach((marker) => {

@@ -453,8 +453,8 @@ export function DocumentEditorPage() {
   }
 
   return (
-    <div className="grid h-screen grid-cols-[18rem_minmax(0,1fr)_3rem] grid-rows-[3.5rem_minmax(0,1fr)] bg-workspace text-text-primary">
-      <header className="col-span-3 row-start-1 flex items-center justify-between border-b border-separator bg-panel px-3">
+    <div className="grid h-screen grid-cols-[minmax(0,1fr)_3rem] grid-rows-[3.5rem_minmax(0,1fr)] bg-workspace text-text-primary lg:grid-cols-[18rem_minmax(0,1fr)_3rem]">
+      <header className="col-span-2 row-start-1 flex items-center justify-between border-b border-separator bg-panel px-3 lg:col-span-3">
         <div className="flex min-w-0 items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => navigate(`/projects/${pid}`)} aria-label="Back to project">
             <ChevronLeft className="h-4 w-4" />
@@ -511,7 +511,7 @@ export function DocumentEditorPage() {
         </div>
       </header>
 
-      <aside className="row-start-2 hidden min-h-0 border-r border-separator bg-panel lg:flex lg:flex-col">
+      <aside className="col-start-1 row-start-2 hidden min-h-0 border-r border-separator bg-panel lg:flex lg:flex-col">
         <div className="border-b border-separator px-4 py-3">
           <p className="text-meta font-medium uppercase text-text-muted">Outline</p>
         </div>
@@ -558,7 +558,7 @@ export function DocumentEditorPage() {
         </div>
       </aside>
 
-      <main ref={scrollRootRef} className="row-start-2 min-h-0 overflow-y-auto bg-canvas">
+      <main ref={scrollRootRef} className="col-start-1 row-start-2 min-h-0 overflow-y-auto bg-canvas lg:col-start-2">
         {showSourceNotice && (
           <div className="mx-auto max-w-3xl px-4 pt-5">
             <Notice variant="warning" title="Potentially Stale Sections">
@@ -609,7 +609,7 @@ export function DocumentEditorPage() {
         )}
       </main>
 
-      <aside className="row-start-2 flex min-h-0 flex-col items-center border-l border-separator bg-panel py-3">
+      <aside className="col-start-2 row-start-2 flex min-h-0 flex-col items-center border-l border-separator bg-panel py-3 lg:col-start-3">
         <Button
           type="button"
           variant="ghost"
