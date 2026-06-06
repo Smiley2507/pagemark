@@ -550,7 +550,7 @@ export function DocumentEditorPage() {
   return (
     <div className="flex h-screen flex-col bg-workspace text-text-primary">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-separator bg-panel px-3">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => navigate(`/projects/${pid}`)} aria-label="Back to project">
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -562,12 +562,14 @@ export function DocumentEditorPage() {
               if (event.key === 'Enter') event.currentTarget.blur();
             }}
             aria-label="Document title"
-            className="h-9 max-w-xl border-transparent bg-transparent text-section font-semibold focus-visible:border-interaction"
+            className="h-9 min-w-0 max-w-xl flex-1 border-transparent bg-transparent text-section font-semibold focus-visible:border-interaction"
           />
-          <Badge variant={statusVariant(document?.status)} className="shrink-0 whitespace-nowrap">{documentStatusLabel(document)}</Badge>
+          <Badge variant={statusVariant(document?.status)} className="min-w-24 shrink-0 justify-center whitespace-nowrap">
+            {documentStatusLabel(document)}
+          </Badge>
         </div>
 
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 shrink-0 items-center gap-2">
           <Surface variant="panel" className="hidden items-center gap-1 border border-input px-2 lg:flex">
             <Search className="h-4 w-4 text-text-muted" aria-hidden="true" />
             <input
