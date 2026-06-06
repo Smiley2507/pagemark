@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom';
 import { EditorView, keymap, placeholder } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { markdown } from '@codemirror/lang-markdown';
+import { GFM } from '@lezer/markdown';
 import { languages } from '@codemirror/language-data';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
@@ -170,10 +171,10 @@ function ensureLivePreviewStyles() {
     }
 
     /* Callout Types */
-    .cm-lp-callout-info { border-left: 4px solid #3b82f6; }
-    .cm-lp-callout-warning { border-left: 4px solid #f59e0b; }
-    .cm-lp-callout-danger { border-left: 4px solid #ef4444; }
-    .cm-lp-callout-success { border-left: 4px solid #10b981; }
+    .cm-lp-callout-info { border-left: 4px solid var(--status-info-foreground); }
+    .cm-lp-callout-warning { border-left: 4px solid var(--status-warning-foreground); }
+    .cm-lp-callout-danger { border-left: 4px solid var(--status-danger-foreground); }
+    .cm-lp-callout-success { border-left: 4px solid var(--status-success-foreground); }
 
     /* ── Blockquote ───────────────────────────────────────────────────────── */
     .cm-line.cm-lp-blockquote {
@@ -471,7 +472,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       const state = EditorState.create({
         doc: value,
         extensions: [
-          markdown({ codeLanguages: languages }),
+          markdown({ codeLanguages: languages, extensions: [GFM] }),
           EditorView.lineWrapping,
           editorTheme,
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -553,7 +554,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     }, [value]);
 
     return (
-      <div ref={containerRef} className={cn('relative min-h-[180px] w-full min-w-0 overflow-x-hidden', className)}>
+      <div ref={containerRef} className={cn('relative min-h-44 w-full min-w-0 overflow-x-hidden', className)}>
         {menuState && viewRef.current &&
           createPortal(
             <SlashCommandMenu

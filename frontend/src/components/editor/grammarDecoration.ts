@@ -40,8 +40,9 @@ export const grammarDecorationField = StateField.define<DecorationSet>({
 export function grammarDecorationTheme() {
   return EditorView.theme({
     '.cm-grammar-issue': {
-      textDecoration: 'underline wavy var(--destructive)',
+      textDecoration: 'underline dotted var(--status-warning-foreground)',
       textUnderlineOffset: '3px',
+      textDecorationThickness: '1px',
       cursor: 'pointer',
     },
   });

@@ -55,7 +55,10 @@ class CalloutWidget extends WidgetType {
 
     const header = document.createElement('div');
     header.className = 'cm-lp-callout-header';
-    header.innerHTML = `<span class="cm-lp-callout-title">${this.title || this.type}</span>`;
+    const title = document.createElement('span');
+    title.className = 'cm-lp-callout-title';
+    title.textContent = this.title || this.type;
+    header.appendChild(title);
 
     const body = document.createElement('div');
     body.className = 'cm-lp-callout-body';
@@ -263,6 +266,13 @@ function cursorInRange(state: EditorState, from: number, to: number): boolean {
   return false;
 }
 
+function linkLabelBounds(doc: EditorState['doc'], from: number, to: number): { from: number; to: number } | null {
+  const raw = doc.sliceString(from, to);
+  const close = raw.indexOf(']');
+  if (raw[0] !== '[' || close <= 1) return null;
+  return { from: from + 1, to: from + close };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Core decoration builder
 // ─────────────────────────────────────────────────────────────────────────────
@@ -358,10 +368,29 @@ function buildDecorations(state: EditorState): DecorationSet {
           }
           break;
         }
+        case 'StrongEmphasis':
+          if (!onCursor(f)) add(f + 2, Math.max(f + 2, t - 2), Decoration.mark({ class: 'cm-lp-strong' }));
+          break;
+        case 'Emphasis':
+          if (!onCursor(f)) add(f + 1, Math.max(f + 1, t - 1), Decoration.mark({ class: 'cm-lp-em' }));
+          break;
+        case 'Strikethrough':
+          if (!onCursor(f)) add(f + 2, Math.max(f + 2, t - 2), Decoration.mark({ class: 'cm-lp-strike' }));
+          break;
+        case 'InlineCode':
+          if (!onCursor(f)) add(f + 1, Math.max(f + 1, t - 1), Decoration.mark({ class: 'cm-lp-inline-code' }));
+          break;
+        case 'Link': {
+          if (!onCursor(f)) {
+            const label = linkLabelBounds(doc, f, t);
+            if (label) add(label.from, label.to, Decoration.mark({ class: 'cm-lp-link' }));
+          }
+          break;
+        }
         case 'EmphasisMark':
           if (!onCursor(f)) add(f, t, Decoration.replace({}));
           break;
-        case 'Strikethrough la':
+        case 'StrikethroughMark':
           if (!onCursor(f)) add(f, t, Decoration.replace({}));
           break;
         case 'CodeMark':

@@ -40,15 +40,8 @@ export const tableKeymap = keymap.of([
         });
         return true;
       } else {
-        // At the last cell of the last row — add a column
-        const newRows = rows.map((row, rIdx) => {
-          const newRow = [...row];
-          newRow.splice(maxCol, 0, rIdx === 1 ? '---' : '');
-          return newRow;
-        });
-        const newAlignments: ('left' | 'center' | 'right')[] = [...alignments, 'left'];
-        const formatted = formatTable(newRows, newAlignments);
-        const targetPos = getCellPosInString(formatted, cursorRow, maxCol);
+        const formatted = addRow(ctx, false, alignments);
+        const targetPos = getCellPosInString(formatted, rows.length, 0);
         view.dispatch({
           changes: { from: ctx.from, to: ctx.to, insert: formatted },
           selection: { anchor: ctx.from + targetPos, head: ctx.from + targetPos },
