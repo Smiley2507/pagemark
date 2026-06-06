@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
+import os
 import re
 from typing import TYPE_CHECKING, Optional
 
@@ -8,6 +11,8 @@ import markdown as md_lib
 
 if TYPE_CHECKING:
     from app.models.document import Section
+
+from app.config import settings
 
 
 _HTML_TEMPLATE = """\
@@ -117,6 +122,23 @@ def _resolve(settings: dict, key: str, default: str) -> str:
     return val if val else default
 
 
+def _maybe_embed_logo(logo_url: str) -> str:
+    """Convert a local relative logo URL to a base64 data URI so it renders
+    when the exported HTML is opened locally or processed by WeasyPrint."""
+    if not logo_url or logo_url.startswith("data:"):
+        return logo_url
+    if logo_url.startswith("/static/"):
+        local_path = os.path.join(settings.UPLOAD_DIR, *logo_url.split("/")[2:])
+        if os.path.isfile(local_path):
+            mime_type, _ = mimetypes.guess_type(local_path)
+            if not mime_type:
+                mime_type = "image/png"
+            with open(local_path, "rb") as f:
+                data = f.read()
+            return f"data:{mime_type};base64,{base64.b64encode(data).decode()}"
+    return logo_url
+
+
 def export_markdown(sections: list["Section"], doc_title: str = "Documentation") -> str:
     parts: list[str] = [f"# {doc_title}\n"]
     for section in sorted(sections, key=lambda s: s.order_index):
@@ -150,15 +172,16 @@ def export_html(
 
     # Logo
     logo_html = ""
-    if logo_url:
+    if logo_url and logo_position != "none":
+        embedded = _maybe_embed_logo(logo_url)
         if logo_position == "title-page":
-            logo_html = f'<div style="text-align:center;margin-bottom:2rem;"><img src="{logo_url}" style="max-height:80px;" alt="logo"/></div>'
+            logo_html = f'<div style="text-align:center;margin-bottom:2rem;"><img src="{embedded}" style="max-height:80px;" alt="logo"/></div>'
         elif logo_position == "header-left":
-            logo_html = f'<img src="{logo_url}" style="max-height:40px;float:left;margin-right:1rem;" alt="logo"/>'
+            logo_html = f'<img src="{embedded}" style="max-height:40px;float:left;margin-right:1rem;" alt="logo"/>'
         elif logo_position == "header-center":
-            logo_html = f'<div style="text-align:center;margin-bottom:1rem;"><img src="{logo_url}" style="max-height:40px;" alt="logo"/></div>'
+            logo_html = f'<div style="text-align:center;margin-bottom:1rem;"><img src="{embedded}" style="max-height:40px;" alt="logo"/></div>'
         elif logo_position == "header-right":
-            logo_html = f'<img src="{logo_url}" style="max-height:40px;float:right;margin-left:1rem;" alt="logo"/>'
+            logo_html = f'<img src="{embedded}" style="max-height:40px;float:right;margin-left:1rem;" alt="logo"/>'
 
     # Header
     has_header = bool(header_left or header_center or header_right)

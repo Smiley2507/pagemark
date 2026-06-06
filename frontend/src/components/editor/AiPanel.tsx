@@ -104,6 +104,9 @@ export function AiPanel({
   const [mentionKind, setMentionKind] = useState<ReferenceKind>('section');
   const mentionTriggerPos = useRef<number | null>(null);
   const mentionDropdownRef = useRef<HTMLDivElement>(null);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const inputValueRef = useRef(inputValue);
 
   const generateSection = useGenerateSection(projectId);
   const refineSection = useRefineSection();
@@ -135,16 +138,25 @@ export function AiPanel({
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
+    inputValueRef.current = inputValue;
   }, [inputValue]);
 
   useEffect(() => {
-    const handleClick = () => {
-      setShowModelDropdown(false);
-      setShowSettings(false);
-      setShowMentionDropdown(false);
+    const handleMousedown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const mentionEl = mentionDropdownRef.current;
+      const modelEl = modelDropdownRef.current;
+      const settingsEl = settingsRef.current;
+      if (mentionEl && !mentionEl.contains(target) &&
+          modelEl && !modelEl.contains(target) &&
+          settingsEl && !settingsEl.contains(target)) {
+        setShowMentionDropdown(false);
+        setShowModelDropdown(false);
+        setShowSettings(false);
+      }
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('mousedown', handleMousedown);
+    return () => document.removeEventListener('mousedown', handleMousedown);
   }, []);
 
   const parseMentions = useCallback((text: string): { cleanText: string; references: string[] } => {
@@ -187,6 +199,7 @@ export function AiPanel({
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setInputValue(val);
+    inputValueRef.current = val;
 
     const cursorPos = e.target.selectionStart;
     const textBefore = val.slice(0, cursorPos);
@@ -203,8 +216,9 @@ export function AiPanel({
   const insertMention = (label: string) => {
     if (mentionTriggerPos.current === null || !textareaRef.current) return;
     const cursorPos = mentionTriggerPos.current;
-    const textBefore = inputValue.slice(0, cursorPos);
-    const textAfter = inputValue.slice(cursorPos);
+    const currentVal = inputValueRef.current;
+    const textBefore = currentVal.slice(0, cursorPos);
+    const textAfter = currentVal.slice(cursorPos);
     const atIndex = textBefore.lastIndexOf('@');
     const referencePrefix = mentionKind === 'section' ? '@section:' :
       mentionKind === 'document' ? '@document:' :
@@ -282,7 +296,7 @@ export function AiPanel({
           </button>
 
           {showModelDropdown && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-44 rounded-lg border border-separator bg-panel py-1 shadow-lg">
+            <div ref={modelDropdownRef} className="absolute right-0 top-full z-50 mt-1 w-44 rounded-lg border border-separator bg-panel py-1 shadow-lg">
               {AVAILABLE_MODELS.map((m) => (
                 <button
                   key={m.id}
@@ -306,7 +320,7 @@ export function AiPanel({
           </button>
 
           {showSettings && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-lg border border-separator bg-panel p-3 shadow-lg">
+            <div ref={settingsRef} className="absolute right-0 top-full z-50 mt-1 w-52 rounded-lg border border-separator bg-panel p-3 shadow-lg">
               <div className="mb-2 space-y-1">
                 <label className="text-[11px] text-text-muted">Temperature: {temperature.toFixed(2)}</label>
                 <input

@@ -33,7 +33,6 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/ui/notice';
 import { SectionStatusBadge } from '@/components/ui/section-status-badge';
-import { Surface } from '@/components/ui/surface';
 import { documentsApi, type Document } from '@/api/documents';
 import { useDocumentAutosave, useDocumentSections, useUpdateDocumentSection, useAcceptSectionReview } from '@/hooks/useSections';
 import { useQualityReport } from '@/hooks/useQuality';
@@ -724,8 +723,8 @@ export function DocumentEditorPage() {
           )}
         </main>
 
-        <Surface variant="panel" className={cn(
-          'flex shrink-0 transition-all duration-200',
+        <div className={cn(
+          'flex shrink-0 border-l border-separator bg-panel transition-all duration-200',
           rightPanelOpen ? 'w-[24rem]' : 'w-10',
         )}>
           {rightPanelOpen ? (
@@ -789,7 +788,7 @@ export function DocumentEditorPage() {
               </button>
             </div>
           ) : (
-            <div className="flex w-10 flex-col items-center gap-2 py-3">
+            <div className="flex w-10 flex-col items-center gap-2 border-l border-separator bg-panel py-3">
               <button
                 onClick={() => { setRightPanelOpen(true); setRightTab('ai'); }}
                 className="rounded p-1.5 text-text-muted transition-colors hover:bg-panel-muted hover:text-text-primary"
@@ -808,7 +807,7 @@ export function DocumentEditorPage() {
               </button>
             </div>
           )}
-        </Surface>
+        </div>
       </div>
 
       <QualityModal
@@ -820,6 +819,7 @@ export function DocumentEditorPage() {
 
       <ExportModal
         projectId={pid}
+        documentId={did}
         projectName={document?.title || 'Document'}
         open={exportModalOpen}
         onClose={() => setExportModalOpen(false)}
