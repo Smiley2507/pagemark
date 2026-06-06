@@ -1,51 +1,272 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDown,
   ArrowUp,
-  Bot,
   ChevronLeft,
-  ChevronRight,
+  Download,
+  GripVertical,
   Loader2,
-  PanelRightClose,
+  MoreHorizontal,
   PanelRightOpen,
-  RefreshCw,
-  Save,
-  Sparkles,
   Plus,
+  Search,
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { MarkdownEditor } from '@/components/editor/MarkdownEditor';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/ui/notice';
 import { SectionStatusBadge } from '@/components/ui/section-status-badge';
 import { Surface } from '@/components/ui/surface';
-import { documentsApi } from '@/api/documents';
-import { sectionsApi } from '@/api/sections';
-import { useDocumentAutosave, useDocumentSections, useUpdateDocumentSection, useAcceptSectionReview } from '@/hooks/useSections';
+import { documentsApi, type Document } from '@/api/documents';
+import { useDocumentAutosave, useDocumentSections, useUpdateDocumentSection } from '@/hooks/useSections';
 import { getSectionState } from '@/lib/section-state';
 import { cn } from '@/lib/utils';
 import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
+import type { Section } from '@/types';
 
-type AssistantEntry = {
+type FlatSection = Section & { depth: number };
+
+type TocItem = {
   id: string;
-  role: 'assistant' | 'user';
-  text: string;
-  refined?: string;
+  label: string;
+  kind: 'section' | 'h1' | 'h2';
+  sectionId: number;
 };
 
-const QUICK_ACTIONS = [
-  { label: 'Generate Draft', mode: 'generate' as const },
-  { label: 'Improve Clarity', mode: 'refine' as const, prompt: 'Improve clarity and structure while keeping the technical meaning intact.' },
-  { label: 'Add Examples', mode: 'refine' as const, prompt: 'Add concrete examples and implementation details where they are missing.' },
-  { label: 'Tighten Language', mode: 'refine' as const, prompt: 'Tighten the prose for a concise technical audience.' },
-];
+function flattenSections(sections: Section[], depth = 0): FlatSection[] {
+  return sections.flatMap((section) => [
+    { ...section, depth },
+    ...flattenSections(section.children || [], depth + 1),
+  ]);
+}
 
-function flattenSections<T extends { id: number; children?: T[] }>(sections: T[]): T[] {
-  return sections.flatMap((section) => [section, ...flattenSections(section.children || [])]);
+function parseHeadings(section: Section): TocItem[] {
+  const items: TocItem[] = [];
+  section.content_md.split('\n').forEach((line, index) => {
+    const match = /^(#{1,2})\s+(.+)$/.exec(line.trim());
+    if (match) {
+      items.push({
+        id: `section-${section.id}-heading-${index}`,
+        label: match[2].trim(),
+        kind: match[1].length === 1 ? 'h1' : 'h2',
+        sectionId: section.id,
+      });
+    }
+  });
+  return items;
+}
+
+function buildToc(sections: FlatSection[]): TocItem[] {
+  return sections.flatMap((section) => [
+    {
+      id: `section-${section.id}`,
+      label: section.title || section.heading || 'Untitled Section',
+      kind: 'section' as const,
+      sectionId: section.id,
+    },
+    ...parseHeadings(section),
+  ]);
+}
+
+function countWords(sections: Section[]): number {
+  return sections.reduce((total, section) => {
+    const text = `${section.title || section.heading} ${section.content_md}`
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/[#*_`>\-[\]()]/g, ' ');
+    const words = text.trim().match(/\b[\w']+\b/g);
+    return total + (words?.length || 0);
+  }, 0);
+}
+
+function countQualityIssues(sections: Section[]): number {
+  return sections.reduce((total, section) => {
+    const metadata = section.workflow_metadata || {};
+    const raw =
+      metadata.grammar_issue_count ??
+      metadata.style_issue_count ??
+      metadata.quality_issue_count ??
+      metadata.issue_count;
+    return total + (typeof raw === 'number' && Number.isFinite(raw) ? raw : 0);
+  }, 0);
+}
+
+function documentStatusLabel(document: Document | undefined): string {
+  const raw = document?.status || 'empty';
+  return raw
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function statusVariant(status: string | undefined): 'neutral' | 'success' | 'warning' | 'danger' | 'generation' | 'review' | 'needsInput' {
+  if (status === 'approved' || status === 'reviewed') return 'review';
+  if (status === 'generating' || status === 'draft') return 'generation';
+  if (status === 'needs_input') return 'needsInput';
+  if (status === 'potentially_stale') return 'warning';
+  if (status === 'failed') return 'danger';
+  if (status === 'empty') return 'neutral';
+  return 'neutral';
+}
+
+function useTocKeyboardNavigation() {
+  return useCallback((event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    const buttons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('[data-toc-item="true"]')
+    );
+    const currentIndex = buttons.indexOf(event.currentTarget);
+    const nextIndex = event.key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1;
+    buttons[nextIndex]?.focus();
+  }, []);
+}
+
+function SectionBlock({
+  projectId,
+  documentId,
+  section,
+  index,
+  total,
+  onAdd,
+  onDeleteRequest,
+  onMove,
+  onRename,
+  onSavingChange,
+  onSaved,
+}: {
+  projectId: number;
+  documentId: number;
+  section: FlatSection;
+  index: number;
+  total: number;
+  onAdd: (anchorSectionId: number, placement: 'above' | 'below') => void;
+  onDeleteRequest: (section: Section) => void;
+  onMove: (sectionId: number, direction: 'up' | 'down') => void;
+  onRename: (sectionId: number, title: string) => void;
+  onSavingChange: (sectionId: number, isSaving: boolean) => void;
+  onSaved: (date: Date) => void;
+}) {
+  const [content, setContent] = useState(section.content_md);
+  const [title, setTitle] = useState(section.title || section.heading || 'Untitled Section');
+  const updateSection = useUpdateDocumentSection(projectId, documentId);
+  const { isSaving, lastSaved, markPersisted } = useDocumentAutosave(
+    projectId,
+    documentId,
+    section.id,
+    content,
+  );
+
+  useEffect(() => {
+    setContent(section.content_md);
+    setTitle(section.title || section.heading || 'Untitled Section');
+    markPersisted(section.content_md, section.updated_at);
+  }, [markPersisted, section.content_md, section.heading, section.id, section.title, section.updated_at]);
+
+  useEffect(() => {
+    onSavingChange(section.id, isSaving);
+  }, [isSaving, onSavingChange, section.id]);
+
+  useEffect(() => {
+    if (lastSaved) onSaved(lastSaved);
+  }, [lastSaved, onSaved]);
+
+  const saveNow = async () => {
+    const updated = await updateSection.mutateAsync({
+      id: section.id,
+      data: { content_md: content },
+    });
+    markPersisted(updated.content_md, updated.updated_at);
+    toast.success('Section saved');
+  };
+
+  const commitTitle = () => {
+    const nextTitle = title.trim() || 'Untitled Section';
+    setTitle(nextTitle);
+    if (nextTitle !== (section.title || section.heading)) {
+      onRename(section.id, nextTitle);
+    }
+  };
+
+  return (
+    <section
+      id={`section-${section.id}`}
+      data-editor-section="true"
+      className="group scroll-mt-24 border-b border-separator py-10 last:border-b-0"
+    >
+      <div className="mx-auto max-w-3xl">
+        <div className="mb-4 flex items-start gap-3">
+          <GripVertical className="mt-3 h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <Input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              onBlur={commitTitle}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+              }}
+              aria-label={`Heading for ${section.heading}`}
+              className="h-auto border-transparent bg-transparent px-1 py-1 text-title font-semibold text-text-primary shadow-none focus-visible:border-interaction focus-visible:bg-panel focus-visible:px-2"
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <SectionStatusBadge section={section} compact />
+              <span className="text-meta text-text-muted">{getSectionState(section).summary}</span>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap justify-end gap-1">
+            <Button type="button" variant="ghost" size="icon" onClick={() => onAdd(section.id, 'above')} aria-label="Add section above">
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" onClick={() => onAdd(section.id, 'below')} aria-label="Add section below">
+              <Plus className="h-4 w-4 rotate-180" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => onMove(section.id, 'up')}
+              disabled={index === 0}
+              aria-label="Move section up"
+            >
+              <ArrowUp className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => onMove(section.id, 'down')}
+              disabled={index >= total - 1}
+              aria-label="Move section down"
+            >
+              <ArrowDown className="h-4 w-4" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" onClick={() => onDeleteRequest(section)} aria-label="Delete section">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-md bg-canvas px-1 py-2 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+          <MarkdownEditor value={content} onChange={setContent} />
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3 text-meta text-text-muted">
+          <span>
+            {isSaving ? 'Autosaving...' : lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : 'Ready'}
+          </span>
+          <Button type="button" variant="outline" size="sm" onClick={saveNow} disabled={updateSection.isPending}>
+            {updateSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Save
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export function DocumentEditorPage() {
@@ -54,27 +275,31 @@ export function DocumentEditorPage() {
   const did = Number(documentId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const recordRecentWork = useViewPreferenceStore((s) => s.recordRecentWork);
-  const getLastSection = useViewPreferenceStore((s) => s.getLastSection);
-
-  const [outlineOpen, setOutlineOpen] = useState(true);
-  const [assistantOpen, setAssistantOpen] = useState(false);
-  const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
-  const [content, setContent] = useState('');
+  const recordRecentWork = useViewPreferenceStore((state) => state.recordRecentWork);
   const [titleDraft, setTitleDraft] = useState('');
-  const [assistantDraft, setAssistantDraft] = useState('');
-  const [assistantEntries, setAssistantEntries] = useState<AssistantEntry[]>([]);
+  const [query, setQuery] = useState('');
+  const [activeTocId, setActiveTocId] = useState<string | null>(null);
+  const [rightPanelOpen, setRightPanelOpen] = useState(false);
+  const [sectionToDelete, setSectionToDelete] = useState<Section | null>(null);
+  const [savingSectionIds, setSavingSectionIds] = useState<Set<number>>(() => new Set());
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const tocKeyboard = useTocKeyboardNavigation();
+  const scrollRootRef = useRef<HTMLDivElement>(null);
 
-  const { data: document } = useQuery({
+  const { data: document, isLoading: documentLoading } = useQuery({
     queryKey: ['document-meta', pid, did],
     queryFn: () => documentsApi.getDocument(pid, did),
     enabled: pid > 0 && did > 0,
   });
 
-  const { data: sectionTree, isLoading } = useDocumentSections(pid, did);
+  const { data: sectionTree, isLoading: sectionsLoading } = useDocumentSections(pid, did);
   const sections = useMemo(() => flattenSections(sectionTree?.sections || []), [sectionTree?.sections]);
-  const activeSection = sections.find((section) => section.id === activeSectionId) || null;
-  const activeState = activeSection ? getSectionState(activeSection) : null;
+  const tocItems = useMemo(() => buildToc(sections), [sections]);
+  const wordCount = useMemo(() => countWords(sections), [sections]);
+  const issueCount = useMemo(() => countQualityIssues(sections), [sections]);
+  const reviewedCount = document?.progress.reviewed_sections || 0;
+  const reviewTotal = document?.progress.total_sections || sections.length;
+  const isSaving = savingSectionIds.size > 0;
 
   const { data: freshnessData } = useQuery({
     queryKey: ['freshness', pid, did],
@@ -83,19 +308,59 @@ export function DocumentEditorPage() {
     refetchInterval: 30000,
   });
 
-  const updateSection = useUpdateDocumentSection(pid, did);
-  const acceptReview = useAcceptSectionReview(pid, did);
-  const { isSaving, lastSaved, markPersisted } = useDocumentAutosave(pid, did, activeSectionId, content);
+  useEffect(() => {
+    if (document) setTitleDraft(document.title || 'Untitled Document');
+  }, [document]);
+
+  useEffect(() => {
+    recordRecentWork({ projectId: pid, documentId: did, sectionId: sections[0]?.id });
+  }, [did, pid, recordRecentWork, sections]);
+
+  useEffect(() => {
+    const root = scrollRootRef.current;
+    if (!root) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible?.target.id) setActiveTocId(visible.target.id);
+      },
+      { root, rootMargin: '-25% 0px -60% 0px', threshold: [0.1, 0.4, 0.8] },
+    );
+    root.querySelectorAll<HTMLElement>('[data-editor-section="true"]').forEach((element) => observer.observe(element));
+    return () => observer.disconnect();
+  }, [sections]);
+
+  const updateDocumentTitle = useMutation({
+    mutationFn: (title: string) => documentsApi.updateDocument(pid, did, { title }),
+    onSuccess: (updated) => {
+      setTitleDraft(updated.title);
+      setLastSaved(new Date(updated.updated_at));
+      void queryClient.invalidateQueries({ queryKey: ['document-meta', pid, did] });
+    },
+    onError: () => toast.error('Failed to rename document'),
+  });
 
   const createSection = useMutation({
-    mutationFn: (title: string) => documentsApi.createSection(pid, did, title),
+    mutationFn: async ({ anchorSectionId, placement }: { anchorSectionId?: number; placement?: 'above' | 'below' }) => {
+      const section = await documentsApi.createSection(pid, did, 'New Section');
+      const currentIds = sections.map((item) => item.id);
+      if (anchorSectionId && placement) {
+        const anchorIndex = currentIds.indexOf(anchorSectionId);
+        const insertIndex = placement === 'above' ? anchorIndex : anchorIndex + 1;
+        const nextIds = currentIds.filter((id) => id !== section.id);
+        nextIds.splice(Math.max(0, insertIndex), 0, section.id);
+        await documentsApi.reorderDocumentSections(pid, did, nextIds);
+      }
+      return section;
+    },
     onSuccess: (section) => {
       void queryClient.invalidateQueries({ queryKey: ['document-sections', pid, did] });
       void queryClient.invalidateQueries({ queryKey: ['document-meta', pid, did] });
-      setActiveSectionId(section.id);
-      setContent(section.content_md);
-      setTitleDraft(section.title || section.heading);
-      markPersisted(section.content_md, section.updated_at);
+      requestAnimationFrame(() => {
+        globalThis.document.getElementById(`section-${section.id}`)?.scrollIntoView({ block: 'center' });
+      });
       toast.success('Section added');
     },
     onError: () => toast.error('Failed to add section'),
@@ -104,11 +369,9 @@ export function DocumentEditorPage() {
   const renameSection = useMutation({
     mutationFn: ({ sectionId, title }: { sectionId: number; title: string }) =>
       documentsApi.updateDocumentSectionTitle(pid, did, sectionId, title),
-    onSuccess: (section) => {
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['document-sections', pid, did] });
       void queryClient.invalidateQueries({ queryKey: ['document-meta', pid, did] });
-      setTitleDraft(section.title || section.heading);
-      toast.success('Section renamed');
     },
     onError: () => toast.error('Failed to rename section'),
   });
@@ -124,9 +387,7 @@ export function DocumentEditorPage() {
 
   const deleteSection = useMutation({
     mutationFn: (sectionId: number) => documentsApi.deleteDocumentSection(pid, did, sectionId),
-    onSuccess: (_, sectionId) => {
-      const remaining = sections.filter((section) => section.id !== sectionId);
-      setActiveSectionId(remaining[0]?.id ?? null);
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['document-sections', pid, did] });
       void queryClient.invalidateQueries({ queryKey: ['document-meta', pid, did] });
       toast.success('Section deleted');
@@ -134,99 +395,16 @@ export function DocumentEditorPage() {
     onError: () => toast.error('Failed to delete section'),
   });
 
-  const generateDraft = useMutation({
-    mutationFn: (sectionId: number) => sectionsApi.generateAI(sectionId),
-    onSuccess: (section) => {
-      void queryClient.invalidateQueries({ queryKey: ['document-sections', pid, did] });
-      void queryClient.invalidateQueries({ queryKey: ['document-meta', pid, did] });
-      setContent(section.content_md);
-      markPersisted(section.content_md, section.updated_at);
-      setAssistantEntries((entries) => [
-        ...entries,
-        {
-          id: `assistant-generate-${section.id}-${Date.now()}`,
-          role: 'assistant',
-          text: 'Generated Draft ready. Review it before accepting the section.',
-        },
-      ]);
-      toast.success('Generated Draft ready for review');
-    },
-    onError: () => toast.error('Draft generation failed'),
-  });
-
-  const refineDraft = useMutation({
-    mutationFn: ({
-      sectionId,
-      instruction,
-    }: {
-      sectionId: number;
-      instruction: string;
-    }) => sectionsApi.refineAI(sectionId, instruction),
-    onSuccess: (result, variables) => {
-      setAssistantEntries((entries) => [
-        ...entries,
-        { id: `user-${Date.now()}`, role: 'user', text: variables.instruction },
-        {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          text: 'Suggested revision prepared. Apply it to keep editing in the document surface.',
-          refined: result.refined,
-        },
-      ]);
-      setAssistantDraft('');
-      setAssistantOpen(true);
-    },
-    onError: () => toast.error('AI refinement failed'),
-  });
-
-  useEffect(() => {
-    if (sections.length === 0 || activeSectionId) return;
-    const lastSectionId = getLastSection(pid, did);
-    const nextSection = lastSectionId ? sections.find((section) => section.id === lastSectionId) : sections[0];
-    if (nextSection) {
-      setActiveSectionId(nextSection.id);
-      setContent(nextSection.content_md);
-      markPersisted(nextSection.content_md, nextSection.updated_at);
+  const commitDocumentTitle = () => {
+    const title = titleDraft.trim() || 'Untitled Document';
+    setTitleDraft(title);
+    if (title !== document?.title) {
+      updateDocumentTitle.mutate(title);
     }
-  }, [sections, activeSectionId, getLastSection, pid, did, markPersisted]);
-
-  useEffect(() => {
-    if (!activeSection) return;
-    setContent(activeSection.content_md);
-    setTitleDraft(activeSection.title || activeSection.heading);
-    markPersisted(activeSection.content_md, activeSection.updated_at);
-    recordRecentWork({ projectId: pid, documentId: did, sectionId: activeSection.id });
-  }, [activeSectionId, activeSection, markPersisted, pid, did, recordRecentWork]);
-
-  const staleCount = freshnessData?.stale_count || 0;
-  const showSourceNotice = freshnessData?.freshness === 'stale' && staleCount > 0;
-
-  const handleSave = async () => {
-    if (!activeSection) return;
-    const section = await updateSection.mutateAsync({
-      id: activeSection.id,
-      data: { content_md: content },
-    });
-    markPersisted(section.content_md, section.updated_at);
-    toast.success('Section saved');
   };
 
-  const handleAddSection = () => {
-    const title = window.prompt('Section title');
-    if (!title?.trim()) return;
-    createSection.mutate(title.trim());
-  };
-
-  const handleRenameSection = () => {
-    if (!activeSection) return;
-    const title = titleDraft.trim();
-    if (!title || title === (activeSection.title || activeSection.heading)) return;
-    renameSection.mutate({ sectionId: activeSection.id, title });
-  };
-
-  const handleMoveSection = (direction: 'up' | 'down') => {
-    if (!activeSection) return;
-    const currentIndex = sections.findIndex((section) => section.id === activeSection.id);
+  const moveSection = (sectionId: number, direction: 'up' | 'down') => {
+    const currentIndex = sections.findIndex((section) => section.id === sectionId);
     const nextIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
     if (currentIndex < 0 || nextIndex < 0 || nextIndex >= sections.length) return;
     const nextSections = [...sections];
@@ -235,342 +413,235 @@ export function DocumentEditorPage() {
     reorderSections.mutate(nextSections.map((section) => section.id));
   };
 
-  const handleDeleteSection = () => {
-    if (!activeSection) return;
-    if (!window.confirm('Delete this section?')) return;
-    deleteSection.mutate(activeSection.id);
+  const scrollToTocItem = (item: TocItem) => {
+    globalThis.document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setActiveTocId(item.id);
   };
 
-  const handleAcceptReview = async () => {
-    if (!activeSection) return;
-    const section = await acceptReview.mutateAsync(activeSection.id);
-    setContent(section.content_md);
-    markPersisted(section.content_md);
+  const runFind = () => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return;
+    const match = sections.find((section) =>
+      `${section.title || section.heading}\n${section.content_md}`.toLowerCase().includes(needle)
+    );
+    if (match) {
+      globalThis.document.getElementById(`section-${match.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   };
 
-  const submitAssistantInstruction = () => {
-    if (!activeSection || !assistantDraft.trim()) return;
-    refineDraft.mutate({ sectionId: activeSection.id, instruction: assistantDraft.trim() });
-  };
+  const handleSavingChange = useCallback((sectionId: number, saving: boolean) => {
+    setSavingSectionIds((current) => {
+      const next = new Set(current);
+      if (saving) next.add(sectionId);
+      else next.delete(sectionId);
+      return next;
+    });
+  }, []);
 
-  if (isLoading) {
+  const loading = documentLoading || sectionsLoading;
+  const showSourceNotice = freshnessData?.freshness === 'stale' && (freshnessData?.stale_count || 0) > 0;
+
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-workspace">
         <div className="flex items-center gap-3 text-body text-text-secondary">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading document workspace…
+          Loading document workspace...
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-workspace text-text-primary">
-      <header className="border-b border-separator bg-panel/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-4 px-5 py-3">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate(`/projects/${pid}`)} aria-label="Back to project">
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Document Workspace</p>
-              <h1 className="text-section font-semibold text-text-primary">
-                {document?.title || 'Untitled Document'}
-              </h1>
-            </div>
-          </div>
+    <div className="grid h-screen grid-cols-[18rem_minmax(0,1fr)_3rem] grid-rows-[3.5rem_minmax(0,1fr)] bg-workspace text-text-primary">
+      <header className="col-span-3 row-start-1 flex items-center justify-between border-b border-separator bg-panel px-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={() => navigate(`/projects/${pid}`)} aria-label="Back to project">
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Input
+            value={titleDraft}
+            onChange={(event) => setTitleDraft(event.target.value)}
+            onBlur={commitDocumentTitle}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur();
+            }}
+            aria-label="Document title"
+            className="h-9 max-w-xl border-transparent bg-transparent text-section font-semibold shadow-none focus-visible:border-interaction focus-visible:bg-panel"
+          />
+          <Badge variant={statusVariant(document?.status)}>{documentStatusLabel(document)}</Badge>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <div className="hidden text-right md:block">
-              <p className="text-meta text-text-secondary">{sections.length} sections</p>
-              <p className="text-meta text-text-muted">
-                {isSaving ? 'Autosaving…' : lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : 'No saved changes yet'}
-              </p>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => setOutlineOpen((open) => !open)} className="gap-2">
-              {outlineOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              Outline
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAddSection}
-              disabled={createSection.isPending}
-              className="gap-2"
-            >
-              {createSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Section
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setAssistantOpen((open) => !open)} className="gap-2">
-              {assistantOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
-              Assistant
-            </Button>
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="hidden items-center gap-1 rounded-md border border-input bg-panel px-2 lg:flex">
+            <Search className="h-4 w-4 text-text-muted" aria-hidden="true" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') runFind();
+              }}
+              placeholder="Find"
+              aria-label="Find in document"
+              className="h-8 w-44 bg-transparent text-body text-text-primary outline-none placeholder:text-text-muted"
+            />
           </div>
+          <span className="hidden text-meta text-text-muted sm:inline">
+            {isSaving || updateDocumentTitle.isPending
+              ? 'Saving...'
+              : lastSaved
+                ? `Saved ${lastSaved.toLocaleTimeString()}`
+                : 'Autosave on'}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+              const exportUrl = new URL(`/projects/${pid}/documents/${did}/export?format=markdown`, apiBase);
+              window.open(exportUrl.toString(), '_blank');
+            }}
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+          <Button variant="ghost" size="icon" aria-label="Document tools">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
         </div>
       </header>
 
-      {showSourceNotice && (
-        <div className="mx-auto w-full max-w-[1600px] px-5 pt-4">
-          <Notice variant="warning" title="Potentially Stale Sections">
-            {staleCount} reviewed {staleCount === 1 ? 'section shows' : 'sections show'} source changes since acceptance.
-            Review them explicitly before trusting the current document.
-          </Notice>
+      <aside className="row-start-2 hidden min-h-0 border-r border-separator bg-panel lg:flex lg:flex-col">
+        <div className="border-b border-separator px-4 py-3">
+          <p className="text-meta font-medium uppercase text-text-muted">Outline</p>
         </div>
-      )}
-
-      <div className="mx-auto flex w-full max-w-[1600px] flex-1 gap-4 overflow-hidden px-5 py-4">
-        {outlineOpen && (
-          <Surface variant="muted" padding="none" className="hidden w-72 shrink-0 overflow-hidden lg:flex lg:flex-col">
-            <div className="border-b border-separator px-4 py-3">
-              <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Outline</p>
-              <p className="mt-1 text-body text-text-secondary">Secondary navigation with section review state.</p>
-            </div>
-            <nav aria-label="Document outline" className="flex-1 space-y-1 overflow-y-auto p-2">
-              {sections.map((section) => (
-                <button
-                  key={section.id}
-                  type="button"
-                  onClick={() => setActiveSectionId(section.id)}
-                  className={cn(
-                    'w-full rounded-md border px-3 py-3 text-left transition-colors',
-                    activeSectionId === section.id
-                      ? 'border-interaction bg-panel text-text-primary'
-                      : 'border-transparent bg-transparent text-text-secondary hover:border-separator hover:bg-panel'
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-body font-medium">{section.heading}</p>
-                      <p className="mt-1 text-meta text-text-muted">{getSectionState(section).label}</p>
-                    </div>
-                    <SectionStatusBadge section={section} compact />
-                  </div>
-                </button>
-              ))}
-              {sections.length === 0 && (
-                <Button type="button" size="sm" onClick={handleAddSection} disabled={createSection.isPending} className="w-full gap-2">
-                  {createSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                  Section
-                </Button>
+        <nav aria-label="Document table of contents" className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
+          {tocItems.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              data-toc-item="true"
+              onClick={() => scrollToTocItem(item)}
+              onKeyDown={tocKeyboard}
+              className={cn(
+                'block w-full rounded-md px-2 py-1.5 text-left text-meta transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+                item.kind === 'h1' && 'pl-5',
+                item.kind === 'h2' && 'pl-8',
+                activeTocId === item.id || activeTocId === `section-${item.sectionId}`
+                  ? 'bg-interaction-muted text-interaction-hover'
+                  : 'text-text-secondary hover:bg-panel-muted hover:text-text-primary',
               )}
-            </nav>
-          </Surface>
-        )}
-
-        <div className="min-w-0 flex-1 overflow-y-auto">
-          {activeSection ? (
-            <article className="mx-auto max-w-5xl">
-              <Surface variant="canvas" padding="lg" className="min-h-[calc(100vh-11rem)] border border-separator">
-                <div className="mx-auto max-w-3xl space-y-5">
-                  <div className="space-y-3 border-b border-separator pb-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="space-y-2">
-                        <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Active Section</p>
-                        <Input
-                          value={titleDraft}
-                          onChange={(event) => setTitleDraft(event.target.value)}
-                          onBlur={handleRenameSection}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.currentTarget.blur();
-                            }
-                          }}
-                          aria-label="Section title"
-                          className="h-auto border-transparent bg-transparent px-0 text-title font-semibold text-text-primary shadow-none focus-visible:border-interaction focus-visible:px-2"
-                        />
-                      </div>
-                      <SectionStatusBadge section={activeSection} />
-                    </div>
-
-                    <p className="max-w-2xl text-body text-text-secondary">{activeState?.summary}</p>
-
-                    <div className="flex flex-wrap gap-2">
-                      {QUICK_ACTIONS.map((action) => (
-                        <Button
-                          key={action.label}
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            if (!activeSection) return;
-                            if (action.mode === 'generate') {
-                              void generateDraft.mutateAsync(activeSection.id);
-                              return;
-                            }
-                            setAssistantDraft(action.prompt || '');
-                            setAssistantOpen(true);
-                          }}
-                          disabled={generateDraft.isPending || refineDraft.isPending || activeSection.is_generating}
-                          className="gap-2"
-                        >
-                          {action.mode === 'generate' ? <Sparkles className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                          {action.label}
-                        </Button>
-                      ))}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleMoveSection('up')}
-                        disabled={sections.findIndex((section) => section.id === activeSection.id) <= 0 || reorderSections.isPending}
-                        className="gap-2"
-                      >
-                        <ArrowUp className="h-4 w-4" />
-                        Move
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleMoveSection('down')}
-                        disabled={
-                          sections.findIndex((section) => section.id === activeSection.id) >= sections.length - 1 ||
-                          reorderSections.isPending
-                        }
-                        className="gap-2"
-                      >
-                        <ArrowDown className="h-4 w-4" />
-                        Move
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleDeleteSection}
-                        disabled={deleteSection.isPending}
-                        className="gap-2"
-                      >
-                        {deleteSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                        Delete
-                      </Button>
-                    </div>
-
-                    {activeSection.reviewed_at && (
-                      <Notice variant="success" title="Review Metadata Recorded">
-                        Accepted {new Date(activeSection.reviewed_at).toLocaleString()}
-                        {activeSection.reviewed_against_analysis_id
-                          ? ` against Analysis snapshot #${activeSection.reviewed_against_analysis_id}.`
-                          : '.'}
-                      </Notice>
-                    )}
-                  </div>
-
-                  <div className="rounded-lg bg-canvas">
-                    <MarkdownEditor value={content} onChange={setContent} />
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-separator pt-4">
-                    <div className="text-meta text-text-muted">
-                      {isSaving ? 'Autosaving changes…' : lastSaved ? `Last saved at ${lastSaved.toLocaleTimeString()}` : 'Edits remain local until the first save.'}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setAssistantOpen(true)}
-                        className="gap-2"
-                      >
-                        <Bot className="h-4 w-4" />
-                        Ask Assistant
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleAcceptReview}
-                        disabled={acceptReview.isPending}
-                        className="gap-2"
-                      >
-                        {acceptReview.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                        Accept Review
-                      </Button>
-                      <Button size="sm" onClick={handleSave} disabled={updateSection.isPending} className="gap-2">
-                        {updateSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                        Save
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </Surface>
-            </article>
-          ) : (
-            <Surface variant="panel" padding="lg">
-              <p className="text-body text-text-secondary">Select a section to start working in the document surface.</p>
-            </Surface>
+            >
+              <span className="block truncate">{item.label}</span>
+            </button>
+          ))}
+          {tocItems.length === 0 && (
+            <Button type="button" size="sm" onClick={() => createSection.mutate({})} className="w-full gap-2">
+              <Plus className="h-4 w-4" />
+              Add Section
+            </Button>
           )}
+        </nav>
+        <div className="space-y-2 border-t border-separator px-4 py-3 text-meta text-text-secondary">
+          <div className="flex justify-between gap-3">
+            <span>Words</span>
+            <span className="font-medium text-text-primary">{wordCount}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span>Review</span>
+            <span className="font-medium text-text-primary">{reviewedCount}/{reviewTotal}</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span>Grammar/style</span>
+            <span className="font-medium text-text-primary">{issueCount}</span>
+          </div>
         </div>
+      </aside>
 
-        {assistantOpen && (
-          <Surface variant="panel" padding="none" className="flex w-full max-w-sm shrink-0 flex-col overflow-hidden">
-            <div className="border-b border-separator px-4 py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Assistant Panel</p>
-                  <h3 className="text-body font-semibold text-text-primary">Longer AI conversation</h3>
-                </div>
-                <Button variant="ghost" size="icon" onClick={() => setAssistantOpen(false)} aria-label="Close assistant panel">
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="mt-2 text-body text-text-secondary">
-                Longer requests and suggested revisions for the active Section.
-              </p>
-            </div>
+      <main ref={scrollRootRef} className="row-start-2 min-h-0 overflow-y-auto bg-canvas">
+        {showSourceNotice && (
+          <div className="mx-auto max-w-3xl px-4 pt-5">
+            <Notice variant="warning" title="Potentially Stale Sections">
+              {freshnessData?.stale_count} reviewed sections show source changes since acceptance.
+            </Notice>
+          </div>
+        )}
 
-            <div className="flex-1 space-y-3 overflow-y-auto p-4">
-              {assistantEntries.length === 0 ? (
-                <Surface variant="muted" padding="default" className="text-body text-text-secondary">
-                  No assistant messages for this Section yet.
-                </Surface>
-              ) : (
-                assistantEntries.map((entry) => (
-                  <Surface
-                    key={entry.id}
-                    variant={entry.role === 'assistant' ? 'muted' : 'panel'}
-                    padding="default"
-                    className="space-y-3"
-                  >
-                    <p className="text-meta uppercase tracking-[0.18em] text-text-muted">
-                      {entry.role === 'assistant' ? 'Assistant' : 'Instruction'}
-                    </p>
-                    <p className="whitespace-pre-wrap text-body text-text-primary">{entry.text}</p>
-                    {entry.refined && (
-                      <>
-                        <div className="rounded-md border border-separator bg-canvas p-3 text-body text-text-secondary">
-                          {entry.refined}
-                        </div>
-                        <Button type="button" size="sm" onClick={() => setContent(entry.refined || '')}>
-                          Apply Suggested Draft
-                        </Button>
-                      </>
-                    )}
-                  </Surface>
-                ))
-              )}
+        {sections.length === 0 ? (
+          <div className="mx-auto flex min-h-full max-w-3xl flex-col justify-center px-6 py-16">
+            <p className="mb-3 text-meta font-medium uppercase text-text-muted">Blank Document</p>
+            <h1 className="text-title font-semibold text-text-primary">Start with a Section</h1>
+            <p className="mt-2 max-w-xl text-body text-text-secondary">
+              This Document has no active Sections yet.
+            </p>
+            <div className="mt-6">
+              <Button type="button" onClick={() => createSection.mutate({})} disabled={createSection.isPending} className="gap-2">
+                {createSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Add Section
+              </Button>
             </div>
+          </div>
+        ) : (
+          <div className="px-4 py-4">
+            {sections.map((section, index) => (
+              <SectionBlock
+                key={section.id}
+                projectId={pid}
+                documentId={did}
+                section={section}
+                index={index}
+                total={sections.length}
+                onAdd={(anchorSectionId, placement) => createSection.mutate({ anchorSectionId, placement })}
+                onDeleteRequest={setSectionToDelete}
+                onMove={moveSection}
+                onRename={(sectionId, title) => renameSection.mutate({ sectionId, title })}
+                onSavingChange={handleSavingChange}
+                onSaved={setLastSaved}
+              />
+            ))}
+            <div className="mx-auto max-w-3xl py-8">
+              <Button type="button" variant="outline" onClick={() => createSection.mutate({})} disabled={createSection.isPending} className="gap-2">
+                {createSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Add Section
+              </Button>
+            </div>
+          </div>
+        )}
+      </main>
 
-            <div className="border-t border-separator p-4">
-              <div className="space-y-2">
-                <Input
-                  value={assistantDraft}
-                  onChange={(event) => setAssistantDraft(event.target.value)}
-                  placeholder="Ask for a revision, expansion, or wording change…"
-                  aria-label="Assistant instruction"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={submitAssistantInstruction}
-                  disabled={!activeSection || !assistantDraft.trim() || refineDraft.isPending}
-                  className="w-full gap-2"
-                >
-                  {refineDraft.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
-                  Send to Assistant
-                </Button>
-              </div>
-            </div>
+      <aside className="row-start-2 flex min-h-0 flex-col items-center border-l border-separator bg-panel py-3">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => setRightPanelOpen((open) => !open)}
+          aria-label={rightPanelOpen ? 'Collapse right tools panel' : 'Open right tools panel'}
+        >
+          <PanelRightOpen className="h-4 w-4" />
+        </Button>
+        {rightPanelOpen && (
+          <Surface variant="overlay" padding="default" className="absolute bottom-0 right-12 top-14 w-80">
+            <p className="text-meta font-medium uppercase text-text-muted">Reserved Tools</p>
+            <p className="mt-2 text-body text-text-secondary">
+              AI, notes, and review tools will live here in later phases.
+            </p>
           </Surface>
         )}
-      </div>
+      </aside>
+
+      <ConfirmDialog
+        open={sectionToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setSectionToDelete(null);
+        }}
+        title="Delete Section?"
+        description={`Delete "${sectionToDelete?.title || sectionToDelete?.heading || 'this section'}"? This removes it from the active Document but preserves the persisted lifecycle record.`}
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (sectionToDelete) deleteSection.mutate(sectionToDelete.id);
+          setSectionToDelete(null);
+        }}
+      />
     </div>
   );
 }
