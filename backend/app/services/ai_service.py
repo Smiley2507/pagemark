@@ -1,8 +1,10 @@
 """Unified BYOK AI provider adapters (Anthropic + Google AI Studio)."""
 
+from collections.abc import Iterable
+
 import httpx
 
-from app.ai_providers import VALID_PROVIDERS, is_valid_model
+from app.ai_providers import PROVIDERS, VALID_PROVIDERS, is_valid_model
 
 
 class AiServiceError(Exception):
@@ -52,6 +54,28 @@ def complete_text(
     raise AiServiceError(f"Unsupported provider: {provider}")
 
 
+def list_models(provider: str, api_key: str) -> tuple[list[dict[str, str]], str]:
+    if provider not in VALID_PROVIDERS:
+        raise AiServiceError(f"Unsupported provider: {provider}")
+    api_key = api_key.strip()
+    if not api_key:
+        raise AiServiceError("API key is required to load models")
+
+    try:
+        if provider == "anthropic":
+            return _list_anthropic_models(api_key), "provider"
+        if provider == "google":
+            return _list_google_models(api_key), "provider"
+        if provider == "opencode-go":
+            return _list_opencode_go_models(api_key), "provider"
+    except AiServiceError:
+        raise
+    except Exception as e:
+        raise AiServiceError(f"Could not load {provider} models: {_safe_error(e)}") from e
+
+    raise AiServiceError(f"Unsupported provider: {provider}")
+
+
 def _safe_error(exc: Exception) -> str:
     msg = str(exc).strip()
     if len(msg) > 200:
@@ -85,6 +109,40 @@ def _complete_anthropic(
     return response.content[0].text.strip()
 
 
+def _model_label(model_id: str) -> str:
+    return model_id.replace("-", " ").replace("_", " ").title()
+
+
+def _curated_models(provider: str) -> list[dict[str, str]]:
+    return [dict(model) for model in PROVIDERS[provider]["models"]]
+
+
+def _normalize_model_id(model_id: str) -> str:
+    return model_id.removeprefix("models/")
+
+
+def _list_anthropic_models(api_key: str) -> list[dict[str, str]]:
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=api_key)
+    models_api = getattr(client, "models", None)
+    if models_api is None or not hasattr(models_api, "list"):
+        return _curated_models("anthropic")
+
+    response = models_api.list()
+    data = getattr(response, "data", response)
+    if not isinstance(data, Iterable):
+        return _curated_models("anthropic")
+
+    models = []
+    for item in data:
+        model_id = getattr(item, "id", None)
+        if isinstance(model_id, str) and model_id:
+            display_name = getattr(item, "display_name", None)
+            models.append({"id": model_id, "label": display_name or _model_label(model_id)})
+    return models or _curated_models("anthropic")
+
+
 def _validate_google(api_key: str, model_id: str) -> None:
     from google import genai
 
@@ -114,6 +172,21 @@ def _complete_google(
         if parts:
             return (parts[0].text or "").strip()
     raise AiServiceError("Empty response from Google AI")
+
+
+def _list_google_models(api_key: str) -> list[dict[str, str]]:
+    from google import genai
+
+    client = genai.Client(api_key=api_key)
+    models = []
+    for item in client.models.list():
+        model_name = getattr(item, "name", "")
+        model_id = _normalize_model_id(model_name)
+        supported_actions = getattr(item, "supported_actions", []) or []
+        if model_id and (not supported_actions or "generateContent" in supported_actions):
+            display_name = getattr(item, "display_name", None)
+            models.append({"id": model_id, "label": display_name or _model_label(model_id)})
+    return models or _curated_models("google")
 
 
 def _opencode_go_chat_completion(
@@ -149,6 +222,29 @@ def _opencode_go_chat_completion(
     if isinstance(content, str) and content.strip():
         return content.strip()
     raise AiServiceError("Empty response from OpenCode Go")
+
+
+def _list_opencode_go_models(api_key: str) -> list[dict[str, str]]:
+    response = httpx.get(
+        "https://opencode.ai/zen/go/v1/models",
+        headers={"Authorization": f"Bearer {api_key}"},
+        timeout=30,
+    )
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise AiServiceError(f"OpenCode Go models request failed: {_safe_error(exc)}") from exc
+
+    data = response.json()
+    items = data.get("data", data if isinstance(data, list) else [])
+    models = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        model_id = item.get("id")
+        if isinstance(model_id, str) and model_id:
+            models.append({"id": model_id, "label": item.get("name") or _model_label(model_id)})
+    return models or _curated_models("opencode-go")
 
 
 def _validate_opencode_go(api_key: str, model_id: str) -> None:

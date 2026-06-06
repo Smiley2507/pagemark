@@ -12,7 +12,7 @@ const SECTIONS = [
   { id: 'profile', label: 'Profile', icon: User, keywords: ['account', 'identity', 'password', 'avatar'] },
   { id: 'organization', label: 'Organization', icon: Building2, keywords: ['org', 'workspace', 'quality'] },
   { id: 'members', label: 'Members', icon: Users, keywords: ['team', 'invite', 'role', 'access'] },
-  { id: 'ai-providers', label: 'AI Providers', icon: Bot, keywords: ['model', 'provider', 'byok', 'claude', 'openai', 'google'] },
+  { id: 'ai-providers', label: 'AI Providers', icon: Bot, keywords: ['model', 'provider', 'byok', 'claude', 'opencode', 'google'] },
   { id: 'api-keys', label: 'API Keys', icon: Key, keywords: ['token', 'integration', 'automation'] },
   { id: 'activity', label: 'Activity Log', icon: Activity, keywords: ['audit', 'history', 'events'] },
 ] as const;

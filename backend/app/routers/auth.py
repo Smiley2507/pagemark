@@ -26,7 +26,7 @@ from app.schemas.analysis import GitHubStatusResponse
 from app.ai_providers import PROVIDERS
 from app.schemas.ai_credential import (
     AiProviderCatalogResponse, AiProviderCatalogItem, AiModelOption,
-    AiCredentialListResponse, AiCredentialResponse, AiCredentialUpsertRequest,
+    AiProviderModelsResponse, AiCredentialListResponse, AiCredentialResponse, AiCredentialUpsertRequest,
 )
 from app.services import ai_credential_service
 
@@ -324,6 +324,20 @@ async def list_ai_credentials(current_user: User = Depends(get_current_user), db
     rows = await ai_credential_service.list_credentials(db, current_user.id)
     creds = [AiCredentialResponse.model_validate(r) for r in rows]
     return AiCredentialListResponse(credentials=creds, has_active=any(c.is_active for c in creds))
+
+
+@router.get("/me/ai-credentials/{provider}/models", response_model=AiProviderModelsResponse)
+async def list_ai_credential_models(
+    provider: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    models, source = await ai_credential_service.list_provider_models(db, current_user.id, provider)
+    return AiProviderModelsResponse(
+        provider=provider,
+        models=[AiModelOption(**model) for model in models],
+        source=source,
+    )
 
 
 @router.put("/me/ai-credentials/{provider}", response_model=AiCredentialResponse)

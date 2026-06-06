@@ -110,6 +110,12 @@ export interface AiProviderCatalogItem {
   models: AiModelOption[];
 }
 
+export interface AiProviderModelsResponse {
+  provider: string;
+  models: AiModelOption[];
+  source: string;
+}
+
 export interface AiCredential {
   id: number;
   provider: string;

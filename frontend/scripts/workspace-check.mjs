@@ -103,6 +103,8 @@ function assertPhase4SearchAndSettings() {
   });
 
   const settings = read('src/pages/SettingsPage.tsx');
+  const aiProviders = read('src/components/settings/AiProvidersSection.tsx');
+  const orgSettings = read('src/components/org/OrgSettingsView.tsx');
   [
     'Profile',
     'Organization',
@@ -112,6 +114,22 @@ function assertPhase4SearchAndSettings() {
     'Activity Log',
     'section.keywords',
   ].forEach((marker) => assertContains(settings, marker, `settings center is missing ${marker}`));
+  [
+    'useAiProviderModels',
+    'Refresh models',
+    'Models refresh after validation.',
+    'aiCredentialsApi.getModels',
+  ].forEach((marker) => assertContains(aiProviders, marker, `AI providers settings is missing ${marker}`));
+  [
+    'AI_PROVIDERS',
+    'Save AI Settings',
+    'ai_provider',
+    'ai_key',
+  ].forEach((marker) => {
+    if (orgSettings.includes(marker)) {
+      fail(`organization settings still exposes duplicate AI provider setting ${marker}`);
+    }
+  });
   [
     'Source Connections',
     'Export Defaults',

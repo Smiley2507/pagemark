@@ -18,6 +18,12 @@ class AiProviderCatalogResponse(BaseModel):
     providers: List[AiProviderCatalogItem]
 
 
+class AiProviderModelsResponse(BaseModel):
+    provider: str
+    models: List[AiModelOption]
+    source: str
+
+
 class AiCredentialResponse(BaseModel):
     id: int
     provider: str

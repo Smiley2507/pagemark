@@ -1,6 +1,7 @@
 import apiClient from './client';
 import type {
   AiProviderCatalogItem,
+  AiProviderModelsResponse,
   AiCredential,
   AiCredentialListResponse,
 } from '../types';
@@ -16,6 +17,13 @@ export const aiCredentialsApi = {
   async list(): Promise<AiCredentialListResponse> {
     const { data } = await apiClient.get<AiCredentialListResponse>(
       '/auth/me/ai-credentials'
+    );
+    return data;
+  },
+
+  async getModels(provider: string): Promise<AiProviderModelsResponse> {
+    const { data } = await apiClient.get<AiProviderModelsResponse>(
+      `/auth/me/ai-credentials/${provider}/models`
     );
     return data;
   },

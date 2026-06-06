@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ai_providers import VALID_PROVIDERS, is_valid_model
 from app.models.ai_credential import UserAiCredential
 from app.services import crypto_service
-from app.services.ai_service import validate_credential, AiServiceError
+from app.services.ai_service import list_models, validate_credential, AiServiceError
 
 
 @dataclass
@@ -160,3 +160,28 @@ async def get_active_credential(db: AsyncSession, user_id: int) -> ActiveCredent
         model_id=row.model_id,
         api_key=api_key,
     )
+
+
+async def list_provider_models(
+    db: AsyncSession,
+    user_id: int,
+    provider: str,
+) -> tuple[list[dict[str, str]], str]:
+    if provider not in VALID_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
+
+    result = await db.execute(
+        select(UserAiCredential).where(
+            UserAiCredential.user_id == user_id,
+            UserAiCredential.provider == provider,
+        )
+    )
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Credential not found")
+
+    api_key = crypto_service.decrypt_token(row.api_key_encrypted)
+    try:
+        return list_models(provider, api_key)
+    except AiServiceError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e

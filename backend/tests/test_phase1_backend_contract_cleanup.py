@@ -20,7 +20,10 @@ from app.models.generation import FailoverState, GenerationMode, GenerationRun, 
 from app.models.project import Project
 from app.models.template import Template
 from app.models.user import User
+from app.models.ai_credential import UserAiCredential
 from app.services import analysis_service
+from app.services import crypto_service
+from app.services import ai_credential_service as ai_credential_service_module
 from app.services import ai_doc_service as ai_doc_service_module
 from app.services import ai_service as ai_service_module
 from app.services.ai_credential_service import ActiveCredential
@@ -400,6 +403,37 @@ async def test_ai_provider_catalog_includes_opencode_go(client):
         "deepseek-v4-flash",
         "kimi-k2.6",
         "glm-5.1",
+    }
+
+
+@pytest.mark.asyncio
+async def test_ai_provider_models_load_from_saved_key(client, db: AsyncSession, test_user: User, monkeypatch):
+    db.add(
+        UserAiCredential(
+            user_id=test_user.id,
+            provider="opencode-go",
+            model_id="deepseek-v4-flash",
+            api_key_encrypted=crypto_service.encrypt_token("saved-opencode-key"),
+            key_hint="key",
+            is_active=True,
+        )
+    )
+    await db.commit()
+
+    def fake_list_models(provider, api_key):
+        assert provider == "opencode-go"
+        assert api_key == "saved-opencode-key"
+        return ([{"id": "loaded-model", "label": "Loaded Model"}], "provider")
+
+    monkeypatch.setattr(ai_credential_service_module, "list_models", fake_list_models)
+
+    response = await client.get("/auth/me/ai-credentials/opencode-go/models")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "provider": "opencode-go",
+        "models": [{"id": "loaded-model", "label": "Loaded Model"}],
+        "source": "provider",
     }
 
 

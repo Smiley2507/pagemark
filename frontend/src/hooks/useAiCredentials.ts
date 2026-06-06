@@ -4,15 +4,23 @@ import { aiCredentialsApi } from '@/api/aiCredentials';
 
 export const useAiProviderCatalog = () =>
   useQuery({
-    queryKey: ['ai', 'catalog'],
+    queryKey: ['ai-provider-catalog'],
     queryFn: () => aiCredentialsApi.getCatalog(),
     staleTime: 60_000,
   });
 
 export const useAiCredentials = () =>
   useQuery({
-    queryKey: ['ai', 'credentials'],
+    queryKey: ['ai-credentials'],
     queryFn: () => aiCredentialsApi.list(),
+  });
+
+export const useAiProviderModels = (provider: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ['ai-provider-models', provider],
+    queryFn: () => aiCredentialsApi.getModels(provider),
+    enabled: enabled && Boolean(provider),
+    staleTime: 60_000,
   });
 
 export const useUpsertAiCredential = () => {
@@ -27,8 +35,9 @@ export const useUpsertAiCredential = () => {
       api_key: string;
       model_id: string;
     }) => aiCredentialsApi.upsert(provider, { api_key, model_id }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ai', 'credentials'] });
+    onSuccess: (credential) => {
+      queryClient.invalidateQueries({ queryKey: ['ai-credentials'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-provider-models', credential.provider] });
       toast.success('API key saved and validated');
     },
     onError: (error: { response?: { data?: { detail?: string } } }) => {
@@ -42,7 +51,7 @@ export const useActivateAiCredential = () => {
   return useMutation({
     mutationFn: (credentialId: number) => aiCredentialsApi.activate(credentialId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ai', 'credentials'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-credentials'] });
       toast.success('Active provider updated');
     },
     onError: (error: { response?: { data?: { detail?: string } } }) => {
@@ -56,7 +65,7 @@ export const useDeleteAiCredential = () => {
   return useMutation({
     mutationFn: (credentialId: number) => aiCredentialsApi.remove(credentialId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ai', 'credentials'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-credentials'] });
       toast.success('API key removed');
     },
     onError: (error: { response?: { data?: { detail?: string } } }) => {

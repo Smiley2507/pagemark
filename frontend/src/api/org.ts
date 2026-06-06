@@ -27,8 +27,6 @@ export const orgApi = {
     name?: string;
     avatar_url?: string;
     quality_threshold?: number;
-    ai_provider?: string | null;
-    ai_key?: string;
   }) => api.patch<Organization>(`/organizations/${orgId}`, data).then(res => res.data),
 
   listAuditLogs: (orgId: number, page: number = 1, perPage: number = 50) =>

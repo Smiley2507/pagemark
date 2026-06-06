@@ -1,17 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useOrgStore } from '@/store/orgStore';
+import { Surface } from '@/components/ui/surface';
 import { orgApi } from '@/api/org';
-import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
-
-const AI_PROVIDERS = [
-  { value: 'claude', label: 'Claude (Anthropic)' },
-  { value: 'gemini', label: 'Gemini (Google AI Studio)' },
-  { value: 'openai', label: 'OpenAI' },
-];
+import { useOrgStore } from '@/store/orgStore';
 
 export const OrgSettingsView: React.FC = () => {
   const { activeOrgId, getActiveOrg, setOrganizations } = useOrgStore();
@@ -19,96 +13,90 @@ export const OrgSettingsView: React.FC = () => {
   const [orgName, setOrgName] = useState('');
   const [orgAvatar, setOrgAvatar] = useState('');
   const [qualityThreshold, setQualityThreshold] = useState(70);
-  const [aiProvider, setAiProvider] = useState('');
-  const [aiKey, setAiKey] = useState('');
 
   const activeOrg = getActiveOrg();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (activeOrg) {
       setOrgName(activeOrg.name);
       setOrgAvatar(activeOrg.avatar_url || '');
-      setAiProvider((activeOrg as any).ai_provider || '');
+      setQualityThreshold((activeOrg as any).quality_threshold ?? 70);
     }
   }, [activeOrg]);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const refreshOrganizations = async () => {
+    const orgs = await orgApi.listOrganizations();
+    setOrganizations(orgs);
+  };
+
+  const handleSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!activeOrgId) return;
     try {
-      await orgApi.updateOrganization(activeOrgId!, { name: orgName, avatar_url: orgAvatar });
-      toast.success('Organization settings updated');
+      await orgApi.updateOrganization(activeOrgId, {
+        name: orgName,
+        avatar_url: orgAvatar,
+      });
+      await refreshOrganizations();
+      toast.success('Organization updated');
       setIsEditing(false);
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to update organization settings');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to update organization');
     }
   };
 
   const handleQualityThresholdSave = async () => {
+    if (!activeOrgId) return;
     try {
-      await orgApi.updateOrganization(activeOrgId!, { quality_threshold: qualityThreshold });
+      await orgApi.updateOrganization(activeOrgId, { quality_threshold: qualityThreshold });
+      await refreshOrganizations();
       toast.success('Quality threshold updated');
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to update quality threshold');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to update quality threshold');
     }
   };
 
-  if (!activeOrgId) return <div className="p-6 text-muted-foreground">No organization selected</div>;
+  if (!activeOrgId) {
+    return <p className="text-body text-text-secondary">No organization selected.</p>;
+  }
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-section font-semibold">Organization Settings</h1>
-        <p className="text-meta text-muted-foreground">Manage your organization's public profile and general configuration</p>
-      </div>
-
-      <div className="rounded-xl border border-border bg-card p-6 space-y-6">
-        <div className="flex items-center gap-6">
-          <div className="relative group">
+    <div className="max-w-2xl space-y-5">
+      <Surface variant="panel" padding="lg" className="space-y-5">
+        <div className="flex items-center gap-4">
+          {orgAvatar ? (
             <img
-              src={orgAvatar || `https://api.dicebear.com/7.x/initials?seed=${orgName}`}
-              alt="Org Avatar"
-              className="h-24 w-24 rounded-2xl object-cover border border-border"
+              src={orgAvatar}
+              alt=""
+              className="h-16 w-16 object-cover"
             />
-            {isEditing && (
-              <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                <span className="text-white text-xs font-medium">Change</span>
-              </div>
-            )}
-          </div>
-          <div className="flex-1">
-            <h3 className="text-lg font-medium">{activeOrg?.name}</h3>
-            <p className="text-meta text-muted-foreground">Organization Profile</p>
+          ) : (
+            <Surface variant="muted" className="flex h-16 w-16 items-center justify-center">
+              <span className="text-section font-semibold text-text-secondary">
+                {orgName.slice(0, 1).toUpperCase()}
+              </span>
+            </Surface>
+          )}
+          <div>
+            <h3 className="text-body font-semibold text-text-primary">{activeOrg?.name}</h3>
+            <p className="text-meta text-text-secondary">{activeOrg?.slug}</p>
           </div>
         </div>
 
         {!isEditing ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30 border border-border">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Organization Name</p>
-                  <p className="text-sm">{activeOrg?.name}</p>
-                </div>
-              </div>
-              <div className="flex justify-between items-center p-3 rounded-lg bg-muted/30 border border-border">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Slug</p>
-                  <p className="text-sm font-mono">{activeOrg?.slug}</p>
-                </div>
-              </div>
-            </div>
-            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setIsEditing(true)}>
-              Edit Profile
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={() => setIsEditing(true)}>
+              Edit profile
             </Button>
           </div>
         ) : (
           <form onSubmit={handleSave} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="org-name">Organization Name</Label>
+              <Label htmlFor="org-name">Organization name</Label>
               <Input
                 id="org-name"
                 value={orgName}
-                onChange={(e) => setOrgName(e.target.value)}
+                onChange={(event) => setOrgName(event.target.value)}
                 required
               />
             </div>
@@ -117,86 +105,25 @@ export const OrgSettingsView: React.FC = () => {
               <Input
                 id="org-avatar"
                 value={orgAvatar}
-                onChange={(e) => setOrgAvatar(e.target.value)}
+                onChange={(event) => setOrgAvatar(event.target.value)}
               />
             </div>
-            <div className="flex justify-end gap-2 pt-4">
+            <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Save Changes</Button>
+              <Button type="submit">Save</Button>
             </div>
           </form>
         )}
-      </div>
+      </Surface>
 
-      {/* AI Configuration */}
-      <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+      <Surface variant="panel" padding="lg" className="space-y-4">
         <div>
-          <h3 className="text-lg font-medium">AI Provider</h3>
-          <p className="text-meta text-muted-foreground">Set a default AI provider and API key for this organization. Per-user credentials will override this.</p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {AI_PROVIDERS.map((p) => (
-            <button
-              key={p.value}
-              onClick={() => setAiProvider(p.value === aiProvider ? '' : p.value)}
-              className={cn(
-                'rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
-                aiProvider === p.value
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-background text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-        {aiProvider && (
-          <div className="space-y-2">
-            <Label htmlFor="org-ai-key">API Key</Label>
-            <Input
-              id="org-ai-key"
-              type="password"
-              value={aiKey}
-              onChange={(e) => setAiKey(e.target.value)}
-              placeholder="sk-…"
-            />
-            <p className="text-xs text-muted-foreground">
-              Key is encrypted at rest. Leave blank to keep the existing key.
-            </p>
-          </div>
-        )}
-
-        <div className="flex justify-end">
-          <Button
-            onClick={async () => {
-              try {
-                await orgApi.updateOrganization(activeOrgId!, {
-                  ai_provider: aiProvider || null,
-                  ai_key: aiKey || undefined,
-                });
-                toast.success('AI configuration updated');
-                setAiKey('');
-                const orgs = await orgApi.listOrganizations();
-                setOrganizations(orgs);
-              } catch {
-                toast.error('Failed to update AI configuration');
-              }
-            }}
-          >
-            Save AI Settings
-          </Button>
-        </div>
-      </div>
-
-      {/* Quality Threshold */}
-      <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-        <div>
-          <h3 className="text-lg font-medium">Documentation Quality Threshold</h3>
-          <p className="text-meta text-muted-foreground">Set the minimum quality score for documentation. Documents below this threshold will display a warning.</p>
+          <h3 className="text-body font-semibold text-text-primary">Quality threshold</h3>
+          <p className="text-meta text-text-secondary">
+            Documents below this score show a quality warning.
+          </p>
         </div>
         <div className="flex items-center gap-4">
           <input
@@ -204,20 +131,23 @@ export const OrgSettingsView: React.FC = () => {
             min="0"
             max="100"
             value={qualityThreshold}
-            onChange={(e) => setQualityThreshold(Number(e.target.value))}
-            className="flex-1 h-2 rounded-full appearance-none bg-muted cursor-pointer accent-primary"
+            onChange={(event) => setQualityThreshold(Number(event.target.value))}
+            className="h-2 flex-1 cursor-pointer accent-primary"
+            aria-label="Documentation quality threshold"
           />
-          <span className="text-lg font-bold tabular-nums w-12 text-right">{qualityThreshold}%</span>
+          <span className="w-12 text-right text-body font-semibold tabular-nums text-text-primary">
+            {qualityThreshold}%
+          </span>
         </div>
         <div className="flex justify-end">
           <Button
             onClick={handleQualityThresholdSave}
-            disabled={qualityThreshold === (activeOrg as any)?.quality_threshold}
+            disabled={qualityThreshold === ((activeOrg as any)?.quality_threshold ?? 70)}
           >
-            Save Threshold
+            Save threshold
           </Button>
         </div>
-      </div>
+      </Surface>
     </div>
   );
 };
