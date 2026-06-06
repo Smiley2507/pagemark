@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { FileText, FolderClock, FolderKanban, GitBranch, PenLine, Search, Sparkles, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Surface } from '@/components/ui/surface';
@@ -61,12 +60,12 @@ export function HomePage() {
   const staleDocuments = allDocuments
     .filter(({ document }) => document.freshness.toLowerCase().includes('stale') || document.status.toLowerCase().includes('stale'))
     .slice(0, 5);
-  const kpis = [
-    { label: 'Projects', value: summaries.length },
-    { label: 'Documents', value: allDocuments.length },
-    { label: 'Needs review', value: reviewDocuments.length },
-    { label: 'Source changed', value: staleDocuments.length },
-  ];
+  const counters = [
+    ['Projects', summaries.length],
+    ['Documents', allDocuments.length],
+    ['Review', reviewDocuments.length],
+    ['Changes', staleDocuments.length],
+  ] as const;
 
   const filteredLibrary = filterProjectSummaries(
     summaries,
@@ -77,12 +76,20 @@ export function HomePage() {
 
   return (
     <div className="space-y-6 px-6 py-6">
-      <Surface variant="panel" padding="lg" className="space-y-4">
+      <Surface variant="panel" padding="lg">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex items-center gap-2">
               <FolderClock className="h-5 w-5 text-text-secondary" aria-hidden="true" />
               <h1 className="text-title font-semibold text-text-primary">Home</h1>
+            </div>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {counters.map(([label, value]) => (
+                <div key={label} className="flex items-baseline gap-1.5">
+                  <span className="text-body font-semibold text-text-primary">{value}</span>
+                  <span className="text-meta text-text-muted">{label}</span>
+                </div>
+              ))}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -96,14 +103,6 @@ export function HomePage() {
             </Button>
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-4">
-          {kpis.map((kpi) => (
-            <div key={kpi.label} className="rounded-md border border-separator bg-panel-muted px-3 py-3">
-              <p className="text-meta text-text-muted">{kpi.label}</p>
-              <p className="mt-1 text-title font-semibold text-text-primary">{kpi.value}</p>
-            </div>
-          ))}
-        </div>
       </Surface>
 
       <div className="grid gap-6 2xl:grid-cols-2">
@@ -113,8 +112,7 @@ export function HomePage() {
           items={recentDocuments.map(({ document, project }) => ({
             id: `recent-doc-${document.id}`,
             title: document.title,
-            meta: `${project.name} · ${formatDate(document.last_activity_at)}`,
-            badge: document.status,
+            meta: `${project.name} / ${formatDate(document.last_activity_at)}`,
             onOpen: () => navigate(`/projects/${project.id}/documents/${document.id}`),
           }))}
           empty="No Documents yet."
@@ -125,8 +123,7 @@ export function HomePage() {
           items={recentProjects.map((summary) => ({
             id: `recent-project-${summary.project.id}`,
             title: summary.project.name,
-            meta: `${summary.documentCount} Documents · ${formatDate(summary.lastActivityAt)}`,
-            badge: summary.project.freshness_state,
+            meta: `${summary.documentCount} Documents / ${formatDate(summary.lastActivityAt)}`,
             onOpen: () => navigate(`/projects/${summary.project.id}`),
           }))}
           empty="No Projects yet."
@@ -141,7 +138,6 @@ export function HomePage() {
             id: `review-${document.id}`,
             title: document.title,
             meta: project.name,
-            badge: document.status,
             onOpen: () => navigate(`/projects/${project.id}/documents/${document.id}`),
           }))}
           empty="Nothing needs review."
@@ -153,7 +149,6 @@ export function HomePage() {
             id: `stale-${document.id}`,
             title: document.title,
             meta: project.name,
-            badge: 'Source changed',
             onOpen: () => navigate(`/projects/${project.id}`),
           }))}
           empty="No source changes."
@@ -164,28 +159,12 @@ export function HomePage() {
           items={draftDocuments.map(({ document, project }) => ({
             id: `draft-${document.id}`,
             title: document.title,
-            meta: `${project.name} · ${document.progress.pct}% reviewed`,
-            badge: document.status,
+            meta: `${project.name} / ${document.progress.pct}% reviewed`,
             onOpen: () => navigate(`/projects/${project.id}/documents/${document.id}`),
           }))}
           empty="No draft Documents."
         />
       </div>
-
-      <Surface variant="panel" padding="lg" className="space-y-3">
-        <h2 className="text-section font-semibold text-text-primary">Actions</h2>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={() => navigate('/new-project')}>
-            New Project
-          </Button>
-          <Button type="button" variant="outline" onClick={() => navigate('/templates')}>
-            Templates
-          </Button>
-          <Button type="button" variant="outline" onClick={() => navigate('/settings?tab=ai-providers')}>
-            AI providers
-          </Button>
-        </div>
-      </Surface>
 
       <Surface variant="panel" padding="lg" className="space-y-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -244,7 +223,6 @@ function WorkList({
     id: string;
     title: string;
     meta: string;
-    badge?: string;
     onOpen: () => void;
   }>;
   empty: string;
@@ -264,13 +242,12 @@ function WorkList({
               key={item.id}
               type="button"
               onClick={item.onOpen}
-              className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-panel-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left transition-colors hover:bg-panel-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span className="min-w-0">
                 <span className="block truncate text-body font-medium text-text-primary">{item.title}</span>
                 <span className="block truncate text-meta text-text-muted">{item.meta}</span>
               </span>
-              {item.badge && <Badge variant="neutral" showIcon={false}>{item.badge}</Badge>}
             </button>
           ))}
         </div>
