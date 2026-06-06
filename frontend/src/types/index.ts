@@ -437,7 +437,9 @@ export interface APIKey {
 
 export interface ExportSettings {
   logo_url?: string | null;
-  logo_position?: 'title-page' | 'header-left' | 'header-center' | 'header-right' | 'none';
+  logo_position?: 'title-page' | 'header-left' | 'header-center' | 'header-right'
+    | 'footer-left' | 'footer-center' | 'footer-right' | 'none';
+  logo_height?: string;
   h1_color?: string;
   h2_color?: string;
   primary_color?: string;
@@ -446,6 +448,8 @@ export interface ExportSettings {
   header_center?: string;
   header_right?: string;
   page_numbers?: boolean;
+  page_number_position?: 'left' | 'center' | 'right';
+  page_number_format?: 'number' | 'page-n';
   paper_size?: 'a4' | 'letter';
   margins?: 'normal' | 'narrow' | 'wide';
 }

@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import base64
-import json
 import mimetypes
 import os
-import re
 from typing import TYPE_CHECKING, Optional
 
 import markdown as md_lib
@@ -27,18 +25,20 @@ _HTML_TEMPLATE = """\
       --h1-color: {h1_color};
       --h2-color: {h2_color};
       --primary-color: {primary_color};
-      --font-family: '{font_family}';
+      --font-family: {font_family};
     }}
-    *, *::before, *::after {{ box-sizing: border-box; }}
-    body {{
-      font-family: var(--font-family), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-                   Helvetica, Arial, sans-serif;
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    html {{
+      font-family: var(--font-family), -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   Roboto, Helvetica, Arial, sans-serif;
       font-size: 16px;
       line-height: 1.7;
       color: #1a202c;
+    }}
+    body {{
       max-width: 860px;
       margin: 0 auto;
-      padding: 2rem 2.5rem 4rem;
+      padding: 2rem 2.5rem 6rem;
     }}
     h1 {{ font-size: 2.2rem; border-bottom: 2px solid var(--h1-color); padding-bottom: .4rem; margin-top: 2rem; color: var(--h1-color); }}
     h2 {{ font-size: 1.6rem; border-bottom: 1px solid var(--h2-color); padding-bottom: .3rem; margin-top: 2rem; color: var(--h2-color); }}
@@ -61,22 +61,9 @@ _HTML_TEMPLATE = """\
       overflow-x: auto;
       margin: 1rem 0;
     }}
-    pre code {{
-      background: transparent;
-      padding: 0;
-      color: inherit;
-      font-size: .85em;
-    }}
-    table {{
-      border-collapse: collapse;
-      width: 100%;
-      margin: 1rem 0;
-    }}
-    th, td {{
-      border: 1px solid #e2e8f0;
-      padding: .5rem .75rem;
-      text-align: left;
-    }}
+    pre code {{ background: transparent; padding: 0; color: inherit; font-size: .85em; }}
+    table {{ border-collapse: collapse; width: 100%; margin: 1rem 0; }}
+    th, td {{ border: 1px solid #e2e8f0; padding: .5rem .75rem; text-align: left; }}
     th {{ background: #f7fafc; font-weight: 600; }}
     tr:nth-child(even) {{ background: #f7fafc; }}
     blockquote {{
@@ -87,44 +74,90 @@ _HTML_TEMPLATE = """\
       background: #f7fafc;
     }}
     hr {{ border: none; border-top: 1px solid #e2e8f0; margin: 2rem 0; }}
-    img {{ max-width: 100%; border-radius: 4px; }}
-    #toc {{ background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 6px;
-            padding: 1rem 1.5rem; margin: 1.5rem 0; }}
-    #toc ul {{ margin: .25rem 0; padding-left: 1.25rem; }}
-    #toc li {{ margin: .2rem 0; }}
+    img {{ max-width: 100%; }}
+
+    /* ── Running header / footer — repeat on every printed page ── */
+    .page-header {{
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      padding: 0.6cm 2cm 0.3cm;
+      font-size: 0.85em;
+      color: #718096;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: white;
+      {header_display}
+    }}
+    .page-header .h-left {{ margin-right: auto; }}
+    .page-header .h-center {{ margin: 0 auto; }}
+    .page-header .h-right {{ margin-left: auto; }}
+    .page-header img.logo-header {{ max-height: {logo_height}; vertical-align: middle; }}
+
+    .page-footer {{
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      padding: 0.3cm 2cm 0.6cm;
+      font-size: 0.85em;
+      color: #718096;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      background: white;
+      {footer_display}
+    }}
+    .page-footer .f-left {{ margin-right: auto; }}
+    .page-footer .f-center {{ margin: 0 auto; }}
+    .page-footer .f-right {{ margin-left: auto; }}
+    .page-footer img.logo-footer {{ max-height: {logo_height}; vertical-align: middle; }}
+
+    .title-page-logo {{
+      text-align: center;
+      margin-bottom: 2rem;
+    }}
+    .title-page-logo img {{ max-height: {logo_height}; }}
+
+    /* ── Print: move body content out from under fixed header/footer ── */
     @media print {{
-      body {{ max-width: 100%; padding: 1cm; }}
-      pre {{ white-space: pre-wrap; }}
+      html {{ font-size: 12pt; }}
+      body {{
+        max-width: 100%;
+        padding: 1.5cm 1.5cm 2cm;
+      }}
+      .page-header, .page-footer {{ background: none; }}
+
+      @page {{
+        {page_style}
+        margin-top: 2.5cm;
+        margin-bottom: 2cm;
+        margin-left: 2cm;
+        margin-right: 2cm;
+      }}
     }}
-    @page {{
-      {page_style}
-    }}
-    #header {{ text-align: center; font-size: 0.85em; color: #718096; margin-bottom: 1rem; {header_display} }}
-    #header-left {{ float: left; }}
-    #header-center {{ display: inline-block; }}
-    #header-right {{ float: right; }}
-    #footer {{ text-align: center; font-size: 0.85em; color: #718096; margin-top: 2rem; border-top: 1px solid #e2e8f0; padding-top: 0.5rem; {footer_display} }}
   </style>
 </head>
 <body>
-{header_html}
-{logo_html}
+{logo_title_html}
 {body}
-{footer_html}
+{header_fixed_html}
+{footer_fixed_html}
 </body>
 </html>
 """
 
 
 def _resolve(settings: dict, key: str, default: str) -> str:
-    """Return setting value or default. Treats empty string as 'use default'."""
     val = settings.get(key)
     return val if val else default
 
 
 def _maybe_embed_logo(logo_url: str) -> str:
-    """Convert a local relative logo URL to a base64 data URI so it renders
-    when the exported HTML is opened locally or processed by WeasyPrint."""
     if not logo_url or logo_url.startswith("data:"):
         return logo_url
     if logo_url.startswith("/static/"):
@@ -162,77 +195,111 @@ def export_html(
     primary_color = _resolve(settings, "primary_color", "#6366f1")
     font_family = _resolve(settings, "font_family", "Inter")
     logo_url = settings.get("logo_url")
-    logo_position = settings.get("logo_position", "title-page")
+    logo_position = settings.get("logo_position", "none")
+    logo_height = settings.get("logo_height", "60px")
     header_left = settings.get("header_left", "")
     header_center = settings.get("header_center", "")
     header_right = settings.get("header_right", "")
     page_numbers = settings.get("page_numbers", False)
+    page_number_position = settings.get("page_number_position", "center")
+    page_number_format = settings.get("page_number_format", "number")
     paper_size = settings.get("paper_size", "a4")
     margins = settings.get("margins", "normal")
 
-    # Logo
-    logo_html = ""
-    if logo_url and logo_position != "none":
-        embedded = _maybe_embed_logo(logo_url)
-        if logo_position == "title-page":
-            logo_html = f'<div style="text-align:center;margin-bottom:2rem;"><img src="{embedded}" style="max-height:80px;" alt="logo"/></div>'
-        elif logo_position == "header-left":
-            logo_html = f'<img src="{embedded}" style="max-height:40px;float:left;margin-right:1rem;" alt="logo"/>'
-        elif logo_position == "header-center":
-            logo_html = f'<div style="text-align:center;margin-bottom:1rem;"><img src="{embedded}" style="max-height:40px;" alt="logo"/></div>'
-        elif logo_position == "header-right":
-            logo_html = f'<img src="{embedded}" style="max-height:40px;float:right;margin-left:1rem;" alt="logo"/>'
+    # ---- sanitise font-family (remove accidental quotes) ----
+    font_family = font_family.strip().strip("'\"")
 
-    # Header
-    has_header = bool(header_left or header_center or header_right)
-    header_html = ""
+    # ---- resolve logo to base64 ----
+    embedded = _maybe_embed_logo(logo_url) if logo_url else None
+
+    # ---- title-page logo (body flow) ----
+    logo_title_html = ""
+    if embedded and logo_position == "title-page":
+        logo_title_html = (
+            f'<div class="title-page-logo">'
+            f'<img src="{embedded}" alt="logo"/>'
+            f"</div>"
+        )
+
+    # ---- fixed header bar ----
+    has_header = bool(header_left or header_center or header_right or
+                      (embedded and logo_position in ("header-left", "header-center", "header-right")))
+    header_fixed_html = ""
     if has_header:
-        parts = []
-        if header_left:
-            parts.append(f'<span id="header-left">{header_left}</span>')
-        if header_center:
-            parts.append(f'<span id="header-center">{header_center}</span>')
-        if header_right:
-            parts.append(f'<span id="header-right">{header_right}</span>')
-        header_html = f'<div id="header">{" ".join(parts)}</div>'
+        cells = []
+        if embedded and logo_position == "header-left":
+            cells.append(f'<span class="h-left"><img class="logo-header" src="{embedded}" alt="logo"/></span>')
+        elif header_left:
+            cells.append(f'<span class="h-left">{header_left}</span>')
+        else:
+            cells.append('<span class="h-left"></span>')
 
-    # Footer with page numbers
-    footer_html = ""
-    footer_display = "none"
+        if embedded and logo_position == "header-center":
+            cells.append(f'<span class="h-center"><img class="logo-header" src="{embedded}" alt="logo"/></span>')
+        elif header_center:
+            cells.append(f'<span class="h-center">{header_center}</span>')
+        else:
+            cells.append('<span class="h-center"></span>')
+
+        if embedded and logo_position == "header-right":
+            cells.append(f'<span class="h-right"><img class="logo-header" src="{embedded}" alt="logo"/></span>')
+        elif header_right:
+            cells.append(f'<span class="h-right">{header_right}</span>')
+        else:
+            cells.append('<span class="h-right"></span>')
+
+        header_fixed_html = f'<div class="page-header">{" ".join(cells)}</div>'
+
+    # ---- fixed footer bar ----
+    footer_parts = []
+    has_footer = False
+
     if page_numbers:
-        footer_display = "block"
-        footer_html = '<div id="footer"><span class="page-number">Page <span class="page"></span></span></div>'
+        has_footer = True
+        pn = '<span class="page"></span>'
+        fmt = f"{pn}" if page_number_format == "number" else f"Page {pn}"
+        pos_class = {"left": "f-left", "center": "f-center", "right": "f-right"}.get(page_number_position, "f-center")
+        footer_parts.append(f'<span class="{pos_class}">{fmt}</span>')
+    elif embedded and logo_position in ("footer-left", "footer-center", "footer-right"):
+        has_footer = True
 
-    # @page style
+    if embedded and logo_position == "footer-left":
+        footer_parts.insert(0, f'<span class="f-left"><img class="logo-footer" src="{embedded}" alt="logo"/></span>')
+    if embedded and logo_position == "footer-center":
+        footer_parts.append(f'<span class="f-center"><img class="logo-footer" src="{embedded}" alt="logo"/></span>')
+    if embedded and logo_position == "footer-right":
+        footer_parts.append(f'<span class="f-right"><img class="logo-footer" src="{embedded}" alt="logo"/></span>')
+
+    footer_fixed_html = ""
+    if has_footer:
+        footer_fixed_html = f'<div class="page-footer">{" ".join(footer_parts)}</div>'
+
+    # ---- @page style ----
     size_map = {"a4": "A4", "letter": "Letter"}
-    margin_map = {
-        "normal": "2cm",
-        "narrow": "1cm",
-        "wide": "3cm",
-    }
+    margin_map = {"normal": "2cm", "narrow": "1cm", "wide": "3cm"}
     ps = size_map.get(paper_size, "A4")
     mg = margin_map.get(margins, "2cm")
     page_style = f"size: {ps}; margin: {mg};"
 
-    if page_numbers:
-        page_style += " @bottom-center { content: counter(page); font-size: 0.85em; color: #718096; }"
-
+    # ---- body ----
     md_text = export_markdown(sections, doc_title)
     body_html = md_lib.markdown(
         md_text,
         extensions=["fenced_code", "tables", "toc", "nl2br"],
     )
+
     html = _HTML_TEMPLATE.format(
         title=project_name,
         h1_color=h1_color,
         h2_color=h2_color,
         primary_color=primary_color,
         font_family=font_family,
-        logo_html=logo_html,
-        header_html=header_html,
-        footer_html=footer_html,
+        logo_height=logo_height,
+        logo_title_html=logo_title_html,
+        header_fixed_html=header_fixed_html,
+        footer_fixed_html=footer_fixed_html,
         header_display="block" if has_header else "none",
-        footer_display=footer_display,
+        footer_display="block" if has_footer else "none",
         page_style=page_style,
         body=body_html,
     )
