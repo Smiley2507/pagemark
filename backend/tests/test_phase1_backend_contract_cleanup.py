@@ -23,6 +23,7 @@ from app.models.user import User
 from app.models.ai_credential import UserAiCredential
 from app.services import analysis_service
 from app.services import crypto_service
+from app.routers import ai as ai_router_module
 from app.services import ai_credential_service as ai_credential_service_module
 from app.services import ai_doc_service as ai_doc_service_module
 from app.services import ai_service as ai_service_module
@@ -471,6 +472,69 @@ def test_opencode_go_chat_completion_payload(monkeypatch):
             {"role": "user", "content": "user prompt"},
         ],
         "max_tokens": 256,
+    }
+
+
+@pytest.mark.asyncio
+async def test_generate_outline_route_uses_active_provider_adapter(
+    client,
+    db: AsyncSession,
+    test_project: Project,
+    test_user: User,
+    monkeypatch,
+):
+    db.add(
+        UserAiCredential(
+            user_id=test_user.id,
+            provider="opencode-go",
+            model_id="deepseek-v4-flash",
+            api_key_encrypted=crypto_service.encrypt_token("saved-opencode-key"),
+            key_hint="key",
+            is_active=True,
+        )
+    )
+    db.add(
+        Analysis(
+            project_id=test_project.id,
+            status=AnalysisStatus.COMPLETED,
+            source_type="git",
+            is_current=True,
+            languages_json={"python": {"dependencies": {"fastapi": "0.1"}}},
+            endpoints_json=[{"method": "GET", "path": "/projects"}],
+            complexity_json={"classes": ["Project"], "functions": ["list_projects"]},
+        )
+    )
+    await db.commit()
+
+    calls = {}
+
+    def fake_complete_text(system, user, provider, api_key, model_id, *, max_tokens):
+        calls.update(
+            {
+                "system": system,
+                "provider": provider,
+                "api_key": api_key,
+                "model_id": model_id,
+                "max_tokens": max_tokens,
+            }
+        )
+        assert "Project" in user
+        return '{"sections":[{"heading":"Overview","description":"Project summary"}]}'
+
+    monkeypatch.setattr(ai_router_module, "complete_text", fake_complete_text)
+
+    response = await client.post(f"/projects/{test_project.id}/ai/generate-outline")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "sections": [{"heading": "Overview", "description": "Project summary"}]
+    }
+    assert calls == {
+        "system": "Return only valid JSON for a documentation outline.",
+        "provider": "opencode-go",
+        "api_key": "saved-opencode-key",
+        "model_id": "deepseek-v4-flash",
+        "max_tokens": 1500,
     }
 
 

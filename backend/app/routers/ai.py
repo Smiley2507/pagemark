@@ -28,6 +28,7 @@ from app.schemas.chat import (
 )
 from app.schemas.section import SectionResponse
 from app.services import ai_credential_service, section_service
+from app.services.ai_service import AiServiceError, complete_text
 from app.services.ai_doc_service import ai_service
 from app.services.version_service import create_version_snapshot
 
@@ -77,7 +78,7 @@ async def generate_outline(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate a documentation outline using Claude, requires completed analysis."""
+    """Generate a documentation outline using the active provider."""
     project = await _require_project(db, project_id, current_user.id)
     analysis = await _require_analysis_complete(db, project_id)
 
@@ -85,7 +86,7 @@ async def generate_outline(
     if not cred:
         raise HTTPException(
             status_code=400,
-            detail="No active AI credential. Add an Anthropic API key in Settings.",
+            detail="No active AI credential. Add an AI provider in Settings.",
         )
 
     # Extract codebase facts from analysis
@@ -115,27 +116,6 @@ async def generate_outline(
         elif isinstance(lang_data, list):
             language = lang_keys[0] if lang_data else ""
 
-    # pyrefly: ignore [missing-import]
-    import anthropic as _anthropic
-    from app.services.crypto_service import decrypt_token
-    from app.models.ai_credential import UserAiCredential
-
-    cred_result = await db.execute(
-        select(UserAiCredential).where(
-            UserAiCredential.user_id == current_user.id,
-            UserAiCredential.is_active == True,  # noqa: E712
-        )
-    )
-    cred_row = cred_result.scalar_one_or_none()
-    if not cred_row or cred_row.provider != "anthropic":
-        raise HTTPException(
-            status_code=400,
-            detail="An active Anthropic credential is required to generate an outline.",
-        )
-
-    api_key = decrypt_token(cred_row.api_key_encrypted)
-    client = _anthropic.AsyncAnthropic(api_key=api_key)
-
     prompt = build_outline_prompt(
         project_name=project.name,
         language=language,
@@ -146,13 +126,18 @@ async def generate_outline(
         dependencies=dependencies,
     )
 
-    response = await client.messages.create(
-        model=cred_row.model_id,
-        max_tokens=1500,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    try:
+        raw = complete_text(
+            "Return only valid JSON for a documentation outline.",
+            prompt,
+            cred.provider,
+            cred.api_key,
+            cred.model_id,
+            max_tokens=1500,
+        ).strip()
+    except AiServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    raw = response.content[0].text.strip()
     try:
         parsed = json.loads(raw)
         sections = parsed.get("sections", parsed) if isinstance(parsed, dict) else parsed
