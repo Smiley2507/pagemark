@@ -452,8 +452,15 @@ export function DocumentEditorPage() {
     );
   }
 
+  const editorGridClassName = cn(
+    'grid h-screen grid-rows-[3.5rem_minmax(0,1fr)] bg-workspace text-text-primary',
+    rightPanelOpen
+      ? 'grid-cols-[minmax(0,1fr)_18rem] lg:grid-cols-[18rem_minmax(0,1fr)_20rem]'
+      : 'grid-cols-[minmax(0,1fr)_3rem] lg:grid-cols-[18rem_minmax(0,1fr)_3rem]',
+  );
+
   return (
-    <div className="grid h-screen grid-cols-[minmax(0,1fr)_3rem] grid-rows-[3.5rem_minmax(0,1fr)] bg-workspace text-text-primary lg:grid-cols-[18rem_minmax(0,1fr)_3rem]">
+    <div className={editorGridClassName}>
       <header className="col-span-2 row-start-1 flex items-center justify-between border-b border-separator bg-panel px-3 lg:col-span-3">
         <div className="flex min-w-0 items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => navigate(`/projects/${pid}`)} aria-label="Back to project">
@@ -609,19 +616,31 @@ export function DocumentEditorPage() {
         )}
       </main>
 
-      <aside className="col-start-2 row-start-2 flex min-h-0 flex-col items-center border-l border-separator bg-panel py-3 lg:col-start-3">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => setRightPanelOpen((open) => !open)}
-          aria-label={rightPanelOpen ? 'Collapse right tools panel' : 'Open right tools panel'}
-        >
-          <PanelRightOpen className="h-4 w-4" />
-        </Button>
+      <aside
+        className={cn(
+          'col-start-2 row-start-2 flex min-h-0 min-w-0 border-l border-separator bg-panel lg:col-start-3',
+          rightPanelOpen ? 'flex-col' : 'flex-col items-center py-3',
+        )}
+      >
+        <div className={cn('border-b border-separator', rightPanelOpen ? 'flex items-center justify-between px-4 py-3' : 'border-b-0')}>
+          {rightPanelOpen && (
+            <div>
+              <p className="text-meta font-medium uppercase text-text-muted">Reserved Tools</p>
+              <p className="text-body font-semibold text-text-primary">AI, notes, review</p>
+            </div>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setRightPanelOpen((open) => !open)}
+            aria-label={rightPanelOpen ? 'Collapse right tools panel' : 'Open right tools panel'}
+          >
+            <PanelRightOpen className={cn('h-4 w-4 transition-transform', rightPanelOpen && 'rotate-180')} />
+          </Button>
+        </div>
         {rightPanelOpen && (
-          <Surface variant="overlay" padding="default" className="absolute bottom-0 right-12 top-14 w-80">
-            <p className="text-meta font-medium uppercase text-text-muted">Reserved Tools</p>
+          <Surface variant="canvas" padding="default" className="min-h-0 flex-1 overflow-y-auto rounded-none border-0">
             <p className="mt-2 text-body text-text-secondary">
               AI, notes, and review tools will live here in later phases.
             </p>

@@ -17,6 +17,10 @@ function assertContains(source, value, message) {
   if (!source.includes(value)) fail(message);
 }
 
+function assertNotContains(source, value, message) {
+  if (source.includes(value)) fail(message);
+}
+
 const app = readFrontend('src/App.tsx');
 const editor = readFrontend('src/pages/DocumentEditorPage.tsx');
 const markdownEditor = readFrontend('src/components/editor/MarkdownEditor.tsx');
@@ -55,15 +59,24 @@ assertContains(
   'documentStatusLabel(document)',
   'data-toc-item="true"',
   'useTocKeyboardNavigation',
+  'editorGridClassName',
+  'lg:grid-cols-[18rem_minmax(0,1fr)_20rem]',
   'lg:grid-cols-[18rem_minmax(0,1fr)_3rem]',
   'col-start-1 row-start-2 hidden',
   'col-start-1 row-start-2 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto bg-canvas lg:col-start-2',
-  'col-start-2 row-start-2 flex min-h-0 flex-col',
+  'col-start-2 row-start-2 flex min-h-0 min-w-0 border-l',
+  'rightPanelOpen ? \'flex-col\'',
   'Grammar/style',
   'Reserved Tools',
 ].forEach((marker) => {
   assertContains(editor, marker, `editor source is missing ${marker}`);
 });
+
+assertNotContains(
+  editor,
+  'absolute bottom-0 right-12',
+  'right tools panel must resize the editor grid instead of overlaying the middle pane',
+);
 
 [
   'EditorView.lineWrapping',
