@@ -55,7 +55,10 @@ export function ProjectActivityPage() {
   }
 
   const activities = activityData?.events || [];
-  const heatmapDays = buildHeatmapDays(heatmapData || {}, HEATMAP_DAYS);
+  const heatmapSource = Object.keys(heatmapData || {}).length > 0
+    ? heatmapData || {}
+    : heatmapFromActivities(activities);
+  const heatmapDays = buildHeatmapDays(heatmapSource, HEATMAP_DAYS);
   const activeDays = heatmapDays.filter((day) => day.weight > 0).length;
 
   return (
@@ -72,30 +75,23 @@ export function ProjectActivityPage() {
           </div>
         </div>
 
-        {activeDays === 0 ? (
-          <EmptyState
-            title="No activity yet"
-            description="Source, Analysis, generation, and review events will appear here."
-          />
-        ) : (
-          <div className="overflow-x-auto pb-1">
-            <div
-              className="grid w-max grid-flow-col grid-rows-7 gap-1"
-              role="list"
-              aria-label="Activity heatmap for the last 12 weeks"
-            >
-              {heatmapDays.map(({ date, weight }) => (
-                <div
-                  key={date}
-                  role="listitem"
-                  title={`${formatHeatmapDate(date)}: ${formatWeight(weight)}`}
-                  aria-label={`${formatHeatmapDate(date)}: ${formatWeight(weight)}`}
-                  className={`h-3 w-3 rounded ${heatmapClass(weight)}`}
-                />
-              ))}
-            </div>
+        <div className="overflow-x-auto pb-1">
+          <div
+            className="grid w-max grid-flow-col grid-rows-7 gap-1"
+            role="list"
+            aria-label="Activity heatmap for the last 12 weeks"
+          >
+            {heatmapDays.map(({ date, weight }) => (
+              <div
+                key={date}
+                role="listitem"
+                title={`${formatHeatmapDate(date)}: ${formatWeight(weight)}`}
+                aria-label={`${formatHeatmapDate(date)}: ${formatWeight(weight)}`}
+                className={`h-3 w-3 rounded ${heatmapClass(weight)}`}
+              />
+            ))}
           </div>
-        )}
+        </div>
       </Surface>
 
       {activities.length === 0 ? (
@@ -149,6 +145,15 @@ function buildHeatmapDays(source: Record<string, number>, days: number) {
     entries.push({ date, weight: source[date] || 0 });
   }
   return entries;
+}
+
+function heatmapFromActivities(activities: ActivityEvent[]) {
+  return activities.reduce<Record<string, number>>((days, activity) => {
+    if (!activity.created_at) return days;
+    const date = toDateKey(new Date(activity.created_at));
+    days[date] = (days[date] || 0) + activity.weight;
+    return days;
+  }, {});
 }
 
 function startOfDay(date: Date) {
