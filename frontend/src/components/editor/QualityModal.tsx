@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import axios from 'axios';
 import { sectionsApi } from '@/api/sections';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -60,6 +61,15 @@ function scoreLabel(score: number): string {
   if (score >= 60) return 'Good';
   if (score >= 40) return 'Fair';
   return 'Poor';
+}
+
+function isMissingQualityReport(error: unknown): boolean {
+  if (!axios.isAxiosError(error) || error.response?.status !== 404) {
+    return false;
+  }
+
+  const detail = error.response.data?.detail;
+  return typeof detail === 'string' && detail.includes('No quality report found');
 }
 
 /** SVG circular progress ring */
@@ -144,19 +154,28 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projectId: number; documentId?: number }> = ({ open, onClose, projectId, documentId = 0 }) => {
+export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projectId: number; documentId?: number }> = ({ open, onClose, projectId, documentId }) => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [progress, setProgress] = useState(0);
+  const hasDocumentContext = Number.isFinite(documentId) && (documentId ?? 0) > 0;
 
   const { data: report, isLoading, error, refetch } = useQuery({
     queryKey: ['quality', projectId, documentId],
-    queryFn: () => qualityApi.getQuality(projectId, documentId),
+    queryFn: async () => {
+      try {
+        return await qualityApi.getQuality(projectId, documentId!);
+      } catch (queryError) {
+        if (isMissingQualityReport(queryError)) {
+          return null;
+        }
+        throw queryError;
+      }
+    },
     retry: false,
-    enabled: open,
+    enabled: open && hasDocumentContext,
   });
 
   const resolveAllMutation = useMutation({
@@ -178,7 +197,12 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
   });
 
   const runMutation = useMutation({
-    mutationFn: () => qualityApi.runQuality(projectId, documentId),
+    mutationFn: () => {
+      if (!hasDocumentContext) {
+        throw new Error('Quality analysis requires an open Document.');
+      }
+      return qualityApi.runQuality(projectId, documentId!);
+    },
     onSuccess: () => {
       toast.success('Quality analysis started. Results will appear shortly.');
       setProgress(5);
@@ -194,11 +218,13 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
       // Poll until success
       const poll = setInterval(async () => {
         try {
-          await refetch();
-          clearInterval(poll);
-          clearInterval(interval);
-          setProgress(100);
-          setTimeout(() => setProgress(0), 500);
+          const result = await refetch();
+          if (result.data) {
+            clearInterval(poll);
+            clearInterval(interval);
+            setProgress(100);
+            setTimeout(() => setProgress(0), 500);
+          }
         } catch (e) {
           // keep polling
         }
@@ -211,7 +237,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
         setProgress(0);
       }, 30000);
     },
-    onError: () => toast.error('Failed to start quality analysis'),
+    onError: () => toast.error(hasDocumentContext ? 'Failed to start quality analysis' : 'Open a Document to run quality analysis'),
   });
 
   // Terminology: fetch from dedicated endpoint (must be before early return — hooks rule)
@@ -242,6 +268,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
   const infoCount = issues.filter(i => i.severity === 'info').length;
 
   const isRunning = runMutation.isPending || progress > 0;
+  const qualityError = error && !isMissingQualityReport(error) ? error : null;
 
   // ── Render helpers ──────────────────────────────────────────────
 
@@ -543,7 +570,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
           <div className="flex items-center gap-3">
             <Button
               onClick={() => runMutation.mutate()}
-              disabled={isRunning}
+              disabled={isRunning || !hasDocumentContext}
             >
               {isRunning ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> {progress > 0 ? `${Math.round(progress)}%` : 'Running…'}</>
@@ -573,8 +600,44 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
             </div>
           )}
 
+          {/* Missing Document context */}
+          {(!hasDocumentContext && !isRunning) && (
+            <div className="flex flex-col items-center justify-center h-full gap-6 py-24 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded bg-panel-muted">
+                <ShieldCheck className="h-8 w-8 text-text-secondary" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">Open a Document first</h2>
+                <p className="mt-2 text-sm text-text-secondary max-w-sm">
+                  Quality analysis runs against one Document at a time.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Error */}
+          {(hasDocumentContext && qualityError && !isLoading && !isRunning) && (
+            <div className="flex flex-col items-center justify-center h-full gap-6 py-24 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded bg-panel-muted">
+                <AlertCircle className="h-8 w-8 text-status-danger-foreground" />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">Quality report unavailable</h2>
+                <p className="mt-2 text-sm text-text-secondary max-w-sm">
+                  Run analysis again or retry after the service is available.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => refetch()}
+              >
+                <RefreshCw className="h-4 w-4" /> Retry
+              </Button>
+            </div>
+          )}
+
           {/* No report yet */}
-          {(!isLoading && !report && !isRunning) && (
+          {(hasDocumentContext && !qualityError && !isLoading && !report && !isRunning) && (
             <div className="flex flex-col items-center justify-center h-full gap-6 py-24 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded bg-panel-muted">
                 <ShieldCheck className="h-8 w-8 text-text-secondary" />
@@ -587,7 +650,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
               </div>
               <Button
                 onClick={() => runMutation.mutate()}
-                disabled={runMutation.isPending}
+                disabled={runMutation.isPending || !hasDocumentContext}
               >
                 <RefreshCw className="h-4 w-4" /> Run Quality Analysis
               </Button>

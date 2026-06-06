@@ -208,6 +208,22 @@ function assertFirstDocumentJourney() {
   });
 }
 
+function assertQualityRequiresDocumentContext() {
+  const modal = read('src/components/editor/QualityModal.tsx');
+  [
+    'hasDocumentContext',
+    'enabled: open && hasDocumentContext',
+    'isMissingQualityReport',
+    'Open a Document to run quality analysis',
+    'Quality analysis runs against one Document at a time.',
+  ].forEach((marker) => {
+    assertContains(modal, marker, `quality modal is missing document-context guard ${marker}`);
+  });
+  if (/documentId\s*=\s*0/.test(modal)) {
+    fail('quality modal must not default missing documentId to 0');
+  }
+}
+
 function assertPhasePromptsStartFromCanonicalPrompt() {
   const promptFiles = [
     'docs/REDESIGN_PHASE_PROMPTS.md',
@@ -242,6 +258,7 @@ assertPhase4SearchAndSettings();
 assertNoPrimaryWorkspaceStubs();
 assertLandingAndAuth();
 assertFirstDocumentJourney();
+assertQualityRequiresDocumentContext();
 assertPhasePromptsStartFromCanonicalPrompt();
 
 if (!process.exitCode) {
