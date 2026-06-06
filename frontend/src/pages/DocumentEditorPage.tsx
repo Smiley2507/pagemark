@@ -197,9 +197,9 @@ function SectionBlock({
     <section
       id={`section-${section.id}`}
       data-editor-section="true"
-      className="group scroll-mt-24 border-b border-separator py-10 last:border-b-0"
+      className="group min-w-0 scroll-mt-24 overflow-x-hidden border-b border-separator py-10 last:border-b-0"
     >
-      <div className="mx-auto max-w-3xl">
+      <div className="mx-auto max-w-3xl min-w-0">
         <div className="mb-4 flex items-start gap-3">
           <GripVertical className="mt-3 h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
           <div className="min-w-0 flex-1">
@@ -251,7 +251,7 @@ function SectionBlock({
           </div>
         </div>
 
-        <div className="rounded-md bg-canvas px-1 py-2 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+        <div className="min-w-0 overflow-x-hidden rounded-md bg-canvas px-1 py-2 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
           <MarkdownEditor value={content} onChange={setContent} />
         </div>
 
@@ -558,7 +558,7 @@ export function DocumentEditorPage() {
         </div>
       </aside>
 
-      <main ref={scrollRootRef} className="col-start-1 row-start-2 min-h-0 overflow-y-auto bg-canvas lg:col-start-2">
+      <main ref={scrollRootRef} className="col-start-1 row-start-2 min-h-0 min-w-0 overflow-x-hidden overflow-y-auto bg-canvas lg:col-start-2">
         {showSourceNotice && (
           <div className="mx-auto max-w-3xl px-4 pt-5">
             <Notice variant="warning" title="Potentially Stale Sections">
@@ -582,7 +582,7 @@ export function DocumentEditorPage() {
             </div>
           </div>
         ) : (
-          <div className="px-4 py-4">
+          <div className="min-w-0 px-4 py-4">
             {sections.map((section, index) => (
               <SectionBlock
                 key={section.id}

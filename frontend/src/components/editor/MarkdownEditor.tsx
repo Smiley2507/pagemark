@@ -553,7 +553,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
     }, [value]);
 
     return (
-      <div ref={containerRef} className={cn('min-h-[180px] w-full relative', className)}>
+      <div ref={containerRef} className={cn('relative min-h-[180px] w-full min-w-0 overflow-x-hidden', className)}>
         {menuState && viewRef.current &&
           createPortal(
             <SlashCommandMenu
