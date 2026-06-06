@@ -25,6 +25,131 @@ from app.services.ai_doc_service import ai_service
 
 
 @pytest.mark.asyncio
+async def test_blank_project_document_and_manual_section_lifecycle(
+    client,
+    test_project: Project,
+):
+    document_response = await client.post(
+        f"/projects/{test_project.id}/documents",
+        json={
+            "title": "Manual Guide",
+            "setup_stage": "editor_ready",
+        },
+    )
+    assert document_response.status_code == 201
+    document = document_response.json()
+    assert document["template_id"] is None
+    assert document["status"] == "empty"
+    assert document["progress"]["total_sections"] == 0
+
+    empty_sections_response = await client.get(
+        f"/projects/{test_project.id}/documents/{document['id']}/sections"
+    )
+    assert empty_sections_response.status_code == 200
+    assert empty_sections_response.json()["sections"] == []
+
+    overview_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document['id']}/sections",
+        json={"title": "Overview"},
+    )
+    details_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document['id']}/sections",
+        json={"title": "Details"},
+    )
+    assert overview_response.status_code == 201
+    assert details_response.status_code == 201
+    overview = overview_response.json()
+    details = details_response.json()
+
+    rename_response = await client.put(
+        f"/projects/{test_project.id}/documents/{document['id']}/sections/{overview['id']}/title",
+        json={"title": "Project Overview"},
+    )
+    assert rename_response.status_code == 200
+    renamed = rename_response.json()
+    assert renamed["heading"] == "Project Overview"
+    assert renamed["title"] == "Project Overview"
+
+    update_response = await client.patch(
+        f"/projects/{test_project.id}/documents/{document['id']}/sections/{overview['id']}",
+        json={"content_md": "Current overview content"},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["content_md"] == "Current overview content"
+
+    reorder_response = await client.put(
+        f"/projects/{test_project.id}/documents/{document['id']}/sections/reorder",
+        json={"section_ids": [details["id"], overview["id"]]},
+    )
+    assert reorder_response.status_code == 200
+
+    delete_response = await client.delete(
+        f"/projects/{test_project.id}/documents/{document['id']}/sections/{details['id']}"
+    )
+    assert delete_response.status_code == 200
+
+    sections_response = await client.get(
+        f"/projects/{test_project.id}/documents/{document['id']}/sections"
+    )
+    assert sections_response.status_code == 200
+    sections = sections_response.json()["sections"]
+    assert [section["id"] for section in sections] == [overview["id"]]
+    assert sections[0]["heading"] == "Project Overview"
+
+    export_response = await client.get(
+        f"/projects/{test_project.id}/documents/{document['id']}/export?format=markdown"
+    )
+    assert export_response.status_code == 200
+    exported = export_response.text
+    assert "## Project Overview" in exported
+    assert "Current overview content" in exported
+    assert "Details" not in exported
+
+
+@pytest.mark.asyncio
+async def test_nested_document_section_routes_reject_guessed_section_ids(
+    client,
+    db: AsyncSession,
+    test_project: Project,
+    other_project: Project,
+):
+    document = Document(
+        project_id=test_project.id,
+        title="Private Document",
+        setup_stage=DocumentSetupStage.EDITOR_READY,
+    )
+    other_document = Document(
+        project_id=other_project.id,
+        title="Other Document",
+        setup_stage=DocumentSetupStage.EDITOR_READY,
+    )
+    db.add_all([document, other_document])
+    await db.flush()
+    other_section = Section(
+        document_id=other_document.id,
+        heading="Other Section",
+        title="Other Section",
+        order_index=0,
+        lifecycle_status=LifecycleStatus.ACTIVE,
+        status=SectionStatus.PENDING,
+    )
+    db.add(other_section)
+    await db.commit()
+
+    guessed_response = await client.patch(
+        f"/projects/{test_project.id}/documents/{document.id}/sections/{other_section.id}",
+        json={"content_md": "Guessed content"},
+    )
+    assert guessed_response.status_code == 404
+
+    guessed_rename_response = await client.put(
+        f"/projects/{test_project.id}/documents/{document.id}/sections/{other_section.id}/title",
+        json={"title": "Guessed title"},
+    )
+    assert guessed_rename_response.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_project_summary_is_derived_from_documents_and_sections(
     client,
     db: AsyncSession,

@@ -67,7 +67,7 @@ async def export_document(
 
     sec_result = await db.execute(
         select(Section)
-        .where(Section.document_id == document.id, Section.lifecycle_status != LifecycleStatus.DELETED)
+        .where(Section.document_id == document.id, Section.lifecycle_status == LifecycleStatus.ACTIVE)
         .order_by(Section.order_index)
     )
     sections = sec_result.scalars().all()
@@ -167,7 +167,7 @@ async def batch_export(
 
                 sec_result = await db.execute(
                     select(Section)
-                    .where(Section.document_id == doc.id, Section.lifecycle_status != LifecycleStatus.DELETED)
+                    .where(Section.document_id == doc.id, Section.lifecycle_status == LifecycleStatus.ACTIVE)
                     .order_by(Section.order_index)
                 )
                 sections = sec_result.scalars().all()

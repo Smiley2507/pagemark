@@ -209,6 +209,7 @@ async def update_section_title(
     current_user: User = Depends(get_current_user),
 ):
     section = await section_service.get_section_for_user(db, section_id, current_user.id)
+    section.heading = body.title
     section.title = body.title
     section.updated_at = datetime.utcnow()
     await db.commit()

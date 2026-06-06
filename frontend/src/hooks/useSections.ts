@@ -75,6 +75,60 @@ export function useAutosave(sectionId: number | null, content: string) {
   return { isSaving, lastSaved, markPersisted };
 }
 
+export function useDocumentAutosave(
+  projectId: number,
+  documentId: number,
+  sectionId: number | null,
+  content: string,
+) {
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const lastPersistedRef = useRef<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const save = useCallback(async (id: number, body: string) => {
+    setIsSaving(true);
+    try {
+      const res = await documentsApi.autosaveDocumentSection(projectId, documentId, id, body);
+      if (res.saved) {
+        lastPersistedRef.current = body;
+        setLastSaved(new Date(res.updated_at));
+      }
+    } catch {
+      toast.error('Autosave failed');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [projectId, documentId]);
+
+  useEffect(() => {
+    if (!sectionId || projectId <= 0 || documentId <= 0) return;
+
+    if (timerRef.current) clearTimeout(timerRef.current);
+
+    timerRef.current = setTimeout(() => {
+      if (lastPersistedRef.current === content) return;
+      save(sectionId, content);
+    }, 3000);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [projectId, documentId, sectionId, content, save]);
+
+  useEffect(() => {
+    lastPersistedRef.current = null;
+    setLastSaved(null);
+  }, [sectionId]);
+
+  const markPersisted = useCallback((body: string, at?: string) => {
+    lastPersistedRef.current = body;
+    setLastSaved(at ? new Date(at) : new Date());
+  }, []);
+
+  return { isSaving, lastSaved, markPersisted };
+}
+
 export const useUpdateSection = (projectId: number) => {
   const queryClient = useQueryClient();
   return useMutation({

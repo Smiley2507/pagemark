@@ -49,7 +49,16 @@ from app.schemas.document import (
     TemplateRecommendationRequest,
     TemplateRecommendationResponse,
 )
-from app.schemas.section import CustomSectionRequest, SectionResponse, SectionTreeResponse, SectionUpdateRequest
+from app.schemas.section import (
+    CustomSectionRequest,
+    SectionAutosaveRequest,
+    SectionAutosaveResponse,
+    SectionReorderRequest,
+    SectionResponse,
+    SectionTitleRequest,
+    SectionTreeResponse,
+    SectionUpdateRequest,
+)
 from app.schemas.template import TemplateResponse
 from app.services import section_service
 from app.services import ai_credential_service
@@ -276,6 +285,20 @@ def _document_to_response(document: Document) -> DocumentResponse:
         created_at=document.created_at,
         updated_at=document.updated_at,
     )
+
+
+def _active_section_for_document(document: Document, section_id: int) -> Section:
+    section = next(
+        (
+            candidate
+            for candidate in document.sections
+            if candidate.id == section_id and candidate.lifecycle_status == LifecycleStatus.ACTIVE
+        ),
+        None,
+    )
+    if section is None:
+        raise HTTPException(status_code=404, detail="Section not found")
+    return section
 
 
 @router.get("/{project_id}/documents", response_model=DocumentListResponse)
@@ -831,29 +854,134 @@ async def update_document_section(
     current_user: User = Depends(get_current_user),
 ):
     document = await _get_document_for_project(db, project.id, document_id)
-    section = next(
-        (
-            candidate
-            for candidate in document.sections
-            if candidate.id == section_id and candidate.lifecycle_status == LifecycleStatus.ACTIVE
-        ),
-        None,
-    )
-    if section is None:
-        raise HTTPException(status_code=404, detail="Section not found")
+    section = _active_section_for_document(document, section_id)
     if document.status == DocumentStatus.APPROVED:
         raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
 
+    old_content = section.content_md or ""
+    old_status = section.status
+    content_changed = False
+    status_changed = False
+
     if body.content_md is not None and body.content_md != (section.content_md or ""):
+        content_changed = True
         section.content_md = body.content_md
         section_service.clear_review_state_for_content_edit(section)
     if body.status is not None:
-        section.status = SectionStatus(body.status.value)
-    section.updated_at = datetime.utcnow()
-    document.updated_at = datetime.utcnow()
+        new_status = SectionStatus(body.status.value)
+        if new_status != old_status:
+            status_changed = True
+            section.status = new_status
+
+    if content_changed or status_changed:
+        section.updated_at = datetime.utcnow()
+        document.updated_at = datetime.utcnow()
+
     await db.commit()
     await db.refresh(section)
     return section_service.section_to_response(section)
+
+
+@router.patch(
+    "/{project_id}/documents/{document_id}/sections/{section_id}/autosave",
+    response_model=SectionAutosaveResponse,
+)
+async def autosave_document_section(
+    document_id: int,
+    section_id: int,
+    body: SectionAutosaveRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    section = _active_section_for_document(document, section_id)
+    if document.status == DocumentStatus.APPROVED:
+        raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
+
+    if body.content_md == (section.content_md or ""):
+        return SectionAutosaveResponse(saved=False, updated_at=section.updated_at)
+
+    section.content_md = body.content_md
+    section.updated_at = datetime.utcnow()
+    document.updated_at = section.updated_at
+    section_service.clear_review_state_for_content_edit(section, edited_at=section.updated_at)
+    await db.commit()
+    await db.refresh(section)
+
+    return SectionAutosaveResponse(saved=True, updated_at=section.updated_at)
+
+
+@router.put(
+    "/{project_id}/documents/{document_id}/sections/{section_id}/title",
+    response_model=SectionResponse,
+)
+async def update_document_section_title(
+    document_id: int,
+    section_id: int,
+    body: SectionTitleRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    section = _active_section_for_document(document, section_id)
+    if document.status == DocumentStatus.APPROVED:
+        raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
+
+    section.heading = body.title
+    section.title = body.title
+    section.updated_at = datetime.utcnow()
+    document.updated_at = section.updated_at
+    await db.commit()
+    await db.refresh(section)
+    return section_service.section_to_response(section)
+
+
+@router.put("/{project_id}/documents/{document_id}/sections/reorder")
+async def reorder_document_sections(
+    document_id: int,
+    body: SectionReorderRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    active_by_id = {section.id: section for section in _active_sections(document)}
+    requested_ids = list(body.section_ids)
+    if len(requested_ids) != len(set(requested_ids)):
+        raise HTTPException(status_code=400, detail="Section IDs must be unique")
+    missing_ids = [section_id for section_id in requested_ids if section_id not in active_by_id]
+    if missing_ids:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    for index, section_id in enumerate(requested_ids):
+        active_by_id[section_id].order_index = index
+        active_by_id[section_id].updated_at = datetime.utcnow()
+    document.updated_at = datetime.utcnow()
+
+    await db.commit()
+    return {"message": "Sections reordered successfully"}
+
+
+@router.delete("/{project_id}/documents/{document_id}/sections/{section_id}")
+async def delete_document_section(
+    document_id: int,
+    section_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    section = _active_section_for_document(document, section_id)
+    if document.status == DocumentStatus.APPROVED:
+        raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
+
+    section.lifecycle_status = LifecycleStatus.DELETED
+    section.updated_at = datetime.utcnow()
+    document.updated_at = section.updated_at
+    await db.commit()
+    return {"message": "Section deleted successfully"}
 
 
 # ── Freshness Endpoints ──────────────────────────────────────────────

@@ -43,6 +43,33 @@ export interface DocumentListResponse {
   total: number;
 }
 
+function normalizeOutlineProposal(proposal: OutlineProposal): OutlineProposal {
+  return {
+    ...proposal,
+    outline_json: Array.isArray(proposal.outline_json)
+      ? proposal.outline_json
+      : proposal.outline ?? [],
+  };
+}
+
+function normalizeSection(section: Section): Section {
+  return {
+    ...section,
+    title: section.title ?? section.heading,
+    content_md: section.content_md ?? '',
+    children: Array.isArray(section.children)
+      ? section.children.map(normalizeSection)
+      : [],
+  };
+}
+
+function normalizeSectionTree(tree: SectionTreeResponse): SectionTreeResponse {
+  return {
+    ...tree,
+    sections: tree.sections.map(normalizeSection),
+  };
+}
+
 export const documentsApi = {
   async createDocument(
     projectId: number,
@@ -93,7 +120,10 @@ export const documentsApi = {
     documentId: number,
   ): Promise<DocumentSetupStateResponse> {
     const { data } = await apiClient.get(`/projects/${projectId}/documents/${documentId}/setup`);
-    return data;
+    return {
+      ...data,
+      outline_proposals: data.outline_proposals.map(normalizeOutlineProposal),
+    };
   },
 
   async getTemplateRecommendations(projectId: number, documentId: number): Promise<{ recommendations: TemplateRecommendation[] }> {
@@ -116,15 +146,16 @@ export const documentsApi = {
 
   async getOutlineProposals(projectId: number, documentId: number): Promise<{ proposals: OutlineProposal[] }> {
     const { data } = await apiClient.get(`/projects/${projectId}/documents/${documentId}/outline-proposals`);
-    // Backend returns outline_json but frontend expects outline_json (same)
-    return data;
+    return {
+      proposals: data.proposals.map(normalizeOutlineProposal),
+    };
   },
 
   async approveOutlineProposal(projectId: number, documentId: number, proposalId: number): Promise<{ proposal: OutlineProposal }> {
     const { data } = await apiClient.post(
       `/projects/${projectId}/documents/${documentId}/outline-proposals/${proposalId}/approve`
     );
-    return { proposal: data };
+    return { proposal: normalizeOutlineProposal(data) };
   },
 
   async createOutlineProposal(
@@ -141,8 +172,7 @@ export const documentsApi = {
       `/projects/${projectId}/documents/${documentId}/outline-proposals`,
       proposal
     );
-    // Wrap in object to match expected response shape
-    return { proposal: data };
+    return { proposal: normalizeOutlineProposal(data) };
   },
 
   async updateOutlineProposal(
@@ -158,7 +188,7 @@ export const documentsApi = {
       `/projects/${projectId}/documents/${documentId}/outline-proposals/${proposalId}`,
       proposal
     );
-    return { proposal: data };
+    return { proposal: normalizeOutlineProposal(data) };
   },
 
   async listClarificationRequests(
@@ -250,7 +280,15 @@ export const documentsApi = {
 
   async getSections(projectId: number, documentId: number): Promise<SectionTreeResponse> {
     const { data } = await apiClient.get(`/projects/${projectId}/documents/${documentId}/sections`);
-    return data;
+    return normalizeSectionTree(data);
+  },
+
+  async createSection(projectId: number, documentId: number, title: string): Promise<Section> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/sections`,
+      { title }
+    );
+    return normalizeSection(data);
   },
 
   async updateDocumentSection(
@@ -262,6 +300,55 @@ export const documentsApi = {
     const { data } = await apiClient.patch(
       `/projects/${projectId}/documents/${documentId}/sections/${sectionId}`,
       payload
+    );
+    return normalizeSection(data);
+  },
+
+  async autosaveDocumentSection(
+    projectId: number,
+    documentId: number,
+    sectionId: number,
+    content_md: string
+  ): Promise<{ saved: boolean; updated_at: string }> {
+    const { data } = await apiClient.patch(
+      `/projects/${projectId}/documents/${documentId}/sections/${sectionId}/autosave`,
+      { content_md }
+    );
+    return data;
+  },
+
+  async updateDocumentSectionTitle(
+    projectId: number,
+    documentId: number,
+    sectionId: number,
+    title: string
+  ): Promise<Section> {
+    const { data } = await apiClient.put(
+      `/projects/${projectId}/documents/${documentId}/sections/${sectionId}/title`,
+      { title }
+    );
+    return normalizeSection(data);
+  },
+
+  async reorderDocumentSections(
+    projectId: number,
+    documentId: number,
+    sectionIds: number[]
+  ): Promise<{ message: string }> {
+    const { data } = await apiClient.put(
+      `/projects/${projectId}/documents/${documentId}/sections/reorder`,
+      { section_ids: sectionIds }
+    );
+    return data;
+  },
+
+  async deleteDocumentSection(
+    projectId: number,
+    documentId: number,
+    sectionId: number
+  ): Promise<{ message: string }> {
+    const { data } = await apiClient.delete(
+      `/projects/${projectId}/documents/${documentId}/sections/${sectionId}`
     );
     return data;
   },

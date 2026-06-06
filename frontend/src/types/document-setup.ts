@@ -139,6 +139,7 @@ export interface OutlineProposal {
   analysis_id?: number;
   basis: RecommendationBasis;
   status: 'draft' | 'approved' | 'superseded';
+  outline?: SetupSectionSummary[];
   outline_json: SetupSectionSummary[];
   explanation?: string | Record<string, unknown>;
   approved_at?: string;
