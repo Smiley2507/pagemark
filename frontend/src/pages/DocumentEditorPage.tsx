@@ -152,6 +152,7 @@ function SectionBlock({
   onRename,
   onSavingChange,
   onSaved,
+  onLocalContentChange,
   onAcceptReview,
   onJumpToSection,
 }: {
@@ -166,6 +167,7 @@ function SectionBlock({
   onRename: (sectionId: number, title: string) => void;
   onSavingChange: (sectionId: number, isSaving: boolean) => void;
   onSaved: (date: Date) => void;
+  onLocalContentChange: (sectionId: number, content: string) => void;
   onAcceptReview?: (sectionId: number) => void;
   onJumpToSection?: (sectionId: number) => void;
 }) {
@@ -192,6 +194,11 @@ function SectionBlock({
   useEffect(() => {
     if (lastSaved) onSaved(lastSaved);
   }, [lastSaved, onSaved]);
+
+  const handleContentChange = (nextContent: string) => {
+    setContent(nextContent);
+    onLocalContentChange(section.id, nextContent);
+  };
 
   const saveNow = async () => {
     const updated = await updateSection.mutateAsync({
@@ -289,7 +296,7 @@ function SectionBlock({
         </div>
 
         <div className="min-w-0 overflow-x-hidden px-1 py-2 focus-within:ring-2 focus-within:ring-ring">
-          <MarkdownEditor value={content} onChange={setContent} />
+          <MarkdownEditor value={content} onChange={handleContentChange} />
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-3 text-meta text-text-muted">
@@ -331,6 +338,7 @@ export function DocumentEditorPage() {
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
+  const [localContentBySectionId, setLocalContentBySectionId] = useState<Record<number, string>>({});
   const tocKeyboard = useTocKeyboardNavigation();
   const scrollRootRef = useRef<HTMLDivElement>(null);
 
@@ -342,9 +350,15 @@ export function DocumentEditorPage() {
 
   const { data: sectionTree, isLoading: sectionsLoading } = useDocumentSections(pid, did);
   const sections = useMemo(() => flattenSections(sectionTree?.sections || []), [sectionTree?.sections]);
-  const tocItems = useMemo(() => buildToc(sections), [sections]);
-  const wordCount = useMemo(() => countWords(sections), [sections]);
-  const issueCount = useMemo(() => countQualityIssues(sections), [sections]);
+  const sectionsForStats = useMemo(() => (
+    sections.map((section) => ({
+      ...section,
+      content_md: localContentBySectionId[section.id] ?? section.content_md,
+    }))
+  ), [localContentBySectionId, sections]);
+  const tocItems = useMemo(() => buildToc(sectionsForStats), [sectionsForStats]);
+  const wordCount = useMemo(() => countWords(sectionsForStats), [sectionsForStats]);
+  const issueCount = useMemo(() => countQualityIssues(sectionsForStats), [sectionsForStats]);
   const reviewedCount = useMemo(
     () => sections.filter((section) => getSectionState(section).key === 'reviewed').length,
     [sections],
@@ -357,6 +371,20 @@ export function DocumentEditorPage() {
   const { data: qualityData } = useQualityReport(pid, did);
 
   const canAcceptAll = sections.length > 0 && reviewedCount < reviewTotal;
+
+  useEffect(() => {
+    setLocalContentBySectionId((current) => {
+      const next = { ...current };
+      let changed = false;
+      sections.forEach((section) => {
+        if (next[section.id] === section.content_md) {
+          delete next[section.id];
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [sections]);
 
   const { data: freshnessData } = useQuery({
     queryKey: ['freshness', pid, did],
@@ -478,6 +506,13 @@ export function DocumentEditorPage() {
     globalThis.document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setActiveTocId(item.id);
   };
+
+  const handleLocalContentChange = useCallback((sectionId: number, content: string) => {
+    setLocalContentBySectionId((current) => {
+      if (current[sectionId] === content) return current;
+      return { ...current, [sectionId]: content };
+    });
+  }, []);
 
   const handleSavingChange = useCallback((sectionId: number, saving: boolean) => {
     setSavingSectionIds((current) => {
@@ -685,6 +720,7 @@ export function DocumentEditorPage() {
                   onRename={(sectionId, title) => renameSection.mutate({ sectionId, title })}
                   onSavingChange={handleSavingChange}
                   onSaved={setLastSaved}
+                  onLocalContentChange={handleLocalContentChange}
                   onAcceptReview={(sectionId) => acceptSectionReview.mutate(sectionId)}
                   onJumpToSection={(sectionId) => { setActiveSectionId(sectionId); setRightPanelOpen(true); setRightTab('notes'); }}
                 />
