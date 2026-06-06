@@ -154,7 +154,7 @@ export function ProjectLibrary({
       </div>
 
       {viewMode === 'list' ? (
-        <div className="space-y-3">
+        <Surface variant="panel" padding="none" className="divide-y divide-separator overflow-hidden">
           {summaries.map((summary) => (
             <ProjectSummaryRow
               key={summary.project.id}
@@ -162,9 +162,9 @@ export function ProjectLibrary({
               onOpen={() => onOpenProject(summary.project.id)}
             />
           ))}
-        </div>
+        </Surface>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {summaries.map((summary) => (
             <ProjectSummaryCard
               key={summary.project.id}
@@ -285,43 +285,38 @@ function ProjectSummaryRow({
 }) {
   const actions = React.useContext(ProjectActionsContext);
   return (
-    <Surface
-      variant="panel"
-      padding="default"
-      className="w-full transition-colors hover:bg-panel-muted"
-    >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <button
-          type="button"
-          className="min-w-0 flex-1 space-y-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={onOpen}
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-body-lg font-semibold text-text-primary">
-              {summary.project.name}
-            </h3>
-            <ProjectAttentionBadges summary={summary} />
-          </div>
-          {summary.project.description && (
-            <p className="max-w-3xl truncate text-body text-text-secondary">
-              {summary.project.description}
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2 text-meta text-text-muted">
-            <span>{summary.documentCount} docs</span>
-            <span>{summary.templates.slice(0, 2).join(', ') || 'Custom outline'}</span>
-            <span>Last activity {formatDate(summary.lastActivityAt)}</span>
-          </div>
-        </button>
-
-        <div className="flex w-full max-w-sm items-center gap-3 lg:pl-4">
-          <div className="min-w-0 flex-1">
-            <Progress value={summary.averageProgress} label="Document progress" />
-          </div>
-          <ProjectActionButtons summary={summary} actions={actions} />
+    <div className="grid gap-3 px-3 py-2.5 transition-colors hover:bg-panel-muted lg:grid-cols-[minmax(0,1fr)_180px_132px_auto] lg:items-center">
+      <button
+        type="button"
+        className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={onOpen}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="truncate text-body font-semibold text-text-primary">
+            {summary.project.name}
+          </h3>
+          <ProjectAttentionBadges summary={summary} />
         </div>
+        <p className="mt-0.5 truncate text-meta text-text-secondary">
+          {summary.project.description || summary.templates.slice(0, 2).join(', ') || 'Custom outline'}
+        </p>
+      </button>
+
+      <div className="flex min-w-0 flex-wrap gap-1 text-meta text-text-muted lg:block">
+        <span>{summary.documentCount} docs</span>
+        <span className="lg:sr-only">/</span>
+        <span className="truncate lg:block">{summary.templates.slice(0, 1).join(', ') || 'Custom outline'}</span>
       </div>
-    </Surface>
+
+      <div className="min-w-0">
+        <Progress value={summary.averageProgress} label="Document progress" />
+      </div>
+
+      <div className="flex items-center justify-between gap-2 lg:justify-end">
+        <span className="text-meta text-text-muted">{formatDate(summary.lastActivityAt)}</span>
+        <ProjectActionButtons summary={summary} actions={actions} />
+      </div>
+    </div>
   );
 }
 
@@ -340,33 +335,37 @@ function ProjectSummaryCard({
       className="w-full transition-colors hover:bg-panel-muted"
     >
       <div className="space-y-3">
-        <button
-          type="button"
-          className="w-full space-y-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={onOpen}
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-body-lg font-semibold text-text-primary">
-              {summary.project.name}
-            </h3>
-            <ProjectAttentionBadges summary={summary} />
-          </div>
-          {summary.project.description && (
-            <p className="line-clamp-2 text-body text-text-secondary">
-              {summary.project.description}
+        <div className="flex items-start justify-between gap-2">
+          <button
+            type="button"
+            className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={onOpen}
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <h3 className="truncate text-body font-semibold text-text-primary">
+                {summary.project.name}
+              </h3>
+            </div>
+            <p className="mt-1 line-clamp-2 min-h-10 text-meta text-text-secondary">
+              {summary.project.description || summary.templates.slice(0, 2).join(', ') || 'Custom outline'}
             </p>
-          )}
-        </button>
+          </button>
+          <ProjectActionButtons summary={summary} actions={actions} />
+        </div>
+
+        <div className="flex min-h-6 flex-wrap gap-1">
+          <ProjectAttentionBadges summary={summary} />
+        </div>
 
         <Progress value={summary.averageProgress} label="Document progress" />
 
-        <div className="grid gap-1 text-meta text-text-secondary">
+        <div className="grid grid-cols-2 gap-2 text-meta text-text-secondary">
           <span>{summary.documentCount} docs</span>
-          <span>{summary.templates.slice(0, 2).join(', ') || 'Custom outline'}</span>
-          <span>Last activity {formatDate(summary.lastActivityAt)}</span>
+          <span className="text-right">{formatDate(summary.lastActivityAt)}</span>
+          <span className="col-span-2 truncate">{summary.templates.slice(0, 2).join(', ') || 'Custom outline'}</span>
         </div>
 
-        <div className="flex items-center justify-between gap-3">
+        {summary.tags.length > 0 && (
           <div className="flex min-w-0 flex-wrap gap-2">
             {summary.tags.slice(0, 4).map((tag) => (
               <Badge key={tag} variant="neutral" showIcon={false}>
@@ -374,8 +373,7 @@ function ProjectSummaryCard({
               </Badge>
             ))}
           </div>
-          <ProjectActionButtons summary={summary} actions={actions} />
-        </div>
+        )}
       </div>
     </Surface>
   );
