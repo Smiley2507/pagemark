@@ -109,6 +109,12 @@ function isAllowedInlineStyle(file, styleBody) {
   ) {
     return true;
   }
+  if (
+    /\b(?:background|backgroundImage|backgroundSize):/.test(normalized) &&
+    /var\(--interaction\)|color-mix\(/.test(normalized)
+  ) {
+    return true;
+  }
   return false;
 }
 

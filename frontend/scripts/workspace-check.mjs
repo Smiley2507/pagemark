@@ -148,7 +148,7 @@ function assertLandingAndAuth() {
   [
     'Multi-Document workspace for software projects',
     'Documentation built section by section from your source code.',
-    'Product workflow',
+    'Reviewable, trackable, fresh',
   ].forEach((marker) => assertContains(landing, marker, `landing page is missing "${marker}"`));
 
   ['images.unsplash.com', 'motion/', 'useScroll', 'useTransform'].forEach((marker) => {
@@ -159,8 +159,8 @@ function assertLandingAndAuth() {
 
   assertContains(authLayout, 'Surface', 'auth layout is missing Surface');
   assertContains(authLayout, 'Connect source once', 'auth layout should reference the core product workflow');
-  assertContains(login, 'Sign in to your workspace.', 'login page should be concise and workspace-aligned');
-  assertContains(register, 'Get started in seconds.', 'register page should be concise and action-oriented');
+  assertContains(login, 'your Documents, Sections, and review state', 'login page should reference workspace resume');
+  assertContains(register, 'no provider credential required', 'register page should highlight low-friction start');
 }
 
 function assertFirstDocumentJourney() {

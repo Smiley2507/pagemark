@@ -11,7 +11,7 @@ export const RegisterPage = () => {
   return (
     <AuthLayout
       title="Create your account"
-      subtitle="Get started in seconds."
+      subtitle="Create a Project, connect your source, and write the first Document — no provider credential required to start."
     >
       <form
         onSubmit={(e) => {

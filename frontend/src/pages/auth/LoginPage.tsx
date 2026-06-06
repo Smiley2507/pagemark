@@ -11,7 +11,7 @@ export const LoginPage = () => {
   return (
     <AuthLayout
       title="Welcome back"
-      subtitle="Sign in to your workspace."
+      subtitle="Sign in to pick up where you left off — your Documents, Sections, and review state are right where you saved them."
     >
       <form
         onSubmit={(e) => {
