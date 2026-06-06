@@ -29,7 +29,9 @@ const HEATMAP_CLASSES = [
   'bg-interaction',
 ];
 
-const HEATMAP_DAYS = 84;
+const HEATMAP_DAYS = 365;
+
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export function ProjectActivityPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -59,6 +61,7 @@ export function ProjectActivityPage() {
     ? heatmapData || {}
     : heatmapFromActivities(activities);
   const heatmapDays = buildHeatmapDays(heatmapSource, HEATMAP_DAYS);
+  const heatmapWeeks = chunkWeeks(heatmapDays);
   const activeDays = heatmapDays.filter((day) => day.weight > 0).length;
 
   return (
@@ -75,21 +78,39 @@ export function ProjectActivityPage() {
           </div>
         </div>
 
-        <div className="overflow-x-auto pb-1">
-          <div
-            className="grid w-max grid-flow-col grid-rows-7 gap-1"
-            role="list"
-            aria-label="Activity heatmap for the last 12 weeks"
-          >
-            {heatmapDays.map(({ date, weight }) => (
+        <div className="overflow-x-auto pb-2">
+          <div className="mx-auto w-max">
+            <div className="ml-12 grid grid-flow-col gap-1" aria-hidden="true">
+              {heatmapWeeks.map((week, index) => (
+                <div key={week[0]?.date || index} className="h-5 w-4 text-meta-sm text-text-muted">
+                  {monthLabelForWeek(week, index)}
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <div className="grid grid-rows-7 gap-1" aria-hidden="true">
+                {WEEKDAY_LABELS.map((label) => (
+                  <div key={label} className="flex h-4 w-10 items-center justify-end text-meta-sm text-text-muted">
+                    {label}
+                  </div>
+                ))}
+              </div>
               <div
-                key={date}
-                role="listitem"
-                title={`${formatHeatmapDate(date)}: ${formatWeight(weight)}`}
-                aria-label={`${formatHeatmapDate(date)}: ${formatWeight(weight)}`}
-                className={`h-3 w-3 rounded ${heatmapClass(weight)}`}
-              />
-            ))}
+                className="grid grid-flow-col grid-rows-7 gap-1"
+                role="list"
+                aria-label="Activity heatmap for the last year"
+              >
+                {heatmapDays.map(({ date, weight }) => (
+                  <div
+                    key={date}
+                    role="listitem"
+                    title={`${formatHeatmapDate(date)}: ${formatWeight(weight)}`}
+                    aria-label={`${formatHeatmapDate(date)}: ${formatWeight(weight)}`}
+                    className={`h-4 w-4 rounded ${heatmapClass(weight)}`}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </Surface>
@@ -145,6 +166,28 @@ function buildHeatmapDays(source: Record<string, number>, days: number) {
     entries.push({ date, weight: source[date] || 0 });
   }
   return entries;
+}
+
+function chunkWeeks(days: Array<{ date: string; weight: number }>) {
+  const weeks: Array<Array<{ date: string; weight: number }>> = [];
+  for (let index = 0; index < days.length; index += 7) {
+    weeks.push(days.slice(index, index + 7));
+  }
+  return weeks;
+}
+
+function monthLabelForWeek(week: Array<{ date: string; weight: number }>, index: number) {
+  const firstDay = week[0]?.date;
+  if (!firstDay) return '';
+  const date = new Date(`${firstDay}T00:00:00`);
+  const previousWeek = index > 0 ? new Date(`${week[0].date}T00:00:00`) : null;
+  if (previousWeek) {
+    previousWeek.setDate(previousWeek.getDate() - 7);
+  }
+  if (index !== 0 && previousWeek && previousWeek.getMonth() === date.getMonth()) {
+    return '';
+  }
+  return date.toLocaleDateString(undefined, { month: 'short' });
 }
 
 function heatmapFromActivities(activities: ActivityEvent[]) {
