@@ -22,6 +22,7 @@ from app.models.template import Template
 from app.models.user import User
 from app.services import analysis_service
 from app.services import ai_doc_service as ai_doc_service_module
+from app.services import ai_service as ai_service_module
 from app.services.ai_credential_service import ActiveCredential
 from app.services.ai_doc_service import ai_service
 
@@ -384,6 +385,58 @@ async def test_ai_doc_service_uses_active_provider_adapter(monkeypatch):
         "api_key": "test-google-key",
         "model_id": "gemini-1.5-flash",
         "max_tokens": 123,
+    }
+
+
+@pytest.mark.asyncio
+async def test_ai_provider_catalog_includes_opencode_go(client):
+    response = await client.get("/auth/me/ai-providers/catalog")
+
+    assert response.status_code == 200
+    providers = {provider["id"]: provider for provider in response.json()["providers"]}
+    assert "opencode-go" in providers
+    assert providers["opencode-go"]["label"] == "OpenCode Go"
+    assert {model["id"] for model in providers["opencode-go"]["models"]} >= {
+        "deepseek-v4-flash",
+        "kimi-k2.6",
+        "glm-5.1",
+    }
+
+
+def test_opencode_go_chat_completion_payload(monkeypatch):
+    calls = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": "OpenCode response"}}]}
+
+    def fake_post(url, *, headers, json, timeout):
+        calls.update({"url": url, "headers": headers, "json": json, "timeout": timeout})
+        return FakeResponse()
+
+    monkeypatch.setattr(ai_service_module.httpx, "post", fake_post)
+
+    response = ai_service_module._complete_opencode_go(
+        "system prompt",
+        "user prompt",
+        "test-opencode-key",
+        "deepseek-v4-flash",
+        256,
+    )
+
+    assert response == "OpenCode response"
+    assert calls["url"] == "https://opencode.ai/zen/go/v1/chat/completions"
+    assert calls["headers"]["Authorization"] == "Bearer test-opencode-key"
+    assert calls["json"] == {
+        "model": "deepseek-v4-flash",
+        "messages": [
+            {"role": "system", "content": "system prompt"},
+            {"role": "user", "content": "user prompt"},
+        ],
+        "max_tokens": 256,
     }
 
 

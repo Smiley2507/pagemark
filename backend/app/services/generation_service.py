@@ -37,6 +37,7 @@ from app.services.template_recommendation_service import get_current_analysis
 PROVIDER_PARALLELISM = {
     "anthropic": 2,
     "google": 3,
+    "opencode-go": 2,
 }
 
 MODEL_PRICING_PER_1K = {
@@ -47,6 +48,16 @@ MODEL_PRICING_PER_1K = {
     "google": {
         "gemini-2.0-flash": {"prompt": 0.0001, "completion": 0.0004},
         "gemini-1.5-flash": {"prompt": 0.000075, "completion": 0.0003},
+    },
+    "opencode-go": {
+        "deepseek-v4-flash": {"prompt": 0.00014, "completion": 0.00028},
+        "deepseek-v4-pro": {"prompt": 0.00174, "completion": 0.00348},
+        "kimi-k2.6": {"prompt": 0.00095, "completion": 0.004},
+        "kimi-k2.5": {"prompt": 0.0006, "completion": 0.003},
+        "glm-5.1": {"prompt": 0.0014, "completion": 0.0044},
+        "glm-5": {"prompt": 0.001, "completion": 0.0032},
+        "mimo-v2.5": {"prompt": 0.00014, "completion": 0.00028},
+        "mimo-v2.5-pro": {"prompt": 0.00174, "completion": 0.00348},
     },
 }
 
@@ -428,7 +439,7 @@ async def _generate_section_content(
     provider: str | None,
     model: str | None,
 ) -> GeneratedSection:
-    if provider != "anthropic":
+    if provider not in PROVIDER_PARALLELISM:
         raise ProviderGenerationError(
             f"Provider '{provider}' is not supported for prose generation yet.",
             "request",

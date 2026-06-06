@@ -76,6 +76,9 @@ def test_cost_calculation():
     # 1000 * 0.0001/1K = 0.0001, 500 * 0.0004/1K = 0.0002, total = 0.0003
     assert abs(gemini_cost - 0.0003) < 0.0001
 
+    opencode_cost = generation_service._cost("opencode-go", "deepseek-v4-flash", 1000, 500)
+    assert abs(opencode_cost - 0.00028) < 0.0001
+
 
 def test_relative_usage_levels():
     """Test relative usage categorization."""
@@ -171,6 +174,7 @@ def test_provider_parallelism():
     from app.services.generation_service import PROVIDER_PARALLELISM
     assert PROVIDER_PARALLELISM["anthropic"] == 2
     assert PROVIDER_PARALLELISM["google"] == 3
+    assert PROVIDER_PARALLELISM["opencode-go"] == 2
 
 
 def test_failover_error_categories():

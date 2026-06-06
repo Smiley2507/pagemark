@@ -1,5 +1,7 @@
 """Unified BYOK AI provider adapters (Anthropic + Google AI Studio)."""
 
+import httpx
+
 from app.ai_providers import VALID_PROVIDERS, is_valid_model
 
 
@@ -21,6 +23,8 @@ def validate_credential(provider: str, api_key: str, model_id: str) -> None:
             _validate_anthropic(api_key, model_id)
         elif provider == "google":
             _validate_google(api_key, model_id)
+        elif provider == "opencode-go":
+            _validate_opencode_go(api_key, model_id)
     except AiServiceError:
         raise
     except Exception as e:
@@ -43,6 +47,8 @@ def complete_text(
         return _complete_anthropic(system, user, api_key, model_id, max_tokens)
     if provider == "google":
         return _complete_google(system, user, api_key, model_id, max_tokens)
+    if provider == "opencode-go":
+        return _complete_opencode_go(system, user, api_key, model_id, max_tokens)
     raise AiServiceError(f"Unsupported provider: {provider}")
 
 
@@ -108,3 +114,61 @@ def _complete_google(
         if parts:
             return (parts[0].text or "").strip()
     raise AiServiceError("Empty response from Google AI")
+
+
+def _opencode_go_chat_completion(
+    api_key: str,
+    model_id: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+) -> str:
+    response = httpx.post(
+        "https://opencode.ai/zen/go/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model_id,
+            "messages": messages,
+            "max_tokens": max_tokens,
+        },
+        timeout=60,
+    )
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise AiServiceError(f"OpenCode Go request failed: {_safe_error(exc)}") from exc
+
+    data = response.json()
+    choices = data.get("choices")
+    if not choices:
+        raise AiServiceError("Empty response from OpenCode Go")
+    message = choices[0].get("message") or {}
+    content = message.get("content")
+    if isinstance(content, str) and content.strip():
+        return content.strip()
+    raise AiServiceError("Empty response from OpenCode Go")
+
+
+def _validate_opencode_go(api_key: str, model_id: str) -> None:
+    _opencode_go_chat_completion(
+        api_key,
+        model_id,
+        [{"role": "user", "content": "Reply with OK"}],
+        16,
+    )
+
+
+def _complete_opencode_go(
+    system: str, user: str, api_key: str, model_id: str, max_tokens: int
+) -> str:
+    return _opencode_go_chat_completion(
+        api_key,
+        model_id,
+        [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        max_tokens,
+    )
