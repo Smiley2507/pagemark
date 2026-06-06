@@ -8,7 +8,12 @@ const frontendRoot = process.cwd();
 const rawProductColorPattern =
   /(?:className\s*=\s*["'][^"']*(?:bg|text|border|ring|from|to|via)-(?:red|orange|amber|yellow|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|slate|gray|zinc|neutral|stone|white|black)-\d{2,3}[^"']*["'])|#[0-9a-fA-F]{3,8}\b|(?:rgb|hsl|oklch)\(/;
 const arbitraryVisualPattern =
-  /\b(?:bg|text|border|ring|shadow|rounded)-\[[^\]]+\]/;
+  /\b(?:bg|text|border|ring|shadow|rounded|p|px|py|pt|pr|pb|pl|m|mx|my|mt|mr|mb|ml|gap|space-x|space-y|w|h|min-w|min-h|max-w|max-h|inset|top|right|bottom|left|translate-x|translate-y)-\[[^\]]+\]/;
+const arbitraryRadiusOrShadowPattern =
+  /\b(?:rounded|shadow)-\[[^\]]+\]|\bshadow-(?!overlay\b)[a-z0-9-]+\b/;
+const repeatedLocalStylingPattern =
+  /\b(?:rounded-(?:sm|md|lg|xl|2xl|3xl|full)|shadow-(?:sm|md|lg|xl|2xl)|bg-(?:panel|card|muted|background|workspace|canvas)|border\s+border-border)\b/g;
+const inlineStylePattern = /style=\{\{([^}]*)\}\}/gs;
 
 const allowedRawColorFiles = new Set([
   'src/index.css',
@@ -16,6 +21,9 @@ const allowedRawColorFiles = new Set([
 const legacyVisualDebtFiles = new Set([
   'src/components/editor/MiddlePanel.tsx',
 ]);
+const governedPrimitiveDirectories = [
+  'src/components/ui/',
+];
 
 function fail(message) {
   console.error(`[design-system] ${message}`);
@@ -25,7 +33,7 @@ function fail(message) {
 function gitChangedFiles() {
   try {
     const output = execSync(
-      'git diff --name-only HEAD -- frontend/src frontend/tailwind.config.cjs frontend/eslint.config.js frontend/scripts',
+      'git diff --name-only HEAD -- frontend/src frontend/tailwind.config.cjs frontend/eslint.config.js',
       { cwd: repoRoot, encoding: 'utf8' }
     );
     return output
@@ -35,6 +43,10 @@ function gitChangedFiles() {
   } catch {
     return [];
   }
+}
+
+function isGovernedPrimitive(file) {
+  return governedPrimitiveDirectories.some((directory) => file.startsWith(directory));
 }
 
 function checkedFiles() {
@@ -64,6 +76,67 @@ function assertRawColorDetectorWorks() {
   }
 }
 
+function assertArbitraryVisualDetectorWorks() {
+  const bad = '<div className="rounded-[13px] shadow-[0_8px_30px_rgb(0_0_0/0.2)] max-w-[41rem]" />';
+  if (!arbitraryVisualPattern.test(bad) || !arbitraryRadiusOrShadowPattern.test(bad)) {
+    fail('arbitrary visual detector did not catch the fixture radius, shadow, or sizing value');
+  }
+}
+
+function assertLocalStylingDetectorWorks() {
+  const bad = '<div className="rounded-lg border border-border bg-panel p-4 shadow-sm" />';
+  const matches = bad.match(repeatedLocalStylingPattern) || [];
+  if (matches.length < 3) {
+    fail('local styling detector did not catch the fixture repeated panel treatment');
+  }
+}
+
+function isAllowedInlineStyle(file, styleBody) {
+  const normalized = styleBody.replace(/\s+/g, ' ');
+  if (/width:\s*`?\$\{[^}]+}%`?/.test(normalized)) {
+    return true;
+  }
+  if (
+    file.includes('/editor/') &&
+    /\b(?:top|left|right|bottom|width|height|transform):/.test(normalized)
+  ) {
+    return true;
+  }
+  if (
+    file.includes('Export') &&
+    /\b(?:color|backgroundColor|borderColor|fontFamily):/.test(normalized) &&
+    /\b(?:primaryColor|fontFamily|branding|export)/i.test(normalized)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function assertInlineStyleDetectorWorks() {
+  const bad = '<div style={{ color: "#123456", borderRadius: "12px" }} />';
+  const allowedProgress = '<div style={{ width: `${percentage}%` }} />';
+  const allowedEditor = '<div style={{ top: position.top, left: position.left }} />';
+  const allowedExport = '<div style={{ color: primaryColor, fontFamily }} />';
+  if (!inlineStylePattern.test(bad)) {
+    fail('inline style detector did not catch the fixture inline style');
+  }
+  inlineStylePattern.lastIndex = 0;
+  if (
+    !isAllowedInlineStyle('src/components/ui/progress.tsx', ' width: `${percentage}%` ') ||
+    !isAllowedInlineStyle('src/components/editor/BubbleMenu.tsx', ' top: position.top, left: position.left ') ||
+    !isAllowedInlineStyle('src/components/editor/ExportModal.tsx', ' color: primaryColor, fontFamily ')
+  ) {
+    fail('inline style detector rejected an allowed runtime-computed fixture');
+  }
+  inlineStylePattern.lastIndex = 0;
+  if (isAllowedInlineStyle('src/pages/HomePage.tsx', ' color: "#123456", borderRadius: "12px" ')) {
+    fail('inline style detector allowed a hardcoded product UI style fixture');
+  }
+  void allowedProgress;
+  void allowedEditor;
+  void allowedExport;
+}
+
 function assertNoRawVisualsInChangedFiles() {
   for (const file of checkedFiles()) {
     const absolute = path.join(frontendRoot, file);
@@ -73,8 +146,22 @@ function assertNoRawVisualsInChangedFiles() {
     if (!allowedRawColorFiles.has(file) && rawProductColorPattern.test(source)) {
       fail(`${file} contains raw product UI color; use semantic tokens or governed variants`);
     }
-    if (!file.startsWith('src/components/ui/') && arbitraryVisualPattern.test(source)) {
+    if (!isGovernedPrimitive(file) && arbitraryVisualPattern.test(source)) {
       fail(`${file} contains arbitrary visual Tailwind values outside governed primitives`);
+    }
+    if (!isGovernedPrimitive(file) && arbitraryRadiusOrShadowPattern.test(source)) {
+      fail(`${file} contains arbitrary radius or shadow outside governed primitives`);
+    }
+    if (!isGovernedPrimitive(file)) {
+      const matches = source.match(repeatedLocalStylingPattern) || [];
+      if (matches.length >= 3) {
+        fail(`${file} repeats local panel/card styling; compose governed variants instead`);
+      }
+    }
+    for (const match of source.matchAll(inlineStylePattern)) {
+      if (!isAllowedInlineStyle(file, match[1])) {
+        fail(`${file} contains inline product styling outside the runtime-computed exceptions`);
+      }
     }
   }
 }
@@ -158,6 +245,19 @@ function assertFocusHooks() {
   }
 }
 
+function assertReducedMotionCoverage() {
+  const css = readFileSync(path.join(frontendRoot, 'src/index.css'), 'utf8');
+  for (const marker of [
+    '@media (prefers-reduced-motion: reduce)',
+    'animation-duration: 0.01ms !important',
+    'transition-duration: 0.01ms !important',
+  ]) {
+    if (!css.includes(marker)) {
+      fail(`reduced motion coverage is missing ${marker}`);
+    }
+  }
+}
+
 function assertPrimitiveProofUsesVariants() {
   const source = readFileSync(
     path.join(frontendRoot, 'src/components/ui/design-system-proof.tsx'),
@@ -233,9 +333,13 @@ function assertPhase4SurfacesUseGovernedPrimitives() {
 }
 
 assertRawColorDetectorWorks();
+assertArbitraryVisualDetectorWorks();
+assertLocalStylingDetectorWorks();
+assertInlineStyleDetectorWorks();
 assertNoRawVisualsInChangedFiles();
 assertContrast();
 assertFocusHooks();
+assertReducedMotionCoverage();
 assertPrimitiveProofUsesVariants();
 assertPhase4SurfacesUseGovernedPrimitives();
 

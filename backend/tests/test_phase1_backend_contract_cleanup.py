@@ -100,6 +100,17 @@ async def test_project_summary_is_derived_from_documents_and_sections(
     assert first_payload["freshness_state"] == "potentially_stale"
     assert first_payload["recent_activity_at"] is not None
 
+    first_documents_response = await client.get(f"/projects/{test_project.id}/documents")
+    assert first_documents_response.status_code == 200
+    first_document = first_documents_response.json()["documents"][0]
+    assert first_document["id"] == document.id
+    assert first_document["status"] == "needs_input"
+    assert first_document["freshness"] == "potentially_stale"
+    assert first_document["progress"]["total_sections"] == 3
+    assert first_document["progress"]["reviewed_sections"] == 1
+    assert first_document["progress"]["generated_sections"] == 2
+    assert first_document["progress"]["pct"] == 33.3
+
     sections = list((await db.execute(select(Section).where(Section.document_id == document.id))).scalars().all())
     for section in sections:
         section.content_md = section.content_md or "Reviewed now"
@@ -121,6 +132,14 @@ async def test_project_summary_is_derived_from_documents_and_sections(
     assert second_payload["sections_needing_input"] == 0
     assert second_payload["review_state"] == "reviewed"
     assert second_payload["freshness_state"] == "fresh"
+
+    second_documents_response = await client.get(f"/projects/{test_project.id}/documents")
+    assert second_documents_response.status_code == 200
+    second_document = second_documents_response.json()["documents"][0]
+    assert second_document["status"] == "reviewed"
+    assert second_document["freshness"] == "fresh"
+    assert second_document["progress"]["reviewed_sections"] == 3
+    assert second_document["progress"]["pct"] == 100.0
 
 
 @pytest.mark.asyncio

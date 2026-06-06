@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const frontendRoot = process.cwd();
+const repoRoot = path.resolve(frontendRoot, '..');
 
 function fail(message) {
   console.error(`[workspace-check] ${message}`);
@@ -10,6 +11,10 @@ function fail(message) {
 
 function read(relativePath) {
   return readFileSync(path.join(frontendRoot, relativePath), 'utf8');
+}
+
+function readRepo(relativePath) {
+  return readFileSync(path.join(repoRoot, relativePath), 'utf8');
 }
 
 function assertContains(source, value, message) {
@@ -124,12 +129,38 @@ function assertFirstDocumentJourney() {
   });
 }
 
+function assertPhasePromptsStartFromCanonicalPrompt() {
+  const promptFiles = [
+    'docs/REDESIGN_PHASE_PROMPTS.md',
+    'docs/GAP_FILL_PHASE_PROMPTS.md',
+  ];
+
+  for (const file of promptFiles) {
+    const source = readRepo(file);
+    const promptBlocks = [...source.matchAll(/```text\n([\s\S]*?)```/g)];
+    if (promptBlocks.length === 0) {
+      fail(`${file} does not contain phase prompt blocks`);
+      continue;
+    }
+    for (const [index, block] of promptBlocks.entries()) {
+      const firstLine = block[1].trimStart().split('\n')[0];
+      if (firstLine !== 'Read docs/CANONICAL_EXECUTION_PROMPT.md first.') {
+        fail(`${file} prompt block ${index + 1} must read docs/CANONICAL_EXECUTION_PROMPT.md first`);
+      }
+      if (/Read docs\/REDESIGN_IMPLEMENTATION_PLAN\.md|Read docs\/MASTER_ROADMAP\.md|Read docs\/ARCHITECTURE_REVIEW\.md|Read docs\/LANDING_PAGE_COPY\.md/.test(block[1])) {
+        fail(`${file} prompt block ${index + 1} points to an older source-of-truth document`);
+      }
+    }
+  }
+}
+
 assertGlobalNavigation();
 assertProjectNavigation();
 assertLibraryPreferences();
 assertSharedPrimitives();
 assertLandingAndAuth();
 assertFirstDocumentJourney();
+assertPhasePromptsStartFromCanonicalPrompt();
 
 if (!process.exitCode) {
   console.log('[workspace-check] checks passed');
