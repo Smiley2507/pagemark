@@ -134,15 +134,12 @@ export const Analysis: React.FC = () => {
               </Button>
             )}
             {isCompleted && (
-              <Button size="sm" onClick={() => navigate(`/editor/${projectId}`)}>
-                Open in editor
+              <Button size="sm" onClick={() => navigate(`/projects/${projectId}`)}>
+                Open project
               </Button>
             )}
           </div>
         </div>
-        <Notice variant="info" title="Shared Project Analysis">
-          This snapshot is reused across Documents in the Project. Treat it as supporting evidence, not the dominant workspace.
-        </Notice>
       </Surface>
 
       <div className="space-y-8">

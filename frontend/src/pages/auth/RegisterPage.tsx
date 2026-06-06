@@ -1,6 +1,4 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,21 +7,11 @@ import { useRegister } from '@/hooks/useAuth';
 
 export const RegisterPage = () => {
   const { mutate: register, isPending } = useRegister();
-  const [password, setPassword] = useState('');
-
-  const strength =
-    password.length === 0
-      ? { label: 'Too short', width: '0%' }
-      : password.length < 6
-        ? { label: 'Weak', width: '33%' }
-        : password.length < 10
-          ? { label: 'Medium', width: '66%' }
-          : { label: 'Strong', width: '100%' };
 
   return (
     <AuthLayout
-      title="Create your workspace access"
-      subtitle="Set up your account now. Provider credentials remain optional until you choose an AI-powered action."
+      title="Create your account"
+      subtitle="Get started in seconds."
     >
       <form
         onSubmit={(e) => {
@@ -52,28 +40,14 @@ export const RegisterPage = () => {
         </div>
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            name="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-panel-muted">
-            <div
-              className="h-full rounded-full bg-interaction transition-all duration-300"
-              style={{ width: strength.width }}
-            />
-          </div>
-          <p className="text-meta-sm text-text-muted">Strength: {strength.label}</p>
+          <Input id="password" type="password" name="password" required />
         </div>
         <div className="space-y-2">
           <Label htmlFor="confirmPassword">Confirm password</Label>
           <Input id="confirmPassword" type="password" name="confirmPassword" required />
         </div>
         <Button type="submit" className="h-10 w-full" disabled={isPending}>
-          {isPending ? 'Creating account…' : 'Sign up'}
+          {isPending ? 'Creating account\u2026' : 'Sign up'}
         </Button>
       </form>
       <p className="mt-6 text-center text-meta text-text-muted">

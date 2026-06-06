@@ -8,8 +8,10 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { projectsApi } from '@/api/projects';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { LogoUploader } from '@/components/ui/LogoUploader';
 import { Notice } from '@/components/ui/notice';
+import { Select } from '@/components/ui/select';
 import { Surface } from '@/components/ui/surface';
 import type { Project, ExportSettings } from '@/types';
 
@@ -189,38 +191,33 @@ export function ExportPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-workspace">
+    <Surface variant="workspace" className="flex h-screen flex-col rounded-none">
       {/* Top bar */}
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-separator bg-panel px-4">
-        <Link to={`/editor/${pid}`} className="flex items-center gap-1.5 text-meta text-muted-foreground hover:text-foreground transition-colors">
+      <Surface as="header" variant="panel" className="flex h-14 shrink-0 items-center gap-3 border-b border-separator border-0 rounded-none px-4">
+        <Link to={`/projects/${pid}`} className="flex items-center gap-1.5 text-meta text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" />
-          Back to editor
+          Back to project
         </Link>
         <span className="text-muted-foreground/30">|</span>
         <h1 className="text-section font-semibold truncate">{project?.name ?? 'Loading\u2026'} \u2014 Export</h1>
         <div className="flex-1" />
         {saving && <span className="text-xs text-muted-foreground animate-pulse">Saving\u2026</span>}
-        <select
+        <Select
           value={exportFormat}
           onChange={(e) => setExportFormat(e.target.value as 'html' | 'pdf')}
-          className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs"
         >
           <option value="html">HTML</option>
           <option value="pdf">PDF</option>
-        </select>
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60"
-        >
+        </Select>
+        <Button onClick={handleExport} disabled={exporting}>
           {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           Download
-        </button>
-      </header>
+        </Button>
+      </Surface>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Settings sidebar */}
-        <aside className="w-80 shrink-0 overflow-y-auto border-r border-separator bg-panel-muted p-5 space-y-6">
+        <aside className="w-80 shrink-0 overflow-y-auto border-r border-separator bg-sidebar p-5 space-y-6">
           <Notice variant="info" title="Document Export">
             Export applies to one Document at a time. Choose the format, branding, and page options before downloading.
           </Notice>
@@ -235,10 +232,10 @@ export function ExportPage() {
               <ColorField label="Heading 2" value={settings.h2_color || defaultHeadingColor} onChange={(v) => updateSetting('h2_color', v)} />
               <ColorField label="Accent" value={settings.primary_color || defaultAccentColor} onChange={(v) => updateSetting('primary_color', v)} />
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Font</label>
-                <select value={settings.font_family || 'Inter, sans-serif'} onChange={(e) => updateSetting('font_family', e.target.value)} className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs">
+                <label className="block text-xs font-medium text-text-secondary mb-1">Font</label>
+                <Select value={settings.font_family || 'Inter, sans-serif'} onChange={(e) => updateSetting('font_family', e.target.value)} className="w-full">
                   {FONTS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-                </select>
+                </Select>
               </div>
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1"><Image className="mr-1 inline h-3 w-3" />Logo</label>
@@ -246,10 +243,10 @@ export function ExportPage() {
               </div>
               {settings.logo_url && (
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1">Logo position</label>
-                  <select value={settings.logo_position || 'title-page'} onChange={(e) => updateSetting('logo_position', e.target.value as any)} className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs">
+                  <label className="block text-xs font-medium text-text-secondary mb-1">Logo position</label>
+                  <Select value={settings.logo_position || 'title-page'} onChange={(e) => updateSetting('logo_position', e.target.value as any)} className="w-full">
                     {LOGO_POSITIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
+                  </Select>
                 </div>
               )}
             </div>
@@ -277,19 +274,19 @@ export function ExportPage() {
             </h2>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Paper size</label>
-                <select value={settings.paper_size || 'a4'} onChange={(e) => updateSetting('paper_size', e.target.value as any)} className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs">
+                <label className="block text-xs font-medium text-text-secondary mb-1">Paper size</label>
+                <Select value={settings.paper_size || 'a4'} onChange={(e) => updateSetting('paper_size', e.target.value as any)} className="w-full">
                   <option value="a4">A4</option>
                   <option value="letter">Letter</option>
-                </select>
+                </Select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1">Margins</label>
-                <select value={settings.margins || 'normal'} onChange={(e) => updateSetting('margins', e.target.value as any)} className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs">
+                <label className="block text-xs font-medium text-text-secondary mb-1">Margins</label>
+                <Select value={settings.margins || 'normal'} onChange={(e) => updateSetting('margins', e.target.value as any)} className="w-full">
                   <option value="normal">Normal</option>
                   <option value="narrow">Narrow</option>
                   <option value="wide">Wide</option>
-                </select>
+                </Select>
               </div>
             </div>
           </Surface>
@@ -297,30 +294,30 @@ export function ExportPage() {
 
         {/* Preview */}
         <main className="flex flex-1 flex-col overflow-hidden">
-          <div className="flex items-center gap-2 border-b border-separator bg-panel px-4 py-2">
+          <Surface variant="panel" className="flex items-center gap-2 border-b border-separator border-0 rounded-none px-4 py-2">
             <Eye className="h-4 w-4 text-muted-foreground" />
             <span className="text-xs font-medium text-muted-foreground">Preview</span>
-            {previewLoading && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          </div>
-          <div className="flex-1 overflow-auto bg-workspace p-4">
+            {previewLoading && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-text-secondary" />}
+          </Surface>
+          <Surface variant="workspace" className="flex-1 overflow-auto p-4 rounded-none">
             {previewHtml ? (
               <iframe
                 ref={iframeRef}
                 srcDoc={previewHtml}
-                className="mx-auto h-full w-full max-w-[900px] rounded-lg border border-border bg-panel shadow-sm"
+                className="mx-auto h-full w-full max-w-4xl border border-separator bg-sidebar"
                 title="Export preview"
                 sandbox="allow-same-origin allow-scripts"
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+              <div className="flex h-full items-center justify-center text-text-secondary text-sm">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Loading preview\u2026
               </div>
             )}
-          </div>
+          </Surface>
         </main>
       </div>
-    </div>
+    </Surface>
   );
 }
 
@@ -329,10 +326,10 @@ export function ExportPage() {
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
+      <label className="block text-xs font-medium text-text-secondary mb-1">{label}</label>
       <div className="flex items-center gap-2">
-        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="h-7 w-7 cursor-pointer rounded border border-border bg-transparent p-0" />
-        <input type="text" value={value} onChange={(e) => onChange(e.target.value)} className="flex-1 rounded-lg border border-border bg-background px-2 py-1 text-xs font-mono" />
+        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="h-7 w-7 cursor-pointer rounded border border-separator bg-transparent p-0" />
+        <input type="text" value={value} onChange={(e) => onChange(e.target.value)} className="flex-1 rounded border border-separator bg-sidebar px-2 py-1 text-xs font-mono" />
       </div>
     </div>
   );
@@ -341,8 +338,8 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
 function TextInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
-      <input type="text" value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs" />
+      <label className="block text-xs font-medium text-text-secondary mb-1">{label}</label>
+      <input type="text" value={value} onChange={(e) => onChange(e.target.value)} className="w-full rounded border border-separator bg-sidebar px-2.5 py-1.5 text-xs" />
     </div>
   );
 }
@@ -350,9 +347,9 @@ function TextInput({ label, value, onChange }: { label: string; value: string; o
 function ToggleField({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <button onClick={() => onChange(!value)} className={cn('relative h-5 w-9 rounded-full transition-colors', value ? 'bg-primary' : 'bg-border')}>
-        <span className={cn('absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-panel transition-transform', value && 'translate-x-4')} />
+      <span className="text-xs font-medium text-text-secondary">{label}</span>
+      <button onClick={() => onChange(!value)} className={cn('relative h-5 w-9 rounded transition-colors', value ? 'bg-primary' : 'bg-border')}>
+        <span className={cn('absolute left-0.5 top-0.5 h-4 w-4 rounded bg-sidebar transition-transform', value && 'translate-x-4')} />
       </button>
     </div>
   );

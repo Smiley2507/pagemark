@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
@@ -11,7 +11,6 @@ import { RegisterPage } from './pages/auth/RegisterPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
 import { NewProject } from './pages/NewProject';
-import { Editor } from './pages/Editor';
 import { Analysis } from './pages/Analysis';
 import { GitConnectPage } from './pages/GitConnectPage';
 import { useMe } from './hooks/useAuth';
@@ -43,6 +42,11 @@ const RootRedirect = () => {
   if (!user) return <LandingPage />;
   if (!user.is_verified) return <Navigate to="/verify-email-pending" replace />;
   return <Navigate to="/home" replace />;
+};
+
+const EditorLegacyRedirect = () => {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`/projects/${id}`} replace />;
 };
 
 const AppRoutes = () => {
@@ -93,7 +97,7 @@ const AppRoutes = () => {
       {/* Protected Routes */}
       <Route element={<ProtectedRoute />}>
         {/* Full-screen routes (no sidebar/header) */}
-        <Route path="/editor/:id" element={<Editor />} />
+        <Route path="/editor/:id" element={<EditorLegacyRedirect />} />
         <Route path="/export/:projectId" element={<ExportPage />} />
         <Route path="/document-setup" element={<DocumentSetupPage />} />
         <Route path="/projects/:projectId/documents/:documentId" element={<DocumentEditorPage />} />

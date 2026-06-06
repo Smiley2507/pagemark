@@ -47,6 +47,20 @@ function assertProjectNavigation() {
   assertContains(routes, 'ProjectSettingsPage', 'project settings route is missing');
 }
 
+function assertOldRoutesRedirect() {
+  const routes = read('src/App.tsx');
+  [
+    'EditorLegacyRedirect',
+    "path=\"/editor/:id\"",
+    "Navigate to={\`/projects/",
+  ].forEach((marker) => assertContains(routes, marker, `old route redirect is missing ${marker}`));
+  if (/from ['"]\.\/pages\/Editor['"]/.test(routes)) {
+    fail('legacy Editor import should be removed from App.tsx');
+  }
+  const editorPage = read('src/pages/EditorPage.tsx');
+  assertContains(editorPage, 'EditorPage', 'EditorPage component should still exist as dead code reference');
+}
+
 function assertLibraryPreferences() {
   const home = read('src/pages/HomePage.tsx');
   const projects = read('src/pages/ProjectsPage.tsx');
@@ -132,10 +146,9 @@ function assertLandingAndAuth() {
   const register = read('src/pages/auth/RegisterPage.tsx');
 
   [
-    'Source-connected multi-Document workspace',
-    'Pagemark creates purpose-specific Documents from one connected Project.',
-    'Static Analysis works without a provider',
-    'AI usage is explicit before it happens',
+    'Multi-Document workspace for software projects',
+    'Documentation built section by section from your source code.',
+    'Product workflow',
   ].forEach((marker) => assertContains(landing, marker, `landing page is missing "${marker}"`));
 
   ['images.unsplash.com', 'motion/', 'useScroll', 'useTransform'].forEach((marker) => {
@@ -144,11 +157,10 @@ function assertLandingAndAuth() {
     }
   });
 
-  ['Surface', 'Same system as the workspace'].forEach((marker) => {
-    assertContains(authLayout, marker, `auth layout is missing ${marker}`);
-  });
-  assertContains(login, 'resume Document setup', 'login page should align copy with the first-Document flow');
-  assertContains(register, 'Provider credentials remain optional', 'register page should clarify provider setup timing');
+  assertContains(authLayout, 'Surface', 'auth layout is missing Surface');
+  assertContains(authLayout, 'Connect source once', 'auth layout should reference the core product workflow');
+  assertContains(login, 'Sign in to your workspace.', 'login page should be concise and workspace-aligned');
+  assertContains(register, 'Get started in seconds.', 'register page should be concise and action-oriented');
 }
 
 function assertFirstDocumentJourney() {
@@ -217,6 +229,7 @@ function assertPhasePromptsStartFromCanonicalPrompt() {
 
 assertGlobalNavigation();
 assertProjectNavigation();
+assertOldRoutesRedirect();
 assertLibraryPreferences();
 assertSharedPrimitives();
 assertPhase4SearchAndSettings();

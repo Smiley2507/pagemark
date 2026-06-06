@@ -18,7 +18,9 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Surface } from '@/components/ui/surface';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { qualityApi } from '@/api/quality';
@@ -30,27 +32,27 @@ type TabId = 'overview' | 'issues' | 'links' | 'terminology';
 type SeverityFilter = 'all' | 'error' | 'warning' | 'info';
 
 function scoreColor(score: number): string {
-  if (score >= 80) return 'text-emerald-500';
-  if (score >= 60) return 'text-amber-500';
-  return 'text-red-500';
+  if (score >= 80) return 'text-status-success-foreground';
+  if (score >= 60) return 'text-status-warning-foreground';
+  return 'text-status-danger-foreground';
 }
 
 function scoreRing(score: number): string {
-  if (score >= 80) return 'stroke-emerald-500';
-  if (score >= 60) return 'stroke-amber-500';
-  return 'stroke-red-500';
+  if (score >= 80) return 'stroke-status-success-foreground';
+  if (score >= 60) return 'stroke-status-warning-foreground';
+  return 'stroke-status-danger-foreground';
 }
 
 function scoreBg(score: number): string {
-  if (score >= 80) return 'from-emerald-500/20 to-emerald-500/5';
-  if (score >= 60) return 'from-amber-500/20 to-amber-500/5';
-  return 'from-red-500/20 to-red-500/5';
+  if (score >= 80) return 'bg-status-success/10';
+  if (score >= 60) return 'bg-status-warning/10';
+  return 'bg-status-danger/10';
 }
 
 function scoreBarColor(score: number): string {
-  if (score >= 80) return 'bg-emerald-500';
-  if (score >= 60) return 'bg-amber-500';
-  return 'bg-red-500';
+  if (score >= 80) return 'bg-status-success';
+  if (score >= 60) return 'bg-status-warning';
+  return 'bg-status-danger';
 }
 
 function scoreLabel(score: number): string {
@@ -78,11 +80,10 @@ function CircularScore({ score, size = 160 }: { score: number; size?: number }) 
         <circle
           cx={size / 2} cy={size / 2} r={radius}
           fill="none"
-          className={scoreRing(score)}
+          className="transition-all duration-1000 ease-in-out"
           strokeWidth={10}
           strokeDasharray={`${dash} ${circumference - dash}`}
           strokeLinecap="round"
-          style={{ transition: 'stroke-dasharray 1s ease' }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -98,41 +99,37 @@ function CircularScore({ score, size = 160 }: { score: number; size?: number }) 
 /** Sub-score card */
 function SubScoreCard({ label, score }: { label: string; score: number }) {
   return (
-    <div className="flex-1 rounded-xl border border-border bg-card p-4">
+    <Surface variant="panel" padding="default" className="flex-1">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-muted-foreground">{label}</span>
+        <span className="text-sm font-medium text-text-secondary">{label}</span>
         <span className={cn('text-lg font-bold tabular-nums', scoreColor(score))}>
           {Math.round(score)}
         </span>
       </div>
-      <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+      <div className="h-1.5 w-full rounded bg-sidebar overflow-hidden">
         <div
-          className={cn('h-full rounded-full transition-all duration-700', scoreBarColor(score))}
+          className={cn('h-full transition-all duration-700', scoreBarColor(score))}
           style={{ width: `${score}%` }}
         />
       </div>
-    </div>
+    </Surface>
   );
 }
 
 /** Severity icon */
 function SeverityIcon({ severity }: { severity: QualityIssue['severity'] }) {
-  if (severity === 'error') return <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />;
-  if (severity === 'warning') return <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />;
-  return <Info className="h-4 w-4 text-blue-500 shrink-0" />;
+  if (severity === 'error') return <AlertCircle className="h-4 w-4 text-status-danger-foreground shrink-0" />;
+  if (severity === 'warning') return <AlertTriangle className="h-4 w-4 text-status-warning-foreground shrink-0" />;
+  return <Info className="h-4 w-4 text-status-info-foreground shrink-0" />;
 }
 
 function SeverityPill({ severity }: { severity: QualityIssue['severity'] }) {
-  const cfg = {
-    error: 'bg-red-500/10 text-red-500 border-red-500/20',
-    warning: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
-    info: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  };
+  const variant = severity === 'error' ? 'danger' : severity === 'warning' ? 'warning' : 'info';
   return (
-    <span className={cn('inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium', cfg[severity])}>
+    <Badge variant={variant}>
       <SeverityIcon severity={severity} />
       {severity}
-    </span>
+    </Badge>
   );
 }
 
@@ -254,8 +251,8 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
       {/* Hero score + sub-scores */}
       <div className="flex flex-col md:flex-row gap-6 items-start">
         {/* Circular score */}
-        <div className={cn(
-          'flex flex-col items-center gap-3 rounded-2xl border border-border bg-gradient-to-br p-8',
+        <Surface variant="panel" padding="lg" className={cn(
+          'flex flex-col items-center gap-3',
           scoreBg(report?.overall_score ?? 0),
         )}>
           <CircularScore score={report?.overall_score ?? 0} size={160} />
@@ -265,7 +262,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
               Analysed {formatDistanceToNow(new Date(report.generated_at), { addSuffix: true })}
             </p>
           )}
-        </div>
+        </Surface>
 
         {/* Sub-score grid */}
         <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -278,22 +275,22 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
 
       {/* Issue summary chips */}
       <div className="flex flex-wrap gap-3">
-        <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
-          <AlertCircle className="h-4 w-4 text-red-500" />
-          <span className="text-sm font-medium text-red-500">{errorCount} Errors</span>
-        </div>
-        <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
-          <AlertTriangle className="h-4 w-4 text-amber-500" />
-          <span className="text-sm font-medium text-amber-500">{warningCount} Warnings</span>
-        </div>
-        <div className="flex items-center gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
-          <Info className="h-4 w-4 text-blue-500" />
-          <span className="text-sm font-medium text-blue-500">{infoCount} Info</span>
-        </div>
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-          <Link2 className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium text-muted-foreground">{brokenLinks.length} Broken Links</span>
-        </div>
+        <Surface variant="muted" className="flex items-center gap-2 px-3 py-2 border-status-danger-foreground/20 bg-status-danger/5">
+          <AlertCircle className="h-4 w-4 text-status-danger-foreground" />
+          <span className="text-sm font-medium text-status-danger-foreground">{errorCount} Errors</span>
+        </Surface>
+        <Surface variant="muted" className="flex items-center gap-2 px-3 py-2 border-status-warning-foreground/20 bg-status-warning/5">
+          <AlertTriangle className="h-4 w-4 text-status-warning-foreground" />
+          <span className="text-sm font-medium text-status-warning-foreground">{warningCount} Warnings</span>
+        </Surface>
+        <Surface variant="muted" className="flex items-center gap-2 px-3 py-2 border-status-info-foreground/20 bg-status-info/5">
+          <Info className="h-4 w-4 text-status-info-foreground" />
+          <span className="text-sm font-medium text-status-info-foreground">{infoCount} Info</span>
+        </Surface>
+        <Surface variant="muted" className="flex items-center gap-2 px-3 py-2">
+          <Link2 className="h-4 w-4 text-text-secondary" />
+          <span className="text-sm font-medium text-text-secondary">{brokenLinks.length} Broken Links</span>
+        </Surface>
       </div>
     </div>
   );
@@ -307,10 +304,10 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
             key={f}
             onClick={() => setSeverityFilter(f)}
             className={cn(
-              'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors capitalize',
+              'rounded px-3 py-1.5 text-sm font-medium transition-colors capitalize',
               severityFilter === f
                 ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-accent',
+                : 'bg-sidebar text-text-secondary hover:bg-accent',
             )}
           >
             {f === 'all' ? `All (${issues.length})` : `${f} (${issues.filter(i => i.severity === f).length})`}
@@ -321,7 +318,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
       {/* Issues list */}
       {filteredIssues.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+          <CheckCircle2 className="h-10 w-10 text-status-success-foreground" />
           <p className="text-base font-medium text-foreground">No issues found</p>
           <p className="text-sm text-muted-foreground">
             {severityFilter === 'all' ? 'Your documentation looks great!' : `No ${severityFilter}s detected.`}
@@ -330,9 +327,11 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
       ) : (
         <div className="space-y-3">
           {filteredIssues.map(issue => (
-            <div
+            <Surface
               key={issue.id}
-              className="rounded-xl border border-border bg-card p-4 hover:border-primary/30 transition-colors"
+              variant="panel"
+              padding="default"
+              className="hover:border-primary/30 transition-colors"
             >
               <div className="flex items-start gap-3">
                 <SeverityIcon severity={issue.severity} />
@@ -341,7 +340,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
                     <SeverityPill severity={issue.severity} />
                     {issue.section_ref && (
                       <button
-                        onClick={() => navigate(`/editor/${projectId}`)}
+                        onClick={() => navigate(`/projects/${projectId}`)}
                         className="flex items-center gap-1 text-xs text-primary hover:underline"
                       >
                         <ExternalLink className="h-3 w-3" />
@@ -357,7 +356,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
                   )}
                 </div>
               </div>
-            </div>
+            </Surface>
           ))}
         </div>
       )}
@@ -370,35 +369,36 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
         <p className="text-sm text-muted-foreground">
           {brokenLinks.length === 0 ? 'No broken links detected.' : `${brokenLinks.length} broken link${brokenLinks.length > 1 ? 's' : ''} found.`}
         </p>
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => runMutation.mutate()}
           disabled={runMutation.isPending}
-          className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-sm hover:bg-accent transition-colors"
         >
           <RefreshCw className={cn('h-3.5 w-3.5', runMutation.isPending && 'animate-spin')} />
           Re-check
-        </button>
+        </Button>
       </div>
 
       {brokenLinks.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+          <CheckCircle2 className="h-10 w-10 text-status-success-foreground" />
           <p className="text-base font-medium text-foreground">All links are working</p>
-          <p className="text-sm text-muted-foreground">No broken or unreachable URLs detected in your documentation.</p>
+          <p className="text-sm text-text-secondary">No broken or unreachable URLs detected in your documentation.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border">
+        <Surface variant="panel" className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-muted/40">
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">URL</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Found In</th>
+              <tr className="border-b border-border bg-sidebar">
+                <th className="px-4 py-3 text-left font-medium text-text-secondary">URL</th>
+                <th className="px-4 py-3 text-left font-medium text-text-secondary">Status</th>
+                <th className="px-4 py-3 text-left font-medium text-text-secondary">Found In</th>
               </tr>
             </thead>
             <tbody>
               {brokenLinks.map(link => (
-                <tr key={link.id} className="border-b border-border/50 last:border-0 hover:bg-muted/20">
+                <tr key={link.id} className="border-b border-border/50 last:border-0 hover:bg-sidebar">
                   <td className="px-4 py-3 max-w-xs">
                     <a
                       href={link.url}
@@ -411,21 +411,20 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
                     </a>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={cn(
-                      'rounded-full px-2 py-0.5 text-xs font-mono font-medium',
+                    <Badge variant={
                       link.status_code === undefined || link.status_code === null
-                        ? 'bg-muted text-muted-foreground'
+                        ? 'neutral'
                         : link.status_code < 400
-                          ? 'bg-emerald-500/10 text-emerald-600'
-                          : 'bg-red-500/10 text-red-600',
-                    )}>
+                          ? 'success'
+                          : 'danger'
+                    }>
                       {link.status_code ?? 'ERR'}
-                    </span>
+                    </Badge>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
+                  <td className="px-4 py-3 text-text-secondary">
                     {link.section_ref ? (
                       <button
-                        onClick={() => navigate(`/editor/${projectId}`)}
+                        onClick={() => navigate(`/projects/${projectId}`)}
                         className="flex items-center gap-1 text-primary hover:underline text-xs"
                       >
                         <ExternalLink className="h-3 w-3" />
@@ -437,7 +436,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
               ))}
             </tbody>
           </table>
-        </div>
+        </Surface>
       )}
     </div>
   );
@@ -466,26 +465,26 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
 
       {!terminologies && terminologyIssues.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
-          <CheckCircle2 className="h-10 w-10 text-emerald-500" />
+          <CheckCircle2 className="h-10 w-10 text-status-success-foreground" />
           <p className="text-base font-medium text-foreground">Terminology is consistent</p>
-          <p className="text-sm text-muted-foreground">No conflicting terms detected across your documentation.</p>
+          <p className="text-sm text-text-secondary">No conflicting terms detected across your documentation.</p>
         </div>
       ) : terminologies && terminologies.length > 0 ? (
         <div className="space-y-3">
           {terminologies.map((tc, i) => (
-            <div key={i} className="rounded-xl border border-border bg-card p-5">
+            <Surface key={i} variant="panel" padding="lg">
               <div className="flex items-start gap-4">
-                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                <AlertTriangle className="h-5 w-5 text-status-warning-foreground shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium mb-2">
                     Conflict: "{tc.term_a}" vs "{tc.term_b}"
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-text-secondary">
                     {tc.conflicts.length} conflicting {tc.conflicts.length === 1 ? 'occurrence' : 'occurrences'} found.
                   </p>
                 </div>
               </div>
-            </div>
+            </Surface>
           ))}
         </div>
       ) : (
@@ -496,32 +495,32 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
             const alternates = matches.slice(1);
 
             return (
-              <div key={issue.id} className="rounded-xl border border-border bg-card p-5">
+              <Surface key={issue.id} variant="panel" padding="lg">
                 <div className="flex items-start gap-4">
-                  <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                  <AlertTriangle className="h-5 w-5 text-status-warning-foreground shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap gap-2 mb-3">
                       {canonical && (
-                        <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-600">
+                        <Badge variant="success" className="px-3 py-1 text-sm">
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           "{canonical[1]}"
-                          <span className="text-xs text-emerald-600/70">×{canonical[2]}</span>
-                          <span className="ml-1 text-xs text-emerald-700 font-semibold">Recommended</span>
-                        </span>
+                          <span className="text-xs opacity-70">×{canonical[2]}</span>
+                          <span className="ml-1 text-xs font-semibold opacity-80">Recommended</span>
+                        </Badge>
                       )}
                       {alternates.map(([, term, count]) => (
-                        <span key={term} className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-sm text-amber-700">
+                        <Badge key={term} variant="warning" className="px-3 py-1 text-sm">
                           "{term}"
-                          <span className="text-xs text-amber-600/70">×{count}</span>
-                        </span>
+                          <span className="text-xs opacity-70">×{count}</span>
+                        </Badge>
                       ))}
                     </div>
                     {issue.suggestion && (
-                      <p className="text-xs text-muted-foreground italic">{issue.suggestion}</p>
+                      <p className="text-xs text-text-secondary italic">{issue.suggestion}</p>
                     )}
                   </div>
                 </div>
-              </div>
+              </Surface>
             );
           })}
         </div>
@@ -531,28 +530,27 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 md:p-12">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-overlay/80 backdrop-blur-sm" onClick={onClose} />
       
-      <div className="relative z-10 flex flex-col h-full max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
+      <Surface variant="overlay" className="relative z-10 flex flex-col h-full max-h-screen w-full max-w-5xl overflow-hidden">
         {/* Top bar */}
-        <header className="shrink-0 flex h-14 items-center justify-between border-b border-border bg-muted/30 px-6">
+        <header className="shrink-0 flex h-14 items-center justify-between border-b border-border bg-sidebar px-6">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-primary" />
             <span className="font-semibold text-foreground">Quality Dashboard</span>
           </div>
 
           <div className="flex items-center gap-3">
-            <button
+            <Button
               onClick={() => runMutation.mutate()}
               disabled={isRunning}
-              className="flex items-center gap-2 rounded-xl bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition-all"
             >
               {isRunning ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> {progress > 0 ? `${Math.round(progress)}%` : 'Running…'}</>
               ) : (
                 <><RefreshCw className="h-4 w-4" /> Run Analysis</>
               )}
-            </button>
+            </Button>
             <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
               <ArrowLeft className="h-5 w-5 rotate-180" /> {/* using ArrowLeft rotated as close button or X */}
             </button>
@@ -561,7 +559,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
 
         {/* Fake Progress Bar */}
         {progress > 0 && (
-          <div className="h-1 w-full bg-muted">
+          <div className="h-1 w-full bg-sidebar">
             <div className="h-full bg-primary transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
           </div>
         )}
@@ -578,22 +576,21 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
           {/* No report yet */}
           {(!isLoading && !report && !isRunning) && (
             <div className="flex flex-col items-center justify-center h-full gap-6 py-24 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted">
-                <ShieldCheck className="h-8 w-8 text-muted-foreground" />
+              <div className="flex h-16 w-16 items-center justify-center rounded bg-sidebar">
+                <ShieldCheck className="h-8 w-8 text-text-secondary" />
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-foreground">No quality report yet</h2>
-                <p className="mt-2 text-sm text-muted-foreground max-w-sm">
+                <p className="mt-2 text-sm text-text-secondary max-w-sm">
                   Run an analysis to score your documentation on completeness, readability, consistency, and link accuracy.
                 </p>
               </div>
-              <button
+              <Button
                 onClick={() => runMutation.mutate()}
                 disabled={runMutation.isPending}
-                className="flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition-all"
               >
                 <RefreshCw className="h-4 w-4" /> Run Quality Analysis
-              </button>
+              </Button>
             </div>
           )}
 
@@ -601,7 +598,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
           {(!isLoading && report) && (
             <>
               {/* Tab navigation */}
-              <div className="flex items-center gap-1 border-b border-border mb-8 sticky top-0 bg-background/95 backdrop-blur-sm z-10 pt-2">
+              <div className="flex items-center gap-1 border-b border-border mb-8 sticky top-0 bg-canvas/95 backdrop-blur-sm z-10 pt-2">
                 {TABS.map(tab => {
                   const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
@@ -625,20 +622,15 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
                       <Icon className="h-4 w-4" />
                       {tab.label}
                       {badge !== null && badge > 0 && (
-                        <span className={cn(
-                          'rounded-full px-1.5 py-0.5 text-xs font-bold',
-                          tab.id === 'issues' && errorCount > 0 ? 'bg-red-500 text-white' :
-                          tab.id === 'links' ? 'bg-red-500 text-white' :
-                          'bg-amber-500 text-white',
-                        )}>
+                        <Badge variant={tab.id === 'terminology' ? 'warning' : 'danger'} className="text-xs font-bold">
                           {badge}
-                        </span>
+                        </Badge>
                       )}
                       {/* Active indicator */}
                       {isActive && (
                         <motion.div
                           layoutId="quality-tab-indicator"
-                          className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full"
+                          className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
                         />
                       )}
                     </button>
@@ -664,7 +656,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
             </>
           )}
         </main>
-      </div>
+      </Surface>
     </div>
   );
 };

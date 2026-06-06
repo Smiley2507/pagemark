@@ -1,26 +1,7 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileCode2, LayoutTemplate, PenSquare } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { PagemarkWordmark } from './PagemarkWordmark';
-import { Badge } from '@/components/ui/badge';
 import { Surface } from '@/components/ui/surface';
-
-const authJourney = [
-  {
-    title: 'Connect a Project',
-    text: 'GitHub first, with repository URL, ZIP upload, and source-less fallback paths kept visible.',
-    icon: FileCode2,
-  },
-  {
-    title: 'Choose the right Document',
-    text: 'Rule-based and AI-personalized recommendations stay explainable and tied to repository facts.',
-    icon: LayoutTemplate,
-  },
-  {
-    title: 'Enter the editor early',
-    text: 'Approve the Outline, review generation choices, and start writing as soon as useful work exists.',
-    icon: PenSquare,
-  },
-];
 
 export function AuthLayout({
   children,
@@ -40,7 +21,7 @@ export function AuthLayout({
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="inline-flex rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label="Back to Pagemark home"
           >
             <PagemarkWordmark className="h-10 text-text-primary" />
@@ -66,27 +47,15 @@ export function AuthLayout({
         </div>
       </div>
 
-      <div className="hidden bg-canvas lg:block">
-        <div className="mx-auto flex h-full max-w-3xl flex-col justify-center px-10 py-12">
-          <Badge variant="review">Same system as the workspace</Badge>
-          <h2 className="mt-4 max-w-xl text-title text-text-primary">
-            Authentication is part of the product, not a separate marketing surface.
+      <div className="hidden items-center justify-center bg-canvas lg:flex">
+        <div className="max-w-lg px-10">
+          <h2 className="text-title text-text-primary">
+            Connect source once, write multiple Documents.
           </h2>
-          <p className="mt-3 max-w-xl text-body text-text-secondary">
-            The first-Document journey keeps provider setup embedded, makes source limitations clear,
-            and uses the same typography, spacing, semantic tokens, and restrained surfaces as the
-            editor and Project workspace.
+          <p className="mt-3 text-body text-text-secondary">
+            Same workspace model as the editor — no marketing surface, no separate wizard.
+            Provider credentials stay optional until you choose an AI-powered action.
           </p>
-
-          <div className="mt-8 grid gap-4">
-            {authJourney.map((item) => (
-              <Surface key={item.title} variant="panel" padding="lg">
-                <item.icon className="h-5 w-5 text-interaction" aria-hidden="true" />
-                <h3 className="mt-4 text-body font-semibold text-text-primary">{item.title}</h3>
-                <p className="mt-2 text-meta text-text-secondary">{item.text}</p>
-              </Surface>
-            ))}
-          </div>
         </div>
       </div>
     </div>

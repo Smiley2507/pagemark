@@ -15,9 +15,11 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Surface } from "@/components/ui/surface";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GitProviderIcon } from "@/components/git/GitProviderIcon";
 import { projectsApi } from "@/api/projects";
@@ -135,7 +137,7 @@ export const NewProject: React.FC = () => {
       setCreatedProjectId(project.id);
 
       if (sourceChoice === "scratch") {
-        navigate(`/editor/${project.id}`);
+        navigate(`/projects/${project.id}`);
         return;
       }
 
@@ -197,8 +199,8 @@ export const NewProject: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur-sm">
+    <div className="min-h-screen bg-sidebar text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border bg-sidebar/80 backdrop-blur-sm">
         <div className="mx-auto flex h-12 max-w-3xl items-center gap-4 px-6">
           <button
             type="button"
@@ -217,7 +219,7 @@ export const NewProject: React.FC = () => {
 
         {step === 1 && (
           <>
-            <div className="space-y-4 rounded-lg border border-border bg-card p-6">
+            <Surface variant="panel" padding="lg" className="space-y-4">
               <div>
                 <Label htmlFor="project-name">Project name</Label>
                 <Input
@@ -243,13 +245,11 @@ export const NewProject: React.FC = () => {
                 <Label>Documentation template (optional)</Label>
                 <div className="mt-1.5 flex items-center gap-3">
                   {selectedTemplate ? (
-                    <div className="flex flex-1 items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
+                    <div className="flex flex-1 items-center justify-between rounded border border-separator bg-sidebar px-3 py-2">
                       <div className="flex items-center gap-2">
                         <LayoutTemplate className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-medium">{selectedTemplate.name}</span>
-                        <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                          {selectedTemplate.category}
-                        </span>
+                        <Badge variant="neutral">{selectedTemplate.category}</Badge>
                       </div>
                       <button
                         type="button"
@@ -278,7 +278,7 @@ export const NewProject: React.FC = () => {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
-            </div>
+            </Surface>
             <TemplatePickerDialog
               open={templatePickerOpen}
               onOpenChange={setTemplatePickerOpen}
@@ -306,10 +306,10 @@ export const NewProject: React.FC = () => {
                   type="button"
                   onClick={() => setSourceChoice(id)}
                   className={cn(
-                    "flex flex-col items-center gap-2 rounded-lg border p-5 text-center transition-all",
+                    "flex flex-col items-center gap-2 rounded border p-5 text-center transition-all",
                     sourceChoice === id
-                      ? "border-primary bg-accent shadow-sm"
-                      : "border-border bg-card hover:bg-accent",
+                      ? "border-primary bg-accent"
+                      : "border-border bg-sidebar hover:bg-accent",
                   )}
                 >
                   <Icon
@@ -439,7 +439,7 @@ function StepIndicator({ current }: { current: number }) {
           >
             <span
               className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-full border-2",
+                "flex h-8 w-8 items-center justify-center rounded border-2",
                 done && "border-primary bg-primary text-primary-foreground",
                 active && !done && "border-primary text-foreground",
                 !active && !done && "border-border",
@@ -475,7 +475,7 @@ function GitUrlTab({
   submitting: boolean;
 }) {
   return (
-    <div className="space-y-4 rounded-lg border border-border bg-card p-6">
+    <Surface variant="panel" padding="lg" className="space-y-4">
       <div>
         <Label htmlFor="git-url">GitHub / Bitbucket URL</Label>
         <div className="relative mt-1.5">
@@ -487,10 +487,10 @@ function GitUrlTab({
             className="pr-10"
           />
           {urlValid === true && (
-            <Check className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-emerald-500" />
+            <Check className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-status-success-foreground" />
           )}
           {urlValid === false && (
-            <X className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-rose-500" />
+            <X className="absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-status-danger-foreground" />
           )}
         </div>
       </div>
@@ -514,7 +514,7 @@ function GitUrlTab({
           {submitting ? "Starting…" : "Connect & Analyse"}
         </Button>
       </div>
-    </div>
+    </Surface>
   );
 }
 
@@ -557,7 +557,7 @@ function GitAccountTab({
 }) {
   if (!oauthConnected) {
     return (
-      <div className="space-y-4 rounded-lg border border-border bg-card p-6">
+      <Surface variant="panel" padding="lg" className="space-y-4">
         <p className="text-meta text-muted-foreground">
           Connect your GitHub account to access private repositories.
         </p>
@@ -574,12 +574,12 @@ function GitAccountTab({
             Back
           </Button>
         </div>
-      </div>
+      </Surface>
     );
   }
 
   return (
-    <div className="space-y-4 rounded-lg border border-border bg-card p-6">
+    <Surface variant="panel" padding="lg" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <img
@@ -588,7 +588,7 @@ function GitAccountTab({
               `https://api.dicebear.com/7.x/adventurer/svg?seed=${profile?.username}`
             }
             alt=""
-            className="h-10 w-10 rounded-lg object-cover"
+            className="h-10 w-10 rounded object-cover"
           />
           <div>
             <p className="text-sm font-bold">{profile?.username}</p>
@@ -599,7 +599,6 @@ function GitAccountTab({
           variant="outline"
           size="sm"
           onClick={onDisconnect}
-          className="rounded-lg"
         >
           Disconnect
         </Button>
@@ -631,7 +630,7 @@ function GitAccountTab({
               type="button"
               onClick={() => setSelectedRepo(repo)}
               className={cn(
-                "w-full rounded-lg border p-3 text-left transition-all",
+                "w-full rounded border p-3 text-left transition-all",
                 selectedRepo?.id === repo.id
                   ? "border-primary bg-accent"
                   : "border-border hover:bg-accent",
@@ -639,16 +638,9 @@ function GitAccountTab({
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="font-semibold">{repo.full_name}</span>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold",
-                    repo.private
-                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
-                      : "bg-muted text-muted-foreground",
-                  )}
-                >
+                <Badge variant={repo.private ? "warning" : "neutral"}>
                   {repo.private ? "Private" : "Public"}
-                </span>
+                </Badge>
               </div>
               {repo.description && (
                 <p className="mt-1 line-clamp-2 text-meta text-muted-foreground">
@@ -657,7 +649,7 @@ function GitAccountTab({
               )}
               <div className="mt-2 flex flex-wrap items-center gap-2 text-meta text-muted-foreground">
                 {repo.language && (
-                  <span className="rounded-full bg-muted px-2 py-0.5">{repo.language}</span>
+                  <Badge variant="neutral" showIcon={false}>{repo.language}</Badge>
                 )}
                 <span className="inline-flex items-center gap-0.5">
                   <Star className="h-3 w-3" />
@@ -683,7 +675,7 @@ function GitAccountTab({
               id="oauth-branch"
               value={oauthBranch}
               onChange={(e) => setOauthBranch(e.target.value)}
-              className="mt-1.5 flex h-9 w-full rounded-md border border-input bg-background px-3 text-body"
+              className="mt-1.5 flex h-9 w-full rounded border border-input bg-sidebar px-3 text-body"
             >
               {(branches ?? [{ name: selectedRepo.default_branch, is_default: true }]).map((b) => (
                 <option key={b.name} value={b.name}>
@@ -706,7 +698,7 @@ function GitAccountTab({
           {submitting ? "Starting…" : "Connect & Analyse"}
         </Button>
       </div>
-    </div>
+    </Surface>
   );
 }
 
@@ -745,7 +737,7 @@ function ZipStep({
   };
 
   return (
-    <div className="space-y-4 rounded-lg border border-border bg-card p-6">
+    <Surface variant="panel" padding="lg" className="space-y-4">
       <Label htmlFor="zip-upload">ZIP archive</Label>
       <Input
         id="zip-upload"
@@ -770,10 +762,10 @@ function ZipStep({
               type="button"
               onClick={() => toggleCommon(p)}
               className={cn(
-                "rounded-full px-3 py-1 text-xs transition-colors",
+                "rounded px-3 py-1 text-xs transition-colors",
                 selectedCommon.includes(p)
                   ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-accent",
+                  : "bg-sidebar text-text-secondary hover:bg-accent",
               )}
             >
               {p}
@@ -795,7 +787,7 @@ function ZipStep({
           Upload & Analyse
         </Button>
       </div>
-    </div>
+    </Surface>
   );
 }
 
@@ -809,10 +801,10 @@ function ScratchStep({
   submitting: boolean;
 }) {
   return (
-    <div className="space-y-4 rounded-lg border border-border bg-card p-6">
-      <p className="text-meta text-muted-foreground">
-        Start with an empty documentation outline — no codebase analysis.
-      </p>
+    <Surface variant="panel" padding="lg" className="space-y-4">
+        <p className="text-meta text-muted-foreground">
+          Create a blank Project without source analysis.
+        </p>
       <div className="flex justify-between pt-2">
         <Button variant="outline" onClick={onBack}>
           Back
@@ -821,7 +813,7 @@ function ScratchStep({
           Create Project
         </Button>
       </div>
-    </div>
+    </Surface>
   );
 }
 

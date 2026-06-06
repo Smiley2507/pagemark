@@ -29,6 +29,7 @@ import { QualityModal } from '@/components/editor/QualityModal';
 import { ExportModal } from '@/components/editor/ExportModal';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Surface } from '@/components/ui/surface';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/ui/notice';
@@ -231,7 +232,7 @@ function SectionBlock({
                 if (event.key === 'Enter') event.currentTarget.blur();
               }}
               aria-label={`Heading for ${section.heading}`}
-              className="h-auto border-transparent bg-transparent px-1 py-1 text-title font-semibold text-text-primary shadow-none focus-visible:border-interaction focus-visible:bg-panel focus-visible:px-2"
+              className="h-auto border-transparent bg-transparent px-1 py-1 text-title font-semibold text-text-primary focus-visible:border-interaction focus-visible:px-2"
             />
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <SectionStatusBadge section={section} compact />
@@ -240,7 +241,7 @@ function SectionBlock({
           </div>
           <div className="flex shrink-0 flex-wrap justify-end gap-1">
             {isReviewed ? (
-              <span className="flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium text-review">
+              <span className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-review">
                 <CheckCircle2 className="h-3 w-3" />
                 Reviewed
               </span>
@@ -288,9 +289,9 @@ function SectionBlock({
           </div>
         </div>
 
-        <div className="min-w-0 overflow-x-hidden rounded-md bg-canvas px-1 py-2 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+        <Surface variant="canvas" className="min-w-0 overflow-x-hidden px-1 py-2 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
           <MarkdownEditor value={content} onChange={setContent} />
-        </div>
+        </Surface>
 
         <div className="mt-4 flex items-center justify-between gap-3 text-meta text-text-muted">
           <span>
@@ -534,18 +535,18 @@ export function DocumentEditorPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-workspace">
+      <Surface variant="workspace" className="flex min-h-screen items-center justify-center rounded-none">
         <div className="flex items-center gap-3 text-body text-text-secondary">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading document workspace...
         </div>
-      </div>
+      </Surface>
     );
   }
 
   return (
-    <div className="flex h-screen flex-col bg-workspace text-text-primary">
-      <header className="flex h-14 shrink-0 items-center justify-between border-b border-separator bg-panel px-3">
+    <Surface variant="workspace" className="flex h-screen flex-col text-text-primary rounded-none">
+      <Surface as="header" variant="panel" className="flex h-14 shrink-0 items-center justify-between border-b border-separator border-0 rounded-none px-3">
         <div className="flex min-w-0 items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => navigate(`/projects/${pid}`)} aria-label="Back to project">
             <ChevronLeft className="h-4 w-4" />
@@ -558,13 +559,13 @@ export function DocumentEditorPage() {
               if (event.key === 'Enter') event.currentTarget.blur();
             }}
             aria-label="Document title"
-            className="h-9 max-w-xl border-transparent bg-transparent text-section font-semibold shadow-none focus-visible:border-interaction focus-visible:bg-panel"
+            className="h-9 max-w-xl border-transparent bg-transparent text-section font-semibold focus-visible:border-interaction"
           />
           <Badge variant={statusVariant(document?.status)}>{documentStatusLabel(document)}</Badge>
         </div>
 
         <div className="flex min-w-0 items-center gap-2">
-          <div className="hidden items-center gap-1 rounded-md border border-input bg-panel px-2 lg:flex">
+          <Surface variant="panel" className="hidden items-center gap-1 border border-input px-2 lg:flex">
             <Search className="h-4 w-4 text-text-muted" aria-hidden="true" />
             <input
               value={query}
@@ -576,7 +577,7 @@ export function DocumentEditorPage() {
               aria-label="Find in document"
               className="h-8 w-44 bg-transparent text-body text-text-primary outline-none placeholder:text-text-muted"
             />
-          </div>
+          </Surface>
           <span className="hidden text-meta text-text-muted sm:inline">
             {isSaving || updateDocumentTitle.isPending
               ? 'Saving...'
@@ -609,17 +610,17 @@ export function DocumentEditorPage() {
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </div>
-      </header>
+      </Surface>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-72 shrink-0 border-r border-separator bg-panel lg:flex lg:flex-col">
+        <Surface as="aside" variant="panel" className="hidden w-72 shrink-0 border-r border-separator border-0 rounded-none lg:flex lg:flex-col">
           <div className="flex items-center justify-between border-b border-separator px-4 py-3">
             <p className="text-meta font-medium uppercase text-text-muted">Outline</p>
             <div className="flex items-center gap-1">
               {canAcceptAll && (
                 <button
                   onClick={handleAcceptAllReview}
-                  className="rounded px-1.5 py-0.5 text-[10px] font-medium text-review transition-colors hover:bg-review/10"
+                  className="rounded px-1.5 py-0.5 text-xs font-medium text-review transition-colors hover:bg-review/10"
                   title="Accept all review-ready sections"
                 >
                   <CheckCheck className="h-3.5 w-3.5" />
@@ -636,12 +637,12 @@ export function DocumentEditorPage() {
                 onClick={() => scrollToTocItem(item)}
                 onKeyDown={tocKeyboard}
                 className={cn(
-                  'block w-full rounded-md px-2 py-1.5 text-left text-meta transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+                  'block w-full rounded px-2 py-1.5 text-left text-meta transition-colors focus-visible:ring-2 focus-visible:ring-ring',
                   item.kind === 'h1' && 'pl-5',
                   item.kind === 'h2' && 'pl-8',
                   activeTocId === item.id || activeTocId === `section-${item.sectionId}`
                     ? 'bg-interaction-muted text-interaction-hover'
-                    : 'text-text-secondary hover:bg-panel-muted hover:text-text-primary',
+                    : 'text-text-secondary hover:bg-interaction-muted hover:text-text-primary',
                 )}
               >
                 <span className="block truncate">{item.label}</span>
@@ -654,7 +655,7 @@ export function DocumentEditorPage() {
               </Button>
             )}
           </nav>
-          <div className="space-y-2 border-t border-separator px-4 py-3 text-meta text-text-secondary">
+          <Surface variant="panel" className="space-y-2 border-t border-separator border-0 rounded-none px-4 py-3 text-meta text-text-secondary">
             <div className="flex justify-between gap-3">
               <span>Words</span>
               <span className="font-medium text-text-primary">{wordCount}</span>
@@ -667,10 +668,10 @@ export function DocumentEditorPage() {
               <span>Grammar/style</span>
               <span className="font-medium text-text-primary">{issueCount}</span>
             </div>
-          </div>
-        </aside>
+          </Surface>
+        </Surface>
 
-        <main ref={scrollRootRef} className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-canvas">
+        <Surface as="main" ref={scrollRootRef} variant="canvas" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-none">
           {showSourceNotice && (
             <div className="mx-auto max-w-3xl px-4 pt-5">
               <Notice variant="warning" title="Potentially Stale Sections">
@@ -681,11 +682,7 @@ export function DocumentEditorPage() {
 
           {sections.length === 0 ? (
             <div className="mx-auto flex min-h-full max-w-3xl flex-col justify-center px-6 py-16">
-              <p className="mb-3 text-meta font-medium uppercase text-text-muted">Blank Document</p>
-              <h1 className="text-title font-semibold text-text-primary">Start with a Section</h1>
-              <p className="mt-2 max-w-xl text-body text-text-secondary">
-                This Document has no active Sections yet.
-              </p>
+              <h1 className="text-title font-semibold text-text-primary">No Sections yet</h1>
               <div className="mt-6">
                 <Button type="button" onClick={() => createSection.mutate({})} disabled={createSection.isPending} className="gap-2">
                   {createSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -721,11 +718,11 @@ export function DocumentEditorPage() {
               </div>
             </div>
           )}
-        </main>
+        </Surface>
 
-        <div className={cn(
-          'flex shrink-0 border-l border-separator bg-panel transition-all duration-200',
-          rightPanelOpen ? 'w-[24rem]' : 'w-10',
+        <Surface variant="panel" className={cn(
+          'flex shrink-0 border-l border-separator border-0 rounded-none transition-all duration-200',
+          rightPanelOpen ? 'w-96' : 'w-10',
         )}>
           {rightPanelOpen ? (
             <div className="flex min-h-0 w-full">
@@ -788,10 +785,10 @@ export function DocumentEditorPage() {
               </button>
             </div>
           ) : (
-            <div className="flex w-10 flex-col items-center gap-2 border-l border-separator bg-panel py-3">
+            <Surface variant="panel" className="flex w-10 flex-col items-center gap-2 border-l border-separator border-0 rounded-none py-3">
               <button
                 onClick={() => { setRightPanelOpen(true); setRightTab('ai'); }}
-                className="rounded p-1.5 text-text-muted transition-colors hover:bg-panel-muted hover:text-text-primary"
+                className="rounded p-1.5 text-text-muted transition-colors hover:bg-interaction-muted hover:text-text-primary"
                 aria-label="Open AI assistant"
                 title="AI Assistant"
               >
@@ -799,15 +796,15 @@ export function DocumentEditorPage() {
               </button>
               <button
                 onClick={() => { setRightPanelOpen(true); setRightTab('notes'); }}
-                className="rounded p-1.5 text-text-muted transition-colors hover:bg-panel-muted hover:text-text-primary"
+                className="rounded p-1.5 text-text-muted transition-colors hover:bg-interaction-muted hover:text-text-primary"
                 aria-label="Open notes"
                 title="Notes"
               >
                 <FileText className="h-4 w-4" />
               </button>
-            </div>
+            </Surface>
           )}
-        </div>
+        </Surface>
       </div>
 
       <QualityModal
@@ -832,13 +829,13 @@ export function DocumentEditorPage() {
           if (!open) setSectionToDelete(null);
         }}
         title="Delete Section?"
-        description={`Delete "${sectionToDelete?.title || sectionToDelete?.heading || 'this section'}"? This removes it from the active Document but preserves the persisted lifecycle record.`}
+        description={`Delete "${sectionToDelete?.title || sectionToDelete?.heading || 'this section'}"? This cannot be undone.`}
         confirmLabel="Delete"
         onConfirm={() => {
           if (sectionToDelete) deleteSection.mutate(sectionToDelete.id);
           setSectionToDelete(null);
         }}
       />
-    </div>
+    </Surface>
   );
 }
