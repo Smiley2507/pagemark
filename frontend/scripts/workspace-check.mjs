@@ -107,15 +107,21 @@ function assertPhase4SearchAndSettings() {
     'Profile',
     'Organization',
     'Members',
-    'AI Providers & Models',
-    'Source Connections',
-    'Export Defaults',
-    'Templates',
-    'Notifications',
+    'AI Providers',
     'API Keys',
-    'Security',
+    'Activity Log',
     'section.keywords',
   ].forEach((marker) => assertContains(settings, marker, `settings center is missing ${marker}`));
+  [
+    'Source Connections',
+    'Export Defaults',
+    'Notifications',
+    'Security',
+  ].forEach((marker) => {
+    if (settings.includes(marker)) {
+      fail(`settings center still exposes stub surface ${marker}`);
+    }
+  });
 }
 
 function assertNoPrimaryWorkspaceStubs() {
