@@ -33,40 +33,37 @@ export function DocumentSummaryRow({
   onDelete: () => void;
 }) {
   return (
-    <Surface
-      variant="panel"
-      padding="default"
-      className="w-full transition-colors hover:bg-panel-muted"
-    >
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="min-w-0 flex-1 space-y-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-body-lg font-semibold text-text-primary">{document.title}</h3>
-            <Badge variant={document.statusVariant}>{document.statusLabel}</Badge>
-            {document.freshnessVariant === 'warning' && (
-              <Badge variant={document.freshnessVariant} showIcon={false}>
-                {document.freshnessLabel}
-              </Badge>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-3 text-meta text-text-secondary">
-            <span>{document.templateName || 'Custom outline'}</span>
-            <span>Last activity {formatDate(document.lastActivityAt)}</span>
-          </div>
-        </button>
-
-        <div className="flex w-full max-w-sm items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <Progress value={document.progress} label="Review progress" />
-          </div>
-          <DocumentActions onEdit={onEdit} onDelete={onDelete} />
+    <div className="grid gap-3 px-3 py-2.5 transition-colors hover:bg-panel-muted lg:grid-cols-[minmax(0,1fr)_180px_132px_auto] lg:items-center">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <h3 className="truncate text-body font-semibold text-text-primary">{document.title}</h3>
+          <DocumentAttentionBadges document={document} />
         </div>
+        <p className="mt-0.5 truncate text-meta text-text-secondary">
+          {document.purpose || document.templateName || 'Custom outline'}
+        </p>
+      </button>
+
+      <div className="min-w-0 text-meta text-text-muted">
+        <span className="block truncate">{document.templateName || 'Custom outline'}</span>
+        {document.tags.length > 0 && (
+          <span className="block truncate">{document.tags.slice(0, 2).join(', ')}</span>
+        )}
       </div>
-    </Surface>
+
+      <div className="min-w-0">
+        <Progress value={document.progress} label="Review progress" />
+      </div>
+
+      <div className="flex items-center justify-between gap-2 lg:justify-end">
+        <span className="text-meta text-text-muted">{formatDate(document.lastActivityAt)}</span>
+        <DocumentActions onEdit={onEdit} onDelete={onDelete} />
+      </div>
+    </div>
   );
 }
 
@@ -88,39 +85,52 @@ export function DocumentSummaryCard({
       className="w-full transition-colors hover:bg-panel-muted"
     >
       <div className="space-y-3">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="w-full space-y-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-body-lg font-semibold text-text-primary">{document.title}</h3>
-            <Badge variant={document.statusVariant}>{document.statusLabel}</Badge>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {document.freshnessVariant === 'warning' && (
-              <Badge variant={document.freshnessVariant} showIcon={false}>
-                {document.freshnessLabel}
-              </Badge>
-            )}
-            <Badge variant="neutral" showIcon={false}>
-              {document.templateName || 'Custom outline'}
-            </Badge>
-          </div>
-        </button>
+        <div className="flex items-start justify-between gap-2">
+          <button
+            type="button"
+            onClick={onOpen}
+            className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <h3 className="truncate text-body font-semibold text-text-primary">{document.title}</h3>
+            <p className="mt-1 line-clamp-2 min-h-10 text-meta text-text-secondary">
+              {document.purpose || document.templateName || 'Custom outline'}
+            </p>
+          </button>
+          <DocumentActions onEdit={onEdit} onDelete={onDelete} />
+        </div>
+
+        <div className="flex min-h-6 flex-wrap gap-1">
+          <DocumentAttentionBadges document={document} />
+        </div>
 
         <Progress value={document.progress} label="Review progress" />
 
-        <div className="grid gap-1 text-meta text-text-secondary">
-          <span>Last activity {formatDate(document.lastActivityAt)}</span>
-          <span>{document.tags.slice(0, 3).join(', ')}</span>
-        </div>
-
-        <div className="flex justify-end">
-          <DocumentActions onEdit={onEdit} onDelete={onDelete} />
+        <div className="grid grid-cols-2 gap-2 text-meta text-text-secondary">
+          <span>{document.templateName || 'Custom outline'}</span>
+          <span className="text-right">{formatDate(document.lastActivityAt)}</span>
+          {document.tags.length > 0 && (
+            <span className="col-span-2 truncate">{document.tags.slice(0, 3).join(', ')}</span>
+          )}
         </div>
       </div>
     </Surface>
+  );
+}
+
+function DocumentAttentionBadges({ document }: { document: WorkspaceDocumentItem }) {
+  return (
+    <>
+      {document.statusVariant !== 'neutral' && document.statusVariant !== 'success' && (
+        <Badge variant={document.statusVariant}>
+          {document.statusLabel}
+        </Badge>
+      )}
+      {document.freshnessVariant === 'warning' && (
+        <Badge variant={document.freshnessVariant} showIcon={false}>
+          {document.freshnessLabel}
+        </Badge>
+      )}
+    </>
   );
 }
 

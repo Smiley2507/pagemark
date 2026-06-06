@@ -224,7 +224,7 @@ export function DocumentLibraryPage() {
           description="Try a different search or filter."
         />
       ) : viewMode === 'list' ? (
-        <div className="space-y-3">
+        <Surface variant="panel" padding="none" className="divide-y divide-separator overflow-hidden">
           {filteredDocuments.map((document) => (
             <DocumentSummaryRow
               key={document.id}
@@ -234,9 +234,9 @@ export function DocumentLibraryPage() {
               onDelete={() => setDeletingDocument(document)}
             />
           ))}
-        </div>
+        </Surface>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
           {filteredDocuments.map((document) => (
             <DocumentSummaryCard
               key={document.id}
