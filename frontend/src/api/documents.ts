@@ -368,13 +368,14 @@ export const documentsApi = {
     return data;
   },
 
-  async getNotes(docId: number): Promise<CollaborationNote[]> {
-    const { data } = await apiClient.get(`/documents/${docId}/notes`);
+  async getNotes(projectId: number, documentId: number, sectionId?: number): Promise<CollaborationNote[]> {
+    const params = sectionId ? { section_id: sectionId } : {};
+    const { data } = await apiClient.get(`/projects/${projectId}/documents/${documentId}/notes`, { params });
     return data;
   },
 
-  async addNote(docId: number, content: string): Promise<CollaborationNote> {
-    const { data } = await apiClient.post(`/documents/${docId}/notes`, { content });
+  async addNote(projectId: number, documentId: number, content: string, sectionId?: number): Promise<CollaborationNote> {
+    const { data } = await apiClient.post(`/projects/${projectId}/documents/${documentId}/notes`, { content, section_id: sectionId });
     return data;
   },
 

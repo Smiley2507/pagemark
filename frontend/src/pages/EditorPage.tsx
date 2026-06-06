@@ -137,8 +137,8 @@ export const EditorPage: React.FC = () => {
         }
       }).catch(() => {});
     }
-    if (projectId) {
-      qualityApi.getQuality(projectId).then(report => {
+    if (projectId && document?.document_id) {
+      qualityApi.getQuality(projectId, document.document_id).then(report => {
         setLatestQualityScore(report.overall_score);
       }).catch(() => {});
     }

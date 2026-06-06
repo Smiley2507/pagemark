@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from pydantic import BaseModel
@@ -18,11 +18,13 @@ router = APIRouter(prefix="/projects", tags=["notes"])
 
 class NoteCreate(BaseModel):
     content: str
+    section_id: Optional[int] = None
 
 
 class NoteResponse(BaseModel):
     id: int
     document_id: int
+    section_id: Optional[int] = None
     user_id: int
     content: str
     created_at: datetime
@@ -53,23 +55,29 @@ async def _get_document_for_project(
 @router.get("/{project_id}/documents/{document_id}/notes", response_model=List[NoteResponse])
 async def list_notes(
     document_id: int,
+    section_id: Optional[int] = Query(None),
     project: Project = Depends(verify_project_ownership),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     document = await _get_document_for_project(db, project.id, document_id)
 
-    res = await db.execute(
+    query = (
         select(CollaborationNote, User)
         .join(User, User.id == CollaborationNote.user_id)
         .where(CollaborationNote.document_id == document.id)
-        .order_by(CollaborationNote.created_at.asc())
     )
+    if section_id is not None:
+        query = query.where(CollaborationNote.section_id == section_id)
+
+    query = query.order_by(CollaborationNote.created_at.asc())
+    res = await db.execute(query)
     rows = res.all()
     return [
         NoteResponse(
             id=note.id,
             document_id=note.document_id,
+            section_id=note.section_id,
             user_id=note.user_id,
             content=note.content,
             created_at=note.created_at,
@@ -96,6 +104,7 @@ async def create_note(
 
     note = CollaborationNote(
         document_id=document.id,
+        section_id=body.section_id,
         user_id=current_user.id,
         content=body.content,
     )
@@ -106,6 +115,7 @@ async def create_note(
     return NoteResponse(
         id=note.id,
         document_id=note.document_id,
+        section_id=note.section_id,
         user_id=note.user_id,
         content=note.content,
         created_at=note.created_at,

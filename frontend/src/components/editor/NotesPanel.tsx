@@ -1,0 +1,144 @@
+import { useState, useRef, useEffect } from 'react';
+import { MessageSquare, Plus, Loader2, User } from 'lucide-react';
+import { useNotes, useCreateNote } from '@/hooks/useNotes';
+import { useAuthStore } from '@/store/authStore';
+import { cn } from '@/lib/utils';
+
+interface NotesPanelProps {
+  projectId: number;
+  documentId: number;
+  activeSectionId: number | null;
+}
+
+export function NotesPanel({ projectId, documentId, activeSectionId }: NotesPanelProps) {
+  const [scope, setScope] = useState<'document' | 'section'>('document');
+  const [newNote, setNewNote] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const user = useAuthStore((s) => s.user);
+  const resolvedSectionId = scope === 'section' ? activeSectionId : null;
+  const { data: notes = [], isLoading } = useNotes(projectId, documentId, resolvedSectionId);
+  const createNote = useCreateNote(projectId, documentId);
+
+  useEffect(() => {
+    if (newNote && textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  }, [newNote]);
+
+  const handleSubmit = () => {
+    const content = newNote.trim();
+    if (!content) return;
+    createNote.mutate(
+      { content, sectionId: resolvedSectionId },
+      { onSuccess: () => { setNewNote(''); } },
+    );
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-separator px-4">
+        <MessageSquare className="h-4 w-4 text-text-muted" />
+        <span className="text-sm font-medium text-text-primary">Notes</span>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={() => setScope('document')}
+            className={cn(
+              'rounded px-2 py-0.5 text-xs transition-colors',
+              scope === 'document'
+                ? 'bg-interaction-muted text-interaction-hover'
+                : 'text-text-muted hover:text-text-primary',
+            )}
+          >
+            Document
+          </button>
+          <button
+            onClick={() => setScope('section')}
+            className={cn(
+              'rounded px-2 py-0.5 text-xs transition-colors',
+              scope === 'section'
+                ? 'bg-interaction-muted text-interaction-hover'
+                : 'text-text-muted hover:text-text-primary',
+            )}
+          >
+            Section
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-4 w-4 animate-spin text-text-muted" />
+          </div>
+        ) : notes.length === 0 ? (
+          <div className="flex flex-col items-center px-4 py-12 text-center">
+            <MessageSquare className="mb-2 h-6 w-6 text-text-muted" />
+            <p className="text-sm font-medium text-text-primary">No notes yet</p>
+            <p className="mt-1 text-xs text-text-muted">
+              {scope === 'section' && !activeSectionId
+                ? 'Select a section to add section-scoped notes'
+                : 'Add a note below'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3 px-4 py-4">
+            {notes.map((note) => (
+              <div key={note.id} className="rounded-lg border border-separator bg-canvas p-3">
+                <div className="mb-1 flex items-center gap-2">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-panel-muted">
+                    <User className="h-3 w-3 text-text-muted" />
+                  </div>
+                  <span className="text-xs font-medium text-text-primary">
+                    {note.user_name || 'Unknown'}
+                  </span>
+                  <span className="ml-auto text-[10px] text-text-muted">
+                    {new Date(note.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+                <p className="text-xs text-text-secondary whitespace-pre-wrap">{note.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="shrink-0 border-t border-separator px-3 pb-3 pt-3">
+        <div className="rounded-lg border border-input bg-canvas focus-within:border-interaction">
+          <textarea
+            ref={textareaRef}
+            value={newNote}
+            onChange={(e) => setNewNote(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={scope === 'section' ? 'Note about this section...' : 'Note about the document...'}
+            className="w-full resize-none bg-transparent px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:outline-none"
+            rows={2}
+          />
+          <div className="flex items-center justify-between px-2 pb-2">
+            <span className="text-[10px] text-text-muted">
+              {scope === 'section' ? 'Section note' : 'Document note'}
+            </span>
+            <button
+              onClick={handleSubmit}
+              disabled={!newNote.trim() || createNote.isPending}
+              className="flex h-6 w-6 items-center justify-center rounded bg-foreground text-background transition-opacity hover:opacity-90 disabled:opacity-30"
+            >
+              {createNote.isPending ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Plus className="h-3 w-3" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

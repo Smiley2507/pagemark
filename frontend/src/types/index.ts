@@ -230,6 +230,7 @@ export type DocumentStatus = 'DRAFT' | 'IN_REVIEW' | 'APPROVED';
 export interface CollaborationNote {
   id: number;
   document_id: number;
+  section_id?: number | null;
   user_id: number;
   content: string;
   created_at: string;

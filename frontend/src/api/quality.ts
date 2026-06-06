@@ -26,23 +26,24 @@ export interface QualityReportFull extends QualityReport {
 
 export const qualityApi = {
   /** Dispatch quality analysis job → 202 */
-  async runQuality(projectId: number): Promise<void> {
-    await apiClient.post(`/projects/${projectId}/quality/run`);
+  async runQuality(projectId: number, documentId: number): Promise<void> {
+    await apiClient.post(`/projects/${projectId}/documents/${documentId}/quality/run`);
   },
 
   /** Fetch latest quality report with all issues + broken links */
-  async getQuality(projectId: number): Promise<QualityReportFull> {
-    const { data } = await apiClient.get(`/projects/${projectId}/quality`);
+  async getQuality(projectId: number, documentId: number): Promise<QualityReportFull> {
+    const { data } = await apiClient.get(`/projects/${projectId}/documents/${documentId}/quality`);
     return data;
   },
 
   /** Fetch issues, optionally filtered by severity */
   async getIssues(
     projectId: number,
+    documentId: number,
     severity?: 'error' | 'warning' | 'info',
   ): Promise<QualityIssue[]> {
     const params = severity ? { severity } : {};
-    const { data } = await apiClient.get(`/projects/${projectId}/quality/issues`, { params });
+    const { data } = await apiClient.get(`/projects/${projectId}/documents/${documentId}/quality/issues`, { params });
     return data;
   },
 };

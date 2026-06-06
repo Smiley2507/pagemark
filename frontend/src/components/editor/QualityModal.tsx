@@ -147,7 +147,7 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projectId: number }> = ({ open, onClose, projectId }) => {
+export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projectId: number; documentId?: number }> = ({ open, onClose, projectId, documentId = 0 }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -156,8 +156,8 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
   const [progress, setProgress] = useState(0);
 
   const { data: report, isLoading, error, refetch } = useQuery({
-    queryKey: ['quality', projectId],
-    queryFn: () => qualityApi.getQuality(projectId),
+    queryKey: ['quality', projectId, documentId],
+    queryFn: () => qualityApi.getQuality(projectId, documentId),
     retry: false,
     enabled: open,
   });
@@ -181,7 +181,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
   });
 
   const runMutation = useMutation({
-    mutationFn: () => qualityApi.runQuality(projectId),
+    mutationFn: () => qualityApi.runQuality(projectId, documentId),
     onSuccess: () => {
       toast.success('Quality analysis started. Results will appear shortly.');
       setProgress(5);
