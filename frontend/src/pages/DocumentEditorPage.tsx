@@ -535,18 +535,18 @@ export function DocumentEditorPage() {
 
   if (loading) {
     return (
-      <Surface variant="workspace" className="flex min-h-screen items-center justify-center rounded-none">
+      <div className="flex min-h-screen items-center justify-center bg-workspace">
         <div className="flex items-center gap-3 text-body text-text-secondary">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading document workspace...
         </div>
-      </Surface>
+      </div>
     );
   }
 
   return (
-    <Surface variant="workspace" className="flex h-screen flex-col text-text-primary rounded-none">
-      <Surface as="header" variant="panel" className="flex h-14 shrink-0 items-center justify-between border-b border-separator border-0 rounded-none px-3">
+    <div className="flex h-screen flex-col bg-workspace text-text-primary">
+      <header className="flex h-14 shrink-0 items-center justify-between border-b border-separator bg-panel px-3">
         <div className="flex min-w-0 items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => navigate(`/projects/${pid}`)} aria-label="Back to project">
             <ChevronLeft className="h-4 w-4" />
@@ -610,10 +610,10 @@ export function DocumentEditorPage() {
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </div>
-      </Surface>
+      </header>
 
       <div className="flex min-h-0 flex-1">
-        <Surface as="aside" variant="panel" className="hidden w-72 shrink-0 border-r border-separator border-0 rounded-none lg:flex lg:flex-col">
+        <aside className="hidden w-72 shrink-0 border-r border-separator bg-panel lg:flex lg:flex-col">
           <div className="flex items-center justify-between border-b border-separator px-4 py-3">
             <p className="text-meta font-medium uppercase text-text-muted">Outline</p>
             <div className="flex items-center gap-1">
@@ -655,7 +655,7 @@ export function DocumentEditorPage() {
               </Button>
             )}
           </nav>
-          <Surface variant="panel" className="space-y-2 border-t border-separator border-0 rounded-none px-4 py-3 text-meta text-text-secondary">
+          <div className="space-y-2 border-t border-separator px-4 py-3 text-meta text-text-secondary">
             <div className="flex justify-between gap-3">
               <span>Words</span>
               <span className="font-medium text-text-primary">{wordCount}</span>
@@ -668,10 +668,10 @@ export function DocumentEditorPage() {
               <span>Grammar/style</span>
               <span className="font-medium text-text-primary">{issueCount}</span>
             </div>
-          </Surface>
-        </Surface>
+          </div>
+        </aside>
 
-        <Surface as="main" ref={scrollRootRef} variant="canvas" className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-none">
+        <main ref={scrollRootRef} className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-canvas">
           {showSourceNotice && (
             <div className="mx-auto max-w-3xl px-4 pt-5">
               <Notice variant="warning" title="Potentially Stale Sections">
@@ -718,10 +718,10 @@ export function DocumentEditorPage() {
               </div>
             </div>
           )}
-        </Surface>
+        </main>
 
-        <Surface variant="panel" className={cn(
-          'flex shrink-0 border-l border-separator border-0 rounded-none transition-all duration-200',
+        <div className={cn(
+          'flex shrink-0 border-l border-separator bg-panel transition-all duration-200',
           rightPanelOpen ? 'w-96' : 'w-10',
         )}>
           {rightPanelOpen ? (
@@ -785,7 +785,7 @@ export function DocumentEditorPage() {
               </button>
             </div>
           ) : (
-            <Surface variant="panel" className="flex w-10 flex-col items-center gap-2 border-l border-separator border-0 rounded-none py-3">
+            <div className="flex w-10 flex-col items-center gap-2 border-l border-separator bg-panel py-3">
               <button
                 onClick={() => { setRightPanelOpen(true); setRightTab('ai'); }}
                 className="rounded p-1.5 text-text-muted transition-colors hover:bg-interaction-muted hover:text-text-primary"
@@ -802,9 +802,9 @@ export function DocumentEditorPage() {
               >
                 <FileText className="h-4 w-4" />
               </button>
-            </Surface>
+            </div>
           )}
-        </Surface>
+        </div>
       </div>
 
       <QualityModal
@@ -836,6 +836,6 @@ export function DocumentEditorPage() {
           setSectionToDelete(null);
         }}
       />
-    </Surface>
+    </div>
   );
 }

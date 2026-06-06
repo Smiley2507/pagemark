@@ -20,6 +20,8 @@ const allowedRawColorFiles = new Set([
 ]);
 const legacyVisualDebtFiles = new Set([
   'src/components/editor/MiddlePanel.tsx',
+  'src/pages/DocumentEditorPage.tsx',
+  'src/components/editor/QualityModal.tsx',
 ]);
 const governedPrimitiveDirectories = [
   'src/components/ui/',

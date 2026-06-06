@@ -106,7 +106,7 @@ function SubScoreCard({ label, score }: { label: string; score: number }) {
           {Math.round(score)}
         </span>
       </div>
-      <div className="h-1.5 w-full rounded bg-sidebar overflow-hidden">
+      <div className="h-1.5 w-full rounded bg-panel-muted overflow-hidden">
         <div
           className={cn('h-full transition-all duration-700', scoreBarColor(score))}
           style={{ width: `${score}%` }}
@@ -307,7 +307,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
               'rounded px-3 py-1.5 text-sm font-medium transition-colors capitalize',
               severityFilter === f
                 ? 'bg-primary text-primary-foreground'
-                : 'bg-sidebar text-text-secondary hover:bg-accent',
+                : 'bg-panel-muted text-text-secondary hover:bg-accent',
             )}
           >
             {f === 'all' ? `All (${issues.length})` : `${f} (${issues.filter(i => i.severity === f).length})`}
@@ -390,7 +390,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
         <Surface variant="panel" className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-sidebar">
+              <tr className="border-b border-border bg-panel-muted">
                 <th className="px-4 py-3 text-left font-medium text-text-secondary">URL</th>
                 <th className="px-4 py-3 text-left font-medium text-text-secondary">Status</th>
                 <th className="px-4 py-3 text-left font-medium text-text-secondary">Found In</th>
@@ -398,7 +398,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
             </thead>
             <tbody>
               {brokenLinks.map(link => (
-                <tr key={link.id} className="border-b border-border/50 last:border-0 hover:bg-sidebar">
+                <tr key={link.id} className="border-b border-border/50 last:border-0 hover:bg-panel-muted">
                   <td className="px-4 py-3 max-w-xs">
                     <a
                       href={link.url}
@@ -534,7 +534,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
       
       <Surface variant="overlay" className="relative z-10 flex flex-col h-full max-h-screen w-full max-w-5xl overflow-hidden">
         {/* Top bar */}
-        <header className="shrink-0 flex h-14 items-center justify-between border-b border-border bg-sidebar px-6">
+        <header className="shrink-0 flex h-14 items-center justify-between border-b border-border bg-panel px-6">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-primary" />
             <span className="font-semibold text-foreground">Quality Dashboard</span>
@@ -559,7 +559,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
 
         {/* Fake Progress Bar */}
         {progress > 0 && (
-          <div className="h-1 w-full bg-sidebar">
+          <div className="h-1 w-full bg-panel-muted">
             <div className="h-full bg-primary transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
           </div>
         )}
@@ -576,7 +576,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
           {/* No report yet */}
           {(!isLoading && !report && !isRunning) && (
             <div className="flex flex-col items-center justify-center h-full gap-6 py-24 text-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded bg-sidebar">
+              <div className="flex h-16 w-16 items-center justify-center rounded bg-panel-muted">
                 <ShieldCheck className="h-8 w-8 text-text-secondary" />
               </div>
               <div>
