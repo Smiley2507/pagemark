@@ -1,5 +1,5 @@
 """
-quality_worker.py — Celery task that scores a project's documentation quality.
+quality_worker.py — Celery task that scores a Document's documentation quality.
 
 Scores (all 0-100):
   completeness  – fraction of sections with substantial content (>100 words)
@@ -188,7 +188,7 @@ def _run_async(coro):
 
 
 @celery_app.task(bind=True, max_retries=2)
-def score_quality_task(self, project_id: int):
+def score_quality_task(self, document_id: int):
     """Main quality scoring Celery task."""
     from app.database import sync_session_factory
     from app.models.document import Document, Section, SectionStatus
@@ -196,14 +196,14 @@ def score_quality_task(self, project_id: int):
     from sqlalchemy.orm import selectinload
 
     with sync_session_factory() as db:
-        # Fetch project document + sections
+        # Fetch the selected Document + sections.
         doc = (
             db.query(Document)
-            .filter(Document.project_id == project_id)
+            .filter(Document.id == document_id)
             .first()
         )
         if not doc:
-            return {"error": "No document found for project"}
+            return {"error": "Document not found"}
 
         sections = (
             db.query(Section)
@@ -241,7 +241,7 @@ def score_quality_task(self, project_id: int):
         # ── Upsert QualityReport (delete old, create new) ─────────────
         existing = (
             db.query(QualityReport)
-            .filter(QualityReport.project_id == project_id)
+            .filter(QualityReport.document_id == doc.id)
             .first()
         )
         if existing:
@@ -249,7 +249,7 @@ def score_quality_task(self, project_id: int):
             db.flush()
 
         report = QualityReport(
-            project_id=project_id,
+            document_id=doc.id,
             overall_score=round(overall, 1),
             completeness=round(completeness, 1),
             readability=round(readability, 1),

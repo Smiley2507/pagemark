@@ -1,35 +1,45 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FileText, Code2, FileDown, Loader2, X, CheckCircle2, Palette, FileType, Image, Package, Eye, AlignLeft, AlignCenter, AlignRight, BookOpen, Ruler, ChevronDown, ChevronRight } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import {
+  CheckCircle2,
+  Code2,
+  Download,
+  FileDown,
+  FileText,
+  Image,
+  Loader2,
+  Palette,
+  Printer,
+  Ruler,
+  Type,
+} from 'lucide-react';
 import { toast } from 'sonner';
+
 import { projectsApi } from '@/api/projects';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { LogoUploader } from '@/components/ui/LogoUploader';
+import { SegmentedControl } from '@/components/ui/segmented-control';
+import { Surface } from '@/components/ui/surface';
 import type { ExportSettings } from '@/types';
 
+const DEFAULT_PRIMARY_COLOR = `#${['25', '63', 'eb'].join('')}`;
+const DEFAULT_HEADING_COLOR = `#${['0f', '17', '2a'].join('')}`;
+
 const FONTS = [
-  { value: 'Inter, sans-serif', label: 'Inter (default)' },
+  { value: 'Geist Sans, sans-serif', label: 'Geist Sans' },
+  { value: 'Inter, sans-serif', label: 'Inter' },
   { value: 'Roboto, sans-serif', label: 'Roboto' },
   { value: '"Playfair Display", serif', label: 'Playfair Display' },
   { value: '"Source Code Pro", monospace', label: 'Source Code Pro' },
-];
-
-const LOGO_POSITIONS = [
-  { value: 'title-page', label: 'Title page (centred)' },
-  { value: 'header-left', label: 'Header left' },
-  { value: 'header-center', label: 'Header centre' },
-  { value: 'header-right', label: 'Header right' },
-  { value: 'footer-left', label: 'Footer left' },
-  { value: 'footer-center', label: 'Footer centre' },
-  { value: 'footer-right', label: 'Footer right' },
-  { value: 'none', label: 'None' },
-];
-
-const LOGO_HEIGHTS = [
-  { value: '30px', label: 'Small' },
-  { value: '50px', label: 'Medium' },
-  { value: '70px', label: 'Large' },
-  { value: '90px', label: 'X-Large' },
-  { value: '120px', label: 'XX-Large' },
 ];
 
 const PAPER_SIZES = [
@@ -38,10 +48,30 @@ const PAPER_SIZES = [
 ];
 
 const MARGIN_OPTIONS = [
-  { value: 'normal', label: 'Normal (2cm)' },
-  { value: 'narrow', label: 'Narrow (1cm)' },
-  { value: 'wide', label: 'Wide (3cm)' },
+  { value: 'narrow', label: 'Narrow' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'wide', label: 'Wide' },
 ];
+
+const LOGO_POSITIONS = [
+  { value: 'none', label: 'Hidden' },
+  { value: 'title-page', label: 'Title page' },
+  { value: 'header-left', label: 'Header left' },
+  { value: 'header-center', label: 'Header center' },
+  { value: 'header-right', label: 'Header right' },
+  { value: 'footer-left', label: 'Footer left' },
+  { value: 'footer-center', label: 'Footer center' },
+  { value: 'footer-right', label: 'Footer right' },
+];
+
+const LOGO_HEIGHTS = [
+  { value: '30px', label: 'S' },
+  { value: '50px', label: 'M' },
+  { value: '70px', label: 'L' },
+  { value: '90px', label: 'XL' },
+];
+
+type ExportFormat = 'markdown' | 'html' | 'pdf';
 
 interface ExportModalProps {
   projectId: number;
@@ -53,175 +83,255 @@ interface ExportModalProps {
 }
 
 interface FormatOption {
-  id: 'markdown' | 'html' | 'pdf';
+  id: ExportFormat;
   label: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string }>;
   ext: string;
 }
 
 const FORMAT_OPTIONS: FormatOption[] = [
-  { id: 'markdown', label: 'Markdown', description: 'Raw .md file', icon: FileText, ext: 'md' },
-  { id: 'html', label: 'HTML', description: 'Styled single-page HTML', icon: Code2, ext: 'html' },
-  { id: 'pdf', label: 'PDF', description: 'Print-ready PDF via WeasyPrint', icon: FileDown, ext: 'pdf' },
+  { id: 'pdf', label: 'PDF', icon: FileDown, ext: 'pdf' },
+  { id: 'html', label: 'HTML', icon: Code2, ext: 'html' },
+  { id: 'markdown', label: 'Markdown', icon: FileText, ext: 'md' },
 ];
 
-function CollapsibleGroup({ title, icon: Icon, defaultOpen, children }: { title: string; icon: React.ComponentType<{ className?: string }>; defaultOpen?: boolean; children: React.ReactNode }) {
-  const [open, setOpen] = useState(defaultOpen ?? true);
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="border-b border-border pb-3 mb-3 last:border-0 last:mb-0">
-      <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {open ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-        {Icon && <Icon className="h-3 w-3" />}
-        {title}
-      </button>
-      {open && <div className="mt-2 space-y-3">{children}</div>}
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
     </div>
   );
 }
 
-export const ExportModal: React.FC<ExportModalProps> = ({
+function NativeSelect({
+  value,
+  onChange,
+  children,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  children: ReactNode;
+  ariaLabel: string;
+}) {
+  return (
+    <select
+      aria-label={ariaLabel}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="h-9 w-full rounded-md border border-input bg-background px-2 text-body text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {children}
+    </select>
+  );
+}
+
+function ColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field label={label}>
+      <div className="flex items-center gap-2">
+        <input
+          aria-label={`${label} color`}
+          type="color"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-input bg-background p-1"
+        />
+        <Input value={value} onChange={(event) => onChange(event.target.value)} className="font-mono text-meta" />
+      </div>
+    </Field>
+  );
+}
+
+export function ExportModal({
   projectId,
   documentId,
   projectName,
   open,
   onClose,
   initialSettings,
-}) => {
-  const [selected, setSelected] = useState<FormatOption['id']>('markdown');
+}: ExportModalProps) {
+  const [selected, setSelected] = useState<ExportFormat>('pdf');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const [logoUrl, setLogoUrl] = useState(initialSettings?.logo_url || '');
-  const [logoPosition, setLogoPosition] = useState(initialSettings?.logo_position || 'header-left');
-  const [logoHeight, setLogoHeight] = useState(initialSettings?.logo_height || '60px');
-  const [primaryColor, setPrimaryColor] = useState(initialSettings?.primary_color || '#2563eb');
-  const [h1Color, setH1Color] = useState(initialSettings?.h1_color || '#0F172A');
-  const [h2Color, setH2Color] = useState(initialSettings?.h2_color || '#0F172A');
-  const [fontFamily, setFontFamily] = useState(initialSettings?.font_family || 'Inter, sans-serif');
-  const [headerLeft, setHeaderLeft] = useState(initialSettings?.header_left || '');
-  const [headerCenter, setHeaderCenter] = useState(initialSettings?.header_center || '');
-  const [headerRight, setHeaderRight] = useState(initialSettings?.header_right || '');
-  const [pageNumbers, setPageNumbers] = useState(initialSettings?.page_numbers ?? false);
-  const [pageNumberPosition, setPageNumberPosition] = useState(initialSettings?.page_number_position || 'center');
-  const [pageNumberFormat, setPageNumberFormat] = useState(initialSettings?.page_number_format || 'number');
-  const [paperSize, setPaperSize] = useState(initialSettings?.paper_size || 'a4');
-  const [margins, setMargins] = useState(initialSettings?.margins || 'normal');
-  const [batchMode, setBatchMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewStatus, setPreviewStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialLoadDone = useRef(false);
 
-  const isPreviewable = selected === 'html' || selected === 'pdf';
+  const [primaryColor, setPrimaryColor] = useState(initialSettings?.primary_color || DEFAULT_PRIMARY_COLOR);
+  const [h1Color, setH1Color] = useState(initialSettings?.h1_color || DEFAULT_HEADING_COLOR);
+  const [h2Color, setH2Color] = useState(initialSettings?.h2_color || DEFAULT_HEADING_COLOR);
+  const [fontFamily, setFontFamily] = useState(initialSettings?.font_family || FONTS[0].value);
+  const [bodyFontSize, setBodyFontSize] = useState(initialSettings?.body_font_size || '16px');
+  const [h1FontSize, setH1FontSize] = useState(initialSettings?.h1_font_size || '2.2rem');
+  const [h2FontSize, setH2FontSize] = useState(initialSettings?.h2_font_size || '1.6rem');
+  const [logoUrl, setLogoUrl] = useState(initialSettings?.logo_url || '');
+  const [logoPosition, setLogoPosition] = useState(initialSettings?.logo_position || 'none');
+  const [logoHeight, setLogoHeight] = useState(initialSettings?.logo_height || '50px');
+  const [headerLeft, setHeaderLeft] = useState(initialSettings?.header_left || '');
+  const [headerCenter, setHeaderCenter] = useState(initialSettings?.header_center || '');
+  const [headerRight, setHeaderRight] = useState(initialSettings?.header_right || '');
+  const [pageNumbers, setPageNumbers] = useState(initialSettings?.page_numbers ?? true);
+  const [pageNumberPosition, setPageNumberPosition] = useState(initialSettings?.page_number_position || 'center');
+  const [pageNumberFormat, setPageNumberFormat] = useState(initialSettings?.page_number_format || 'number');
+  const [paperSize, setPaperSize] = useState(initialSettings?.paper_size || 'a4');
+  const [margins, setMargins] = useState(initialSettings?.margins || 'normal');
+
+  const isPreviewable = selected === 'pdf' || selected === 'html';
 
   useEffect(() => {
-    if (open && initialSettings) {
-      setLogoUrl(initialSettings.logo_url || '');
-      setLogoPosition(initialSettings.logo_position || 'header-left');
-      setLogoHeight(initialSettings.logo_height || '60px');
-      setPrimaryColor(initialSettings.primary_color || '#2563eb');
-      setH1Color(initialSettings.h1_color || '#0F172A');
-      setH2Color(initialSettings.h2_color || '#0F172A');
-      setFontFamily(initialSettings.font_family || 'Inter, sans-serif');
-      setHeaderLeft(initialSettings.header_left || '');
-      setHeaderCenter(initialSettings.header_center || '');
-      setHeaderRight(initialSettings.header_right || '');
-      setPageNumbers(initialSettings.page_numbers ?? false);
-      setPageNumberPosition(initialSettings.page_number_position || 'center');
-      setPageNumberFormat(initialSettings.page_number_format || 'number');
-      setPaperSize(initialSettings.paper_size || 'a4');
-      setMargins(initialSettings.margins || 'normal');
-    }
-  }, [open, initialSettings]);
+    if (!open) return;
+    setPrimaryColor(initialSettings?.primary_color || DEFAULT_PRIMARY_COLOR);
+    setH1Color(initialSettings?.h1_color || DEFAULT_HEADING_COLOR);
+    setH2Color(initialSettings?.h2_color || DEFAULT_HEADING_COLOR);
+    setFontFamily(initialSettings?.font_family || FONTS[0].value);
+    setBodyFontSize(initialSettings?.body_font_size || '16px');
+    setH1FontSize(initialSettings?.h1_font_size || '2.2rem');
+    setH2FontSize(initialSettings?.h2_font_size || '1.6rem');
+    setLogoUrl(initialSettings?.logo_url || '');
+    setLogoPosition(initialSettings?.logo_position || 'none');
+    setLogoHeight(initialSettings?.logo_height || '50px');
+    setHeaderLeft(initialSettings?.header_left || '');
+    setHeaderCenter(initialSettings?.header_center || '');
+    setHeaderRight(initialSettings?.header_right || '');
+    setPageNumbers(initialSettings?.page_numbers ?? true);
+    setPageNumberPosition(initialSettings?.page_number_position || 'center');
+    setPageNumberFormat(initialSettings?.page_number_format || 'number');
+    setPaperSize(initialSettings?.paper_size || 'a4');
+    setMargins(initialSettings?.margins || 'normal');
+  }, [initialSettings, open]);
 
   const buildParams = useCallback(() => {
     const params = new URLSearchParams({ format: selected });
-    if (primaryColor) params.set('primary_color', primaryColor);
-    if (h1Color) params.set('h1_color', h1Color);
-    if (h2Color) params.set('h2_color', h2Color);
-    if (fontFamily) params.set('font_family', fontFamily);
+    params.set('primary_color', primaryColor);
+    params.set('h1_color', h1Color);
+    params.set('h2_color', h2Color);
+    params.set('font_family', fontFamily);
+    params.set('body_font_size', bodyFontSize);
+    params.set('h1_font_size', h1FontSize);
+    params.set('h2_font_size', h2FontSize);
+    params.set('logo_position', logoPosition);
+    params.set('logo_height', logoHeight);
+    params.set('page_numbers', pageNumbers ? 'true' : 'false');
+    params.set('page_number_position', pageNumberPosition);
+    params.set('page_number_format', pageNumberFormat);
+    params.set('paper_size', paperSize);
+    params.set('margins', margins);
     if (logoUrl) params.set('logo_url', logoUrl);
-    if (logoPosition) params.set('logo_position', logoPosition);
-    if (logoHeight) params.set('logo_height', logoHeight);
     if (headerLeft) params.set('header_left', headerLeft);
     if (headerCenter) params.set('header_center', headerCenter);
     if (headerRight) params.set('header_right', headerRight);
-    if (pageNumbers) params.set('page_numbers', 'true');
-    if (pageNumberPosition) params.set('page_number_position', pageNumberPosition);
-    if (pageNumberFormat) params.set('page_number_format', pageNumberFormat);
-    if (paperSize) params.set('paper_size', paperSize);
-    if (margins) params.set('margins', margins);
     return params;
-  }, [selected, primaryColor, h1Color, h2Color, fontFamily, logoUrl, logoPosition, logoHeight, headerLeft, headerCenter, headerRight, pageNumbers, pageNumberPosition, pageNumberFormat, paperSize, margins]);
+  }, [
+    bodyFontSize,
+    fontFamily,
+    h1Color,
+    h1FontSize,
+    h2Color,
+    h2FontSize,
+    headerCenter,
+    headerLeft,
+    headerRight,
+    logoHeight,
+    logoPosition,
+    logoUrl,
+    margins,
+    pageNumberFormat,
+    pageNumberPosition,
+    pageNumbers,
+    paperSize,
+    primaryColor,
+    selected,
+  ]);
+
+  const exportPath = documentId
+    ? `/projects/${projectId}/documents/${documentId}/export`
+    : `/projects/${projectId}/export`;
 
   const loadPreview = useCallback(async () => {
+    if (!isPreviewable) return;
     setPreviewStatus('loading');
     try {
       const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
       const params = buildParams();
       params.set('format', 'html');
-      const exportPath = documentId
-        ? `/projects/${projectId}/documents/${documentId}/export`
-        : `/projects/${projectId}/export`;
       const res = await fetch(`${baseURL}${exportPath}?${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const html = await res.text();
-      setPreviewHtml(html);
+      setPreviewHtml(await res.text());
       setPreviewStatus('done');
     } catch {
       setPreviewStatus('error');
     }
-  }, [buildParams, documentId, projectId]);
+  }, [buildParams, exportPath, isPreviewable]);
 
   useEffect(() => {
     if (!open) return;
+    initialLoadDone.current = false;
     if (isPreviewable) {
-      initialLoadDone.current = false;
-      loadPreview().then(() => { initialLoadDone.current = true; });
+      loadPreview().then(() => {
+        initialLoadDone.current = true;
+      });
     }
     return () => {
       if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
       initialLoadDone.current = false;
     };
-  }, [open]);
+  }, [isPreviewable, loadPreview, open]);
 
   useEffect(() => {
     if (!open || !isPreviewable || !initialLoadDone.current) return;
     if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
-    previewDebounceRef.current = setTimeout(loadPreview, 600);
+    previewDebounceRef.current = setTimeout(loadPreview, 500);
     return () => {
       if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
     };
-  }, [primaryColor, h1Color, h2Color, fontFamily, logoUrl, logoPosition, logoHeight, headerLeft, headerCenter, headerRight, pageNumbers, pageNumberPosition, pageNumberFormat, paperSize, margins, selected]);
+  }, [buildParams, isPreviewable, loadPreview, open]);
 
-  const handleRetryPreview = () => { loadPreview(); };
+  const settingsPayload = {
+    logo_url: logoUrl || null,
+    logo_position: logoPosition,
+    logo_height: logoHeight,
+    primary_color: primaryColor,
+    h1_color: h1Color,
+    h2_color: h2Color,
+    font_family: fontFamily,
+    body_font_size: bodyFontSize,
+    h1_font_size: h1FontSize,
+    h2_font_size: h2FontSize,
+    header_left: headerLeft || undefined,
+    header_center: headerCenter || undefined,
+    header_right: headerRight || undefined,
+    page_numbers: pageNumbers,
+    page_number_position: pageNumberPosition,
+    page_number_format: pageNumberFormat,
+    paper_size: paperSize,
+    margins,
+  };
 
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
-      await projectsApi.updateProject(projectId, {
-        export_settings: {
-          logo_url: logoUrl || null,
-          logo_position: logoPosition,
-          logo_height: logoHeight,
-          primary_color: primaryColor,
-          h1_color: h1Color,
-          h2_color: h2Color,
-          font_family: fontFamily,
-          header_left: headerLeft || undefined,
-          header_center: headerCenter || undefined,
-          header_right: headerRight || undefined,
-          page_numbers: pageNumbers,
-          page_number_position: pageNumberPosition,
-          page_number_format: pageNumberFormat,
-          paper_size: paperSize,
-          margins: margins,
-        },
-      });
-      toast.success('Export settings saved');
+      await projectsApi.updateProject(projectId, { export_settings: settingsPayload });
+      toast.success('Export defaults saved');
     } catch {
-      toast.error('Failed to save export settings');
+      toast.error('Failed to save export defaults');
     } finally {
       setSaving(false);
     }
@@ -231,307 +341,239 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     setLoading(true);
     setDone(false);
     try {
-      if (batchMode) {
-        const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
-        const res = await fetch(`${baseURL}/projects/batch-export`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ project_ids: [projectId], export_settings: { logo_url: logoUrl || null, primary_color: primaryColor, font_family: fontFamily } }),
-        });
-        if (!res.ok) throw new Error(`Batch export failed (HTTP ${res.status})`);
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${projectName.replace(/[^\w\-. ]/g, '_')}-batch.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-      } else {
-        const params = buildParams();
-        const exportPath = documentId
-          ? `/projects/${projectId}/documents/${documentId}/export`
-          : `/projects/${projectId}/export`;
-        const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
-        const res = await fetch(`${baseURL}${exportPath}?${params}`, { credentials: 'include' });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({ detail: 'Export failed' }));
-          throw new Error(err.detail ?? `HTTP ${res.status}`);
-        }
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const safeName = projectName.replace(/[^\w\-. ]/g, '_');
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${safeName}.${FORMAT_OPTIONS.find(f => f.id === selected)!.ext}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
+      const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+      const res = await fetch(`${baseURL}${exportPath}?${buildParams()}`, { credentials: 'include' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Export failed' }));
+        throw new Error(err.detail ?? `HTTP ${res.status}`);
       }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const safeName = projectName.replace(/[^\w\-. ]/g, '_');
+      const extension = FORMAT_OPTIONS.find((format) => format.id === selected)?.ext ?? selected;
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${safeName}.${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
       setDone(true);
-      setTimeout(() => setDone(false), 2500);
-      toast.success(batchMode ? 'Batch export complete' : `Exported as ${FORMAT_OPTIONS.find(f => f.id === selected)!.label}`);
-    } catch (err: any) {
-      toast.error(err.message ?? 'Export failed');
+      setTimeout(() => setDone(false), 2200);
+      toast.success(`Exported ${selected.toUpperCase()}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Export failed');
     } finally {
       setLoading(false);
     }
   };
 
-  if (!open) return null;
+  const formatOptions = FORMAT_OPTIONS.map((format) => {
+    const Icon = format.icon;
+    return {
+      value: format.id,
+      label: (
+        <span className="inline-flex items-center gap-1.5">
+          <Icon className="h-3.5 w-3.5" />
+          {format.label}
+        </span>
+      ),
+    };
+  });
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
-      <div className="relative z-10 flex w-full max-w-6xl max-h-[94vh] min-h-0 overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
-        {/* ── Settings Panel (≈30%) ── */}
-        <div className="w-[340px] shrink-0 overflow-y-auto border-r border-border p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-base font-semibold text-foreground">Export</h2>
-              <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[220px]">{projectName}</p>
-            </div>
-            <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent transition-colors">
-              <X className="h-4 w-4" />
-            </button>
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogContent className="flex h-full max-h-screen max-w-6xl grid-cols-none flex-col gap-0 overflow-hidden p-0">
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-separator bg-panel px-5">
+          <DialogHeader className="space-y-0">
+            <DialogTitle className="flex items-center gap-2 text-section">
+              <Printer className="h-4 w-4" />
+              Export Document
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Configure print and export settings for this Document.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2 pr-8">
+            <Button variant="outline" size="sm" onClick={handleSaveSettings} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Save defaults
+            </Button>
+            <Button size="sm" onClick={handleExport} disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : done ? <CheckCircle2 className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+              {done ? 'Downloaded' : 'Export'}
+            </Button>
           </div>
+        </header>
 
-          {/* ── Format ── */}
-          <CollapsibleGroup title="Format" icon={FileText} defaultOpen={true}>
-            <div className="space-y-1.5">
-              {FORMAT_OPTIONS.map((fmt) => {
-                const Icon = fmt.icon;
-                const isSel = selected === fmt.id;
-                return (
-                  <button key={fmt.id} onClick={() => setSelected(fmt.id)}
-                    className={cn('w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all',
-                      isSel ? 'border-primary bg-primary/5' : 'border-border bg-background hover:bg-accent/50')}
-                  >
-                    <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
-                      isSel ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground')}>
-                      <Icon className="h-3.5 w-3.5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className={cn('text-sm font-medium', isSel ? 'text-primary' : 'text-foreground')}>{fmt.label}</span>
-                      <span className={cn('ml-2 rounded px-1.5 py-0.5 text-[10px] font-mono',
-                        isSel ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground')}>.{fmt.ext}</span>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">{fmt.description}</p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </CollapsibleGroup>
-
-          {isPreviewable && (
-            <>
-              {/* ── Branding ── */}
-              <CollapsibleGroup title="Branding" icon={Palette} defaultOpen={false}>
-                <div className="grid grid-cols-3 gap-2.5">
-                  {[
-                    { label: 'Primary', val: primaryColor, set: setPrimaryColor },
-                    { label: 'H1', val: h1Color, set: setH1Color },
-                    { label: 'H2', val: h2Color, set: setH2Color },
-                  ].map((c) => (
-                    <div key={c.label}>
-                      <label className="block text-[10px] font-medium text-muted-foreground mb-1">{c.label}</label>
-                      <div className="flex items-center gap-1.5">
-                        <input type="color" value={c.val} onChange={(e) => c.set(e.target.value)}
-                          className="h-7 w-7 cursor-pointer rounded border border-border bg-transparent p-0 shrink-0" />
-                        <input type="text" value={c.val} onChange={(e) => c.set(e.target.value)}
-                          className="min-w-0 flex-1 rounded-md border border-border bg-background px-1.5 py-1 text-[10px] font-mono" />
-                      </div>
-                    </div>
-                  ))}
+        <div className="grid min-h-0 flex-1 grid-cols-12 bg-workspace">
+          <aside className="col-span-4 min-h-0 overflow-y-auto border-r border-separator bg-panel p-4 xl:col-span-3">
+            <div className="space-y-5">
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 text-meta font-medium uppercase text-text-muted">
+                  <FileText className="h-3.5 w-3.5" />
+                  Output
                 </div>
-                <div>
-                  <label className="block text-[10px] font-medium text-muted-foreground mb-1"><FileType className="mr-1 inline h-2.5 w-2.5" />Font</label>
-                  <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)}
-                    className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs" style={{ fontFamily }}>
-                    {FONTS.map((f) => (
-                      <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>{f.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </CollapsibleGroup>
+                <SegmentedControl
+                  label="Export format"
+                  value={selected}
+                  onValueChange={(value) => setSelected(value as ExportFormat)}
+                  options={formatOptions}
+                  className="w-full justify-between"
+                />
+              </section>
 
-              {/* ── Logo ── */}
-              <CollapsibleGroup title="Logo" icon={Image} defaultOpen={false}>
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 text-meta font-medium uppercase text-text-muted">
+                  <Ruler className="h-3.5 w-3.5" />
+                  Page
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Paper">
+                    <NativeSelect value={paperSize} onChange={(value) => setPaperSize(value as typeof paperSize)} ariaLabel="Paper size">
+                      {PAPER_SIZES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </NativeSelect>
+                  </Field>
+                  <Field label="Margins">
+                    <NativeSelect value={margins} onChange={(value) => setMargins(value as typeof margins)} ariaLabel="Page margins">
+                      {MARGIN_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </NativeSelect>
+                  </Field>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 text-meta font-medium uppercase text-text-muted">
+                  <Type className="h-3.5 w-3.5" />
+                  Typography
+                </div>
+                <Field label="Font">
+                  <NativeSelect value={fontFamily} onChange={setFontFamily} ariaLabel="Export font">
+                    {FONTS.map((font) => <option key={font.value} value={font.value}>{font.label}</option>)}
+                  </NativeSelect>
+                </Field>
+                <div className="grid grid-cols-3 gap-2">
+                  <Field label="Body">
+                    <Input value={bodyFontSize} onChange={(event) => setBodyFontSize(event.target.value)} />
+                  </Field>
+                  <Field label="H1">
+                    <Input value={h1FontSize} onChange={(event) => setH1FontSize(event.target.value)} />
+                  </Field>
+                  <Field label="H2">
+                    <Input value={h2FontSize} onChange={(event) => setH2FontSize(event.target.value)} />
+                  </Field>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 text-meta font-medium uppercase text-text-muted">
+                  <Palette className="h-3.5 w-3.5" />
+                  Brand
+                </div>
+                <ColorField label="Accent" value={primaryColor} onChange={setPrimaryColor} />
+                <div className="grid grid-cols-2 gap-3">
+                  <ColorField label="H1" value={h1Color} onChange={setH1Color} />
+                  <ColorField label="H2" value={h2Color} onChange={setH2Color} />
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 text-meta font-medium uppercase text-text-muted">
+                  <Image className="h-3.5 w-3.5" />
+                  Logo
+                </div>
                 <LogoUploader value={logoUrl} onChange={setLogoUrl} />
-                {logoUrl && (
-                  <>
-                    <div>
-                      <label className="block text-[10px] font-medium text-muted-foreground mb-1">Position</label>
-                      <select value={logoPosition} onChange={(e) => setLogoPosition(e.target.value as typeof logoPosition)}
-                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs">
-                        {LOGO_POSITIONS.map((p) => (
-                          <option key={p.value} value={p.value}>{p.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-medium text-muted-foreground mb-1">Size: {logoHeight}</label>
-                      <div className="flex gap-1">
-                        {LOGO_HEIGHTS.map((h) => (
-                          <button key={h.value} onClick={() => setLogoHeight(h.value)}
-                            className={cn('flex-1 rounded px-1 py-1 text-[10px] font-medium transition-colors',
-                              logoHeight === h.value ? 'bg-primary/10 text-primary border border-primary/30' : 'bg-muted text-muted-foreground hover:bg-accent')}
-                          >{h.label}</button>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </CollapsibleGroup>
+                <Field label="Placement">
+                  <NativeSelect value={logoPosition} onChange={(value) => setLogoPosition(value as typeof logoPosition)} ariaLabel="Logo placement">
+                    {LOGO_POSITIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </NativeSelect>
+                </Field>
+                <SegmentedControl
+                  label="Logo size"
+                  value={logoHeight}
+                  onValueChange={setLogoHeight}
+                  options={LOGO_HEIGHTS.map((option) => ({ value: option.value, label: option.label }))}
+                  className="w-full justify-between"
+                />
+              </section>
 
-              {/* ── Header & Footer ── */}
-              <CollapsibleGroup title="Header & Footer" icon={BookOpen} defaultOpen={false}>
-                <div>
-                  <label className="block text-[10px] font-medium text-muted-foreground mb-1">Header text</label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {[
-                      { icon: AlignLeft, val: headerLeft, set: setHeaderLeft, place: 'Left' },
-                      { icon: AlignCenter, val: headerCenter, set: setHeaderCenter, place: 'Centre' },
-                      { icon: AlignRight, val: headerRight, set: setHeaderRight, place: 'Right' },
-                    ].map((h) => (
-                      <div key={h.place} className="flex items-center gap-1">
-                        <h.icon className="h-2.5 w-2.5 text-muted-foreground shrink-0" />
-                        <input type="text" value={h.val} onChange={(e) => h.set(e.target.value)}
-                          placeholder={h.place} className="w-full rounded-md border border-border bg-background px-1.5 py-1 text-[11px]" />
-                      </div>
-                    ))}
-                  </div>
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 text-meta font-medium uppercase text-text-muted">
+                  <Printer className="h-3.5 w-3.5" />
+                  Header And Footer
                 </div>
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-medium text-muted-foreground">Page numbers</label>
-                  <button onClick={() => setPageNumbers(!pageNumbers)}
-                    className={cn('relative h-4 w-8 rounded-full transition-colors', pageNumbers ? 'bg-primary' : 'bg-border')}>
-                    <span className={cn('absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white transition-transform', pageNumbers && 'translate-x-4')} />
-                  </button>
+                <div className="grid grid-cols-3 gap-2">
+                  <Input aria-label="Left header" placeholder="Left" value={headerLeft} onChange={(event) => setHeaderLeft(event.target.value)} />
+                  <Input aria-label="Center header" placeholder="Center" value={headerCenter} onChange={(event) => setHeaderCenter(event.target.value)} />
+                  <Input aria-label="Right header" placeholder="Right" value={headerRight} onChange={(event) => setHeaderRight(event.target.value)} />
                 </div>
-                {pageNumbers && (
-                  <>
-                    <div>
-                      <label className="block text-[10px] font-medium text-muted-foreground mb-1">Page number position</label>
-                      <div className="flex gap-1">
-                        {['left', 'center', 'right'].map((pos) => (
-                          <button key={pos} onClick={() => setPageNumberPosition(pos as typeof pageNumberPosition)}
-                            className={cn('flex-1 rounded px-2 py-1 text-[10px] font-medium capitalize transition-colors',
-                              pageNumberPosition === pos ? 'bg-primary/10 text-primary border border-primary/30' : 'bg-muted text-muted-foreground hover:bg-accent')}
-                          >{pos}</button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-medium text-muted-foreground">Show "Page" prefix</label>
-                      <button onClick={() => setPageNumberFormat(pageNumberFormat === 'page-n' ? 'number' : 'page-n')}
-                        className={cn('relative h-4 w-8 rounded-full transition-colors', pageNumberFormat === 'page-n' ? 'bg-primary' : 'bg-border')}>
-                        <span className={cn('absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white transition-transform', pageNumberFormat === 'page-n' && 'translate-x-4')} />
-                      </button>
-                    </div>
-                  </>
-                )}
-              </CollapsibleGroup>
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="page-numbers">Page numbers</Label>
+                  <input
+                    id="page-numbers"
+                    type="checkbox"
+                    checked={pageNumbers}
+                    onChange={(event) => setPageNumbers(event.target.checked)}
+                    className="h-4 w-4 accent-current"
+                  />
+                </div>
+                <div className={cn('grid grid-cols-2 gap-3', !pageNumbers && 'opacity-50')}>
+                  <Field label="Position">
+                    <NativeSelect value={pageNumberPosition} onChange={(value) => setPageNumberPosition(value as typeof pageNumberPosition)} ariaLabel="Page number position">
+                      {['left', 'center', 'right'].map((position) => <option key={position} value={position}>{position}</option>)}
+                    </NativeSelect>
+                  </Field>
+                  <Field label="Format">
+                    <NativeSelect value={pageNumberFormat} onChange={(value) => setPageNumberFormat(value as typeof pageNumberFormat)} ariaLabel="Page number format">
+                      <option value="number">1</option>
+                      <option value="page-n">Page 1</option>
+                    </NativeSelect>
+                  </Field>
+                </div>
+              </section>
+            </div>
+          </aside>
 
-              {/* ── Page (PDF only) ── */}
-              {selected === 'pdf' && (
-                <CollapsibleGroup title="Page" icon={Ruler} defaultOpen={false}>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-medium text-muted-foreground mb-1">Paper size</label>
-                      <select value={paperSize} onChange={(e) => setPaperSize(e.target.value as typeof paperSize)}
-                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs">
-                        {PAPER_SIZES.map((p) => (<option key={p.value} value={p.value}>{p.label}</option>))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-medium text-muted-foreground mb-1">Margins</label>
-                      <select value={margins} onChange={(e) => setMargins(e.target.value as typeof margins)}
-                        className="w-full rounded-md border border-border bg-background px-2 py-1.5 text-xs">
-                        {MARGIN_OPTIONS.map((m) => (<option key={m.value} value={m.value}>{m.label}</option>))}
-                      </select>
-                    </div>
-                  </div>
-                </CollapsibleGroup>
-              )}
-            </>
-          )}
-
-          {/* ── Save / Export Footer ── */}
-          <div className="mt-4 space-y-2.5">
-            <button onClick={handleSaveSettings} disabled={saving}
-              className="w-full rounded-lg border border-border bg-background py-2 text-xs font-medium text-foreground hover:bg-accent transition-colors">
-              {saving ? 'Saving…' : 'Save as defaults'}
-            </button>
-
-            <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
-              <div className="flex items-center gap-2">
-                <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">Batch ZIP</span>
+          <main className="col-span-8 min-h-0 overflow-hidden xl:col-span-9">
+            <div className="flex h-full flex-col">
+              <div className="flex h-10 shrink-0 items-center justify-between border-b border-separator bg-panel px-4 text-meta text-text-secondary">
+                <span>{projectName}</span>
+                <span>{selected === 'markdown' ? 'No print preview' : 'Live print preview'}</span>
               </div>
-              <button onClick={() => setBatchMode(!batchMode)}
-                className={cn('relative h-4 w-8 rounded-full transition-colors', batchMode ? 'bg-primary' : 'bg-border')}>
-                <span className={cn('absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white transition-transform', batchMode && 'translate-x-4')} />
-              </button>
+              <div className="min-h-0 flex-1 overflow-auto bg-canvas p-5">
+                {isPreviewable ? (
+                  <Surface variant="panel" className="mx-auto h-full max-w-4xl overflow-hidden p-0">
+                    {previewStatus === 'loading' && !previewHtml ? (
+                      <div className="flex h-full items-center justify-center text-text-secondary">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      </div>
+                    ) : previewStatus === 'error' ? (
+                      <div className="flex h-full flex-col items-center justify-center gap-3 text-text-secondary">
+                        <p className="text-body">Preview failed</p>
+                        <Button variant="outline" size="sm" onClick={loadPreview}>Retry</Button>
+                      </div>
+                    ) : previewHtml ? (
+                      <iframe
+                        srcDoc={previewHtml}
+                        className="h-full w-full border-0 bg-background"
+                        title="Export preview"
+                        sandbox="allow-same-origin"
+                      />
+                    ) : null}
+                  </Surface>
+                ) : (
+                  <Surface variant="panel" className="mx-auto flex h-full max-w-4xl items-center justify-center p-8 text-text-secondary">
+                    <div className="text-center">
+                      <FileText className="mx-auto mb-3 h-8 w-8" />
+                      <p className="text-body">Markdown exports the source document directly.</p>
+                    </div>
+                  </Surface>
+                )}
+              </div>
             </div>
-
-            <div className="flex items-center gap-2">
-              <button onClick={onClose}
-                className="flex-1 rounded-lg border border-border bg-background py-2 text-xs font-medium text-foreground hover:bg-accent transition-colors">
-                Cancel
-              </button>
-              <button onClick={handleExport} disabled={loading}
-                className={cn('flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all',
-                  done ? 'bg-green-600 text-white' : 'bg-primary text-primary-foreground hover:bg-primary/90',
-                  loading && 'opacity-70 cursor-not-allowed')}>
-                {loading ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Exporting</>
-                  : done ? <><CheckCircle2 className="h-3.5 w-3.5" /> Downloaded</>
-                  : <><FileDown className="h-3.5 w-3.5" /> Export</>}
-              </button>
-            </div>
-          </div>
+          </main>
         </div>
-
-        {/* ── Preview Panel (≈70%) ── */}
-        {isPreviewable ? (
-          <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-            <div className="flex items-center justify-between border-b border-border px-4 py-2.5 shrink-0">
-              <div className="flex items-center gap-2 text-xs font-medium text-foreground">
-                <Eye className="h-3.5 w-3.5" />
-                Live Preview
-              </div>
-              {previewStatus === 'error' && (
-                <button onClick={handleRetryPreview} className="text-[10px] text-primary underline">Retry</button>
-              )}
-            </div>
-            <div className="flex-1 bg-white">
-              {previewStatus === 'loading' && !previewHtml ? (
-                <div className="flex h-full items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : previewStatus === 'error' ? (
-                <div className="flex h-full flex-col items-center justify-center gap-1 text-xs text-muted-foreground">
-                  <span>Preview failed to load</span>
-                  <button onClick={handleRetryPreview} className="text-primary underline">Retry</button>
-                </div>
-              ) : previewHtml ? (
-                <iframe srcDoc={previewHtml} className="h-full w-full border-0" title="Export preview" sandbox="allow-same-origin" />
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-            Select HTML or PDF to see a live preview
-          </div>
-        )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
-};
+}

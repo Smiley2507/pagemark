@@ -218,9 +218,9 @@ function SectionBlock({
     <section
       id={`section-${section.id}`}
       data-editor-section="true"
-      className="group min-w-0 scroll-mt-24 overflow-x-hidden border-b border-separator py-10 last:border-b-0"
+      className="group min-w-0 scroll-mt-24 overflow-x-hidden py-8"
     >
-      <div className="mx-auto max-w-3xl min-w-0">
+      <div className="mx-auto max-w-4xl min-w-0">
         <div className="mb-4 flex items-start gap-3">
           <GripVertical className="mt-3 h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
           <div className="min-w-0 flex-1">
@@ -289,9 +289,9 @@ function SectionBlock({
           </div>
         </div>
 
-        <Surface variant="canvas" className="min-w-0 overflow-x-hidden px-1 py-2 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background">
+        <div className="min-w-0 overflow-x-hidden px-1 py-2 focus-within:ring-2 focus-within:ring-ring">
           <MarkdownEditor value={content} onChange={setContent} />
-        </Surface>
+        </div>
 
         <div className="mt-4 flex items-center justify-between gap-3 text-meta text-text-muted">
           <span>
@@ -347,7 +347,10 @@ export function DocumentEditorPage() {
   const tocItems = useMemo(() => buildToc(sections), [sections]);
   const wordCount = useMemo(() => countWords(sections), [sections]);
   const issueCount = useMemo(() => countQualityIssues(sections), [sections]);
-  const reviewedCount = document?.progress.reviewed_sections || 0;
+  const reviewedCount = useMemo(
+    () => sections.filter((section) => getSectionState(section).key === 'reviewed').length,
+    [sections],
+  );
   const reviewTotal = document?.progress.total_sections || sections.length;
   const isSaving = savingSectionIds.size > 0;
 
@@ -561,7 +564,7 @@ export function DocumentEditorPage() {
             aria-label="Document title"
             className="h-9 max-w-xl border-transparent bg-transparent text-section font-semibold focus-visible:border-interaction"
           />
-          <Badge variant={statusVariant(document?.status)}>{documentStatusLabel(document)}</Badge>
+          <Badge variant={statusVariant(document?.status)} className="shrink-0 whitespace-nowrap">{documentStatusLabel(document)}</Badge>
         </div>
 
         <div className="flex min-w-0 items-center gap-2">
@@ -673,7 +676,7 @@ export function DocumentEditorPage() {
 
         <main ref={scrollRootRef} className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-canvas">
           {showSourceNotice && (
-            <div className="mx-auto max-w-3xl px-4 pt-5">
+            <div className="mx-auto max-w-4xl px-4 pt-5">
               <Notice variant="warning" title="Potentially Stale Sections">
                 {freshnessData?.stale_count} reviewed sections show source changes since acceptance.
               </Notice>
@@ -681,7 +684,7 @@ export function DocumentEditorPage() {
           )}
 
           {sections.length === 0 ? (
-            <div className="mx-auto flex min-h-full max-w-3xl flex-col justify-center px-6 py-16">
+            <div className="mx-auto flex min-h-full max-w-4xl flex-col justify-center px-6 py-16">
               <h1 className="text-title font-semibold text-text-primary">No Sections yet</h1>
               <div className="mt-6">
                 <Button type="button" onClick={() => createSection.mutate({})} disabled={createSection.isPending} className="gap-2">
@@ -691,7 +694,7 @@ export function DocumentEditorPage() {
               </div>
             </div>
           ) : (
-            <div className="min-w-0 px-4 py-4">
+            <div className="min-w-0 px-5 py-3">
               {sections.map((section, index) => (
                 <SectionBlock
                   key={section.id}
@@ -710,7 +713,7 @@ export function DocumentEditorPage() {
                   onJumpToSection={(sectionId) => { setActiveSectionId(sectionId); setRightPanelOpen(true); setRightTab('notes'); }}
                 />
               ))}
-              <div className="mx-auto max-w-3xl py-8">
+              <div className="mx-auto max-w-4xl py-8">
                 <Button type="button" variant="outline" onClick={() => createSection.mutate({})} disabled={createSection.isPending} className="gap-2">
                   {createSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                   Add Section

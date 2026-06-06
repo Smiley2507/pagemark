@@ -81,6 +81,7 @@ export function useDocumentAutosave(
   sectionId: number | null,
   content: string,
 ) {
+  const queryClient = useQueryClient();
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const lastPersistedRef = useRef<string | null>(null);
@@ -93,13 +94,15 @@ export function useDocumentAutosave(
       if (res.saved) {
         lastPersistedRef.current = body;
         setLastSaved(new Date(res.updated_at));
+        void queryClient.invalidateQueries({ queryKey: ['document-sections', projectId, documentId] });
+        void queryClient.invalidateQueries({ queryKey: ['document-meta', projectId, documentId] });
       }
     } catch {
       toast.error('Autosave failed');
     } finally {
       setIsSaving(false);
     }
-  }, [projectId, documentId]);
+  }, [documentId, projectId, queryClient]);
 
   useEffect(() => {
     if (!sectionId || projectId <= 0 || documentId <= 0) return;

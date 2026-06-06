@@ -53,7 +53,7 @@ async def run_quality_analysis(
 ):
     """Dispatch quality scoring for a Document under an authorized Project."""
     await _get_document_or_404(project.id, document_id, db)
-    score_quality_task.delay(project.id)
+    score_quality_task.delay(document_id)
     return QualityRunResponse(message="Quality analysis started")
 
 

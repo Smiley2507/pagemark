@@ -444,6 +444,9 @@ export interface ExportSettings {
   h2_color?: string;
   primary_color?: string;
   font_family?: string;
+  body_font_size?: string;
+  h1_font_size?: string;
+  h2_font_size?: string;
   header_left?: string;
   header_center?: string;
   header_right?: string;

@@ -26,12 +26,15 @@ _HTML_TEMPLATE = """\
       --h2-color: {h2_color};
       --primary-color: {primary_color};
       --font-family: {font_family};
+      --body-font-size: {body_font_size};
+      --h1-font-size: {h1_font_size};
+      --h2-font-size: {h2_font_size};
     }}
     *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
     html {{
       font-family: var(--font-family), -apple-system, BlinkMacSystemFont, "Segoe UI",
                    Roboto, Helvetica, Arial, sans-serif;
-      font-size: 16px;
+      font-size: var(--body-font-size);
       line-height: 1.7;
       color: #1a202c;
     }}
@@ -40,8 +43,8 @@ _HTML_TEMPLATE = """\
       margin: 0 auto;
       padding: 2rem 2.5rem 6rem;
     }}
-    h1 {{ font-size: 2.2rem; border-bottom: 2px solid var(--h1-color); padding-bottom: .4rem; margin-top: 2rem; color: var(--h1-color); }}
-    h2 {{ font-size: 1.6rem; border-bottom: 1px solid var(--h2-color); padding-bottom: .3rem; margin-top: 2rem; color: var(--h2-color); }}
+    h1 {{ font-size: var(--h1-font-size); border-bottom: 2px solid var(--h1-color); padding-bottom: .4rem; margin-top: 2rem; color: var(--h1-color); }}
+    h2 {{ font-size: var(--h2-font-size); border-bottom: 1px solid var(--h2-color); padding-bottom: .3rem; margin-top: 2rem; color: var(--h2-color); }}
     h3 {{ font-size: 1.25rem; margin-top: 1.5rem; color: var(--h1-color); }}
     h4, h5, h6 {{ margin-top: 1.25rem; color: var(--h2-color); }}
     p  {{ margin: .75rem 0; }}
@@ -125,7 +128,7 @@ _HTML_TEMPLATE = """\
 
     /* ── Print: move body content out from under fixed header/footer ── */
     @media print {{
-      html {{ font-size: 12pt; }}
+      html {{ font-size: var(--body-font-size); }}
       body {{
         max-width: 100%;
         padding: 1.5cm 1.5cm 2cm;
@@ -194,6 +197,9 @@ def export_html(
     h2_color = _resolve(settings, "h2_color", "#0F172A")
     primary_color = _resolve(settings, "primary_color", "#6366f1")
     font_family = _resolve(settings, "font_family", "Inter")
+    body_font_size = _resolve(settings, "body_font_size", "16px")
+    h1_font_size = _resolve(settings, "h1_font_size", "2.2rem")
+    h2_font_size = _resolve(settings, "h2_font_size", "1.6rem")
     logo_url = settings.get("logo_url")
     logo_position = settings.get("logo_position", "none")
     logo_height = settings.get("logo_height", "60px")
@@ -294,6 +300,9 @@ def export_html(
         h2_color=h2_color,
         primary_color=primary_color,
         font_family=font_family,
+        body_font_size=body_font_size,
+        h1_font_size=h1_font_size,
+        h2_font_size=h2_font_size,
         logo_height=logo_height,
         logo_title_html=logo_title_html,
         header_fixed_html=header_fixed_html,
