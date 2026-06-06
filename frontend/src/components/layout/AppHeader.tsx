@@ -1,23 +1,56 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Laptop, Moon, Sun, Bell, Search, Loader2, FileText, CheckCircle2, AlertTriangle, Info } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Activity,
+  Bell,
+  BookOpen,
+  Check,
+  Code,
+  FileText,
+  GitCommit,
+  Laptop,
+  Layers,
+  Loader2,
+  Moon,
+  Search,
+  Sun,
+  TriangleAlert,
+} from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useThemeStore } from '@/store/themeStore';
 import { Button } from '@/components/ui/button';
-import { useOrgStore } from '@/store/orgStore';
-import { orgApi } from '@/api/org';
+import { Badge } from '@/components/ui/badge';
+import { Surface } from '@/components/ui/surface';
 import { searchApi, type GlobalSearchSort, type GlobalSearchType } from '@/api/search';
-import type { SearchResult, AuditLog } from '@/types';
+import { projectsApi, type ActivityEvent } from '@/api/projects';
+import type { SearchResult } from '@/types';
 import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
 
 type Theme = 'light' | 'dark' | 'system';
+
+const NOTIFICATION_READ_AT_KEY = 'pagemark.notifications.readAt';
+
+const EVENT_ICONS: Record<string, React.ElementType> = {
+  source_sync: GitCommit,
+  analysis_started: Code,
+  analysis_complete: Code,
+  analysis_failed: TriangleAlert,
+  project_created: FileText,
+  document_created: FileText,
+  outline_approved: Layers,
+  generation_run_started: BookOpen,
+  generation_run_completed: BookOpen,
+  generation_run_failed: TriangleAlert,
+  section_reviewed: Check,
+  freshness_detected: TriangleAlert,
+};
 
 export function AppHeader() {
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
   const { theme, setTheme } = useThemeStore();
-  const activeOrgId = useOrgStore((state) => state.activeOrgId);
   const recentWork = useViewPreferenceStore((state) => state.recentWork);
   const [notifOpen, setNotifOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -33,8 +66,16 @@ export function AppHeader() {
   const [searchLoading, setSearchLoading] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [logsLoading, setLogsLoading] = useState(false);
+  const [notificationReadAt, setNotificationReadAt] = useState(() => (
+    window.localStorage.getItem(NOTIFICATION_READ_AT_KEY) || ''
+  ));
+
+  const { data: notificationData, isLoading: notificationsLoading } = useQuery({
+    queryKey: ['recent-activity-notifications'],
+    queryFn: () => projectsApi.getRecentActivity({ limit: 12, days: 30 }),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
 
   const cycleTheme = () => {
     const order: Theme[] = ['light', 'dark', 'system'];
@@ -44,15 +85,20 @@ export function AppHeader() {
 
   const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Laptop;
 
+  const notificationEvents = notificationData?.events || [];
+  const latestNotificationAt = notificationEvents[0]?.created_at || '';
+  const unreadCount = useMemo(() => {
+    if (!notificationReadAt) return notificationEvents.length;
+    return notificationEvents.filter((event) => (
+      new Date(event.created_at).getTime() > new Date(notificationReadAt).getTime()
+    )).length;
+  }, [notificationEvents, notificationReadAt]);
+
   useEffect(() => {
-    if (notifOpen && activeOrgId) {
-      setLogsLoading(true);
-      orgApi.listAuditLogs(activeOrgId, 1, 10)
-        .then(setAuditLogs)
-        .catch(() => setAuditLogs([]))
-        .finally(() => setLogsLoading(false));
-    }
-  }, [notifOpen, activeOrgId]);
+    if (!notifOpen || !latestNotificationAt) return;
+    window.localStorage.setItem(NOTIFICATION_READ_AT_KEY, latestNotificationAt);
+    setNotificationReadAt(latestNotificationAt);
+  }, [latestNotificationAt, notifOpen]);
 
   useEffect(() => {
     const hasFilters = searchType !== 'all' || tagFilter.trim() || statusFilter.trim();
@@ -128,6 +174,13 @@ export function AppHeader() {
     }
   };
 
+  const handleActivitySelect = (event: ActivityEvent) => {
+    setNotifOpen(false);
+    if (event.project_id) {
+      navigate(`/projects/${event.project_id}/activity`);
+    }
+  };
+
   const currentLabel = location.pathname.startsWith('/projects/') && params.projectId
     ? 'Project workspace'
     : location.pathname.startsWith('/projects')
@@ -142,7 +195,7 @@ export function AppHeader() {
     <header className="sticky top-0 z-40 h-12 border-b border-separator bg-workspace/95 backdrop-blur-sm">
       <div className="flex h-full items-center justify-between gap-4 px-4">
         <div className="min-w-0">
-          <p className="text-meta font-medium uppercase tracking-[0.12em] text-text-muted">
+          <p className="text-meta font-medium uppercase text-text-muted">
             {currentLabel}
           </p>
         </div>
@@ -160,7 +213,7 @@ export function AppHeader() {
               onChange={(event) => { setSearchQuery(event.target.value); setSearchOpen(true); }}
               onFocus={() => setSearchOpen(true)}
               placeholder="Search Projects, Documents, Sections..."
-              className="w-full rounded-md border border-input bg-panel py-1.5 pl-8 pr-3 text-sm text-text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded border border-input bg-input py-1.5 pl-8 pr-3 text-sm text-text-primary transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             {searchLoading && (
               <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
@@ -168,13 +221,13 @@ export function AppHeader() {
           </div>
 
           {searchOpen && (searchQuery.trim() || searchType !== 'all' || tagFilter.trim() || statusFilter.trim() || searchResults.length > 0) && (
-            <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-96 overflow-y-auto rounded-lg border border-border bg-card shadow-overlay">
+            <Surface variant="overlay" padding="none" className="absolute left-0 right-0 top-full z-50 mt-1 max-h-96 overflow-y-auto">
               <div className="grid gap-2 border-b border-border p-2 md:grid-cols-4">
                 <select
                   aria-label="Search entity type"
                   value={searchType}
                   onChange={(event) => setSearchType(event.target.value as GlobalSearchType)}
-                  className="rounded-md border border-input bg-panel px-2 py-1.5 text-xs text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="rounded border border-input bg-input px-2 py-1.5 text-xs text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="all">All types</option>
                   <option value="project">Projects</option>
@@ -186,13 +239,13 @@ export function AppHeader() {
                   value={tagFilter}
                   onChange={(event) => setTagFilter(event.target.value)}
                   placeholder="Tag"
-                  className="rounded-md border border-input bg-panel px-2 py-1.5 text-xs text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="rounded border border-input bg-input px-2 py-1.5 text-xs text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 <select
                   aria-label="Search status filter"
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value)}
-                  className="rounded-md border border-input bg-panel px-2 py-1.5 text-xs text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="rounded border border-input bg-input px-2 py-1.5 text-xs text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="">Any status</option>
                   <option value="draft">Draft</option>
@@ -205,7 +258,7 @@ export function AppHeader() {
                   aria-label="Search sort"
                   value={sortBy}
                   onChange={(event) => setSortBy(event.target.value as GlobalSearchSort)}
-                  className="rounded-md border border-input bg-panel px-2 py-1.5 text-xs text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="rounded border border-input bg-input px-2 py-1.5 text-xs text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="last_modified">Last modified</option>
                   <option value="last_opened">Last opened</option>
@@ -223,26 +276,26 @@ export function AppHeader() {
                 <button
                   key={`${item.type}-${item.id}`}
                   onClick={() => handleSearchSelect(item)}
-                  className="flex w-full items-start gap-2 border-b border-border/50 px-3 py-2.5 text-left transition-colors hover:bg-muted/60 last:border-0"
+                  className="flex w-full items-start gap-2 border-b border-border/50 px-3 py-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground last:border-0"
                 >
                   <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
+                      <Badge variant="neutral" showIcon={false} className="shrink-0 uppercase">
                         {item.type}
-                      </span>
+                      </Badge>
                       <span className="truncate text-xs font-medium">{item.title}</span>
-                      {item.subtitle && <span className="truncate text-[10px] text-muted-foreground">{item.subtitle}</span>}
+                      {item.subtitle && <span className="truncate text-meta-sm text-muted-foreground">{item.subtitle}</span>}
                     </div>
                     {(item.content_excerpt || item.status || item.tags.length > 0) && (
-                      <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground/70">
+                      <p className="mt-0.5 line-clamp-1 text-meta-sm text-muted-foreground">
                         {[item.content_excerpt, item.status, item.tags.slice(0, 3).join(', ')].filter(Boolean).join(' · ')}
                       </p>
                     )}
                   </div>
                 </button>
               ))}
-            </div>
+            </Surface>
           )}
         </div>
 
@@ -255,60 +308,82 @@ export function AppHeader() {
             <Button
               variant="ghost"
               size="icon"
+              className="relative"
               aria-label="Notifications"
               onClick={() => setNotifOpen((current) => !current)}
             >
               <Bell className="h-4 w-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-danger px-1 text-meta-sm font-semibold text-status-danger-foreground">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
             </Button>
+            <span className="sr-only" aria-live="polite">
+              {unreadCount > 0 ? `${unreadCount} unread notifications` : 'No unread notifications'}
+            </span>
 
             {notifOpen && (
-              <div className="absolute right-0 z-50 mt-2 w-80 rounded-lg border border-border bg-card shadow-overlay">
+              <Surface variant="overlay" padding="none" className="absolute right-0 z-50 mt-2 w-96">
                 <div className="border-b border-border px-4 py-2.5">
-                  <p className="text-sm font-semibold">Notifications</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold">Notifications</p>
+                    {notificationEvents.length > 0 && (
+                      <Badge variant="neutral" showIcon={false}>
+                        {notificationEvents.length}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="max-h-72 overflow-y-auto">
-                  {logsLoading && (
+                  {notificationsLoading && (
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
                   )}
-                  {!logsLoading && auditLogs.length === 0 && (
+                  {!notificationsLoading && notificationEvents.length === 0 && (
                     <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-                      No recent activity
+                      No workflow updates
                     </div>
                   )}
-                  {!logsLoading && auditLogs.map((log) => {
-                    let icon = <Info className="h-3.5 w-3.5 text-text-secondary" />;
-                    if (log.action?.toLowerCase().includes('create') || log.action?.toLowerCase().includes('invite')) {
-                      icon = <CheckCircle2 className="h-3.5 w-3.5 text-status-success-foreground" />;
-                    } else if (log.action?.toLowerCase().includes('delete') || log.action?.toLowerCase().includes('remove')) {
-                      icon = <AlertTriangle className="h-3.5 w-3.5 text-status-danger-foreground" />;
-                    }
+                  {!notificationsLoading && notificationEvents.map((event) => {
+                    const Icon = EVENT_ICONS[event.event_type] || Activity;
                     return (
-                      <div key={log.id} className="flex items-start gap-3 border-b border-border/50 px-4 py-2.5 transition-colors hover:bg-muted/40 last:border-0">
-                        {icon}
+                      <button
+                        key={event.id}
+                        type="button"
+                        onClick={() => handleActivitySelect(event)}
+                        className="flex w-full items-start gap-3 border-b border-border/50 px-4 py-3 text-left transition-colors hover:bg-accent hover:text-accent-foreground last:border-0"
+                      >
+                        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" aria-hidden="true" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs text-foreground">
-                            <span className="font-medium">{log.user_name}</span> {log.action}
+                          <p className="text-xs font-medium text-text-primary">{event.message}</p>
+                          <p className="mt-0.5 line-clamp-1 text-meta-sm text-text-secondary">
+                            {[event.project_name, event.document_title, event.section_heading].filter(Boolean).join(' · ')}
                           </p>
-                          <p className="mt-0.5 text-[10px] text-muted-foreground">{log.resource}</p>
-                          <p className="mt-0.5 text-[10px] text-muted-foreground">
-                            {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
+                          <p className="mt-0.5 text-meta-sm text-text-muted">
+                            {formatDistanceToNow(new Date(event.created_at), { addSuffix: true })}
                           </p>
                         </div>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
                 <div className="border-t border-border px-4 py-2">
                   <button
-                    onClick={() => { setNotifOpen(false); navigate('/settings?tab=activity'); }}
-                    className="w-full text-center text-xs text-primary hover:underline"
+                    onClick={() => {
+                      const targetProjectId = params.projectId || notificationEvents[0]?.project_id;
+                      setNotifOpen(false);
+                      if (targetProjectId) {
+                        navigate(`/projects/${targetProjectId}/activity`);
+                      }
+                    }}
+                    className="w-full rounded px-2 py-1.5 text-center text-xs text-primary transition-colors hover:bg-accent hover:text-accent-foreground"
                   >
-                    View all activity
+                    View activity
                   </button>
                 </div>
-              </div>
+              </Surface>
             )}
           </div>
         </div>

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.activity import ActivityEvent
+from app.models.project import Project
 
 
 EVENT_WEIGHTS: dict[str, float] = {
@@ -51,6 +52,22 @@ EVENT_MESSAGES: dict[str, str] = {
     "project_created": "Project created",
     "project_updated": "Project updated",
 }
+
+
+def _activity_event_to_dict(event: ActivityEvent) -> dict[str, Any]:
+    return {
+        "id": event.id,
+        "project_id": event.project_id,
+        "project_name": event.project.name if event.project else None,
+        "event_type": event.event_type,
+        "weight": event.weight,
+        "message": (event.payload or {}).get("message") or EVENT_MESSAGES.get(event.event_type, event.event_type),
+        "document_title": event.document.title if event.document else None,
+        "section_heading": event.section.heading if event.section else None,
+        "analysis_status": event.analysis.status.value if event.analysis else None,
+        "payload": event.payload,
+        "created_at": event.created_at.isoformat() if event.created_at else None,
+    }
 
 
 async def record_event(
@@ -128,20 +145,44 @@ async def get_timeline(
     )
     events = list(result.scalars().all())
 
-    return [
-        {
-            "id": event.id,
-            "event_type": event.event_type,
-            "weight": event.weight,
-            "message": (event.payload or {}).get("message") or EVENT_MESSAGES.get(event.event_type, event.event_type),
-            "document_title": event.document.title if event.document else None,
-            "section_heading": event.section.heading if event.section else None,
-            "analysis_status": event.analysis.status.value if event.analysis else None,
-            "payload": event.payload,
-            "created_at": event.created_at.isoformat() if event.created_at else None,
-        }
-        for event in events
-    ]
+    return [_activity_event_to_dict(event) for event in events]
+
+
+async def get_recent_for_org(
+    db: AsyncSession,
+    org_id: int,
+    *,
+    limit: int = 20,
+    days: int | None = 30,
+) -> list[dict[str, Any]]:
+    """
+    Get recent meaningful activity across an organization for notification delivery.
+    """
+    query = (
+        select(ActivityEvent)
+        .join(Project, Project.id == ActivityEvent.project_id)
+        .where(
+            Project.org_id == org_id,
+            Project.deleted_at.is_(None),
+            ActivityEvent.weight >= 1.0,
+        )
+    )
+
+    if days:
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        query = query.where(ActivityEvent.created_at >= cutoff)
+
+    query = query.order_by(ActivityEvent.created_at.desc()).limit(limit)
+
+    result = await db.execute(
+        query.options(
+            selectinload(ActivityEvent.project),
+            selectinload(ActivityEvent.document),
+            selectinload(ActivityEvent.section),
+            selectinload(ActivityEvent.analysis),
+        )
+    )
+    return [_activity_event_to_dict(event) for event in result.scalars().all()]
 
 
 async def get_heatmap_data(

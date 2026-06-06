@@ -191,6 +191,23 @@ async def _get_project(project_id: int, current_user: User, db: AsyncSession) ->
 
 # ── GET /projects/tags ────────────────────────────────────────────
 
+@router.get("/activity/recent")
+async def get_recent_project_activity(
+    request: Request,
+    limit: int = Query(20, ge=1, le=50),
+    days: int | None = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    org_id = await _resolve_org_id(request, current_user, db)
+    events = await activity_service.get_recent_for_org(
+        db,
+        org_id,
+        limit=limit,
+        days=days,
+    )
+    return {"events": events, "total": len(events)}
+
 @router.get("/tags")
 async def list_tags(
     request: Request,

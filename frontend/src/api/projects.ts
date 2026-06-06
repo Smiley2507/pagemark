@@ -2,6 +2,8 @@ import apiClient from './client';
 
 export interface ActivityEvent {
   id: number;
+  project_id?: number;
+  project_name?: string | null;
   event_type: string;
   weight: number;
   message: string;
@@ -110,6 +112,14 @@ export const projectsApi = {
     days?: number;
   }): Promise<{ events: ActivityEvent[]; total: number }> {
     const { data } = await apiClient.get(`/projects/${projectId}/activity`, { params });
+    return data;
+  },
+
+  async getRecentActivity(params?: {
+    limit?: number;
+    days?: number;
+  }): Promise<{ events: ActivityEvent[]; total: number }> {
+    const { data } = await apiClient.get('/projects/activity/recent', { params });
     return data;
   },
 

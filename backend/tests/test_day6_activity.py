@@ -20,6 +20,7 @@ def test_activity_service_exists():
     assert hasattr(activity_service, 'record_event')
     assert hasattr(activity_service, 'get_timeline')
     assert hasattr(activity_service, 'get_heatmap_data')
+    assert hasattr(activity_service, 'get_recent_for_org')
 
 
 def test_event_weights_defined():
@@ -81,6 +82,8 @@ def test_timeline_structure():
     """Test the structure of timeline events."""
     event = {
         "id": 1,
+        "project_id": 1,
+        "project_name": "Pagemark",
         "event_type": "document_created",
         "weight": 2.5,
         "message": "Document created",
@@ -91,9 +94,30 @@ def test_timeline_structure():
         "created_at": "2026-06-05T12:00:00",
     }
     assert "event_type" in event
+    assert "project_id" in event
     assert "message" in event
     assert "created_at" in event
     assert event["message"] == "Document created"
+
+
+def test_notification_timeline_structure():
+    """Test the structure of workspace notification events."""
+    event = {
+        "id": 1,
+        "project_id": 4,
+        "project_name": "SDK",
+        "event_type": "generation_run_completed",
+        "weight": 2.5,
+        "message": "Generation completed",
+        "document_title": "API Reference",
+        "section_heading": None,
+        "analysis_status": None,
+        "payload": None,
+        "created_at": "2026-06-05T12:00:00",
+    }
+    assert event["project_id"] == 4
+    assert event["project_name"] == "SDK"
+    assert event["message"] == "Generation completed"
 
 
 def test_timeline_excludes_low_weight_events():
