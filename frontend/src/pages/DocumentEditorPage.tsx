@@ -740,9 +740,9 @@ export function DocumentEditorPage() {
           rightPanelOpen ? 'w-96' : 'w-10',
         )}>
           {rightPanelOpen ? (
-            <div className="flex min-h-0 w-full">
-              <div className="flex w-full min-w-0 flex-col">
-                <div className="flex h-10 shrink-0 items-center border-b border-separator">
+            <div className="flex min-h-0 w-full min-w-0 flex-col">
+              <div className="flex h-10 shrink-0 items-center border-b border-separator">
+                <div className="flex min-w-0 flex-1">
                   <button
                     onClick={() => setRightTab('ai')}
                     className={cn(
@@ -768,36 +768,39 @@ export function DocumentEditorPage() {
                     Notes
                   </button>
                 </div>
-                <div className="min-h-0 flex-1 overflow-hidden">
-                  {rightTab === 'ai' ? (
-                    <AiPanel
-                      projectId={pid}
-                      documentId={did}
-                      activeSectionId={activeSection?.id ?? null}
-                      activeSectionHeading={activeSection?.title || activeSection?.heading || null}
-                      activeSectionContent={activeSection?.content_md || ''}
-                      activeSectionStatus={activeSection?.status || 'pending'}
-                      sections={sections.map((s) => ({ id: s.id, heading: s.title || s.heading }))}
-                      onApplyContent={handleApplyContent}
-                      onReplaceContent={handleReplaceContent}
-                      onInsertAtCursor={handleInsertAtCursor}
-                    />
-                  ) : (
-                    <NotesPanel
-                      projectId={pid}
-                      documentId={did}
-                      activeSectionId={activeSection?.id ?? null}
-                    />
-                  )}
-                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setRightPanelOpen(false)}
+                  aria-label="Close right panel"
+                  className="h-9 w-9 shrink-0"
+                >
+                  <PanelRightOpen className="h-3.5 w-3.5 rotate-180" />
+                </Button>
               </div>
-              <button
-                onClick={() => setRightPanelOpen(false)}
-                className="flex w-6 shrink-0 items-center justify-center border-l border-separator text-text-muted hover:text-text-primary"
-                aria-label="Close right panel"
-              >
-                <PanelRightOpen className="h-3.5 w-3.5 rotate-180" />
-              </button>
+              <div className="min-h-0 flex-1 overflow-hidden">
+                {rightTab === 'ai' ? (
+                  <AiPanel
+                    projectId={pid}
+                    documentId={did}
+                    activeSectionId={activeSection?.id ?? null}
+                    activeSectionHeading={activeSection?.title || activeSection?.heading || null}
+                    activeSectionContent={activeSection?.content_md || ''}
+                    activeSectionStatus={activeSection?.status || 'pending'}
+                    sections={sections.map((s) => ({ id: s.id, heading: s.title || s.heading }))}
+                    onApplyContent={handleApplyContent}
+                    onReplaceContent={handleReplaceContent}
+                    onInsertAtCursor={handleInsertAtCursor}
+                  />
+                ) : (
+                  <NotesPanel
+                    projectId={pid}
+                    documentId={did}
+                    activeSectionId={activeSection?.id ?? null}
+                  />
+                )}
+              </div>
             </div>
           ) : (
             <div className="flex w-10 flex-col items-center gap-2 border-l border-separator bg-panel py-3">
