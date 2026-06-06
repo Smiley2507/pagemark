@@ -209,7 +209,7 @@ export function AiProvidersSection() {
   }
 
   return (
-    <Surface variant="canvas" padding="none" className="space-y-5">
+    <div className="space-y-5">
       <div className="flex items-start gap-3">
         <Bot className="mt-0.5 h-5 w-5 text-interaction" />
         <div className="space-y-1">
@@ -235,6 +235,6 @@ export function AiProvidersSection() {
           Select an active provider before running provider-consuming actions.
         </Badge>
       )}
-    </Surface>
+    </div>
   );
 }
