@@ -11,7 +11,6 @@ import {
   MoreHorizontal,
   PanelRightOpen,
   Plus,
-  Search,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -323,7 +322,6 @@ export function DocumentEditorPage() {
   const queryClient = useQueryClient();
   const recordRecentWork = useViewPreferenceStore((state) => state.recordRecentWork);
   const [titleDraft, setTitleDraft] = useState('');
-  const [query, setQuery] = useState('');
   const [activeTocId, setActiveTocId] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [rightTab, setRightTab] = useState<RightTab>('ai');
@@ -481,17 +479,6 @@ export function DocumentEditorPage() {
     setActiveTocId(item.id);
   };
 
-  const runFind = () => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return;
-    const match = sections.find((section) =>
-      `${section.title || section.heading}\n${section.content_md}`.toLowerCase().includes(needle)
-    );
-    if (match) {
-      globalThis.document.getElementById(`section-${match.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  };
-
   const handleSavingChange = useCallback((sectionId: number, saving: boolean) => {
     setSavingSectionIds((current) => {
       const next = new Set(current);
@@ -539,10 +526,10 @@ export function DocumentEditorPage() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-workspace">
-        <div className="flex items-center gap-3 text-body text-text-secondary">
+        <Surface variant="panel" padding="default" className="flex items-center gap-3 text-body text-text-secondary">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading document workspace...
-        </div>
+        </Surface>
       </div>
     );
   }
@@ -570,19 +557,6 @@ export function DocumentEditorPage() {
         </div>
 
         <div className="flex min-w-0 shrink-0 items-center gap-2">
-          <Surface variant="panel" className="hidden items-center gap-1 border border-input px-2 lg:flex">
-            <Search className="h-4 w-4 text-text-muted" aria-hidden="true" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') runFind();
-              }}
-              placeholder="Find"
-              aria-label="Find in document"
-              className="h-8 w-44 bg-transparent text-body text-text-primary outline-none placeholder:text-text-muted"
-            />
-          </Surface>
           <span className="hidden text-meta text-text-muted sm:inline">
             {isSaving || updateDocumentTitle.isPending
               ? 'Saving...'
