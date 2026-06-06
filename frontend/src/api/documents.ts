@@ -115,6 +115,10 @@ export const documentsApi = {
     return data;
   },
 
+  async deleteDocument(projectId: number, documentId: number): Promise<void> {
+    await apiClient.delete(`/projects/${projectId}/documents/${documentId}`);
+  },
+
   async getSetupState(
     projectId: number,
     documentId: number,

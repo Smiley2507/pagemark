@@ -1,13 +1,29 @@
-import { Clock3, FolderOpenDot, Sparkles, TriangleAlert } from 'lucide-react';
+import * as React from 'react';
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { Clock3, FolderOpenDot, Grid2X2, List, Pencil, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Surface } from '@/components/ui/surface';
+import { Tooltip } from '@/components/ui/tooltip';
+import { projectsApi } from '@/api/projects';
 import type { Project } from '@/types';
 import type { Document as ProjectDocument } from '@/api/documents';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 export type ProjectLibraryFilter = 'all' | 'active' | 'stale' | 'resume';
 export type ProjectLibraryView = 'list' | 'grid';
@@ -124,15 +140,15 @@ export function ProjectLibrary({
   }
 
   return (
-    <div className="space-y-4">
+    <ProjectLibraryActions>
       <div className="flex items-center justify-end">
         <SegmentedControl
           label="Project library view"
           value={viewMode}
           onValueChange={onViewModeChange}
           options={[
-            { value: 'list', label: 'List' },
-            { value: 'grid', label: 'Grid' },
+            { value: 'list', label: <List className="h-4 w-4" /> },
+            { value: 'grid', label: <Grid2X2 className="h-4 w-4" /> },
           ]}
         />
       </div>
@@ -158,7 +174,105 @@ export function ProjectLibrary({
           ))}
         </div>
       )}
-    </div>
+    </ProjectLibraryActions>
+  );
+}
+
+type ProjectActionContext = {
+  onEditProject: (project: Project) => void;
+  onDeleteProject: (project: Project) => void;
+};
+
+const ProjectActionsContext = React.createContext<ProjectActionContext | null>(null);
+
+function ProjectLibraryActions({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [tags, setTags] = useState('');
+
+  const updateProject = useMutation({
+    mutationFn: () => {
+      if (!editingProject) throw new Error('No Project selected');
+      return projectsApi.updateProject(editingProject.id, {
+        name: name.trim() || editingProject.name,
+        description: description.trim() || undefined,
+        tags: parseTags(tags),
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      toast.success('Project updated');
+      setEditingProject(null);
+    },
+    onError: () => toast.error('Failed to update Project'),
+  });
+
+  const deleteProject = useMutation({
+    mutationFn: (projectId: number) => projectsApi.deleteProject(projectId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      toast.success('Project deleted');
+    },
+    onError: () => toast.error('Failed to delete Project'),
+  });
+
+  const openEditProject = (project: Project) => {
+    setEditingProject(project);
+    setName(project.name);
+    setDescription(project.description || '');
+    setTags(project.tags.join(', '));
+  };
+
+  return (
+    <ProjectActionsContext.Provider value={{ onEditProject: openEditProject, onDeleteProject: setDeletingProject }}>
+      <div className="space-y-4">{children}</div>
+
+      <Dialog open={editingProject !== null} onOpenChange={(open) => { if (!open) setEditingProject(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Edit Project</DialogTitle>
+            <DialogDescription className="sr-only">
+              Rename the Project, update its description, or change tags.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="project-name">Name</Label>
+              <Input id="project-name" value={name} onChange={(event) => setName(event.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="project-description">Description</Label>
+              <Input id="project-description" value={description} onChange={(event) => setDescription(event.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="project-tags">Tags</Label>
+              <Input id="project-tags" value={tags} onChange={(event) => setTags(event.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setEditingProject(null)}>Cancel</Button>
+              <Button type="button" onClick={() => updateProject.mutate()} disabled={updateProject.isPending}>
+                Save
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={deletingProject !== null}
+        onOpenChange={(open) => { if (!open) setDeletingProject(null); }}
+        title="Delete Project?"
+        description={`Delete "${deletingProject?.name || 'this Project'}" and its Documents? This cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (deletingProject) deleteProject.mutate(deletingProject.id);
+          setDeletingProject(null);
+        }}
+      />
+    </ProjectActionsContext.Provider>
   );
 }
 
@@ -169,16 +283,19 @@ function ProjectSummaryRow({
   summary: ProjectWorkspaceSummary;
   onOpen: () => void;
 }) {
+  const actions = React.useContext(ProjectActionsContext);
   return (
     <Surface
-      as="button"
       variant="panel"
       padding="default"
-      className="w-full text-left transition-colors hover:bg-panel-muted focus-visible:ring-2 focus-visible:ring-ring"
-      onClick={onOpen}
+      className="w-full transition-colors hover:bg-panel-muted"
     >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1 space-y-3">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <button
+          type="button"
+          className="min-w-0 flex-1 space-y-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={onOpen}
+        >
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-body-lg font-semibold text-text-primary">
               {summary.project.name}
@@ -186,26 +303,22 @@ function ProjectSummaryRow({
             <ProjectAttentionBadges summary={summary} />
           </div>
           {summary.project.description && (
-            <p className="max-w-3xl text-body text-text-secondary">
+            <p className="max-w-3xl truncate text-body text-text-secondary">
               {summary.project.description}
             </p>
           )}
           <div className="flex flex-wrap gap-2 text-meta text-text-muted">
-            <span>{summary.documentCount} Documents</span>
-            <span>Templates: {summary.templates.slice(0, 2).join(', ') || 'Custom outline'}</span>
+            <span>{summary.documentCount} docs</span>
+            <span>{summary.templates.slice(0, 2).join(', ') || 'Custom outline'}</span>
             <span>Last activity {formatDate(summary.lastActivityAt)}</span>
           </div>
-        </div>
+        </button>
 
-        <div className="w-full max-w-sm space-y-3 lg:pl-4">
-          <Progress value={summary.averageProgress} label="Document progress" />
-          <div className="flex flex-wrap gap-2">
-            {summary.tags.slice(0, 3).map((tag) => (
-              <Badge key={tag} variant="neutral" showIcon={false}>
-                {tag}
-              </Badge>
-            ))}
+        <div className="flex w-full max-w-sm items-center gap-3 lg:pl-4">
+          <div className="min-w-0 flex-1">
+            <Progress value={summary.averageProgress} label="Document progress" />
           </div>
+          <ProjectActionButtons summary={summary} actions={actions} />
         </div>
       </div>
     </Surface>
@@ -219,16 +332,19 @@ function ProjectSummaryCard({
   summary: ProjectWorkspaceSummary;
   onOpen: () => void;
 }) {
+  const actions = React.useContext(ProjectActionsContext);
   return (
     <Surface
-      as="button"
       variant="panel"
-      padding="lg"
-      className="w-full text-left transition-colors hover:bg-panel-muted focus-visible:ring-2 focus-visible:ring-ring"
-      onClick={onOpen}
+      padding="default"
+      className="w-full transition-colors hover:bg-panel-muted"
     >
-      <div className="space-y-4">
-        <div className="space-y-2">
+      <div className="space-y-3">
+        <button
+          type="button"
+          className="w-full space-y-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={onOpen}
+        >
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-body-lg font-semibold text-text-primary">
               {summary.project.name}
@@ -236,29 +352,56 @@ function ProjectSummaryCard({
             <ProjectAttentionBadges summary={summary} />
           </div>
           {summary.project.description && (
-            <p className="text-body text-text-secondary">
+            <p className="line-clamp-2 text-body text-text-secondary">
               {summary.project.description}
             </p>
           )}
-        </div>
+        </button>
 
         <Progress value={summary.averageProgress} label="Document progress" />
 
-        <div className="grid gap-2 text-meta text-text-secondary">
-          <span>{summary.documentCount} Documents in workspace</span>
+        <div className="grid gap-1 text-meta text-text-secondary">
+          <span>{summary.documentCount} docs</span>
           <span>{summary.templates.slice(0, 2).join(', ') || 'Custom outline'}</span>
           <span>Last activity {formatDate(summary.lastActivityAt)}</span>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {summary.tags.slice(0, 4).map((tag) => (
-            <Badge key={tag} variant="neutral" showIcon={false}>
-              {tag}
-            </Badge>
-          ))}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-wrap gap-2">
+            {summary.tags.slice(0, 4).map((tag) => (
+              <Badge key={tag} variant="neutral" showIcon={false}>
+                {tag}
+              </Badge>
+            ))}
+          </div>
+          <ProjectActionButtons summary={summary} actions={actions} />
         </div>
       </div>
     </Surface>
+  );
+}
+
+function ProjectActionButtons({
+  summary,
+  actions,
+}: {
+  summary: ProjectWorkspaceSummary;
+  actions: ProjectActionContext | null;
+}) {
+  if (!actions) return null;
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <Tooltip content="Edit Project">
+        <Button type="button" variant="ghost" size="icon" onClick={() => actions.onEditProject(summary.project)} aria-label="Edit Project">
+          <Pencil className="h-4 w-4" />
+        </Button>
+      </Tooltip>
+      <Tooltip content="Delete Project">
+        <Button type="button" variant="ghost" size="icon" onClick={() => actions.onDeleteProject(summary.project)} aria-label="Delete Project">
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </Tooltip>
+    </div>
   );
 }
 
@@ -373,4 +516,11 @@ function isStale(freshness: string, status: string) {
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString();
+}
+
+function parseTags(value: string) {
+  return value
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 }

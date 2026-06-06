@@ -229,6 +229,15 @@ async def test_project_and_nested_document_api_behaviour(migrated_async_database
         legacy_response = await client.get(f"/projects/{project['id']}/document")
         assert legacy_response.status_code == 404
 
+        delete_document_response = await client.delete(
+            f"/projects/{project['id']}/documents/{second_doc['id']}"
+        )
+        assert delete_document_response.status_code == 204
+        deleted_document_response = await client.get(
+            f"/projects/{project['id']}/documents/{second_doc['id']}"
+        )
+        assert deleted_document_response.status_code == 404
+
         current_user_id = outsider.id
         blocked_response = await client.get(
             f"/projects/{project['id']}/documents/{first_doc['id']}/sections"

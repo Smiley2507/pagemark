@@ -58,9 +58,6 @@ export function ProjectsPage() {
           <FolderKanban className="mt-0.5 h-5 w-5 text-text-secondary" aria-hidden="true" />
           <div>
             <h1 className="text-title font-semibold text-text-primary">Projects</h1>
-            <p className="mt-1 text-body text-text-secondary">
-              Scan the Project library by purpose, freshness, and active work signals.
-            </p>
           </div>
         </div>
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -81,7 +78,7 @@ export function ProjectsPage() {
             options={[
               { value: 'all', label: 'All' },
               { value: 'active', label: 'Active' },
-              { value: 'stale', label: 'Source changes' },
+              { value: 'stale', label: 'Changed' },
               { value: 'resume', label: 'Recent' },
             ]}
           />
@@ -95,7 +92,7 @@ export function ProjectsPage() {
         onOpenProject={(projectId) => navigate(`/projects/${projectId}`)}
         onCreateProject={() => navigate('/document-setup')}
         emptyTitle="No Projects found"
-        emptyDescription={searchQuery ? 'No Projects match the current search or filter.' : 'Create a Project to start building Documents from source.'}
+        emptyDescription={searchQuery ? 'No Projects match the current search or filter.' : 'Create a Project to start.'}
       />
     </div>
   );

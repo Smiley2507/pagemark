@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.dependencies import get_current_user, verify_project_ownership
+from app.models.activity import ActivityEvent
 from app.models.document import (
     Document,
     DocumentSetupStage,
@@ -403,6 +404,24 @@ async def update_document(
     document.updated_at = datetime.utcnow()
     await db.commit()
     return await _load_document_response(db, project.id, document.id)
+
+
+@router.delete("/{project_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_document(
+    document_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    await db.execute(
+        ActivityEvent.__table__.update()
+        .where(ActivityEvent.document_id == document.id)
+        .values(document_id=None)
+    )
+    await db.delete(document)
+    await db.commit()
+    return None
 
 
 @router.get(

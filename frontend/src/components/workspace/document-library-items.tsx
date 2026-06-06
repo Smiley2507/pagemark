@@ -1,7 +1,9 @@
-import { FileText } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Surface } from '@/components/ui/surface';
+import { Tooltip } from '@/components/ui/tooltip';
 
 export interface WorkspaceDocumentItem {
   id: number;
@@ -14,47 +16,54 @@ export interface WorkspaceDocumentItem {
   progress: number;
   lastActivityAt: string;
   tags: string[];
+  purpose?: string;
+  audience?: string;
+  context?: string;
 }
 
 export function DocumentSummaryRow({
   document,
   onOpen,
+  onEdit,
+  onDelete,
 }: {
   document: WorkspaceDocumentItem;
   onOpen: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   return (
     <Surface
-      as="button"
       variant="panel"
       padding="default"
-      className="w-full text-left transition-colors hover:bg-panel-muted focus-visible:ring-2 focus-visible:ring-ring"
-      onClick={onOpen}
+      className="w-full transition-colors hover:bg-panel-muted"
     >
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0 flex-1 space-y-3">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="min-w-0 flex-1 space-y-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-body-lg font-semibold text-text-primary">{document.title}</h3>
             <Badge variant={document.statusVariant}>{document.statusLabel}</Badge>
-            <Badge variant={document.freshnessVariant} showIcon={false}>
-              {document.freshnessLabel}
-            </Badge>
+            {document.freshnessVariant === 'warning' && (
+              <Badge variant={document.freshnessVariant} showIcon={false}>
+                {document.freshnessLabel}
+              </Badge>
+            )}
           </div>
           <div className="flex flex-wrap gap-3 text-meta text-text-secondary">
-            <span>Template: {document.templateName || 'Custom outline'}</span>
+            <span>{document.templateName || 'Custom outline'}</span>
             <span>Last activity {formatDate(document.lastActivityAt)}</span>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {document.tags.map((tag) => (
-              <Badge key={tag} variant="neutral" showIcon={false}>
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        </div>
+        </button>
 
-        <div className="w-full max-w-sm">
-          <Progress value={document.progress} label="Review progress" />
+        <div className="flex w-full max-w-sm items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <Progress value={document.progress} label="Review progress" />
+          </div>
+          <DocumentActions onEdit={onEdit} onDelete={onDelete} />
         </div>
       </div>
     </Surface>
@@ -64,42 +73,71 @@ export function DocumentSummaryRow({
 export function DocumentSummaryCard({
   document,
   onOpen,
+  onEdit,
+  onDelete,
 }: {
   document: WorkspaceDocumentItem;
   onOpen: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   return (
     <Surface
-      as="button"
       variant="panel"
-      padding="lg"
-      className="w-full text-left transition-colors hover:bg-panel-muted focus-visible:ring-2 focus-visible:ring-ring"
-      onClick={onOpen}
+      padding="default"
+      className="w-full transition-colors hover:bg-panel-muted"
     >
-      <div className="space-y-4">
-        <div className="space-y-2">
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="w-full space-y-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-body-lg font-semibold text-text-primary">{document.title}</h3>
             <Badge variant={document.statusVariant}>{document.statusLabel}</Badge>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge variant={document.freshnessVariant} showIcon={false}>
-              {document.freshnessLabel}
-            </Badge>
+            {document.freshnessVariant === 'warning' && (
+              <Badge variant={document.freshnessVariant} showIcon={false}>
+                {document.freshnessLabel}
+              </Badge>
+            )}
             <Badge variant="neutral" showIcon={false}>
               {document.templateName || 'Custom outline'}
             </Badge>
           </div>
-        </div>
+        </button>
 
         <Progress value={document.progress} label="Review progress" />
 
-        <div className="grid gap-2 text-meta text-text-secondary">
+        <div className="grid gap-1 text-meta text-text-secondary">
           <span>Last activity {formatDate(document.lastActivityAt)}</span>
-          <span>{document.tags.length > 0 ? document.tags.join(', ') : 'No tags yet'}</span>
+          <span>{document.tags.slice(0, 3).join(', ')}</span>
+        </div>
+
+        <div className="flex justify-end">
+          <DocumentActions onEdit={onEdit} onDelete={onDelete} />
         </div>
       </div>
     </Surface>
+  );
+}
+
+function DocumentActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <Tooltip content="Edit Document">
+        <Button type="button" variant="ghost" size="icon" onClick={onEdit} aria-label="Edit Document">
+          <Pencil className="h-4 w-4" />
+        </Button>
+      </Tooltip>
+      <Tooltip content="Delete Document">
+        <Button type="button" variant="ghost" size="icon" onClick={onDelete} aria-label="Delete Document">
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </Tooltip>
+    </div>
   );
 }
 
@@ -134,11 +172,7 @@ export function mapFreshness(freshness: string) {
 export function EmptyDocumentState() {
   return (
     <Surface variant="muted" padding="lg" className="flex flex-col items-center justify-center text-center">
-      <FileText className="h-8 w-8 text-text-muted" aria-hidden="true" />
       <h2 className="mt-3 text-section font-semibold text-text-primary">No Documents yet</h2>
-      <p className="mt-2 text-body text-text-secondary">
-        Create the first Document in this Project workspace to start generation and review.
-      </p>
     </Surface>
   );
 }

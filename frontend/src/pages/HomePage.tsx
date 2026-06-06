@@ -173,7 +173,7 @@ export function HomePage() {
       </div>
 
       <Surface variant="panel" padding="lg" className="space-y-3">
-        <h2 className="text-section font-semibold text-text-primary">Quick Actions</h2>
+        <h2 className="text-section font-semibold text-text-primary">Actions</h2>
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={() => navigate('/new-project')}>
             New Project
@@ -189,14 +189,9 @@ export function HomePage() {
 
       <Surface variant="panel" padding="lg" className="space-y-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-text-secondary" aria-hidden="true" />
-              <h2 className="text-section font-semibold text-text-primary">Project library</h2>
-            </div>
-            <p className="text-body text-text-secondary">
-              Search across recent Projects, active generation, and the full library.
-            </p>
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-text-secondary" aria-hidden="true" />
+            <h2 className="text-section font-semibold text-text-primary">Project library</h2>
           </div>
           <div className="flex flex-col gap-3 xl:flex-row">
             <div className="relative w-full min-w-0 xl:w-80">
@@ -216,7 +211,7 @@ export function HomePage() {
               options={[
                 { value: 'all', label: 'All' },
                 { value: 'active', label: 'Active' },
-                { value: 'stale', label: 'Source changes' },
+                { value: 'stale', label: 'Changed' },
                 { value: 'resume', label: 'Recent' },
               ]}
             />
@@ -231,7 +226,7 @@ export function HomePage() {
         onOpenProject={(projectId) => navigate(`/projects/${projectId}`)}
         onCreateProject={() => navigate('/new-project')}
         emptyTitle="No Projects found"
-        emptyDescription={searchQuery ? 'No Projects match the current search or filter.' : 'Create a Project to start building Documents from source.'}
+        emptyDescription={searchQuery ? 'No Projects match the current search or filter.' : 'Create a Project to start.'}
       />
     </div>
   );
