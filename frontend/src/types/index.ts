@@ -21,8 +21,23 @@ export interface Project {
   git_repo_url?: string;
   git_branch?: string;
   git_provider?: "github" | "bitbucket";
+  source_provider?: string;
+  source_owner?: string;
+  source_repository?: string;
+  selected_branch?: string;
+  default_branch?: string;
+  source_visibility?: string;
+  last_synced_commit?: string;
+  source_metadata?: Record<string, unknown>;
   tags: string[];
   starred: boolean;
+  documents_count?: number;
+  sections_count?: number;
+  active_generation?: boolean;
+  sections_needing_input?: number;
+  review_state?: string;
+  freshness_state?: string;
+  recent_activity_at?: string;
   context_md?: string;
   export_settings?: ExportSettings;
   created_at: string;
@@ -223,13 +238,22 @@ export interface CollaborationNote {
 }
 
 export interface SearchResult {
-  section_id: number;
-  section_heading: string;
-  content_excerpt: string;
-  document_id: number;
-  document_title: string;
+  type: "project" | "document" | "section";
+  id: number;
+  title: string;
+  subtitle?: string;
+  content_excerpt?: string;
+  status?: string;
+  tags: string[];
+  last_opened_at?: string;
+  last_added_at: string;
+  last_modified_at: string;
   project_id: number;
   project_name: string;
+  document_id?: number;
+  document_title?: string;
+  section_id?: number;
+  section_heading?: string;
 }
 
 export interface Section {

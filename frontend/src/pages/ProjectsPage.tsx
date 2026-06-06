@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FolderKanban, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
@@ -17,7 +17,9 @@ import {
 
 export function ProjectsPage() {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchParams] = useSearchParams();
+  const initialTag = searchParams.get('tag') || '';
+  const [searchQuery, setSearchQuery] = useState(initialTag);
   const [filter, setFilter] = useState<ProjectLibraryFilter>('all');
   const viewMode = useViewPreferenceStore((state) => state.getViewMode('home-projects'));
   const setViewMode = useViewPreferenceStore((state) => state.setViewMode);

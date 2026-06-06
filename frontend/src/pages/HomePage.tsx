@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { FolderClock, Search, Sparkles } from 'lucide-react';
+import { FileText, FolderClock, FolderKanban, GitBranch, PenLine, Search, Sparkles, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Notice } from '@/components/ui/notice';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Surface } from '@/components/ui/surface';
 import { projectsApi } from '@/api/projects';
@@ -14,7 +14,6 @@ import {
   buildProjectWorkspaceSummary,
   filterProjectSummaries,
   ProjectLibrary,
-  SignalList,
 } from '@/components/workspace/project-library';
 
 export function HomePage() {
@@ -24,7 +23,6 @@ export function HomePage() {
   const viewMode = useViewPreferenceStore((state) => state.getViewMode('home-projects'));
   const setViewMode = useViewPreferenceStore((state) => state.setViewMode);
   const getRecentProjects = useViewPreferenceStore((state) => state.getRecentProjects);
-  const recentWork = useViewPreferenceStore((state) => state.recentWork);
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
@@ -45,71 +43,30 @@ export function HomePage() {
     )
   ), [documentQueries, projects]);
 
-  const summariesById = useMemo(
-    () => new Map(summaries.map((summary) => [summary.project.id, summary])),
-    [summaries]
+  const allDocuments = summaries.flatMap((summary) =>
+    summary.documents.map((document) => ({ document, project: summary.project }))
   );
-
-  const resumeItems = recentWork
-    .slice(0, 5)
-    .map((entry) => {
-      const summary = summariesById.get(entry.projectId);
-      if (!summary) {
-        return null;
-      }
-      const document = entry.documentId
-        ? summary.documents.find((candidate) => candidate.id === entry.documentId)
-        : undefined;
-      return {
-        id: `${entry.projectId}-${entry.documentId || 'project'}-${entry.sectionId || 'root'}`,
-        title: summary.project.name,
-        description: document ? `Resume ${document.title}` : 'Return to the Project workspace',
-        meta: `Last opened ${new Date(entry.timestamp).toLocaleDateString()}`,
-        badge: document ? { label: 'Resume', variant: 'review' as const } : undefined,
-        onOpen: () => navigate(document ? `/projects/${entry.projectId}/documents/${document.id}` : `/projects/${entry.projectId}`),
-      };
-    })
-    .filter(Boolean) as Array<{
-      id: string;
-      title: string;
-      description: string;
-      meta: string;
-      badge?: {
-        label: string;
-        variant: 'review';
-      };
-      onOpen: () => void;
-    }>;
-
-  const generationItems = summaries
-    .flatMap((summary) =>
-      summary.documents
-        .filter((document) => document.status.toLowerCase().includes('generat'))
-        .map((document) => ({
-          id: `${summary.project.id}-${document.id}-generation`,
-          title: summary.project.name,
-          description: `Generating ${document.title}`,
-          meta: `Template ${document.template?.name || 'Custom outline'}`,
-          badge: { label: 'Generating', variant: 'generation' as const },
-          onOpen: () => navigate(`/projects/${summary.project.id}/documents/${document.id}`),
-        }))
-    )
+  const recentDocuments = [...allDocuments]
+    .sort((left, right) => new Date(right.document.last_activity_at).getTime() - new Date(left.document.last_activity_at).getTime())
     .slice(0, 5);
-
-  const staleItems = summaries
-    .flatMap((summary) =>
-      summary.documents
-        .filter((document) => document.freshness.toLowerCase().includes('stale'))
-        .map((document) => ({
-          id: `${summary.project.id}-${document.id}-stale`,
-          title: summary.project.name,
-          description: `${document.title} may need freshness review`,
-          meta: `Last activity ${new Date(document.last_activity_at).toLocaleDateString()}`,
-          badge: { label: 'Source changes', variant: 'warning' as const },
-          onOpen: () => navigate(`/projects/${summary.project.id}`),
-        }))
-    )
+  const recentProjects = [...summaries]
+    .sort((left, right) => new Date(right.lastActivityAt).getTime() - new Date(left.lastActivityAt).getTime())
     .slice(0, 5);
+  const reviewDocuments = allDocuments
+    .filter(({ document }) => document.status.toLowerCase().includes('needs') || document.status.toLowerCase().includes('review'))
+    .slice(0, 5);
+  const draftDocuments = allDocuments
+    .filter(({ document }) => document.status.toLowerCase().includes('draft') || document.progress.pct < 100)
+    .slice(0, 5);
+  const staleDocuments = allDocuments
+    .filter(({ document }) => document.freshness.toLowerCase().includes('stale') || document.status.toLowerCase().includes('stale'))
+    .slice(0, 5);
+  const kpis = [
+    { label: 'Projects', value: summaries.length },
+    { label: 'Documents', value: allDocuments.length },
+    { label: 'Needs review', value: reviewDocuments.length },
+    { label: 'Source changed', value: staleDocuments.length },
+  ];
 
   const filteredLibrary = filterProjectSummaries(
     summaries,
@@ -127,39 +84,108 @@ export function HomePage() {
               <FolderClock className="h-5 w-5 text-text-secondary" aria-hidden="true" />
               <h1 className="text-title font-semibold text-text-primary">Home</h1>
             </div>
-            <p className="max-w-3xl text-body text-text-secondary">
-              Resume recent Project work, monitor active generation, and keep Documents fresh without leaving the workspace.
-            </p>
           </div>
-          <Button type="button" onClick={() => navigate('/document-setup')}>
-            New Project
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => navigate('/projects')}>
+              <FolderKanban className="h-4 w-4" />
+              Projects
+            </Button>
+            <Button type="button" onClick={() => navigate('/new-project')}>
+              <PenLine className="h-4 w-4" />
+              New Project
+            </Button>
+          </div>
         </div>
-        <Notice variant="info" title="Workspace focus">
-          Projects organize multiple Documents. Resume work starts here, then narrows into Documents, Source, and Activity after you enter a Project.
-        </Notice>
+        <div className="grid gap-3 md:grid-cols-4">
+          {kpis.map((kpi) => (
+            <div key={kpi.label} className="rounded-md border border-separator bg-panel-muted px-3 py-3">
+              <p className="text-meta text-text-muted">{kpi.label}</p>
+              <p className="mt-1 text-title font-semibold text-text-primary">{kpi.value}</p>
+            </div>
+          ))}
+        </div>
       </Surface>
 
-      <div className="grid gap-6 2xl:grid-cols-3">
-        <SignalList
-          title="Resume work"
-          icon="resume"
-          items={resumeItems}
-          empty="Recent work will appear here after you open a Project or Document."
+      <div className="grid gap-6 2xl:grid-cols-2">
+        <WorkList
+          title="Recent Documents"
+          icon={FileText}
+          items={recentDocuments.map(({ document, project }) => ({
+            id: `recent-doc-${document.id}`,
+            title: document.title,
+            meta: `${project.name} · ${formatDate(document.last_activity_at)}`,
+            badge: document.status,
+            onOpen: () => navigate(`/projects/${project.id}/documents/${document.id}`),
+          }))}
+          empty="No Documents yet."
         />
-        <SignalList
-          title="Active generation"
-          icon="generation"
-          items={generationItems}
-          empty="No Documents are generating right now."
-        />
-        <SignalList
-          title="Source changes"
-          icon="stale"
-          items={staleItems}
-          empty="No freshness signals need attention."
+        <WorkList
+          title="Recent Projects"
+          icon={FolderKanban}
+          items={recentProjects.map((summary) => ({
+            id: `recent-project-${summary.project.id}`,
+            title: summary.project.name,
+            meta: `${summary.documentCount} Documents · ${formatDate(summary.lastActivityAt)}`,
+            badge: summary.project.freshness_state,
+            onOpen: () => navigate(`/projects/${summary.project.id}`),
+          }))}
+          empty="No Projects yet."
         />
       </div>
+
+      <div className="grid gap-6 2xl:grid-cols-3">
+        <WorkList
+          title="Needs Review"
+          icon={TriangleAlert}
+          items={reviewDocuments.map(({ document, project }) => ({
+            id: `review-${document.id}`,
+            title: document.title,
+            meta: project.name,
+            badge: document.status,
+            onOpen: () => navigate(`/projects/${project.id}/documents/${document.id}`),
+          }))}
+          empty="Nothing needs review."
+        />
+        <WorkList
+          title="Source Changed"
+          icon={GitBranch}
+          items={staleDocuments.map(({ document, project }) => ({
+            id: `stale-${document.id}`,
+            title: document.title,
+            meta: project.name,
+            badge: 'Source changed',
+            onOpen: () => navigate(`/projects/${project.id}`),
+          }))}
+          empty="No source changes."
+        />
+        <WorkList
+          title="Drafts In Progress"
+          icon={PenLine}
+          items={draftDocuments.map(({ document, project }) => ({
+            id: `draft-${document.id}`,
+            title: document.title,
+            meta: `${project.name} · ${document.progress.pct}% reviewed`,
+            badge: document.status,
+            onOpen: () => navigate(`/projects/${project.id}/documents/${document.id}`),
+          }))}
+          empty="No draft Documents."
+        />
+      </div>
+
+      <Surface variant="panel" padding="lg" className="space-y-3">
+        <h2 className="text-section font-semibold text-text-primary">Quick Actions</h2>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={() => navigate('/new-project')}>
+            New Project
+          </Button>
+          <Button type="button" variant="outline" onClick={() => navigate('/templates')}>
+            Templates
+          </Button>
+          <Button type="button" variant="outline" onClick={() => navigate('/settings?tab=ai-providers')}>
+            AI providers
+          </Button>
+        </div>
+      </Surface>
 
       <Surface variant="panel" padding="lg" className="space-y-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -203,10 +229,61 @@ export function HomePage() {
         viewMode={viewMode}
         onViewModeChange={(value) => setViewMode('home-projects', value as 'list' | 'grid')}
         onOpenProject={(projectId) => navigate(`/projects/${projectId}`)}
-        onCreateProject={() => navigate('/document-setup')}
+        onCreateProject={() => navigate('/new-project')}
         emptyTitle="No Projects found"
         emptyDescription={searchQuery ? 'No Projects match the current search or filter.' : 'Create a Project to start building Documents from source.'}
       />
     </div>
   );
+}
+
+function WorkList({
+  title,
+  icon: Icon,
+  items,
+  empty,
+}: {
+  title: string;
+  icon: typeof FileText;
+  items: Array<{
+    id: string;
+    title: string;
+    meta: string;
+    badge?: string;
+    onOpen: () => void;
+  }>;
+  empty: string;
+}) {
+  return (
+    <Surface variant="panel" padding="lg" className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4 text-text-secondary" aria-hidden="true" />
+        <h2 className="text-section font-semibold text-text-primary">{title}</h2>
+      </div>
+      {items.length === 0 ? (
+        <p className="text-body text-text-muted">{empty}</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={item.onOpen}
+              className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left transition-colors hover:bg-panel-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span className="min-w-0">
+                <span className="block truncate text-body font-medium text-text-primary">{item.title}</span>
+                <span className="block truncate text-meta text-text-muted">{item.meta}</span>
+              </span>
+              {item.badge && <Badge variant="neutral" showIcon={false}>{item.badge}</Badge>}
+            </button>
+          ))}
+        </div>
+      )}
+    </Surface>
+  );
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString();
 }

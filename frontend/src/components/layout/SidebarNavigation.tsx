@@ -5,6 +5,7 @@ import {
   Check,
   ChevronRight,
   FolderKanban,
+  Hash,
   House,
   LayoutTemplate,
   Loader2,
@@ -23,7 +24,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { orgApi } from '@/api/org';
+import { projectsApi } from '@/api/projects';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 
 export function SidebarNavigation() {
   const location = useLocation();
@@ -44,6 +47,21 @@ export function SidebarNavigation() {
   const [joining, setJoining] = useState(false);
 
   const activeOrg = organizations.find((organization) => organization.id === activeOrgId);
+  const { data: projects = [] } = useQuery({
+    queryKey: ['projects', activeOrgId, 'sidebar-tags'],
+    queryFn: () => projectsApi.getProjects({}),
+    enabled: !!activeOrgId,
+  });
+
+  const topTags = projects
+    .flatMap((project) => project.tags || [])
+    .reduce<Map<string, number>>((counts, tag) => {
+      counts.set(tag, (counts.get(tag) || 0) + 1);
+      return counts;
+    }, new Map<string, number>());
+  const tagItems = Array.from(topTags.entries())
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, 3);
 
   const refreshOrgs = () => {
     orgApi.listOrganizations().then(setOrganizations).catch(console.error);
@@ -116,10 +134,10 @@ export function SidebarNavigation() {
             type="button"
             variant="secondary"
             className="w-full justify-start gap-2"
-            onClick={() => navigate('/document-setup')}
+            onClick={() => navigate('/new-project')}
           >
             <Plus className="h-4 w-4" />
-            New
+            New Project
           </Button>
         </div>
 
@@ -127,6 +145,26 @@ export function SidebarNavigation() {
           <NavLink href="/home" icon={House} label="Home" isActive={isActive('/home')} />
           <NavLink href="/projects" icon={FolderKanban} label="Projects" isActive={isActive('/projects')} />
           <NavLink href="/templates" icon={LayoutTemplate} label="Templates" isActive={isActive('/templates')} />
+          <div className="px-3 pb-1 pt-4 text-meta font-medium uppercase text-sidebar-foreground/50">
+            Tags
+          </div>
+          {tagItems.length > 0 ? tagItems.map(([tag, count]) => (
+            <Link
+              key={tag}
+              to={`/projects?tag=${encodeURIComponent(tag)}`}
+              className="flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/72 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <Hash className="h-4 w-4 shrink-0" />
+                <span className="truncate">{tag}</span>
+              </span>
+              <span className="text-xs text-sidebar-foreground/56">{count}</span>
+            </Link>
+          )) : (
+            <div className="px-3 py-2 text-sm text-sidebar-foreground/56">
+              No tags yet
+            </div>
+          )}
           <NavLink href="/settings" icon={Settings} label="Settings" isActive={isActive('/settings')} />
         </nav>
 

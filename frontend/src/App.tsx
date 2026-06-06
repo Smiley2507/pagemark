@@ -27,6 +27,7 @@ import { DocumentLibraryPage } from './pages/DocumentLibraryPage';
 import { ProjectSourcePage } from './pages/ProjectSourcePage';
 import { ProjectActivityPage } from './pages/ProjectActivityPage';
 import { DocumentEditorPage } from './pages/DocumentEditorPage';
+import { ProjectSettingsPage } from './pages/ProjectSettingsPage';
 
 const queryClient = new QueryClient();
 
@@ -116,6 +117,7 @@ const AppRoutes = () => {
             <Route index element={<DocumentLibraryPage />} />
             <Route path="source" element={<ProjectSourcePage />} />
             <Route path="activity" element={<ProjectActivityPage />} />
+            <Route path="settings" element={<ProjectSettingsPage />} />
           </Route>
         </Route>
       </Route>

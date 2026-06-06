@@ -28,6 +28,9 @@ function assertGlobalNavigation() {
   ['label="Home"', 'label="Projects"', 'label="Templates"', 'label="Settings"'].forEach((label) => {
     assertContains(source, label, `global navigation is missing ${label}`);
   });
+  ['New Project', 'sidebar-tags', 'topTags', 'Hash'].forEach((marker) => {
+    assertContains(source, marker, `sidebar is missing Phase 4 marker ${marker}`);
+  });
   ['label="Documents"', 'label="Source"', 'label="Activity"'].forEach((label) => {
     if (source.includes(label)) {
       fail(`global navigation should not contain project-only item ${label}`);
@@ -37,9 +40,11 @@ function assertGlobalNavigation() {
 
 function assertProjectNavigation() {
   const source = read('src/pages/ProjectWorkspacePage.tsx');
-  ['Documents', 'Source', 'Activity', "navigate('/projects')"].forEach((marker) => {
+  ['Documents', 'Source', 'Activity', 'Settings', "navigate('/projects')", 'projectsApi.updateProject', 'Project description'].forEach((marker) => {
     assertContains(source, marker, `project workspace navigation is missing ${marker}`);
   });
+  const routes = read('src/App.tsx');
+  assertContains(routes, 'ProjectSettingsPage', 'project settings route is missing');
 }
 
 function assertLibraryPreferences() {
@@ -62,6 +67,62 @@ function assertSharedPrimitives() {
       fail(`workspace source ${index + 1} does not render through Surface primitives`);
     }
   });
+}
+
+function assertPhase4SearchAndSettings() {
+  const header = read('src/components/layout/AppHeader.tsx');
+  [
+    'Search Projects, Documents, Sections',
+    'Search entity type',
+    'Search tag filter',
+    'Search status filter',
+    'Search sort',
+    "sortBy === 'last_opened'",
+    'value="project"',
+    'value="document"',
+    'value="section"',
+  ].forEach((marker) => assertContains(header, marker, `topbar search is missing ${marker}`));
+
+  const searchApi = read('src/api/search.ts');
+  ['GlobalSearchType', 'GlobalSearchSort', 'last_opened', 'last_added', 'last_modified'].forEach((marker) => {
+    assertContains(searchApi, marker, `search API is missing ${marker}`);
+  });
+
+  const settings = read('src/pages/SettingsPage.tsx');
+  [
+    'Profile',
+    'Organization',
+    'Members',
+    'AI Providers & Models',
+    'Source Connections',
+    'Export Defaults',
+    'Templates',
+    'Notifications',
+    'API Keys',
+    'Security',
+    'section.keywords',
+  ].forEach((marker) => assertContains(settings, marker, `settings center is missing ${marker}`));
+}
+
+function assertNoPrimaryWorkspaceStubs() {
+  const primaryFiles = [
+    'src/components/layout/SidebarNavigation.tsx',
+    'src/components/layout/AppHeader.tsx',
+    'src/pages/HomePage.tsx',
+    'src/pages/ProjectsPage.tsx',
+    'src/pages/ProjectWorkspacePage.tsx',
+    'src/pages/ProjectSettingsPage.tsx',
+    'src/pages/SettingsPage.tsx',
+  ];
+  const banned = [/coming soon/i, /placeholder content/i, /not implemented/i, /stub/i];
+  for (const file of primaryFiles) {
+    const source = read(file);
+    for (const pattern of banned) {
+      if (pattern.test(source)) {
+        fail(`${file} contains visible stub marker ${pattern}`);
+      }
+    }
+  }
 }
 
 function assertLandingAndAuth() {
@@ -158,6 +219,8 @@ assertGlobalNavigation();
 assertProjectNavigation();
 assertLibraryPreferences();
 assertSharedPrimitives();
+assertPhase4SearchAndSettings();
+assertNoPrimaryWorkspaceStubs();
 assertLandingAndAuth();
 assertFirstDocumentJourney();
 assertPhasePromptsStartFromCanonicalPrompt();
