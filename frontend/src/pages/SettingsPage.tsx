@@ -1,18 +1,17 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Activity, Bell, Bot, Building2, Key, Search, User, Users } from 'lucide-react';
+import { Activity, Bell, Bot, Building2, Key, Search, User } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
 import { ProfileSection } from '@/components/settings/ProfileSection';
 import { AiProvidersSection } from '@/components/settings/AiProvidersSection';
 import { NotificationPreferencesSection } from '@/components/settings/NotificationPreferencesSection';
-import { OrgApiKeysView, OrgAuditLogView, OrgJoinLinksView, OrgMembersView, OrgSettingsView } from '@/components/org';
+import { OrgApiKeysView, OrgAuditLogView, OrgSettingsView } from '@/components/org';
 
 const SECTIONS = [
   { id: 'profile', label: 'Profile', icon: User, keywords: ['account', 'identity', 'password', 'avatar'] },
   { id: 'organization', label: 'Organization', icon: Building2, keywords: ['org', 'workspace', 'quality'] },
-  { id: 'members', label: 'Members', icon: Users, keywords: ['team', 'invite', 'role', 'access'] },
   { id: 'notifications', label: 'Notifications', icon: Bell, keywords: ['alert', 'preferences', 'events', 'bell'] },
   { id: 'ai-providers', label: 'AI Providers', icon: Bot, keywords: ['model', 'provider', 'byok', 'claude', 'opencode', 'google'] },
   { id: 'api-keys', label: 'API Keys', icon: Key, keywords: ['token', 'integration', 'automation'] },
@@ -101,13 +100,6 @@ export function SettingsPage() {
 
           {activeSection.id === 'profile' && <ProfileSection />}
           {activeSection.id === 'organization' && <OrgSettingsView />}
-          {activeSection.id === 'members' && (
-            <>
-              <OrgMembersView />
-              <hr className="my-6 border-separator" />
-              <OrgJoinLinksView />
-            </>
-          )}
           {activeSection.id === 'notifications' && <NotificationPreferencesSection />}
           {activeSection.id === 'ai-providers' && <AiProvidersSection />}
           {activeSection.id === 'api-keys' && <OrgApiKeysView />}

@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -184,6 +185,9 @@ export const OrgMembersView: React.FC = () => {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Invite New Member</DialogTitle>
+                <DialogDescription>
+                  Send an email invitation to join this organization.
+                </DialogDescription>
               </DialogHeader>
               <form
                 onSubmit={(e) => {

@@ -26,6 +26,7 @@ import { ProjectSourcePage } from './pages/ProjectSourcePage';
 import { ProjectActivityPage } from './pages/ProjectActivityPage';
 import { DocumentEditorPage } from './pages/DocumentEditorPage';
 import { ProjectSettingsPage } from './pages/ProjectSettingsPage';
+import { MembersPage } from './pages/MembersPage';
 
 const queryClient = new QueryClient();
 
@@ -106,6 +107,7 @@ const AppRoutes = () => {
           <Route path="/home" element={<HomePage />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/templates" element={<TemplatesView />} />
+          <Route path="/members" element={<MembersPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/new-project" element={<Navigate to="/home?new_project=true" replace />} />
           <Route path="/analysis/:id" element={<Analysis />} />

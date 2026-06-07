@@ -13,6 +13,7 @@ import {
   Plus,
   PlusCircle,
   Settings,
+  Users,
   UserPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -145,6 +146,7 @@ export function SidebarNavigation() {
           <NavLink href="/home" icon={House} label="Home" isActive={isActive('/home')} />
           <NavLink href="/projects" icon={FolderKanban} label="Projects" isActive={isActive('/projects')} />
           <NavLink href="/templates" icon={LayoutTemplate} label="Templates" isActive={isActive('/templates')} />
+          <NavLink href="/members" icon={Users} label="Members" isActive={isActive('/members')} />
           <div className="px-3 pb-1 pt-4 text-meta font-medium uppercase text-sidebar-foreground/50">
             Tags
           </div>

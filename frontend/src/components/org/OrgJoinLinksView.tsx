@@ -16,6 +16,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
@@ -137,6 +138,9 @@ export const OrgJoinLinksView: React.FC = () => {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create Join Link</DialogTitle>
+                <DialogDescription>
+                  Create a shareable link that lets anyone join your organization.
+                </DialogDescription>
               </DialogHeader>
               <form
                 onSubmit={(e) => {
@@ -219,7 +223,7 @@ export const OrgJoinLinksView: React.FC = () => {
                         ) : (
                           <Ban className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         )}
-                        <code className="text-meta font-mono truncate max-w-[240px] block">
+                        <code className="text-meta font-mono truncate max-w-60 block">
                           {window.location.origin}/org/join/{link.code}
                         </code>
                       </div>
