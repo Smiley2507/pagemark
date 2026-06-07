@@ -10,7 +10,6 @@ import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
-import { NewProject } from './pages/NewProject';
 import { Analysis } from './pages/Analysis';
 import { GitConnectPage } from './pages/GitConnectPage';
 import { useMe } from './hooks/useAuth';
@@ -108,7 +107,7 @@ const AppRoutes = () => {
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/templates" element={<TemplatesView />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/new-project" element={<NewProject />} />
+          <Route path="/new-project" element={<Navigate to="/home?new_project=true" replace />} />
           <Route path="/analysis/:id" element={<Analysis />} />
           <Route path="/nlp/:projectId" element={<NLPDashboard />} />
           <Route path="/git-connect" element={<GitConnectPage />} />
