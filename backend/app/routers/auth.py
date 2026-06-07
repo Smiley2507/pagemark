@@ -28,6 +28,9 @@ from app.schemas.ai_credential import (
     AiProviderCatalogResponse, AiProviderCatalogItem, AiModelOption,
     AiProviderModelsResponse, AiCredentialListResponse, AiCredentialResponse, AiCredentialUpsertRequest,
 )
+from app.schemas.notification import (
+    NotificationPreferences, NotificationPreferencesResponse, UpdateNotificationPreferencesRequest,
+)
 from app.services import ai_credential_service
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -98,8 +101,10 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
     db.add(UserRole(user_id=user.id, role=RoleEnum.USER))
 
     verification_token = secrets.token_urlsafe(32)
+    import json
     db.add(UserSettings(
         user_id=user.id,
+        notifications_json=json.dumps(_get_default_notification_preferences()),
         verification_token=verification_token,
         verification_token_expires=datetime.utcnow() + timedelta(hours=24),
     ))
@@ -306,6 +311,86 @@ async def github_disconnect(current_user: User = Depends(get_current_user), db: 
         await db.delete(tok)
         await db.commit()
     return None
+
+
+NOTIFICATION_CATEGORY_MAP: dict[str, str] = {
+    "source_sync": "source_sync",
+    "generation_run_started": "generation",
+    "generation_run_completed": "generation",
+    "generation_run_failed": "generation",
+    "section_generated": "generation",
+    "freshness_detected": "stale_sections",
+    "freshness_accepted": "stale_sections",
+    "freshness_rejected": "stale_sections",
+}
+
+# Event types excluded from the category filter — always shown
+ALWAYS_VISIBLE_EVENTS = {
+    "analysis_started", "analysis_complete", "analysis_failed",
+    "document_created", "outline_approved",
+    "section_reviewed", "project_created",
+}
+
+
+def _get_default_notification_preferences() -> dict[str, bool]:
+    return {
+        "member_activity": True,
+        "document_sharing": True,
+        "document_notes": True,
+        "generation": True,
+        "quality": True,
+        "stale_sections": True,
+        "source_sync": True,
+        "invites": True,
+    }
+
+
+def _apply_notification_filter(
+    events: list[dict],
+    preferences: dict[str, bool],
+) -> list[dict]:
+    """Filter activity events based on user notification preferences."""
+    return [
+        event for event in events
+        if event.get("event_type") in ALWAYS_VISIBLE_EVENTS
+        or NOTIFICATION_CATEGORY_MAP.get(event.get("event_type", ""), "")
+           in [cat for cat, enabled in preferences.items() if enabled]
+    ]
+
+
+@router.get("/me/notification-preferences", response_model=NotificationPreferencesResponse)
+async def get_notification_preferences(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
+    user_settings = result.scalar_one_or_none()
+    preferences = _get_default_notification_preferences()
+    if user_settings and user_settings.notifications_json:
+        import json
+        try:
+            stored = json.loads(user_settings.notifications_json)
+            preferences.update(stored)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return NotificationPreferencesResponse(preferences=NotificationPreferences(**preferences))
+
+
+@router.put("/me/notification-preferences", response_model=NotificationPreferencesResponse)
+async def update_notification_preferences(
+    body: UpdateNotificationPreferencesRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    import json
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
+    user_settings = result.scalar_one_or_none()
+    if not user_settings:
+        user_settings = UserSettings(user_id=current_user.id)
+        db.add(user_settings)
+    user_settings.notifications_json = json.dumps(body.preferences.model_dump())
+    await db.commit()
+    return NotificationPreferencesResponse(preferences=body.preferences)
 
 
 # ── BYOK AI credentials ───────────────────────────────────────────

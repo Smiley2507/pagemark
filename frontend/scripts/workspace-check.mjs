@@ -124,6 +124,7 @@ function assertPhase4SearchAndSettings() {
     'Profile',
     'Organization',
     'Members',
+    'Notifications',
     'AI Providers',
     'API Keys',
     'Activity Log',
@@ -148,13 +149,15 @@ function assertPhase4SearchAndSettings() {
   [
     'Source Connections',
     'Export Defaults',
-    'Notifications',
     'Security',
   ].forEach((marker) => {
     if (settings.includes(marker)) {
       fail(`settings center still exposes stub surface ${marker}`);
     }
   });
+
+  // Phase 4: Notifications is now a real section, not a stub
+  assertContains(settings, 'Notifications', 'settings should now have a real Notifications section');
 }
 
 function assertNoPrimaryWorkspaceStubs() {

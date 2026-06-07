@@ -9,7 +9,7 @@ from sqlalchemy import func
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models.user import User
+from app.models.user import User, UserSettings
 from app.models.organization import Organization, OrganizationMember, OrgMemberStatus
 from app.models.project import Project, ProjectSourceExclusion, ProjectStatus, SourceType
 from app.models.document import Document, Section, SectionStatus
@@ -191,6 +191,35 @@ async def _get_project(project_id: int, current_user: User, db: AsyncSession) ->
 
 # ── GET /projects/tags ────────────────────────────────────────────
 
+NOTIFICATION_CATEGORY_MAP: dict[str, str] = {
+    "source_sync": "source_sync",
+    "generation_run_started": "generation",
+    "generation_run_completed": "generation",
+    "generation_run_failed": "generation",
+    "section_generated": "generation",
+    "freshness_detected": "stale_sections",
+    "freshness_accepted": "stale_sections",
+    "freshness_rejected": "stale_sections",
+}
+
+ALWAYS_VISIBLE_EVENTS = {
+    "analysis_started", "analysis_complete", "analysis_failed",
+    "document_created", "outline_approved",
+    "section_reviewed", "project_created",
+}
+
+DEFAULT_NOTIFICATION_PREFS: dict[str, bool] = {
+    "member_activity": True,
+    "document_sharing": True,
+    "document_notes": True,
+    "generation": True,
+    "quality": True,
+    "stale_sections": True,
+    "source_sync": True,
+    "invites": True,
+}
+
+
 @router.get("/activity/recent")
 async def get_recent_project_activity(
     request: Request,
@@ -206,7 +235,26 @@ async def get_recent_project_activity(
         limit=limit,
         days=days,
     )
-    return {"events": events, "total": len(events)}
+
+    # Filter by user notification preferences
+    result = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
+    user_settings = result.scalar_one_or_none()
+    prefs = dict(DEFAULT_NOTIFICATION_PREFS)
+    if user_settings and user_settings.notifications_json:
+        import json
+        try:
+            stored = json.loads(user_settings.notifications_json)
+            prefs.update(stored)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    enabled_categories = {cat for cat, enabled in prefs.items() if enabled}
+    filtered = [
+        event for event in events
+        if event.get("event_type") in ALWAYS_VISIBLE_EVENTS
+        or NOTIFICATION_CATEGORY_MAP.get(event.get("event_type", "")) in enabled_categories
+    ]
+    return {"events": filtered, "total": len(filtered)}
 
 @router.get("/tags")
 async def list_tags(
