@@ -5,7 +5,6 @@ import difflib
 import json
 from typing import AsyncGenerator
 
-import anthropic
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -22,7 +21,6 @@ from app.services import ai_credential_service
 from app.services.ai_service import AiServiceError, complete_text
 from app.exceptions import NeedsClarificationException
 
-CLAUDE_MODEL = "claude-sonnet-4-5"
 MAX_TOKENS_SECTION = 2000
 MAX_TOKENS_REFINE = 2000
 MAX_TOKENS_CHAT = 1500
@@ -32,30 +30,6 @@ class AIService:
     """Async AI service backed by the user's active BYOK provider credential."""
 
     # ── Internal helpers ────────────────────────────────────────
-
-    async def _get_anthropic_client(
-        self, db: AsyncSession, user_id: int, model_name: str | None = None
-    ) -> tuple[anthropic.AsyncAnthropic, str]:
-        """Return (async client, model_id) from the user's active credential.
-
-        If model_name is provided, uses it instead of the credential's default.
-        """
-        cred = await ai_credential_service.get_active_credential(db, user_id)
-        if not cred:
-            raise HTTPException(
-                status_code=400,
-                detail="No active AI credential found. Please add an Anthropic API key in Settings.",
-            )
-        if cred.provider != "anthropic":
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Active credential is for '{cred.provider}'. "
-                    "Only Anthropic is supported for this operation."
-                ),
-            )
-        client = anthropic.AsyncAnthropic(api_key=cred.api_key)
-        return client, model_name or cred.model_id
 
     async def _get_active_credential(
         self, db: AsyncSession, user_id: int, model_name: str | None = None
@@ -520,7 +494,29 @@ class AIService:
         effective_temperature = temperature
 
         async def _stream() -> AsyncGenerator[str, None]:
-            if cred.provider != "anthropic":
+            # Anthropic supports native async streaming via its SDK.
+            # All other providers (Google, OpenCode Go) deliver a single response
+            # via complete_text and it is emitted as a single chunk.
+            if cred.provider == "anthropic":
+                import anthropic as _anthropic
+
+                client = _anthropic.AsyncAnthropic(api_key=cred.api_key)
+                kwargs = {
+                    "model": cred.model_id,
+                    "max_tokens": effective_max_tokens,
+                    "system": system_prompt,
+                    "messages": api_messages,
+                }
+                if effective_temperature is not None:
+                    kwargs["temperature"] = effective_temperature
+
+                async with client.messages.stream(**kwargs) as stream:
+                    async for text in stream.text_stream:
+                        full_response.append(text)
+                        yield text
+
+                ai_content = "".join(full_response)
+            else:
                 transcript = "\n".join(
                     f"{message['role']}: {message['content']}" for message in api_messages
                 )
@@ -540,32 +536,7 @@ class AIService:
                 full_response.append(ai_content)
                 yield ai_content
 
-                ai_msg = ChatMessage(
-                    thread_id=thread_id,
-                    role=MessageRole.AI,
-                    content=ai_content,
-                )
-                db.add(ai_msg)
-                await db.commit()
-                return
-
-            client = anthropic.AsyncAnthropic(api_key=cred.api_key)
-            kwargs = {
-                "model": cred.model_id,
-                "max_tokens": effective_max_tokens,
-                "system": system_prompt,
-                "messages": api_messages,
-            }
-            if effective_temperature is not None:
-                kwargs["temperature"] = effective_temperature
-
-            async with client.messages.stream(**kwargs) as stream:
-                async for text in stream.text_stream:
-                    full_response.append(text)
-                    yield text
-
-            # After stream completes, save AI message
-            ai_content = "".join(full_response)
+            # Save AI message after generation completes
             ai_msg = ChatMessage(
                 thread_id=thread_id,
                 role=MessageRole.AI,
