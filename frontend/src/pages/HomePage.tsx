@@ -1,27 +1,54 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueries, useQuery } from '@tanstack/react-query';
-import { FileText, FolderClock, FolderKanban, GitBranch, PenLine, Search, Sparkles, TriangleAlert } from 'lucide-react';
+import { FileText, FolderKanban, GitBranch, PenLine, Search, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Surface } from '@/components/ui/surface';
 import { projectsApi } from '@/api/projects';
 import { documentsApi } from '@/api/documents';
+import { useAuthStore } from '@/store/authStore';
 import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
 import {
   buildProjectWorkspaceSummary,
   filterProjectSummaries,
   ProjectLibrary,
 } from '@/components/workspace/project-library';
+import { cn } from '@/lib/utils';
+
+type OverviewTab = 'recent-documents' | 'recent-projects' | 'need-review' | 'source-changes' | 'drafts';
 
 export function HomePage() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'active' | 'stale' | 'resume'>('all');
-  const viewMode = useViewPreferenceStore((state) => state.getViewMode('home-projects'));
-  const setViewMode = useViewPreferenceStore((state) => state.setViewMode);
+  const [activeOverviewTab, setActiveOverviewTab] = useState<OverviewTab>('recent-documents');
   const getRecentProjects = useViewPreferenceStore((state) => state.getRecentProjects);
+  const user = useAuthStore((state) => state.user);
+  const userName = user?.name || user?.email?.split('@')[0] || 'there';
+  const greetingText = `${getTimeGreeting()}, ${userName}`;
+  const [typedGreeting, setTypedGreeting] = useState('');
+
+  useEffect(() => {
+    const reduceMotion = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) {
+      setTypedGreeting(greetingText);
+      return;
+    }
+
+    setTypedGreeting('');
+    let index = 0;
+    const interval = window.setInterval(() => {
+      index += 1;
+      setTypedGreeting(greetingText.slice(0, index));
+      if (index >= greetingText.length) {
+        window.clearInterval(interval);
+      }
+    }, 42);
+
+    return () => window.clearInterval(interval);
+  }, [greetingText]);
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
@@ -60,12 +87,6 @@ export function HomePage() {
   const staleDocuments = allDocuments
     .filter(({ document }) => document.freshness.toLowerCase().includes('stale') || document.status.toLowerCase().includes('stale'))
     .slice(0, 5);
-  const counters = [
-    ['Projects', summaries.length],
-    ['Documents', allDocuments.length],
-    ['Review', reviewDocuments.length],
-    ['Changes', staleDocuments.length],
-  ] as const;
 
   const filteredLibrary = filterProjectSummaries(
     summaries,
@@ -74,104 +95,137 @@ export function HomePage() {
     searchQuery
   );
 
+  const overviewTabs = [
+    {
+      id: 'recent-documents' as const,
+      label: 'Recent documents',
+      icon: FileText,
+      items: recentDocuments.map(({ document, project }) => ({
+        id: `recent-doc-${document.id}`,
+        title: document.title,
+        meta: `${project.name} / ${formatDate(document.last_activity_at)}`,
+        onOpen: () => navigate(`/projects/${project.id}/documents/${document.id}`),
+      })),
+    },
+    {
+      id: 'recent-projects' as const,
+      label: 'Recent projects',
+      icon: FolderKanban,
+      items: recentProjects.map((summary) => ({
+        id: `recent-project-${summary.project.id}`,
+        title: summary.project.name,
+        meta: `${summary.documentCount} Documents / ${formatDate(summary.lastActivityAt)}`,
+        onOpen: () => navigate(`/projects/${summary.project.id}`),
+      })),
+    },
+    {
+      id: 'need-review' as const,
+      label: 'Need review',
+      icon: TriangleAlert,
+      items: reviewDocuments.map(({ document, project }) => ({
+        id: `review-${document.id}`,
+        title: document.title,
+        meta: project.name,
+        onOpen: () => navigate(`/projects/${project.id}/documents/${document.id}`),
+      })),
+    },
+    {
+      id: 'source-changes' as const,
+      label: 'Source changes',
+      icon: GitBranch,
+      items: staleDocuments.map(({ document, project }) => ({
+        id: `stale-${document.id}`,
+        title: document.title,
+        meta: project.name,
+        onOpen: () => navigate(`/projects/${project.id}`),
+      })),
+    },
+    {
+      id: 'drafts' as const,
+      label: 'Drafts in progress',
+      icon: PenLine,
+      items: draftDocuments.map(({ document, project }) => ({
+        id: `draft-${document.id}`,
+        title: document.title,
+        meta: `${project.name} / ${document.progress.pct}% reviewed`,
+        onOpen: () => navigate(`/projects/${project.id}/documents/${document.id}`),
+      })),
+    },
+  ];
+  const activeOverview = overviewTabs.find((tab) => tab.id === activeOverviewTab) || overviewTabs[0];
+
   return (
-    <div className="space-y-6 px-6 py-6">
-      <Surface variant="panel" padding="lg">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <FolderClock className="h-5 w-5 text-text-secondary" aria-hidden="true" />
-              <h1 className="text-title font-semibold text-text-primary">Home</h1>
+    <div className="dashboard-atmosphere min-h-screen space-y-6 px-8 pb-6 pt-12">
+      <section className="pb-14 pt-3">
+        <p className="text-[2rem] font-semibold leading-tight text-text-primary" aria-label={greetingText}>
+          <span aria-hidden="true">{typedGreeting || '\u00A0'}</span>
+          <span aria-hidden="true" className="dashboard-type-cursor ml-1 inline-block h-8 w-0.5 translate-y-1 bg-text-primary" />
+        </p>
+      </section>
+
+      <Surface variant="panel" padding="none" className="overflow-hidden">
+        <div className="border-b border-separator px-5 py-4">
+          <h1 className="text-title font-semibold text-text-primary">Overview</h1>
+        </div>
+        <div className="grid min-h-80 lg:grid-cols-[240px_minmax(0,1fr)]">
+          <nav aria-label="Overview sections" className="border-b border-separator p-3 lg:border-b-0 lg:border-r">
+            <div className="space-y-1">
+              {overviewTabs.map((tab) => {
+                const Icon = tab.icon;
+                const active = tab.id === activeOverview.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveOverviewTab(tab.id)}
+                    className={cn(
+                      'flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left text-meta transition-colors',
+                      active
+                        ? 'bg-interaction-muted text-interaction-hover'
+                        : 'text-text-secondary hover:bg-panel-muted hover:text-text-primary',
+                    )}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <span className="truncate font-medium">{tab.label}</span>
+                    </span>
+                    <span className="shrink-0 text-xs">{tab.items.length}</span>
+                  </button>
+                );
+              })}
             </div>
-            <div className="flex flex-wrap gap-x-5 gap-y-2">
-              {counters.map(([label, value]) => (
-                <div key={label} className="flex items-baseline gap-1.5">
-                  <span className="text-body font-semibold text-text-primary">{value}</span>
-                  <span className="text-meta text-text-muted">{label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" onClick={() => navigate('/projects')}>
-              <FolderKanban className="h-4 w-4" />
-              Projects
-            </Button>
-            <Button type="button" onClick={() => navigate('/new-project')}>
-              <PenLine className="h-4 w-4" />
-              New Project
-            </Button>
+          </nav>
+          <div className="min-w-0 p-4">
+            {activeOverview.items.length === 0 ? (
+              <p className="text-body text-text-muted">Nothing here</p>
+            ) : (
+              <div className="divide-y divide-separator">
+                {activeOverview.items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={item.onOpen}
+                    className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left transition-colors hover:bg-panel-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-body font-medium text-text-primary">{item.title}</span>
+                      <span className="block truncate text-meta text-text-muted">{item.meta}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </Surface>
 
-      <div className="grid gap-6 2xl:grid-cols-2">
-        <WorkList
-          title="Recent Documents"
-          icon={FileText}
-          items={recentDocuments.map(({ document, project }) => ({
-            id: `recent-doc-${document.id}`,
-            title: document.title,
-            meta: `${project.name} / ${formatDate(document.last_activity_at)}`,
-            onOpen: () => navigate(`/projects/${project.id}/documents/${document.id}`),
-          }))}
-          empty="No Documents yet."
-        />
-        <WorkList
-          title="Recent Projects"
-          icon={FolderKanban}
-          items={recentProjects.map((summary) => ({
-            id: `recent-project-${summary.project.id}`,
-            title: summary.project.name,
-            meta: `${summary.documentCount} Documents / ${formatDate(summary.lastActivityAt)}`,
-            onOpen: () => navigate(`/projects/${summary.project.id}`),
-          }))}
-          empty="No Projects yet."
-        />
-      </div>
-
-      <div className="grid gap-6 2xl:grid-cols-3">
-        <WorkList
-          title="Needs Review"
-          icon={TriangleAlert}
-          items={reviewDocuments.map(({ document, project }) => ({
-            id: `review-${document.id}`,
-            title: document.title,
-            meta: project.name,
-            onOpen: () => navigate(`/projects/${project.id}/documents/${document.id}`),
-          }))}
-          empty="Nothing needs review."
-        />
-        <WorkList
-          title="Source Changed"
-          icon={GitBranch}
-          items={staleDocuments.map(({ document, project }) => ({
-            id: `stale-${document.id}`,
-            title: document.title,
-            meta: project.name,
-            onOpen: () => navigate(`/projects/${project.id}`),
-          }))}
-          empty="No source changes."
-        />
-        <WorkList
-          title="Drafts In Progress"
-          icon={PenLine}
-          items={draftDocuments.map(({ document, project }) => ({
-            id: `draft-${document.id}`,
-            title: document.title,
-            meta: `${project.name} / ${document.progress.pct}% reviewed`,
-            onOpen: () => navigate(`/projects/${project.id}/documents/${document.id}`),
-          }))}
-          empty="No draft Documents."
-        />
-      </div>
-
-      <Surface variant="panel" padding="lg" className="space-y-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-text-secondary" aria-hidden="true" />
-            <h2 className="text-section font-semibold text-text-primary">Project library</h2>
-          </div>
+      <ProjectLibrary
+        summaries={filteredLibrary}
+        onOpenProject={(projectId) => navigate(`/projects/${projectId}`)}
+        onCreateProject={() => navigate('/new-project')}
+        emptyTitle="No Projects found"
+        emptyDescription={searchQuery ? 'No Projects match the current search or filter.' : 'Create a Project to start.'}
+        headerActions={(
           <div className="flex flex-col gap-3 xl:flex-row">
             <div className="relative w-full min-w-0 xl:w-80">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" aria-hidden="true" />
@@ -194,66 +248,22 @@ export function HomePage() {
                 { value: 'resume', label: 'Recent' },
               ]}
             />
+            <Button type="button" onClick={() => navigate('/new-project')} className="gap-2">
+              <PenLine className="h-4 w-4" />
+              New Project
+            </Button>
           </div>
-        </div>
-      </Surface>
-
-      <ProjectLibrary
-        summaries={filteredLibrary}
-        viewMode={viewMode}
-        onViewModeChange={(value) => setViewMode('home-projects', value as 'list' | 'grid')}
-        onOpenProject={(projectId) => navigate(`/projects/${projectId}`)}
-        onCreateProject={() => navigate('/new-project')}
-        emptyTitle="No Projects found"
-        emptyDescription={searchQuery ? 'No Projects match the current search or filter.' : 'Create a Project to start.'}
+        )}
       />
     </div>
   );
 }
 
-function WorkList({
-  title,
-  icon: Icon,
-  items,
-  empty,
-}: {
-  title: string;
-  icon: typeof FileText;
-  items: Array<{
-    id: string;
-    title: string;
-    meta: string;
-    onOpen: () => void;
-  }>;
-  empty: string;
-}) {
-  return (
-    <Surface variant="panel" padding="lg" className="space-y-4">
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-text-secondary" aria-hidden="true" />
-        <h2 className="text-section font-semibold text-text-primary">{title}</h2>
-      </div>
-      {items.length === 0 ? (
-        <p className="text-body text-text-muted">{empty}</p>
-      ) : (
-        <div className="space-y-2">
-          {items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={item.onOpen}
-              className="flex w-full items-center justify-between gap-3 rounded px-3 py-2 text-left transition-colors hover:bg-panel-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <span className="min-w-0">
-                <span className="block truncate text-body font-medium text-text-primary">{item.title}</span>
-                <span className="block truncate text-meta text-text-muted">{item.meta}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </Surface>
-  );
+function getTimeGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
 }
 
 function formatDate(value: string) {

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Key, Trash2, Copy, ExternalLink } from 'lucide-react';
+import { Key, Trash2, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { EmptyState } from '@/components/dashboard/DashboardViews';
 
@@ -67,7 +67,6 @@ export const OrgApiKeysView: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-section font-semibold">API Keys</h2>
-          <p className="text-meta text-muted-foreground">Generate and manage keys for programmatic access to the Pagemark API</p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>

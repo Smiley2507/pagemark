@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Shield } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiCredentialsApi } from '@/api/aiCredentials';
 import { Button } from '@/components/ui/button';
@@ -67,13 +67,8 @@ export function ProviderCredentialSetup({
         </div>
       </div>
 
-      <Notice variant="generation" title="Usage and billing remain your responsibility">
-        Pagemark stores your provider credential encrypted per account, validates it before use, and
-        shows approximate usage before provider-consuming actions. Estimates are not guaranteed billing amounts.
-      </Notice>
-
-      <Notice variant="info" title="Security summary">
-        Your API key is encrypted before storage and used only for your account&apos;s Project and Document actions.
+      <Notice variant="info" title="Security and billing">
+        Your API key is encrypted before storage. Pagemark shows approximate usage before provider-consuming actions; estimates are not guaranteed billing amounts.
       </Notice>
 
       <form

@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Notice } from '@/components/ui/notice';
 import { Surface } from '@/components/ui/surface';
 import { analysisApi } from '@/api/analysis';
 import { projectsApi } from '@/api/projects';
@@ -110,9 +109,6 @@ export function ProjectSourcePage() {
         </Surface>
       )}
 
-      <Notice variant="info" title="Supporting view">
-        Source health stays available here, but Document generation and review remain the primary Project workflow.
-      </Notice>
     </div>
   );
 }

@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   FileText,
   BookOpen,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -33,6 +34,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/ui/notice';
 import { SectionStatusBadge } from '@/components/ui/section-status-badge';
+import { Tooltip } from '@/components/ui/tooltip';
 import { documentsApi, type Document } from '@/api/documents';
 import { useDocumentAutosave, useDocumentSections, useUpdateDocumentSection, useAcceptSectionReview } from '@/hooks/useSections';
 import { useQualityReport } from '@/hooks/useQuality';
@@ -173,7 +175,6 @@ function SectionBlock({
 }) {
   const [content, setContent] = useState(section.content_md);
   const [title, setTitle] = useState(section.title || section.heading || 'Untitled Section');
-  const updateSection = useUpdateDocumentSection(projectId, documentId);
   const { isSaving, lastSaved, markPersisted } = useDocumentAutosave(
     projectId,
     documentId,
@@ -200,15 +201,6 @@ function SectionBlock({
     onLocalContentChange(section.id, nextContent);
   };
 
-  const saveNow = async () => {
-    const updated = await updateSection.mutateAsync({
-      id: section.id,
-      data: { content_md: content },
-    });
-    markPersisted(updated.content_md, updated.updated_at);
-    toast.success('Section saved');
-  };
-
   const commitTitle = () => {
     const nextTitle = title.trim() || 'Untitled Section';
     setTitle(nextTitle);
@@ -224,11 +216,12 @@ function SectionBlock({
     <section
       id={`section-${section.id}`}
       data-editor-section="true"
-      className="group min-w-0 scroll-mt-24 overflow-x-hidden py-8"
+      className="group min-w-0 scroll-mt-24 overflow-x-hidden py-6"
     >
-      <div className="mx-auto max-w-4xl min-w-0">
+      <div className="relative mx-auto max-w-4xl min-w-0 rounded-sm px-4 py-3 transition-colors duration-150 focus-within:bg-panel/45 hover:bg-panel/35">
+        <div className="pointer-events-none absolute bottom-3 left-0 top-3 w-0.5 rounded-full bg-interaction opacity-0 transition-opacity duration-150 group-focus-within:opacity-70 group-hover:opacity-50" />
         <div className="mb-4 flex items-start gap-3">
-          <GripVertical className="mt-3 h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
+          <GripVertical className="mt-4 h-4 w-4 shrink-0 text-text-muted opacity-0 transition-opacity duration-150 group-focus-within:opacity-60 group-hover:opacity-50" aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <Input
               value={title}
@@ -238,14 +231,16 @@ function SectionBlock({
                 if (event.key === 'Enter') event.currentTarget.blur();
               }}
               aria-label={`Heading for ${section.heading}`}
-              className="h-auto border-transparent bg-transparent px-1 py-1 text-title font-semibold text-text-primary focus-visible:border-interaction focus-visible:px-2"
+              className="h-auto rounded-none border-0 border-b border-transparent bg-transparent px-0 py-1 text-[2rem] font-semibold leading-tight text-text-primary shadow-none focus-visible:border-interaction focus-visible:ring-0 focus-visible:ring-offset-0"
             />
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <SectionStatusBadge section={section} compact />
-              <span className="text-meta text-text-muted">{sectionState.summary}</span>
-            </div>
+            {!isReviewed && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <SectionStatusBadge section={section} compact />
+                <span className="text-meta text-text-muted opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">{sectionState.summary}</span>
+              </div>
+            )}
           </div>
-          <div className="flex shrink-0 flex-wrap justify-end gap-1">
+          <div className="flex shrink-0 flex-wrap justify-end gap-1 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
             {isReviewed ? (
               <span className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-review">
                 <CheckCircle2 className="h-3 w-3" />
@@ -295,27 +290,17 @@ function SectionBlock({
           </div>
         </div>
 
-        <div className="min-w-0 overflow-x-hidden px-1 py-2 focus-within:ring-2 focus-within:ring-ring">
+        <div className="min-w-0 overflow-x-hidden px-1 py-2">
           <MarkdownEditor value={content} onChange={handleContentChange} />
         </div>
-
-        <div className="mt-4 flex items-center justify-between gap-3 text-meta text-text-muted">
-          <span>
-            {isSaving ? 'Autosaving...' : lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : 'Ready'}
-          </span>
-          <div className="flex items-center gap-2">
-            {onJumpToSection && (
-              <Button type="button" variant="ghost" size="sm" onClick={() => onJumpToSection(section.id)} className="text-xs">
-                <BookOpen className="mr-1 h-3 w-3" />
-                Notes
-              </Button>
-            )}
-            <Button type="button" variant="outline" size="sm" onClick={saveNow} disabled={updateSection.isPending}>
-              {updateSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Save
+        {onJumpToSection && (
+          <div className="mt-2 flex justify-end opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
+            <Button type="button" variant="ghost" size="sm" onClick={() => onJumpToSection(section.id)} className="text-xs">
+              <BookOpen className="mr-1 h-3 w-3" />
+              Notes
             </Button>
           </div>
-        </div>
+        )}
       </div>
     </section>
   );
@@ -584,21 +569,24 @@ export function DocumentEditorPage() {
               if (event.key === 'Enter') event.currentTarget.blur();
             }}
             aria-label="Document title"
-            className="h-9 min-w-0 max-w-xl flex-1 border-transparent bg-transparent text-section font-semibold focus-visible:border-interaction"
+            className="h-8 min-w-0 max-w-xl flex-1 rounded-none border-0 border-b border-transparent bg-transparent px-0 text-body font-semibold shadow-none focus-visible:border-interaction focus-visible:ring-0 focus-visible:ring-offset-0"
           />
-          <Badge variant={statusVariant(document?.status)} className="min-w-24 shrink-0 justify-center whitespace-nowrap">
+          <Badge variant={statusVariant(document?.status)} className="min-w-0 shrink-0 justify-center whitespace-nowrap px-1.5 text-[10px]">
             {documentStatusLabel(document)}
           </Badge>
         </div>
 
         <div className="flex min-w-0 shrink-0 items-center gap-2">
-          <span className="hidden text-meta text-text-muted sm:inline">
-            {isSaving || updateDocumentTitle.isPending
-              ? 'Saving...'
-              : lastSaved
-                ? `Saved ${lastSaved.toLocaleTimeString()}`
-                : 'Autosave on'}
-          </span>
+          <Tooltip content={lastSaved ? `Saved ${lastSaved.toLocaleTimeString()}` : 'Autosave is on'} side="bottom">
+            <span className="hidden items-center gap-1.5 text-meta text-text-muted sm:inline-flex">
+              {isSaving || updateDocumentTitle.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5 text-status-success-foreground" />
+              )}
+              <span>{isSaving || updateDocumentTitle.isPending ? 'Saving' : 'Saved'}</span>
+            </span>
+          </Tooltip>
 
           <Button
             variant="ghost"

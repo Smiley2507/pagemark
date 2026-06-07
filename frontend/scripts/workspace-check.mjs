@@ -61,13 +61,28 @@ function assertOldRoutesRedirect() {
   assertContains(editorPage, 'EditorPage', 'EditorPage component should still exist as dead code reference');
 }
 
-function assertLibraryPreferences() {
+function assertUnifiedLibrarySurfaces() {
   const home = read('src/pages/HomePage.tsx');
   const projects = read('src/pages/ProjectsPage.tsx');
   const documents = read('src/pages/DocumentLibraryPage.tsx');
-  assertContains(home, "getViewMode('home-projects')", 'home must use persisted project-library view preference');
-  assertContains(projects, "getViewMode('home-projects')", 'projects page must reuse project-library view preference');
-  assertContains(documents, "getViewMode('project-documents', projectId)", 'document library must use persisted project view preference');
+  const sharedProjectLibrary = read('src/components/workspace/project-library.tsx');
+
+  assertContains(home, 'Overview', 'home must render the unified overview card');
+  assertContains(home, 'activeOverviewTab', 'home overview must switch content in one card');
+  assertContains(home, 'headerActions', 'home project library controls must live in the project library card');
+  assertContains(projects, 'headerActions', 'projects controls must live in the project library card');
+  assertContains(documents, 'space-y-2 bg-panel-muted/55 p-3', 'document library must render separated rows inside one panel');
+  assertContains(sharedProjectLibrary, 'headerActions', 'shared project library must support in-card header controls');
+
+  [
+    ["getViewMode('home-projects')", home, 'home should not use the removed project grid/list preference'],
+    ["getViewMode('home-projects')", projects, 'projects should not use the removed project grid/list preference'],
+    ["getViewMode('project-documents', projectId)", documents, 'document library should not use the removed document grid/list preference'],
+  ].forEach(([marker, source, message]) => {
+    if (source.includes(marker)) {
+      fail(message);
+    }
+  });
 }
 
 function assertSharedPrimitives() {
@@ -270,7 +285,7 @@ function assertPhasePromptsStartFromCanonicalPrompt() {
 assertGlobalNavigation();
 assertProjectNavigation();
 assertOldRoutesRedirect();
-assertLibraryPreferences();
+assertUnifiedLibrarySurfaces();
 assertSharedPrimitives();
 assertPhase4SearchAndSettings();
 assertNoPrimaryWorkspaceStubs();

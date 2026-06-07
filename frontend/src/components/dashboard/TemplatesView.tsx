@@ -9,7 +9,6 @@ import { ErrorBanner } from './DashboardViews';
 import type { Template } from '@/types';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Notice } from '@/components/ui/notice';
 import { Surface } from '@/components/ui/surface';
 import { toast } from 'sonner';
 import { projectsApi } from '@/api/projects';
@@ -63,18 +62,12 @@ export const TemplatesView: React.FC = () => {
           <div>
             <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Templates</p>
             <h2 className="text-section font-semibold text-text-primary">Document structures</h2>
-            <p className="text-body text-text-secondary">
-              Compact library of reusable outlines by documentation purpose. Generated prose is reviewed later in the document workspace.
-            </p>
           </div>
           <Button onClick={() => setIsTemplateModalOpen(true)}>
             <PlusCircle className="mr-2 h-4 w-4" />
             Create template
           </Button>
         </div>
-        <Notice variant="info" title="Template Scope">
-          Templates define reusable section headings and writing guidance. Section prose is created and reviewed inside each Document.
-        </Notice>
       </Surface>
 
       {templatesError && (

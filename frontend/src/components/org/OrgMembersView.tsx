@@ -86,7 +86,6 @@ export const OrgMembersView: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-section font-semibold">Organization Members</h2>
-          <p className="text-meta text-muted-foreground">Manage users and their permissions within this organization</p>
         </div>
         {isAdmin && (
           <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>

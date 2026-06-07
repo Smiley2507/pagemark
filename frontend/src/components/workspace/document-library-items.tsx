@@ -33,7 +33,7 @@ export function DocumentSummaryRow({
   onDelete: () => void;
 }) {
   return (
-    <div className="grid gap-3 px-3 py-2.5 transition-colors hover:bg-panel-muted lg:grid-cols-[minmax(0,1fr)_180px_132px_auto] lg:items-center">
+    <div className="grid gap-3 rounded-md border border-border bg-panel px-3 py-3 transition-colors hover:bg-canvas lg:grid-cols-[minmax(0,1fr)_180px_132px_auto] lg:items-center">
       <button
         type="button"
         onClick={onOpen}
@@ -173,10 +173,7 @@ export function mapFreshness(freshness: string) {
   if (normalized.includes('stale')) {
     return { label: 'Source changed', variant: 'warning' as const };
   }
-  if (normalized.includes('fresh')) {
-    return { label: 'Fresh', variant: 'success' as const };
-  }
-  return { label: 'Freshness unknown', variant: 'neutral' as const };
+  return { label: '', variant: 'neutral' as const };
 }
 
 export function EmptyDocumentState() {

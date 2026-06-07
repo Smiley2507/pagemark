@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Clock3, FolderOpenDot, Grid2X2, List, Pencil, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
+import { Clock3, FolderOpenDot, Pencil, Sparkles, Trash2, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -12,11 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Surface } from '@/components/ui/surface';
 import { Tooltip } from '@/components/ui/tooltip';
 import { projectsApi } from '@/api/projects';
@@ -26,7 +24,6 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 export type ProjectLibraryFilter = 'all' | 'active' | 'stale' | 'resume';
-export type ProjectLibraryView = 'list' | 'grid';
 
 export interface ProjectWorkspaceSummary {
   project: Project;
@@ -110,51 +107,39 @@ export function filterProjectSummaries(
 
 export function ProjectLibrary({
   summaries,
-  viewMode,
-  onViewModeChange,
   onOpenProject,
   onCreateProject,
   emptyTitle,
   emptyDescription,
+  title = 'Project library',
+  headerActions,
 }: {
   summaries: ProjectWorkspaceSummary[];
-  viewMode: ProjectLibraryView;
-  onViewModeChange: (value: string) => void;
   onOpenProject: (projectId: number) => void;
   onCreateProject: () => void;
   emptyTitle: string;
   emptyDescription: string;
+  title?: string;
+  headerActions?: React.ReactNode;
 }) {
-  if (summaries.length === 0) {
-    return (
-      <EmptyState
-        title={emptyTitle}
-        description={emptyDescription}
-        action={(
-          <Button type="button" onClick={onCreateProject}>
-            Create Project
-          </Button>
-        )}
-      />
-    );
-  }
-
   return (
     <ProjectLibraryActions>
-      <div className="flex items-center justify-end">
-        <SegmentedControl
-          label="Project library view"
-          value={viewMode}
-          onValueChange={onViewModeChange}
-          options={[
-            { value: 'list', label: <List className="h-4 w-4" /> },
-            { value: 'grid', label: <Grid2X2 className="h-4 w-4" /> },
-          ]}
-        />
-      </div>
+      <Surface variant="panel" padding="none" className="overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-separator px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
+          <h2 className="text-section font-semibold text-text-primary">{title}</h2>
+          {headerActions}
+        </div>
 
-      {viewMode === 'list' ? (
-        <Surface variant="panel" padding="none" className="divide-y divide-separator overflow-hidden">
+        {summaries.length === 0 ? (
+          <div className="flex min-h-48 flex-col items-center justify-center px-5 py-10 text-center">
+            <h3 className="text-section font-semibold text-text-primary">{emptyTitle}</h3>
+            <p className="mt-2 max-w-md text-body text-text-secondary">{emptyDescription}</p>
+            <Button type="button" onClick={onCreateProject} className="mt-4">
+              Create Project
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-2 bg-panel-muted/55 p-3">
           {summaries.map((summary) => (
             <ProjectSummaryRow
               key={summary.project.id}
@@ -162,18 +147,9 @@ export function ProjectLibrary({
               onOpen={() => onOpenProject(summary.project.id)}
             />
           ))}
-        </Surface>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-          {summaries.map((summary) => (
-            <ProjectSummaryCard
-              key={summary.project.id}
-              summary={summary}
-              onOpen={() => onOpenProject(summary.project.id)}
-            />
-          ))}
-        </div>
-      )}
+          </div>
+        )}
+      </Surface>
     </ProjectLibraryActions>
   );
 }
@@ -285,7 +261,7 @@ function ProjectSummaryRow({
 }) {
   const actions = React.useContext(ProjectActionsContext);
   return (
-    <div className="grid gap-3 px-3 py-2.5 transition-colors hover:bg-panel-muted lg:grid-cols-[minmax(0,1fr)_180px_132px_auto] lg:items-center">
+    <div className="grid gap-3 rounded-md border border-border bg-panel px-3 py-3 transition-colors hover:bg-canvas lg:grid-cols-[minmax(0,1fr)_180px_132px_auto] lg:items-center">
       <button
         type="button"
         className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

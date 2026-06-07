@@ -35,10 +35,10 @@ Read docs/CANONICAL_EXECUTION_PROMPT.md first.
 Then read only CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, docs/POST_RECOVERY_COMPLETION_PLAN.md, and this phase prompt.
 
 Implement Phase 3 only: Dashboard And Settings Cleanup.
+ AI Providers.
 
-Reduce routine copy, remove unclear badges, hide or implement empty settings, and keep AI provider/model settings single-sourced in AI Providers.
-
-Run frontend lint/build and browser verification for Home, Projects, Project workspace, and Settings. Commit when complete.
+Run frontend lint/build and browse
+Reduce routine copy, remove unclear badges, hide or implement empty settings, and keep AI provider/model settings single-sourced inr verification for Home, Projects, Project workspace, and Settings. Commit when complete.
 ```
 
 ## Phase 4: Notifications And Notification Settings

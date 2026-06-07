@@ -7,7 +7,6 @@ import {
   Copy,
   Check,
   Settings,
-  ChevronDown,
   FileText,
   Book,
   FileCode,
@@ -19,14 +18,8 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { analysisApi } from '@/api/analysis';
 import { useGenerateSection, useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread } from '@/hooks/useAI';
+import { useAiCredentials } from '@/hooks/useAiCredentials';
 import type { ChatMessage, Section } from '@/types';
-
-const AVAILABLE_MODELS = [
-  { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
-  { id: 'claude-3-5-sonnet-latest', label: 'Claude 3.5 Sonnet' },
-  { id: 'claude-3-opus-latest', label: 'Claude 3 Opus' },
-  { id: 'claude-3-haiku-latest', label: 'Claude 3 Haiku' },
-];
 
 type ReferenceKind = 'section' | 'document' | 'source' | 'template';
 
@@ -93,10 +86,8 @@ export function AiPanel({
   const [clarificationAnswer, setClarificationAnswer] = useState('');
   const [isClarifying, setIsClarifying] = useState(false);
 
-  const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id);
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(2000);
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
@@ -104,9 +95,12 @@ export function AiPanel({
   const [mentionKind, setMentionKind] = useState<ReferenceKind>('section');
   const mentionTriggerPos = useRef<number | null>(null);
   const mentionDropdownRef = useRef<HTMLDivElement>(null);
-  const modelDropdownRef = useRef<HTMLDivElement>(null);
   const settingsRef = useRef<HTMLDivElement>(null);
   const inputValueRef = useRef(inputValue);
+
+  const { data: credentials } = useAiCredentials();
+  const activeCredential = credentials?.credentials?.find((c) => c.is_active);
+  const activeModelLabel = activeCredential?.model_id || 'Configured in Settings';
 
   const generateSection = useGenerateSection(projectId);
   const refineSection = useRefineSection();
@@ -145,13 +139,10 @@ export function AiPanel({
     const handleMousedown = (e: MouseEvent) => {
       const target = e.target as Node;
       const mentionEl = mentionDropdownRef.current;
-      const modelEl = modelDropdownRef.current;
       const settingsEl = settingsRef.current;
       if (mentionEl && !mentionEl.contains(target) &&
-          modelEl && !modelEl.contains(target) &&
           settingsEl && !settingsEl.contains(target)) {
         setShowMentionDropdown(false);
-        setShowModelDropdown(false);
         setShowSettings(false);
       }
     };
@@ -278,7 +269,6 @@ export function AiPanel({
   };
 
   const hasMessages = messages.length > 0 || isStreaming;
-  const currentModelLabel = AVAILABLE_MODELS.find((m) => m.id === selectedModel)?.label || selectedModel;
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
@@ -287,33 +277,10 @@ export function AiPanel({
         <span className="text-sm font-medium text-text-primary">AI Assistant</span>
 
         <div className="relative ml-auto flex items-center gap-1">
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowModelDropdown(!showModelDropdown); setShowSettings(false); }}
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-text-muted transition-colors hover:bg-panel-muted"
-          >
-            {currentModelLabel}
-            <ChevronDown className="h-3 w-3" />
-          </button>
-
-          {showModelDropdown && (
-            <div ref={modelDropdownRef} className="absolute right-0 top-full z-50 mt-1 w-44 rounded-lg border border-separator bg-panel py-1 shadow-lg">
-              {AVAILABLE_MODELS.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => { setSelectedModel(m.id); setShowModelDropdown(false); }}
-                  className={cn(
-                    'w-full px-3 py-1.5 text-left text-xs transition-colors',
-                    m.id === selectedModel ? 'bg-interaction-muted text-interaction-hover' : 'text-text-muted hover:bg-panel-muted',
-                  )}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          )}
+          <span className="text-[11px] text-text-muted">{activeModelLabel}</span>
 
           <button
-            onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setShowModelDropdown(false); }}
+            onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); }}
             className="rounded p-0.5 text-text-muted transition-colors hover:text-text-primary"
           >
             <Settings className="h-3.5 w-3.5" />
