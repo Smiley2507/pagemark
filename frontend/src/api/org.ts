@@ -1,5 +1,5 @@
 import api from './client';
-import type { Organization, OrgMember, AuditLog, OrgMemberRole } from '../types';
+import type { Organization, OrgMember, OrgJoinLink, AuditLog, OrgMemberRole } from '../types';
 
 export const orgApi = {
   listOrganizations: () => 
@@ -34,4 +34,16 @@ export const orgApi = {
 
   listAuditLogs: (orgId: number, page: number = 1, perPage: number = 50) =>
     api.get<AuditLog[]>(`/organizations/${orgId}/audit-logs`, { params: { page, per_page: perPage } }).then(res => res.data),
+
+  createJoinLink: (orgId: number, data: { role?: OrgMemberRole; max_uses?: number; expires_in_days?: number }) =>
+    api.post<OrgJoinLink>(`/organizations/${orgId}/join-links`, data).then(res => res.data),
+
+  listJoinLinks: (orgId: number) =>
+    api.get<OrgJoinLink[]>(`/organizations/${orgId}/join-links`).then(res => res.data),
+
+  revokeJoinLink: (orgId: number, linkId: number) =>
+    api.post(`/organizations/${orgId}/join-links/${linkId}/revoke`).then(res => res.data),
+
+  acceptJoinLink: (code: string) =>
+    api.post(`/organizations/join-links/${code}/accept`).then(res => res.data),
 };

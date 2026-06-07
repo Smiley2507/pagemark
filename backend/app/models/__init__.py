@@ -2,7 +2,7 @@
 
 from app.models.user import User, UserRole, UserSettings
 from app.models.template import Template
-from app.models.organization import Organization, OrganizationMember, OrgMemberRole, OrgMemberStatus
+from app.models.organization import Organization, OrganizationMember, OrganizationJoinLink, OrgMemberRole, OrgMemberStatus
 from app.models.project import Project, ProjectSourceExclusion, ProjectStatus, SourceType
 from app.models.document import (
     Document,
@@ -44,6 +44,7 @@ __all__ = [
     "Template",
     "Organization",
     "OrganizationMember",
+    "OrganizationJoinLink",
     "OrgMemberRole",
     "OrgMemberStatus",
     "Project",

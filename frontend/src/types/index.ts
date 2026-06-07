@@ -424,6 +424,19 @@ export interface OrgMember {
   user_avatar?: string;
 }
 
+export interface OrgJoinLink {
+  id: number;
+  org_id: number;
+  code: string;
+  role: OrgMemberRole;
+  max_uses?: number;
+  use_count: number;
+  expires_at?: string;
+  revoked_at?: string;
+  created_by: number;
+  created_at: string;
+}
+
 export interface AuditLog {
   id: number;
   user_id: number;

@@ -11,7 +11,12 @@ Organizations router:
   GET    /organizations/{org_id}/audit-logs     — paginated audit logs (admin/pm)
   PUT    /organizations/{org_id}/members/{uid}  — update member role (admin)
   DELETE /organizations/{org_id}/members/{uid}  — revoke membership (admin)
+  POST   /organizations/{org_id}/join-links     — create join link (admin)
+  GET    /organizations/{org_id}/join-links     — list join links (admin)
+  POST   /organizations/{org_id}/join-links/{lid}/revoke  — revoke join link (admin)
+  POST   /organizations/join-links/{code}/accept  — join org via link
 """
+import logging
 import secrets
 from datetime import datetime, timedelta
 import re
@@ -28,13 +33,16 @@ from app.database import get_db
 from app.config import settings
 from app.dependencies import get_current_user
 from app.models.user import User, UserSettings
-from app.models.organization import Organization, OrganizationMember, OrgMemberRole, OrgMemberStatus
+from app.models.organization import Organization, OrganizationMember, OrganizationJoinLink, OrgMemberRole, OrgMemberStatus
 from app.models.audit import AuditLog
 from app.schemas.organization import (
     OrganizationCreate, OrganizationResponse,
     MemberResponse, InviteMemberRequest, UpdateMemberRoleRequest,
+    JoinLinkCreateRequest, JoinLinkResponse,
     AuditLogResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -100,8 +108,12 @@ async def _send_invite_email(email: str, org_name: str, token: str):
             subtype="html",
         )
         await FastMail(conf).send_message(msg)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to send invite email to %s: %s", email, exc)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to send invitation email. Check mail server configuration.",
+        ) from exc
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -305,10 +317,10 @@ async def send_invite(
         invite_token_expires=datetime.utcnow() + timedelta(days=7),
     )
     db.add(member)
-    await _log(db, current_user.id, org_id, "invite_member", f"user:{body.email}")
-    await db.commit()
 
     await _send_invite_email(body.email, org.name, invite_token)
+    await _log(db, current_user.id, org_id, "invite_member", f"user:{body.email}")
+    await db.commit()
     return {"message": "Invitation sent", "member_id": member.id}
 
 
@@ -462,3 +474,122 @@ async def revoke_membership(
     await _log(db, current_user.id, org_id, "revoke_membership", f"user:{user_id}")
     await db.commit()
     return None
+
+
+# ── Join Links ──────────────────────────────────────────────────────────────────
+
+
+@router.post("/{org_id}/join-links", status_code=status.HTTP_201_CREATED, response_model=JoinLinkResponse)
+async def create_join_link(
+    org_id: int,
+    body: JoinLinkCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_membership(db, org_id, current_user.id, [OrgMemberRole.ADMIN])
+
+    code = secrets.token_urlsafe(12)
+    expires_at = None
+    if body.expires_in_days:
+        expires_at = datetime.utcnow() + timedelta(days=body.expires_in_days)
+
+    link = OrganizationJoinLink(
+        org_id=org_id,
+        code=code,
+        role=body.role,
+        max_uses=body.max_uses,
+        expires_at=expires_at,
+        created_by=current_user.id,
+    )
+    db.add(link)
+    await _log(db, current_user.id, org_id, "create_join_link", f"link:{code}")
+    await db.commit()
+    await db.refresh(link)
+    return link
+
+
+@router.get("/{org_id}/join-links", response_model=List[JoinLinkResponse])
+async def list_join_links(
+    org_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_membership(db, org_id, current_user.id, [OrgMemberRole.ADMIN])
+
+    res = await db.execute(
+        select(OrganizationJoinLink)
+        .where(OrganizationJoinLink.org_id == org_id)
+        .order_by(OrganizationJoinLink.created_at.desc())
+    )
+    return res.scalars().all()
+
+
+@router.post("/{org_id}/join-links/{link_id}/revoke")
+async def revoke_join_link(
+    org_id: int,
+    link_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_membership(db, org_id, current_user.id, [OrgMemberRole.ADMIN])
+
+    res = await db.execute(
+        select(OrganizationJoinLink).where(
+            OrganizationJoinLink.id == link_id,
+            OrganizationJoinLink.org_id == org_id,
+        )
+    )
+    link = res.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404, detail="Join link not found")
+    if link.revoked_at:
+        raise HTTPException(status_code=400, detail="Join link is already revoked")
+
+    link.revoked_at = datetime.utcnow()
+    await _log(db, current_user.id, org_id, "revoke_join_link", f"link:{link.code}")
+    await db.commit()
+    return {"message": "Join link revoked"}
+
+
+@router.post("/join-links/{code}/accept")
+async def accept_join_link(
+    code: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    res = await db.execute(
+        select(OrganizationJoinLink).where(OrganizationJoinLink.code == code)
+    )
+    link = res.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404, detail="Join link not found")
+
+    if link.revoked_at:
+        raise HTTPException(status_code=400, detail="Join link has been revoked")
+
+    if link.expires_at and link.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Join link has expired")
+
+    if link.max_uses is not None and link.use_count >= link.max_uses:
+        raise HTTPException(status_code=400, detail="Join link has reached maximum uses")
+
+    existing_res = await db.execute(
+        select(OrganizationMember).where(
+            OrganizationMember.org_id == link.org_id,
+            OrganizationMember.user_id == current_user.id,
+        )
+    )
+    if existing_res.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="You are already a member of this organization")
+
+    db.add(OrganizationMember(
+        org_id=link.org_id,
+        user_id=current_user.id,
+        role=link.role,
+        status=OrgMemberStatus.ACTIVE,
+        invited_by=link.created_by,
+    ))
+    link.use_count += 1
+    await _log(db, current_user.id, link.org_id, "accept_join_link", f"link:{code}:org:{link.org_id}")
+    await db.commit()
+    return {"message": "Joined organization successfully"}

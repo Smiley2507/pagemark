@@ -14,7 +14,7 @@ from alembic import context
 from app.database import Base, engine
 from app.models.user import User, UserRole, UserSettings
 from app.models.template import Template
-from app.models.organization import Organization, OrganizationMember
+from app.models.organization import Organization, OrganizationMember, OrganizationJoinLink
 from app.models.project import Project, ProjectSourceExclusion
 from app.models.document import Document, Section
 from app.models.analysis import Analysis

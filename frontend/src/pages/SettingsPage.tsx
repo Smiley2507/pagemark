@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { ProfileSection } from '@/components/settings/ProfileSection';
 import { AiProvidersSection } from '@/components/settings/AiProvidersSection';
 import { NotificationPreferencesSection } from '@/components/settings/NotificationPreferencesSection';
-import { OrgApiKeysView, OrgAuditLogView, OrgMembersView, OrgSettingsView } from '@/components/org';
+import { OrgApiKeysView, OrgAuditLogView, OrgJoinLinksView, OrgMembersView, OrgSettingsView } from '@/components/org';
 
 const SECTIONS = [
   { id: 'profile', label: 'Profile', icon: User, keywords: ['account', 'identity', 'password', 'avatar'] },
@@ -101,7 +101,13 @@ export function SettingsPage() {
 
           {activeSection.id === 'profile' && <ProfileSection />}
           {activeSection.id === 'organization' && <OrgSettingsView />}
-          {activeSection.id === 'members' && <OrgMembersView />}
+          {activeSection.id === 'members' && (
+            <>
+              <OrgMembersView />
+              <hr className="my-6 border-separator" />
+              <OrgJoinLinksView />
+            </>
+          )}
           {activeSection.id === 'notifications' && <NotificationPreferencesSection />}
           {activeSection.id === 'ai-providers' && <AiProvidersSection />}
           {activeSection.id === 'api-keys' && <OrgApiKeysView />}

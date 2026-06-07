@@ -53,3 +53,21 @@ class OrganizationMember(Base):
     organization = relationship("Organization", back_populates="members")
     user = relationship("User", foreign_keys=[user_id], backref="org_memberships")
     inviter = relationship("User", foreign_keys=[invited_by])
+
+
+class OrganizationJoinLink(Base):
+    __tablename__ = "organization_join_links"
+
+    id = Column(Integer, primary_key=True, index=True)
+    org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
+    code = Column(String, unique=True, nullable=False, index=True)
+    role = Column(Enum(OrgMemberRole), nullable=False, default=OrgMemberRole.DEVELOPER)
+    max_uses = Column(Integer, nullable=True)
+    use_count = Column(Integer, default=0, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    organization = relationship("Organization", foreign_keys=[org_id])
+    creator = relationship("User", foreign_keys=[created_by])
