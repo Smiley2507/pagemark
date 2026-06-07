@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -16,6 +16,7 @@ import {
   Search,
   Sun,
   TriangleAlert,
+  X,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useThemeStore } from '@/store/themeStore';
@@ -30,6 +31,7 @@ import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
 type Theme = 'light' | 'dark' | 'system';
 
 const NOTIFICATION_READ_AT_KEY = 'pagemark.notifications.readAt';
+const DISMISSED_EVENTS_KEY = 'pagemark.notifications.dismissed';
 
 const EVENT_ICONS: Record<string, React.ElementType> = {
   source_sync: GitCommit,
@@ -70,7 +72,31 @@ export function AppHeader() {
     window.localStorage.getItem(NOTIFICATION_READ_AT_KEY) || ''
   ));
 
-  const { data: notificationData, isLoading: notificationsLoading } = useQuery({
+  const [dismissedIds, setDismissedIds] = useState<Set<number>>(() => {
+    try {
+      const raw = window.localStorage.getItem(DISMISSED_EVENTS_KEY);
+      return new Set<number>(raw ? JSON.parse(raw) : []);
+    } catch {
+      return new Set<number>();
+    }
+  });
+
+  const dismissEvent = useCallback((id: number) => {
+    setDismissedIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      window.localStorage.setItem(DISMISSED_EVENTS_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+
+  const markAllRead = useCallback(() => {
+    const now = new Date().toISOString();
+    window.localStorage.setItem(NOTIFICATION_READ_AT_KEY, now);
+    setNotificationReadAt(now);
+  }, []);
+
+  const { data: notificationData, isLoading: notificationsLoading, refetch: refetchNotifications } = useQuery({
     queryKey: ['recent-activity-notifications'],
     queryFn: () => projectsApi.getRecentActivity({ limit: 12, days: 30 }),
     refetchInterval: 60_000,
@@ -85,8 +111,9 @@ export function AppHeader() {
 
   const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Laptop;
 
-  const notificationEvents = notificationData?.events || [];
-  const latestNotificationAt = notificationEvents[0]?.created_at || '';
+  const allEvents = notificationData?.events || [];
+  const notificationEvents = allEvents.filter((event) => !dismissedIds.has(event.id));
+  const latestNotificationAt = allEvents[0]?.created_at || '';
   const unreadCount = useMemo(() => {
     if (!notificationReadAt) return notificationEvents.length;
     return notificationEvents.filter((event) => (
@@ -95,10 +122,12 @@ export function AppHeader() {
   }, [notificationEvents, notificationReadAt]);
 
   useEffect(() => {
-    if (!notifOpen || !latestNotificationAt) return;
+    if (!notifOpen) return;
+    void refetchNotifications();
+    if (!latestNotificationAt) return;
     window.localStorage.setItem(NOTIFICATION_READ_AT_KEY, latestNotificationAt);
     setNotificationReadAt(latestNotificationAt);
-  }, [latestNotificationAt, notifOpen]);
+  }, [latestNotificationAt, notifOpen, refetchNotifications]);
 
   useEffect(() => {
     const hasFilters = searchType !== 'all' || tagFilter.trim() || statusFilter.trim();
@@ -328,10 +357,14 @@ export function AppHeader() {
                 <div className="border-b border-border px-4 py-2.5">
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold">Notifications</p>
-                    {notificationEvents.length > 0 && (
-                      <Badge variant="neutral" showIcon={false}>
-                        {notificationEvents.length}
-                      </Badge>
+                    {unreadCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={markAllRead}
+                        className="text-xs text-interaction hover:text-interaction-hover transition-colors"
+                      >
+                        Mark all read
+                      </button>
                     )}
                   </div>
                 </div>
@@ -349,23 +382,35 @@ export function AppHeader() {
                   {!notificationsLoading && notificationEvents.map((event) => {
                     const Icon = EVENT_ICONS[event.event_type] || Activity;
                     return (
-                      <button
+                      <div
                         key={event.id}
-                        type="button"
-                        onClick={() => handleActivitySelect(event)}
-                        className="flex w-full items-start gap-3 border-b border-border/50 px-4 py-3 text-left transition-colors hover:bg-accent hover:text-accent-foreground last:border-0"
+                        className="group relative border-b border-border/50 last:border-0"
                       >
-                        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" aria-hidden="true" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-text-primary">{event.message}</p>
-                          <p className="mt-0.5 line-clamp-1 text-meta-sm text-text-secondary">
-                            {[event.project_name, event.document_title, event.section_heading].filter(Boolean).join(' · ')}
-                          </p>
-                          <p className="mt-0.5 text-meta-sm text-text-muted">
-                            {formatDistanceToNow(new Date(event.created_at), { addSuffix: true })}
-                          </p>
-                        </div>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => handleActivitySelect(event)}
+                          className="flex w-full items-start gap-3 px-4 py-3 pr-10 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
+                        >
+                          <Icon className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" aria-hidden="true" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-text-primary">{event.message}</p>
+                            <p className="mt-0.5 line-clamp-1 text-meta-sm text-text-secondary">
+                              {[event.project_name, event.document_title, event.section_heading].filter(Boolean).join(' · ')}
+                            </p>
+                            <p className="mt-0.5 text-meta-sm text-text-muted">
+                              {formatDistanceToNow(new Date(event.created_at), { addSuffix: true })}
+                            </p>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); dismissEvent(event.id); }}
+                          className="absolute right-2 top-3 hidden h-5 w-5 items-center justify-center rounded text-text-muted hover:bg-panel-muted hover:text-text-secondary group-hover:flex"
+                          aria-label="Dismiss notification"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
