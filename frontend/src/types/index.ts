@@ -410,6 +410,8 @@ export interface Organization {
 
 export type OrgMemberRole = 'ADMIN' | 'PROJECT_MANAGER' | 'DEVELOPER' | 'TECHNICAL_WRITER' | 'VIEWER';
 
+export type OrgMemberStatus = 'ACTIVE' | 'INVITED' | 'SUSPENDED';
+
 export interface OrgMember {
   id: number;
   user_id: number;

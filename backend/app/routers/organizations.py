@@ -4,8 +4,9 @@ Organizations router:
   POST   /organizations                         — create new org
   GET    /organizations/{org_id}                 — get org details
   PATCH  /organizations/{org_id}                 — update org (name, avatar, quality_threshold)
-  GET    /organizations/{org_id}/members        — list members
+  GET    /organizations/{org_id}/members        — list members (with search/filter query params)
   POST   /organizations/{org_id}/invites        — send invite
+  POST   /organizations/{org_id}/invites/{uid}/resend  — resend pending invite (admin)
   POST   /organizations/invites/{token}/accept  — accept invite
   GET    /organizations/{org_id}/audit-logs     — paginated audit logs (admin/pm)
   PUT    /organizations/{org_id}/members/{uid}  — update member role (admin)
@@ -17,6 +18,7 @@ import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+import sqlalchemy
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from pydantic import SecretStr
@@ -211,16 +213,42 @@ async def update_organization(
 @router.get("/{org_id}/members", response_model=List[MemberResponse])
 async def list_members(
     org_id: int,
+    search: Optional[str] = Query(None, min_length=1, max_length=100),
+    role: Optional[str] = Query(None, description="Filter by role (e.g. ADMIN, DEVELOPER)"),
+    status: Optional[str] = Query(None, description="Filter by status (e.g. ACTIVE, INVITED)"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     await _get_membership(db, org_id, current_user.id)
 
-    res = await db.execute(
+    query = (
         select(OrganizationMember, User)
         .join(User, User.id == OrganizationMember.user_id)
         .where(OrganizationMember.org_id == org_id)
     )
+    if role:
+        try:
+            role_enum = OrgMemberRole[role.upper()]
+        except KeyError:
+            raise HTTPException(status_code=422, detail=f"Invalid role: {role}")
+        query = query.where(OrganizationMember.role == role_enum)
+    if status:
+        try:
+            status_enum = OrgMemberStatus[status.upper()]
+        except KeyError:
+            raise HTTPException(status_code=422, detail=f"Invalid status: {status}")
+        query = query.where(OrganizationMember.status == status_enum)
+    if search:
+        pattern = f"%{search}%"
+        query = query.where(
+            sqlalchemy.or_(
+                User.name.ilike(pattern),
+                User.email.ilike(pattern),
+            )
+        )
+
+    query = query.order_by(OrganizationMember.joined_at.desc())
+    res = await db.execute(query)
     rows = res.all()
     result = []
     for member, user in rows:
@@ -281,7 +309,45 @@ async def send_invite(
     await db.commit()
 
     await _send_invite_email(body.email, org.name, invite_token)
-    return {"message": "Invitation sent"}
+    return {"message": "Invitation sent", "member_id": member.id}
+
+
+@router.post("/{org_id}/invites/{user_id}/resend")
+async def resend_invite(
+    org_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_membership(db, org_id, current_user.id, [OrgMemberRole.ADMIN])
+
+    res = await db.execute(
+        select(OrganizationMember).where(
+            OrganizationMember.org_id == org_id,
+            OrganizationMember.user_id == user_id,
+        )
+    )
+    member = res.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    if member.status != OrgMemberStatus.INVITED:
+        raise HTTPException(status_code=400, detail="Only pending invitations can be resent")
+
+    org_res = await db.execute(select(Organization).where(Organization.id == org_id))
+    org = org_res.scalar_one_or_none()
+
+    user_res = await db.execute(select(User).where(User.id == user_id))
+    invitee = user_res.scalar_one_or_none()
+
+    member.invite_token = secrets.token_urlsafe(32)
+    member.invite_token_expires = datetime.utcnow() + timedelta(days=7)
+    member.invited_by = current_user.id
+
+    await _log(db, current_user.id, org_id, "resend_invite", f"user:{invitee.email}")
+    await db.commit()
+
+    await _send_invite_email(invitee.email, org.name, member.invite_token)
+    return {"message": "Invitation resent"}
 
 
 @router.post("/invites/{token}/accept")
