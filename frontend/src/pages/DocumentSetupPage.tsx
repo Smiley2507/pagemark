@@ -12,6 +12,7 @@ import { GenerationChoiceStep } from '@/components/document-setup/GenerationChoi
 import { OutlineReviewStep } from '@/components/document-setup/OutlineReviewStep';
 import { ProviderCredentialSetup } from '@/components/document-setup/ProviderCredentialSetup';
 import { SetupSummaryRail } from '@/components/document-setup/SetupSummaryRail';
+import { NewDocumentStep } from '@/components/document-setup/NewDocumentStep';
 import { SourceStep } from '@/components/document-setup/SourceStep';
 import { TemplateRecommendationStep } from '@/components/document-setup/TemplateRecommendationStep';
 import { Button } from '@/components/ui/button';
@@ -165,20 +166,32 @@ export function DocumentSetupPage() {
       try {
         const projectId = Number(resumeProjectId);
         const project = await projectsApi.getProject(projectId);
-        const list = await documentsApi.listDocuments(projectId);
-        const documentId = resumeDocumentId
-          ? Number(resumeDocumentId)
-          : list.documents.find((item) => item.setup_stage !== 'editor_ready')?.id ?? list.documents[0]?.id;
+        const sourceType = sourceTypeFromProject(project.source_type, project.git_repo_url);
+        const sourceSummary = describeSource(sourceType, project.git_repo_url || undefined);
 
-        if (!documentId || !active) {
+        // --- Additional-document path ---
+        // projectId supplied but NO documentId → user clicked "New Document" from workspace.
+        // Do NOT create a new Project. Land on the new-document form instead.
+        if (!resumeDocumentId) {
+          if (!active) return;
+          setSetupState((current) => ({
+            ...current,
+            projectId,
+            projectName: project.name,
+            sourceType,
+            sourceLabel: sourceSummary.label,
+            sourceLimitations: sourceSummary.limitations,
+            stage: 'new-document',
+          }));
           setResumeLoaded(true);
           return;
         }
 
+        // --- Resume existing document setup ---
+        const documentId = Number(resumeDocumentId);
         const document = await documentsApi.getDocument(projectId, documentId);
-        const sourceType = sourceTypeFromProject(project.source_type, project.git_repo_url);
-        const sourceSummary = describeSource(sourceType, project.git_repo_url || undefined);
 
+        if (!active) return;
         setSetupState((current) => ({
           ...current,
           projectId,
@@ -306,6 +319,57 @@ export function DocumentSetupPage() {
     },
   });
 
+  // ------------------------------------------------------------------
+  // Handler: create additional Document in an EXISTING project.
+  // Called from NewDocumentStep when projectId is already known.
+  // ------------------------------------------------------------------
+  const createAdditionalDocument = async (payload: {
+    title: string;
+    purpose?: string;
+    audience?: string;
+    context?: string;
+  }) => {
+    if (!setupState.projectId) return;
+    const pid = setupState.projectId;
+    try {
+      const document = await documentsApi.createDocument(pid, {
+        title: payload.title,
+        purpose: payload.purpose,
+        audience: payload.audience,
+        context: payload.context,
+        setup_stage: 'purpose',
+      });
+
+      // Pre-seed rule-based recommendations so template-selection has data.
+      try {
+        await documentsApi.createTemplateRecommendations(pid, document.id, 'rule_based', true);
+      } catch {
+        // Non-blocking — recommendations may be empty when no analysis exists yet.
+      }
+
+      // Advance setup stage to template_selection on the backend.
+      await documentsApi.updateDocument(pid, document.id, {
+        setup_stage: 'template_selection',
+        context: payload.context,
+      });
+      await queryClient.invalidateQueries({ queryKey: ['document-setup', pid, document.id] });
+
+      setSetupState((current) => ({
+        ...current,
+        documentId: document.id,
+        projectContext: payload.context || current.projectContext,
+        stage: 'template-selection',
+      }));
+
+      navigate(`/document-setup?projectId=${pid}&documentId=${document.id}`, { replace: true });
+    } catch (error) {
+      toast.error('Unable to create the Document.');
+    }
+  };
+
+  // ------------------------------------------------------------------
+  // Handler: create first Project + first Document (onboarding flow).
+  // ------------------------------------------------------------------
   const connectSource = async (payload: {
     type: 'github-oauth' | 'git-url' | 'zip' | 'none';
     projectName: string;
@@ -592,6 +656,13 @@ export function DocumentSetupPage() {
             </div>
           ) : (
             <>
+              {setupState.stage === 'new-document' && (
+                <NewDocumentStep
+                  projectName={setupState.projectName}
+                  onSubmit={(payload) => void createAdditionalDocument(payload)}
+                />
+              )}
+
               {setupState.stage === 'source' && (
                 <SourceStep
                   onConnect={(payload) => void connectSource(payload)}
