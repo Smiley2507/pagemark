@@ -1,6 +1,5 @@
 export type DocumentSetupStage =
   | 'source'
-  | 'new-document'
   | 'analysis'
   | 'template-selection'
   | 'outline-review'

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Grid2X2, List, Search } from 'lucide-react';
+import { FilePlus2, Search } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -17,12 +17,9 @@ import { Label } from '@/components/ui/label';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Select } from '@/components/ui/select';
 import { Surface } from '@/components/ui/surface';
-import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
 import { documentsApi } from '@/api/documents';
 import {
-  DocumentSummaryCard,
   DocumentSummaryRow,
-  EmptyDocumentState,
   mapDocumentStatus,
   mapFreshness,
   type WorkspaceDocumentItem,
@@ -46,8 +43,6 @@ export function DocumentLibraryPage() {
   const [audience, setAudience] = useState('');
   const [context, setContext] = useState('');
   const [tags, setTags] = useState('');
-  const viewMode = useViewPreferenceStore((state) => state.getViewMode('project-documents', projectId));
-  const setViewMode = useViewPreferenceStore((state) => state.setViewMode);
 
   const { data: response, isLoading, error } = useQuery({
     queryKey: ['documents', projectId],
@@ -114,6 +109,57 @@ export function DocumentLibraryPage() {
     setTags(document.tags.join(', '));
   };
 
+  const [isCreateDocOpen, setIsCreateDocOpen] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newPurpose, setNewPurpose] = useState('');
+  const [newAudience, setNewAudience] = useState('');
+  const [newContext, setNewContext] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+
+  const handleCreateDocument = async () => {
+    if (!newTitle.trim()) return;
+    setIsCreating(true);
+    try {
+      const document = await documentsApi.createDocument(pid, {
+        title: newTitle.trim(),
+        purpose: newPurpose.trim() || undefined,
+        audience: newAudience.trim() || undefined,
+        context: newContext.trim() || undefined,
+        setup_stage: 'purpose',
+      });
+
+      // Pre-seed recommendations
+      try {
+        await documentsApi.createTemplateRecommendations(pid, document.id, 'rule_based', true);
+      } catch {
+        // Non-blocking
+      }
+
+      // Update to template_selection stage
+      await documentsApi.updateDocument(pid, document.id, {
+        setup_stage: 'template_selection',
+        context: newContext.trim() || undefined,
+      });
+
+      void queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
+      toast.success('Document created successfully');
+      
+      // Reset state and close modal
+      setNewTitle('');
+      setNewPurpose('');
+      setNewAudience('');
+      setNewContext('');
+      setIsCreateDocOpen(false);
+
+      // Navigate straight to template-selection stage in setup
+      navigate(`/document-setup?projectId=${pid}&documentId=${document.id}`);
+    } catch {
+      toast.error('Failed to create Document');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const filteredDocuments = documents
     .filter((document) => {
       const matchesQuery = document.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -159,95 +205,74 @@ export function DocumentLibraryPage() {
 
   return (
     <div className="space-y-6">
-      <Surface variant="panel" padding="lg" className="space-y-4">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div>
+      <Surface variant="panel" padding="none" className="overflow-hidden">
+        <div className="flex flex-col gap-4 border-b border-separator px-5 py-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <h2 className="text-section font-semibold text-text-primary">Documents</h2>
+            <Button type="button" onClick={() => setIsCreateDocOpen(true)} className="gap-2">
+              <FilePlus2 className="h-4 w-4" />
+              New Document
+            </Button>
           </div>
-          <Button type="button" onClick={() => navigate(`/document-setup?projectId=${projectId}`)}>
-            New Document
-          </Button>
+
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="relative w-full max-w-xl">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" aria-hidden="true" />
+              <Input
+                aria-label="Search Documents"
+                className="pl-9"
+                placeholder="Search Documents by title, Template, or tags"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+              <SegmentedControl
+                label="Document filter"
+                value={filterMode}
+                onValueChange={(value) => setFilterMode(value as FilterMode)}
+                options={[
+                  { value: 'all', label: 'All' },
+                  { value: 'active', label: 'Active' },
+                  { value: 'stale', label: 'Changed' },
+                ]}
+              />
+              <Select
+                aria-label="Sort Documents"
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value as 'updated' | 'name' | 'progress')}
+              >
+                <option value="updated">Last activity</option>
+                <option value="name">Title</option>
+                <option value="progress">Progress</option>
+              </Select>
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="relative w-full max-w-xl">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" aria-hidden="true" />
-            <Input
-              aria-label="Search Documents"
-              className="pl-9"
-              placeholder="Search Documents by title, Template, or tags"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
+        {documents.length === 0 ? (
+          <div className="flex min-h-48 flex-col items-center justify-center px-5 py-10 text-center">
+            <h3 className="text-section font-semibold text-text-primary">No Documents yet</h3>
           </div>
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
-            <SegmentedControl
-              label="Document filter"
-              value={filterMode}
-              onValueChange={(value) => setFilterMode(value as FilterMode)}
-              options={[
-                { value: 'all', label: 'All' },
-                { value: 'active', label: 'Active' },
-                { value: 'stale', label: 'Changed' },
-              ]}
-            />
-            <Select
-              aria-label="Sort Documents"
-              value={sortBy}
-              onChange={(event) => setSortBy(event.target.value as 'updated' | 'name' | 'progress')}
-            >
-              <option value="updated">Last activity</option>
-              <option value="name">Title</option>
-              <option value="progress">Progress</option>
-            </Select>
+        ) : filteredDocuments.length === 0 ? (
+          <div className="flex min-h-48 flex-col items-center justify-center px-5 py-10 text-center">
+            <h3 className="text-section font-semibold text-text-primary">No Documents found</h3>
+            <p className="mt-2 text-body text-text-secondary">Try a different search or filter.</p>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-2 bg-panel-muted/55 p-3">
+            {filteredDocuments.map((document) => (
+              <DocumentSummaryRow
+                key={document.id}
+                document={document}
+                onOpen={() => navigate(`/projects/${projectId}/documents/${document.id}`)}
+                onEdit={() => openEditDocument(document)}
+                onDelete={() => setDeletingDocument(document)}
+              />
+            ))}
+          </div>
+        )}
       </Surface>
-
-      <div className="flex justify-end">
-        <SegmentedControl
-          label="Document library view"
-          value={viewMode}
-          onValueChange={(value) => setViewMode('project-documents', value as 'list' | 'grid', projectId)}
-          options={[
-            { value: 'list', label: <List className="h-4 w-4" /> },
-            { value: 'grid', label: <Grid2X2 className="h-4 w-4" /> },
-          ]}
-        />
-      </div>
-
-      {documents.length === 0 ? (
-        <EmptyDocumentState />
-      ) : filteredDocuments.length === 0 ? (
-        <EmptyState
-          title="No Documents found"
-          description="Try a different search or filter."
-        />
-      ) : viewMode === 'list' ? (
-        <Surface variant="panel" padding="none" className="divide-y divide-separator overflow-hidden">
-          {filteredDocuments.map((document) => (
-            <DocumentSummaryRow
-              key={document.id}
-              document={document}
-              onOpen={() => navigate(`/projects/${projectId}/documents/${document.id}`)}
-              onEdit={() => openEditDocument(document)}
-              onDelete={() => setDeletingDocument(document)}
-            />
-          ))}
-        </Surface>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-          {filteredDocuments.map((document) => (
-            <DocumentSummaryCard
-              key={document.id}
-              document={document}
-              onOpen={() => navigate(`/projects/${projectId}/documents/${document.id}`)}
-              onEdit={() => openEditDocument(document)}
-              onDelete={() => setDeletingDocument(document)}
-            />
-          ))}
-        </div>
-      )}
 
       <Dialog open={editingDocument !== null} onOpenChange={(open) => { if (!open) setEditingDocument(null); }}>
         <DialogContent className="sm:max-w-lg">
@@ -299,6 +324,67 @@ export function DocumentLibraryPage() {
           setDeletingDocument(null);
         }}
       />
+
+      <Dialog open={isCreateDocOpen} onOpenChange={(open) => { if (!open) setIsCreateDocOpen(false); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>New Document</DialogTitle>
+            <DialogDescription className="sr-only">
+              Create a new Document within the Project container.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="new-document-title">Title</Label>
+              <Input
+                id="new-document-title"
+                placeholder="e.g. API Reference, User Guide"
+                value={newTitle}
+                onChange={(event) => setNewTitle(event.target.value)}
+                required
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="new-document-purpose">Purpose (optional)</Label>
+              <Input
+                id="new-document-purpose"
+                placeholder="e.g. Document the payment gateway integration endpoints"
+                value={newPurpose}
+                onChange={(event) => setNewPurpose(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="new-document-audience">Audience (optional)</Label>
+              <Input
+                id="new-document-audience"
+                placeholder="e.g. External third-party developers"
+                value={newAudience}
+                onChange={(event) => setNewAudience(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="new-document-context">Context / Guidelines (optional)</Label>
+              <Input
+                id="new-document-context"
+                placeholder="e.g. Focus on sandbox testing and error codes"
+                value={newContext}
+                onChange={(event) => setNewContext(event.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsCreateDocOpen(false)}>Cancel</Button>
+              <Button
+                type="button"
+                onClick={handleCreateDocument}
+                disabled={!newTitle.trim() || isCreating}
+              >
+                {isCreating ? 'Creating...' : 'Create Document'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
