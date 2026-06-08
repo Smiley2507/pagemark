@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ArrowUp, Paperclip, FileText, Book, FileCode, Layout } from 'lucide-react';
+import { ArrowUp, Paperclip, ChevronDown, FlaskConical, PenLine, Expand, WandSparkles, MessageSquare, FileText, Book, FileCode, Layout } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAiStore, MODE_LABELS } from '@/store/aiStore';
-import type { AiAttachment, AiMode } from '@/store/aiStore';
+import { useAiStore, AVAILABLE_MODELS, MODE_LABELS, MODE_DESCRIPTIONS, type AiMode } from '@/store/aiStore';
+import type { AiAttachment } from '@/store/aiStore';
 
 type ReferenceKind = 'section' | 'document' | 'source' | 'template';
 
@@ -12,6 +12,14 @@ const MODE_PLACEHOLDERS: Record<AiMode, string> = {
   refine: 'How should this be improved?',
   expand: 'What detail should be added?',
   auto: 'Ask Mark anything...',
+};
+
+const MODE_ICONS: Record<AiMode, typeof MessageSquare> = {
+  chat: MessageSquare,
+  generate: FlaskConical,
+  refine: PenLine,
+  expand: Expand,
+  auto: WandSparkles,
 };
 
 const REFERENCE_OPTIONS: { kind: ReferenceKind; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -42,7 +50,7 @@ export function AiPanelComposer({
   sections,
   onAttachClick,
 }: AiPanelComposerProps) {
-  const { activeMode, addAttachment } = useAiStore();
+  const { activeMode, activeModelId, setActiveMode, setActiveModelId, addAttachment } = useAiStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
@@ -51,12 +59,27 @@ export function AiPanelComposer({
   const mentionTriggerPos = useRef<number | null>(null);
   const mentionDropdownRef = useRef<HTMLDivElement>(null);
 
+  const [showModeMenu, setShowModeMenu] = useState(false);
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const modeRef = useRef<HTMLDivElement>(null);
+  const modelRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (value && textareaRef.current) {
       textareaRef.current.style.height = 'auto';
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
   }, [value]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (modeRef.current && !modeRef.current.contains(target)) setShowModeMenu(false);
+      if (modelRef.current && !modelRef.current.contains(target)) setShowModelDropdown(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const parseMentions = useCallback((text: string): { cleanText: string; references: string[] } => {
     const refs: string[] = [];
@@ -66,13 +89,6 @@ export function AiPanelComposer({
     });
     return { cleanText: clean, references: refs };
   }, []);
-
-  const getSendPayload = useCallback((): string => {
-    const { cleanText, references } = parseMentions(value);
-    return references.length > 0
-      ? `${cleanText}\n\n(referencing: ${references.join(', ')})`
-      : cleanText;
-  }, [value, parseMentions]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -136,6 +152,9 @@ export function AiPanelComposer({
     ? [{ id: 'repo', label: 'Repository source' }]
     : [{ id: 'template', label: 'Document template' }];
 
+  const currentModel = AVAILABLE_MODELS.find((m) => m.id === activeModelId);
+  const ModeIcon = MODE_ICONS[activeMode];
+
   return (
     <div className="rounded-xl border border-input focus-within:border-interaction transition-colors">
       <textarea
@@ -196,7 +215,7 @@ export function AiPanelComposer({
       )}
 
       <div className="flex items-center justify-between px-2 pb-2">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <button
             onClick={onAttachClick}
             className="rounded p-1 text-text-muted transition-colors hover:bg-panel-muted hover:text-text-primary"
@@ -204,9 +223,81 @@ export function AiPanelComposer({
           >
             <Paperclip className="h-3.5 w-3.5" />
           </button>
-          <span className="text-[10px] text-text-muted">
-            {activeMode === 'auto' ? '' : MODE_LABELS[activeMode] + ' mode'}
-          </span>
+
+          <div className="flex items-center gap-0.5">
+            <div ref={modeRef} className="relative">
+              <button
+                onClick={() => setShowModeMenu(!showModeMenu)}
+                className={cn(
+                  'flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium transition-colors',
+                  showModeMenu
+                    ? 'bg-interaction-muted text-interaction-hover'
+                    : 'text-text-muted hover:bg-panel-muted hover:text-text-primary',
+                )}
+              >
+                <ModeIcon className="h-3 w-3" />
+                {MODE_LABELS[activeMode]}
+                <ChevronDown className="h-2.5 w-2.5" />
+              </button>
+              {showModeMenu && (
+                <div className="absolute bottom-full left-0 z-50 mb-1 w-44 rounded-lg border border-separator bg-panel py-1 shadow-lg">
+                  {(Object.keys(MODE_LABELS) as AiMode[]).map((mode) => {
+                    const Icon = MODE_ICONS[mode];
+                    return (
+                      <button
+                        key={mode}
+                        onClick={() => { setActiveMode(mode); setShowModeMenu(false); }}
+                        className={cn(
+                          'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors',
+                          mode === activeMode
+                            ? 'bg-interaction-muted text-interaction-hover'
+                            : 'text-text-muted hover:bg-panel-muted hover:text-text-primary',
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        <div className="min-w-0">
+                          <div className="font-medium">{MODE_LABELS[mode]}</div>
+                          <div className="text-[10px] text-text-muted">{MODE_DESCRIPTIONS[mode]}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div ref={modelRef} className="relative">
+              <button
+                onClick={() => setShowModelDropdown(!showModelDropdown)}
+                className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] text-text-muted transition-colors hover:bg-panel-muted hover:text-text-primary"
+              >
+                {currentModel?.label || 'Model'}
+                <ChevronDown className="h-2.5 w-2.5" />
+              </button>
+              {showModelDropdown && (
+                <div className="absolute bottom-full left-0 z-50 mb-1 w-48 rounded-lg border border-separator bg-panel py-1 shadow-lg">
+                  {AVAILABLE_MODELS.map((m) => {
+                    const isActive = m.id === activeModelId;
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => { setActiveModelId(m.id); setShowModelDropdown(false); }}
+                        className={cn(
+                          'flex w-full items-center justify-between px-3 py-1.5 text-left text-xs transition-colors',
+                          isActive
+                            ? 'bg-interaction-muted text-interaction-hover'
+                            : 'text-text-muted hover:bg-panel-muted hover:text-text-primary',
+                        )}
+                      >
+                        <span>{m.label}</span>
+                        <span className="text-[10px] text-text-muted">{m.provider}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center gap-1">

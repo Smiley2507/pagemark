@@ -4,14 +4,12 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { analysisApi } from '@/api/analysis';
 import { useGenerateSection, useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread } from '@/hooks/useAI';
-import { useAiCredentials } from '@/hooks/useAiCredentials';
 import type { Section } from '@/types';
 
 import { AiPanelHeader } from './ai/AiPanelHeader';
 import { AiPanelEmptyState } from './ai/AiPanelEmptyState';
 import { AiPanelMessages } from './ai/AiPanelMessages';
 import { AiPanelContextBar } from './ai/AiPanelContextBar';
-import { AiPanelBottomBar } from './ai/AiPanelBottomBar';
 import { AiPanelComposer } from './ai/AiPanelComposer';
 import { AiPanelAttachments } from './ai/AiPanelAttachments';
 
@@ -58,10 +56,6 @@ export function AiPanel({
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(2000);
   const [showAttachments, setShowAttachments] = useState(false);
-
-  const { data: credentials } = useAiCredentials();
-  const activeCredential = credentials?.credentials?.find((c) => c.is_active);
-  const activeModelLabel = activeCredential?.model_id || 'Configured in Settings';
 
   const generateSection = useGenerateSection(projectId);
   const refineSection = useRefineSection();
@@ -232,13 +226,11 @@ export function AiPanel({
         activeSectionStatus={activeSectionStatus}
       />
 
-      <AiPanelBottomBar activeModelLabel={activeModelLabel} />
-
       {showAttachments && (
         <AiPanelAttachments onClose={() => setShowAttachments(false)} />
       )}
 
-      <div className="shrink-0 bg-canvas px-3 pb-3 pt-2">
+      <div className="shrink-0 px-3 pb-3 pt-2">
         <AiPanelComposer
           value={inputValue}
           onChange={setInputValue}
