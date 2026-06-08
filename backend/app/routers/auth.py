@@ -16,6 +16,7 @@ from app.database import get_db
 from app.config import settings
 from app.models.user import User, UserRole, UserSettings, RoleEnum
 from app.models.organization import Organization, OrganizationMember, OrgMemberRole, OrgMemberStatus
+from app.models.audit import AuditLog
 from app.schemas.auth import RegisterRequest, LoginRequest, MeResponse, UpdateMeRequest, ForgotPasswordRequest, ResetPasswordRequest
 from app.services import auth_service
 from app.dependencies import get_current_user
@@ -433,9 +434,15 @@ async def upsert_ai_credential(
     provider: str, body: AiCredentialUpsertRequest,
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    return AiCredentialResponse.model_validate(
-        await ai_credential_service.upsert_credential(db, current_user.id, provider, body.api_key, body.model_id)
-    )
+    cred = await ai_credential_service.upsert_credential(db, current_user.id, provider, body.api_key, body.model_id)
+    db.add(AuditLog(
+        user_id=current_user.id,
+        org_id=None,
+        action="upsert_ai_credential",
+        resource=f"provider:{provider}:credential:{cred.id}",
+    ))
+    await db.commit()
+    return AiCredentialResponse.model_validate(cred)
 
 
 @router.post("/me/ai-credentials/{credential_id}/activate", response_model=AiCredentialResponse)
@@ -443,9 +450,15 @@ async def activate_ai_credential(
     credential_id: int,
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    return AiCredentialResponse.model_validate(
-        await ai_credential_service.set_active(db, current_user.id, credential_id)
-    )
+    cred = await ai_credential_service.set_active(db, current_user.id, credential_id)
+    db.add(AuditLog(
+        user_id=current_user.id,
+        org_id=None,
+        action="activate_ai_credential",
+        resource=f"credential:{credential_id}:provider:{cred.provider}",
+    ))
+    await db.commit()
+    return AiCredentialResponse.model_validate(cred)
 
 
 @router.delete("/me/ai-credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -454,4 +467,11 @@ async def delete_ai_credential(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     await ai_credential_service.delete_credential(db, current_user.id, credential_id)
+    db.add(AuditLog(
+        user_id=current_user.id,
+        org_id=None,
+        action="delete_ai_credential",
+        resource=f"credential:{credential_id}",
+    ))
+    await db.commit()
     return None

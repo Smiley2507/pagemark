@@ -17,6 +17,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.models.key import UserAPIKey
+from app.models.audit import AuditLog
 from app.schemas.key import APIKeyCreate, APIKeyResponse
 
 router = APIRouter(prefix="/users", tags=["api-keys"])
@@ -68,6 +69,14 @@ async def create_api_key(
     await db.commit()
     await db.refresh(api_key)
 
+    db.add(AuditLog(
+        user_id=current_user.id,
+        org_id=None,
+        action="create_api_key",
+        resource=f"key:{api_key.id}:name:{body.name}",
+    ))
+    await db.commit()
+
     # Return raw key exactly once
     return APIKeyResponse(
         id=api_key.id,
@@ -94,5 +103,11 @@ async def revoke_api_key(
     if not key:
         raise HTTPException(status_code=404, detail="API key not found")
     await db.delete(key)
+    db.add(AuditLog(
+        user_id=current_user.id,
+        org_id=None,
+        action="revoke_api_key",
+        resource=f"key:{key_id}:name:{key.name}",
+    ))
     await db.commit()
     return None

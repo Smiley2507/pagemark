@@ -36,7 +36,7 @@ export const OrgAuditLogView: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6">
-      <h2 className="text-section font-semibold">Activity Log</h2>
+      <h2 className="text-section font-semibold">Audit Log</h2>
 
       {logs && logs.length > 0 ? (
         <div className="rounded-xl border border-border bg-card overflow-hidden">

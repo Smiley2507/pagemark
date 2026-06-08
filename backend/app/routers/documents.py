@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.dependencies import get_current_user, verify_project_ownership, require_document_permission, verify_document_access
 from app.models.activity import ActivityEvent
+from app.models.audit import AuditLog
 from app.models.document import (
     Document,
     DocumentSetupStage,
@@ -398,6 +399,16 @@ async def update_document(
 
     document.updated_at = datetime.utcnow()
     await db.commit()
+
+    project = await db.get(Project, document.project_id)
+    db.add(AuditLog(
+        user_id=current_user.id,
+        org_id=project.org_id if project else None,
+        action="update_document",
+        resource=f"document:{document.id}:project:{document.project_id}",
+    ))
+    await db.commit()
+
     return await _load_document_response(db, document.project_id, document.id)
 
 
@@ -413,6 +424,13 @@ async def delete_document(
         .values(document_id=None)
     )
     await db.delete(document)
+    project = await db.get(Project, document.project_id)
+    db.add(AuditLog(
+        user_id=current_user.id,
+        org_id=project.org_id if project else None,
+        action="delete_document",
+        resource=f"document:{document.id}:project:{document.project_id}",
+    ))
     await db.commit()
     return None
 

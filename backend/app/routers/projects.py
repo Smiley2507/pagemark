@@ -12,6 +12,7 @@ from app.dependencies import get_current_user
 from app.models.user import User, UserSettings
 from app.models.organization import Organization, OrganizationMember, OrgMemberStatus
 from app.models.project import Project, ProjectSourceExclusion, ProjectStatus, SourceType
+from app.models.audit import AuditLog
 from app.models.document import Document, Section, SectionStatus
 from typing import List
 from app.schemas.project import (
@@ -361,6 +362,15 @@ async def create_project(
     await db.commit()
     await db.refresh(project)
     source_exclusions = await _load_source_exclusions(project.id, db)
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        org_id=org_id,
+        action="create_project",
+        resource=f"project:{project.id}:name:{project.name}",
+    ))
+    await db.commit()
+
     return await _project_to_response(
         project,
         db,
@@ -409,6 +419,14 @@ async def update_project(
     project.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(project)
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        org_id=project.org_id,
+        action="update_project",
+        resource=f"project:{project.id}",
+    ))
+    await db.commit()
 
     return await _project_to_response(
         project,
@@ -477,6 +495,13 @@ async def delete_project(
     project = await _get_project(project_id, current_user, db)
     project.deleted_at = datetime.utcnow()
     await db.commit()
+    db.add(AuditLog(
+        user_id=current_user.id,
+        org_id=project.org_id,
+        action="delete_project",
+        resource=f"project:{project_id}:name:{project.name}",
+    ))
+    await db.commit()
 
 
 # ── PATCH /projects/{id}/context ─────────────────────────────────
@@ -497,6 +522,14 @@ async def update_project_context(
     project.updated_at = datetime.utcnow()
     await db.commit()
     await db.refresh(project)
+
+    db.add(AuditLog(
+        user_id=current_user.id,
+        org_id=project.org_id,
+        action="update_project_context",
+        resource=f"project:{project_id}",
+    ))
+    await db.commit()
 
     return await _project_to_response(
         project,

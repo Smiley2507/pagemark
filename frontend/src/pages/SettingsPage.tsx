@@ -15,7 +15,7 @@ const SECTIONS = [
   { id: 'notifications', label: 'Notifications', icon: Bell, keywords: ['alert', 'preferences', 'events', 'bell'] },
   { id: 'ai-providers', label: 'AI Providers', icon: Bot, keywords: ['model', 'provider', 'byok', 'claude', 'opencode', 'google'] },
   { id: 'api-keys', label: 'API Keys', icon: Key, keywords: ['token', 'integration', 'automation'] },
-  { id: 'activity', label: 'Activity Log', icon: Activity, keywords: ['audit', 'history', 'events'] },
+  { id: 'activity', label: 'Audit Log', icon: Activity, keywords: ['audit', 'history', 'events', 'activity'] },
 ] as const;
 
 export function SettingsPage() {
