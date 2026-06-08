@@ -9,12 +9,12 @@ import {
   GripVertical,
   Loader2,
   MoreHorizontal,
+  PanelLeft,
   PanelRightOpen,
   Plus,
   ShieldCheck,
   Sparkles,
   Trash2,
-  CheckCheck,
   CheckCircle2,
   FileText,
   BookOpen,
@@ -42,18 +42,13 @@ import { useDocumentAutosave, useDocumentSections, useUpdateDocumentSection, use
 import { useQualityReport } from '@/hooks/useQuality';
 import { getSectionState } from '@/lib/section-state';
 import { cn } from '@/lib/utils';
+import { OutlinePanel } from '@/components/editor/OutlinePanel';
+import type { TocItem } from '@/components/editor/OutlinePanel';
 import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import type { Section } from '@/types';
 
 type FlatSection = Section & { depth: number };
-
-type TocItem = {
-  id: string;
-  label: string;
-  kind: 'section' | 'h1' | 'h2';
-  sectionId: number;
-};
 
 type RightTab = 'ai' | 'notes';
 
@@ -317,6 +312,7 @@ export function DocumentEditorPage() {
   const queryClient = useQueryClient();
   const recordRecentWork = useViewPreferenceStore((state) => state.recordRecentWork);
   const [titleDraft, setTitleDraft] = useState('');
+  const [tocOpen, setTocOpen] = useState(true);
   const [activeTocId, setActiveTocId] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [rightTab, setRightTab] = useState<RightTab>('ai');
@@ -544,6 +540,11 @@ export function DocumentEditorPage() {
   useKeyboardShortcuts({
     shortcuts: [
       {
+        key: 'b',
+        mod: 'metaKey',
+        handler: () => setTocOpen((prev) => !prev),
+      },
+      {
         key: 'i',
         mod: 'metaKey',
         handler: () => { setRightPanelOpen((prev) => !prev); setRightTab('ai'); },
@@ -650,65 +651,35 @@ export function DocumentEditorPage() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-72 shrink-0 border-r border-separator bg-panel lg:flex lg:flex-col">
-          <div className="flex items-center justify-between border-b border-separator px-4 py-3">
-            <p className="text-meta font-medium uppercase text-text-muted">Outline</p>
-            <div className="flex items-center gap-1">
-              {canAcceptAll && (
-                <button
-                  onClick={handleAcceptAllReview}
-                  className="rounded px-1.5 py-0.5 text-xs font-medium text-review transition-colors hover:bg-review/10"
-                  title="Accept all review-ready sections"
-                >
-                  <CheckCheck className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-          <nav aria-label="Document table of contents" className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
-            {tocItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                data-toc-item="true"
-                onClick={() => scrollToTocItem(item)}
-                onKeyDown={tocKeyboard}
-                className={cn(
-                  'block w-full rounded px-2 py-1.5 text-left text-meta transition-colors focus-visible:ring-2 focus-visible:ring-ring',
-                  item.kind === 'h1' && 'pl-5',
-                  item.kind === 'h2' && 'pl-8',
-                  activeTocId === item.id || activeTocId === `section-${item.sectionId}`
-                    ? 'bg-interaction-muted text-interaction-hover'
-                    : 'text-text-secondary hover:bg-interaction-muted hover:text-text-primary',
-                )}
-              >
-                <span className="block truncate">{item.label}</span>
-              </button>
-            ))}
-            {tocItems.length === 0 && (
-              <Button type="button" size="sm" onClick={() => createSection.mutate({})} className="w-full gap-2">
-                <Plus className="h-4 w-4" />
-                Add Section
-              </Button>
-            )}
-          </nav>
-          <div className="space-y-2 border-t border-separator px-4 py-3 text-meta text-text-secondary">
-            <div className="flex justify-between gap-3">
-              <span>Words</span>
-              <span className="font-medium text-text-primary">{wordCount}</span>
-            </div>
-            <div className="flex justify-between gap-3">
-              <span>Review</span>
-              <span className="font-medium text-text-primary">{reviewedCount}/{reviewTotal}</span>
-            </div>
-            <div className="flex justify-between gap-3">
-              <span>Grammar/style</span>
-              <span className="font-medium text-text-primary">{issueCount}</span>
-            </div>
-          </div>
-        </aside>
+        {tocOpen && (
+          <OutlinePanel
+            tocItems={tocItems}
+            activeTocId={activeTocId}
+            onTocItemClick={scrollToTocItem}
+            onTocKeyboard={tocKeyboard}
+            wordCount={wordCount}
+            reviewedCount={reviewedCount}
+            reviewTotal={reviewTotal}
+            issueCount={issueCount}
+            qualityScore={qualityData?.overall_score}
+            canAcceptAll={canAcceptAll}
+            onAcceptAll={handleAcceptAllReview}
+            onCreateSection={() => createSection.mutate({})}
+            onClose={() => setTocOpen(false)}
+          />
+        )}
 
-        <main ref={scrollRootRef} className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-canvas">
+        <main ref={scrollRootRef} className={cn('min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto bg-canvas', tocOpen ? 'lg:border-l-0' : '')}>
+          {!tocOpen && (
+            <button
+              onClick={() => setTocOpen(true)}
+              className="sticky top-3 z-10 ml-3 inline-flex items-center gap-1.5 rounded-lg border border-separator bg-panel px-2 py-1.5 text-meta-sm text-text-muted shadow-sm transition-colors hover:bg-interaction-muted hover:text-interaction-hover"
+              aria-label="Show outline"
+            >
+              <PanelLeft className="h-3.5 w-3.5" />
+              Outline
+            </button>
+          )}
           {showSourceNotice && (
             <div className="mx-auto max-w-4xl px-4 pt-5">
               <Notice variant="warning" title="Potentially Stale Sections">
