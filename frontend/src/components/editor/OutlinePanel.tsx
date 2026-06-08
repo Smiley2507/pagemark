@@ -64,8 +64,8 @@ export function OutlinePanel({
     'bg-status-danger-foreground';
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-separator bg-canvas">
-      <div className="flex items-center justify-between border-b border-separator px-4 h-11">
+    <aside className="flex w-64 shrink-0 flex-col bg-canvas">
+      <div className="flex items-center justify-between pl-8 pr-4 h-11">
         <p className="text-meta-sm font-medium uppercase text-text-muted tracking-wider">Outline</p>
         <div className="flex items-center gap-1">
           {canAcceptAll && (
@@ -87,7 +87,7 @@ export function OutlinePanel({
         </div>
       </div>
 
-      <nav aria-label="Document table of contents" className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+      <nav aria-label="Document table of contents" className="min-h-0 flex-1 overflow-y-auto pl-7 pr-2 py-2">
         {tocItems.map((item) => {
           const isActive = activeTocId === item.id || activeTocId === `section-${item.sectionId}`;
           return (
@@ -119,46 +119,48 @@ export function OutlinePanel({
         )}
       </nav>
 
-      <div className="shrink-0 border-t border-separator px-4 py-3">
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between gap-2 text-meta-sm">
-            <span className="flex items-center gap-1.5 text-text-muted">
-              <FileText className="h-3 w-3" />
-              Words
-            </span>
-            <span className="font-medium text-text-primary">{wordCount.toLocaleString()}</span>
-          </div>
-          <div className="flex items-center justify-between gap-2 text-meta-sm">
-            <span className="flex items-center gap-1.5 text-text-muted">
-              <Sparkles className="h-3 w-3" />
-              Review
-            </span>
-            <span className="flex items-center gap-1.5">
-              {StatDot(reviewDot)}
-              <span className="font-medium text-text-primary">{reviewedCount}/{reviewTotal}</span>
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-2 text-meta-sm">
-            <span className="flex items-center gap-1.5 text-text-muted">
-              <ShieldCheck className="h-3 w-3" />
-              Quality
-            </span>
-            <span className="flex items-center gap-1.5">
-              {StatDot(qualityDot)}
-              <span className="font-medium text-text-primary">
-                {qualityScore != null ? `${Math.round(qualityScore)}%` : '—'}
+      <div className="px-3 pb-3 pt-1">
+        <div className="rounded-lg border border-separator bg-panel px-4 py-3 shadow-sm">
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between gap-2 text-meta-sm">
+              <span className="flex items-center gap-1.5 text-text-muted">
+                <FileText className="h-3 w-3" />
+                Words
               </span>
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-2 text-meta-sm">
-            <span className="flex items-center gap-1.5 text-text-muted">
-              <BookOpen className="h-3 w-3" />
-              Issues
-            </span>
-            <span className="flex items-center gap-1.5">
-              {StatDot(issueDot)}
-              <span className="font-medium text-text-primary">{issueCount}</span>
-            </span>
+              <span className="font-medium text-text-primary">{wordCount.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2 text-meta-sm">
+              <span className="flex items-center gap-1.5 text-text-muted">
+                <Sparkles className="h-3 w-3" />
+                Review
+              </span>
+              <span className="flex items-center gap-1.5">
+                {StatDot(reviewDot)}
+                <span className="font-medium text-text-primary">{reviewedCount}/{reviewTotal}</span>
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 text-meta-sm">
+              <span className="flex items-center gap-1.5 text-text-muted">
+                <ShieldCheck className="h-3 w-3" />
+                Quality
+              </span>
+              <span className="flex items-center gap-1.5">
+                {StatDot(qualityDot)}
+                <span className="font-medium text-text-primary">
+                  {qualityScore != null ? `${Math.round(qualityScore)}%` : '—'}
+                </span>
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 text-meta-sm">
+              <span className="flex items-center gap-1.5 text-text-muted">
+                <BookOpen className="h-3 w-3" />
+                Issues
+              </span>
+              <span className="flex items-center gap-1.5">
+                {StatDot(issueDot)}
+                <span className="font-medium text-text-primary">{issueCount}</span>
+              </span>
+            </div>
           </div>
         </div>
       </div>
