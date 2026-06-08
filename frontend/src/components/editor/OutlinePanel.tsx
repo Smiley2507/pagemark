@@ -65,7 +65,7 @@ export function OutlinePanel({
 
   return (
     <aside className="flex w-64 shrink-0 flex-col bg-canvas">
-      <div className="flex items-center justify-between pl-8 pr-4 h-11">
+      <div className="flex items-center justify-between px-3 h-11">
         <p className="text-meta-sm font-medium uppercase text-text-muted tracking-wider">Outline</p>
         <div className="flex items-center gap-1">
           {canAcceptAll && (
@@ -87,7 +87,7 @@ export function OutlinePanel({
         </div>
       </div>
 
-      <nav aria-label="Document table of contents" className="min-h-0 flex-1 overflow-y-auto pl-7 pr-2 py-2">
+      <nav aria-label="Document table of contents" className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
         {tocItems.map((item) => {
           const isActive = activeTocId === item.id || activeTocId === `section-${item.sectionId}`;
           return (
@@ -98,7 +98,7 @@ export function OutlinePanel({
               onClick={() => onTocItemClick(item)}
               onKeyDown={onTocKeyboard}
               className={cn(
-                'block w-full rounded px-2 py-1 text-left text-meta transition-all duration-150 focus-visible:ring-2 focus-visible:ring-ring',
+                'block w-full rounded py-1 text-left text-meta transition-all duration-150 focus-visible:ring-2 focus-visible:ring-ring',
                 item.kind === 'h1' && 'pl-6',
                 item.kind === 'h2' && 'pl-8',
                 isActive

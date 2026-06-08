@@ -673,7 +673,7 @@ export function DocumentEditorPage() {
           {!tocOpen && (
             <button
               onClick={() => setTocOpen(true)}
-              className="sticky top-3 z-10 ml-7 inline-flex items-center gap-1.5 rounded-lg border border-separator bg-panel px-2 py-1.5 text-meta-sm text-text-muted shadow-sm transition-colors hover:bg-interaction-muted hover:text-interaction-hover"
+              className="sticky top-3 z-10 ml-3 inline-flex items-center gap-1.5 rounded-lg border border-separator bg-panel px-2 py-1.5 text-meta-sm text-text-muted shadow-sm transition-colors hover:bg-interaction-muted hover:text-interaction-hover"
               aria-label="Show outline"
             >
               <PanelLeft className="h-3.5 w-3.5" />
