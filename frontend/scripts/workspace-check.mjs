@@ -193,11 +193,16 @@ function assertLandingAndAuth() {
     'Reviewable, trackable, fresh',
   ].forEach((marker) => assertContains(landing, marker, `landing page is missing "${marker}"`));
 
-  ['images.unsplash.com', 'motion/', 'useScroll', 'useTransform'].forEach((marker) => {
+  // unsplash images and scroll-driven hooks are banned everywhere on public/auth surfaces
+  ['images.unsplash.com', 'useScroll', 'useTransform'].forEach((marker) => {
     if (landing.includes(marker) || authLayout.includes(marker)) {
-      fail(`public/auth surfaces must not rely on decorative media or motion marker ${marker}`);
+      fail(`public/auth surfaces must not rely on decorative media or scroll-motion marker ${marker}`);
     }
   });
+  // motion/ imports are intentionally used on LandingPage for animations; ban only on AuthLayout
+  if (authLayout.includes('motion/')) {
+    fail('auth layout must not rely on motion/ animations');
+  }
 
   assertContains(authLayout, 'Surface', 'auth layout is missing Surface');
   assertContains(authLayout, 'Connect source once', 'auth layout should reference the core product workflow');

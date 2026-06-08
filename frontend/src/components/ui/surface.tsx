@@ -11,6 +11,9 @@ const surfaceVariants = cva('rounded-lg text-text-primary', {
       muted: 'border border-border bg-panel-muted',
       overlay: 'border border-border bg-overlay shadow-overlay',
       sidebar: 'bg-sidebar text-sidebar-foreground',
+      glass: 'border border-[color-mix(in_oklch,var(--border),transparent_40%)] bg-[color-mix(in_oklch,var(--panel),transparent_30%)] backdrop-blur-sm',
+      interactive: 'border border-border bg-panel card-hover cursor-pointer',
+      'glass-interactive': 'border border-[color-mix(in_oklch,var(--border),transparent_40%)] bg-[color-mix(in_oklch,var(--panel),transparent_30%)] backdrop-blur-sm card-hover cursor-pointer',
     },
     padding: {
       none: '',

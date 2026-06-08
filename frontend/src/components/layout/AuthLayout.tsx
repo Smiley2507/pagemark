@@ -15,8 +15,8 @@ export function AuthLayout({
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-canvas text-text-primary lg:grid lg:grid-cols-2">
-      <div className="flex flex-col px-4 py-8 sm:px-10 lg:border-r lg:border-border/60">
+    <div className="min-h-screen bg-canvas text-text-primary selection:bg-interaction/20 lg:grid lg:grid-cols-2">
+      <div className="flex flex-col px-4 py-8 sm:px-10 lg:border-r lg:border-border/40">
         <button
           type="button"
           onClick={() => navigate('/')}
@@ -47,40 +47,34 @@ export function AuthLayout({
         </div>
       </div>
 
-      <div
-        className="relative hidden items-center justify-center overflow-hidden lg:flex"
-        style={{
-          background: [
-            'linear-gradient(135deg, color-mix(in srgb, var(--interaction) 18%, var(--canvas)) 0%, color-mix(in srgb, var(--interaction) 6%, var(--canvas)) 50%, var(--canvas) 100%)',
-          ].join(', '),
-        }}
-      >
+      <div className="landing-atmosphere grain-overlay relative hidden items-center justify-center overflow-hidden lg:flex">
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.03]"
+          className="pointer-events-none absolute inset-0 opacity-[0.025]"
           style={{
             backgroundImage: [
-              'linear-gradient(var(--interaction) 1px, transparent 1px)',
-              'linear-gradient(90deg, var(--interaction) 1px, transparent 1px)',
+              'linear-gradient(135deg, var(--interaction) 1px, transparent 1px)',
+              'linear-gradient(225deg, var(--interaction) 1px, transparent 1px)',
             ].join(', '),
-            backgroundSize: '40px 40px',
+            backgroundSize: '48px 48px',
           }}
         />
         <div
           className="pointer-events-none absolute inset-0"
           style={{
             background: [
-              'radial-gradient(ellipse 80% 50% at 50% 20%, color-mix(in srgb, var(--interaction) 20%, transparent) 0%, transparent 60%)',
-              'radial-gradient(ellipse 50% 60% at 80% 70%, color-mix(in srgb, var(--interaction) 12%, transparent) 0%, transparent 50%)',
+              'radial-gradient(ellipse 70% 50% at 50% 20%, color-mix(in srgb, var(--interaction), transparent 82%) 0%, transparent 60%)',
+              'radial-gradient(ellipse 40% 50% at 80% 70%, color-mix(in srgb, var(--interaction), transparent 88%) 0%, transparent 50%)',
             ].join(', '),
           }}
         />
         <div className="relative max-w-lg px-10">
           <h2 className="text-title text-text-primary">
-            Connect source once, write multiple Documents.
+            Documentation grounded in your codebase.
           </h2>
           <p className="mt-3 text-body text-text-secondary">
-            Same workspace model as the editor — no marketing surface, no separate wizard.
-            Provider credentials stay optional until you choose an AI-powered action.
+            One Analysis snapshot powers every Document. Provider credentials stay
+            optional until you choose an AI-powered action. Reviewed Sections are
+            never silently overwritten.
           </p>
         </div>
       </div>
