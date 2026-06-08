@@ -137,7 +137,7 @@ export function AiPanelComposer({
     : [{ id: 'template', label: 'Document template' }];
 
   return (
-    <div className="rounded-xl border border-input bg-panel focus-within:border-interaction transition-colors">
+    <div className="rounded-xl border border-input focus-within:border-interaction transition-colors">
       <textarea
         ref={textareaRef}
         value={value}

@@ -11,6 +11,7 @@ import { AiPanelHeader } from './ai/AiPanelHeader';
 import { AiPanelEmptyState } from './ai/AiPanelEmptyState';
 import { AiPanelMessages } from './ai/AiPanelMessages';
 import { AiPanelContextBar } from './ai/AiPanelContextBar';
+import { AiPanelBottomBar } from './ai/AiPanelBottomBar';
 import { AiPanelComposer } from './ai/AiPanelComposer';
 import { AiPanelAttachments } from './ai/AiPanelAttachments';
 
@@ -146,8 +147,6 @@ export function AiPanel({
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
       <AiPanelHeader
-        activeSectionHeading={activeSectionHeading}
-        activeModelLabel={activeModelLabel}
         temperature={temperature}
         maxTokens={maxTokens}
         onTemperatureChange={setTemperature}
@@ -233,11 +232,13 @@ export function AiPanel({
         activeSectionStatus={activeSectionStatus}
       />
 
+      <AiPanelBottomBar activeModelLabel={activeModelLabel} />
+
       {showAttachments && (
         <AiPanelAttachments onClose={() => setShowAttachments(false)} />
       )}
 
-      <div className="shrink-0 border-t border-separator bg-canvas px-3 pb-3 pt-3">
+      <div className="shrink-0 bg-canvas px-3 pb-3 pt-2">
         <AiPanelComposer
           value={inputValue}
           onChange={setInputValue}
