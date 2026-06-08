@@ -9,7 +9,7 @@ export const useQualityReport = (projectId: number, documentId: number) =>
     enabled: projectId > 0 && documentId > 0,
     retry: false,
     refetchInterval: (query) => {
-      return query.state.data ? 30000 : 5000;
+      return query.state.data ? 30000 : false;
     },
   });
 
@@ -20,7 +20,21 @@ export const useRunQuality = (projectId: number, documentId: number) => {
     onSuccess: () => {
       toast.success('Quality analysis started');
       queryClient.invalidateQueries({ queryKey: ['quality', projectId, documentId] });
+      let attempts = 0;
+      const maxAttempts = 12;
+      const poll = setInterval(() => {
+        attempts++;
+        queryClient.invalidateQueries({ queryKey: ['quality', projectId, documentId] });
+        const state = queryClient.getQueryState(['quality', projectId, documentId]);
+        if (state?.data) {
+          clearInterval(poll);
+          toast.success('Quality analysis complete');
+        } else if (attempts >= maxAttempts) {
+          clearInterval(poll);
+          toast.error('Quality analysis timed out. Please try again.');
+        }
+      }, 5000);
     },
-    onError: () => toast.error('Failed to start quality analysis'),
+    onError: () => toast.error('Failed to start quality analysis. Check your connection and try again.'),
   });
 };

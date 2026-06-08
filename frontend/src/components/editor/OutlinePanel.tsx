@@ -155,28 +155,29 @@ export function OutlinePanel({
             </div>
 
             <div>
-              <button
-                onClick={() => setShowSubScores(!showSubScores)}
-                className="flex w-full items-center justify-between gap-2 text-meta-sm text-left"
-              >
-                <span className="flex items-center gap-1.5 text-text-muted">
+              <div className="flex items-center justify-between gap-2 text-meta-sm">
+                <button
+                  onClick={() => setShowSubScores(!showSubScores)}
+                  className="flex items-center gap-1.5 text-text-muted cursor-pointer"
+                  title="Toggle quality sub-scores"
+                >
                   <ShieldCheck className="h-3 w-3" />
                   Quality
+                </button>
+                <span className="flex items-center gap-1.5">
                   <button
-                    onClick={(e) => { e.stopPropagation(); onRunQuality(); }}
-                    className="rounded p-0.5 text-text-muted transition-colors hover:bg-interaction-muted hover:text-interaction-hover"
+                    onClick={onRunQuality}
+                    className="rounded p-0.5 text-text-muted transition-colors hover:bg-interaction-muted hover:text-interaction-hover cursor-pointer"
                     title="Run quality analysis"
                   >
                     <RotateCw className="h-2.5 w-2.5" />
                   </button>
-                </span>
-                <span className="flex items-center gap-1.5">
                   {StatDot(qualityDot)}
                   <span className="font-medium text-text-primary">
                     {qualityData != null ? `${Math.round(qualityData.overall_score)}%` : '—'}
                   </span>
                 </span>
-              </button>
+              </div>
               {showSubScores && qualityData && (
                 <div className="ml-5 mt-1 space-y-1 border-l border-separator pl-2">
                   <div className="flex items-center justify-between text-[10px] text-text-muted">
