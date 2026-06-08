@@ -43,6 +43,7 @@ import { useQualityReport } from '@/hooks/useQuality';
 import { getSectionState } from '@/lib/section-state';
 import { cn } from '@/lib/utils';
 import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import type { Section } from '@/types';
 
 type FlatSection = Section & { depth: number };
@@ -539,6 +540,27 @@ export function DocumentEditorPage() {
   const handleInsertAtCursor = useCallback((content: string) => {
     toast.success('AI content ready to insert');
   }, []);
+
+  useKeyboardShortcuts({
+    shortcuts: [
+      {
+        key: 'i',
+        mod: 'metaKey',
+        handler: () => { setRightPanelOpen((prev) => !prev); setRightTab('ai'); },
+      },
+      {
+        key: 'k',
+        mod: 'metaKey',
+        handler: () => {
+          setRightPanelOpen(true);
+          setRightTab('ai');
+          requestAnimationFrame(() => {
+            globalThis.document.querySelector<HTMLTextAreaElement>('[data-ai-input="true"]')?.focus();
+          });
+        },
+      },
+    ],
+  });
 
   const loading = documentLoading || sectionsLoading;
   const showSourceNotice = freshnessData?.freshness === 'stale' && (freshnessData?.stale_count || 0) > 0;
