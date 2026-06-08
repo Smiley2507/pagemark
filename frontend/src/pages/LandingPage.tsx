@@ -5,12 +5,17 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronDown,
+  DollarSign,
+  Download,
   GitBranch,
   Layers,
   LayoutTemplate,
+  MessageSquare,
   Moon,
   PenSquare,
+  Search,
   ShieldCheck,
+  Sparkles,
   Star,
   Sun,
   Zap,
@@ -157,20 +162,20 @@ const trustLogos = [
   { name: 'OpenCode', symbol: '◉' },
 ];
 
-const pricingCore = [
-  'Static source analysis',
-  'Rule-based template recommendations',
-  'Multi-document projects',
-  'Section review workflow',
-  'Export to Markdown / HTML / PDF',
+const pricingCoreItems = [
+  { icon: Search, label: 'Static source analysis' },
+  { icon: LayoutTemplate, label: 'Rule-based recommendations' },
+  { icon: Layers, label: 'Multi-document projects' },
+  { icon: ShieldCheck, label: 'Section review workflow' },
+  { icon: Download, label: 'Export Markdown / HTML / PDF' },
 ];
 
-const pricingAi = [
-  'AI-personalized template recommendations',
-  'Outline adaptation from repo facts',
-  'Section-level prose generation',
-  'AI chat and refinement per section',
-  'Estimated cost shown before every run',
+const pricingAiItems = [
+  { icon: Sparkles, label: 'AI-personalized recommendations' },
+  { icon: GitBranch, label: 'Outline adaptation from repo facts' },
+  { icon: PenSquare, label: 'Section-level prose generation' },
+  { icon: MessageSquare, label: 'AI chat & refinement per section' },
+  { icon: DollarSign, label: 'Cost estimates before every run' },
 ];
 
 // ─── component ────────────────────────────────────────────────────────────────
@@ -542,7 +547,7 @@ export function LandingPage() {
 
         {/* ── Pricing with Mesh overlay ── */}
         <section className="mesh-overlay relative overflow-hidden border-y border-border/10 bg-[color-mix(in_srgb,var(--canvas),var(--text-primary)_3%)] px-4 py-24 sm:px-8 sm:py-32">
-          <div className="relative z-10 mx-auto max-w-4xl">
+          <div className="relative z-10 mx-auto max-w-6xl">
             <FadeUp className="text-center">
               <span className="text-meta-sm font-semibold tracking-wider text-interaction uppercase">Pricing</span>
               <h2 className="mt-4 text-title text-text-primary">Simple and transparent.</h2>
@@ -550,48 +555,78 @@ export function LandingPage() {
                 Pagemark never charges for AI inference. You pay only for what you use through your own provider.
               </p>
             </FadeUp>
-            <FadeUp className="mx-auto mt-10 max-w-4xl">
-              <Surface variant="glass" padding="lg" className="space-y-8">
-                <div className="space-y-2 text-center">
-                  <h3 className="text-title text-text-primary">Everything you need to document your codebase.</h3>
-                  <p className="text-body text-text-secondary">
-                    Pagemark is free. AI generation uses your own provider key — you pay only for what you consume.
-                  </p>
-                </div>
 
-                <div className="grid gap-8 sm:grid-cols-2">
-                  <div className="space-y-4">
-                    <h4 className="text-section font-semibold text-text-primary">Core</h4>
-                    <ul className="space-y-2.5">
-                      {pricingCore.map((item) => (
-                        <li key={item} className="flex items-start gap-2.5 text-body text-text-secondary">
-                          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-interaction" aria-hidden="true" />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
+            <div className="relative z-10 mx-auto mt-14 grid gap-8 lg:grid-cols-5">
+              {/* LEFT: Value prop card */}
+              <FadeUp className="lg:col-span-2">
+                <Surface variant="glass" padding="lg" className="flex h-full flex-col justify-between gap-8">
+                  <div className="space-y-5">
+                    <span className="inline-flex items-center rounded-full bg-interaction/10 px-3 py-1 text-xs font-semibold text-interaction">
+                      Free forever
+                    </span>
+                    <div>
+                      <p className="text-5xl font-bold tracking-tight text-text-primary">$0</p>
+                      <p className="mt-1 text-body text-text-muted">No credit card required</p>
+                    </div>
+                    <p className="text-body leading-relaxed text-text-secondary">
+                      Static Analysis is always free. AI generation uses your own provider key — you pay only for what your model consumes.
+                    </p>
                   </div>
-
-                  <div className="space-y-4">
-                    <h4 className="text-section font-semibold text-text-primary">AI-powered</h4>
-                    <ul className="space-y-2.5">
-                      {pricingAi.map((item) => (
-                        <li key={item} className="flex items-start gap-2.5 text-body text-text-secondary">
-                          <Zap className="mt-0.5 h-4 w-4 shrink-0 text-interaction" aria-hidden="true" />
-                          {item}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="pt-2 text-center">
                   <Link to="/register">
-                    <Button size="lg">Get started — no credit card required</Button>
+                    <Button size="lg" className="w-full">Get started</Button>
                   </Link>
+                </Surface>
+              </FadeUp>
+
+              {/* RIGHT: Feature tiles */}
+              <FadeUp delay={0.1} className="lg:col-span-3">
+                <div className="flex h-full flex-col justify-center gap-8">
+                  {/* Core group */}
+                  <div className="space-y-4">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1 text-xs font-semibold text-text-secondary">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Core
+                    </span>
+                    <div className="grid grid-cols-2 gap-3">
+                      {pricingCoreItems.map((item) => (
+                        <motion.div
+                          key={item.label}
+                          whileHover={{ y: -2, transition: { duration: 0.2 } }}
+                          className="flex items-center gap-3 rounded-xl border border-border/40 bg-[color-mix(in_srgb,var(--canvas),transparent_50%)] p-3 transition-all duration-200 hover:border-interaction/30 hover:shadow-[0_4px_16px_color-mix(in_srgb,var(--interaction),transparent_92%)]"
+                        >
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-interaction/10 text-interaction">
+                            <item.icon className="h-4 w-4" />
+                          </div>
+                          <span className="text-sm font-medium leading-snug text-text-primary">{item.label}</span>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* AI-powered group */}
+                  <div className="space-y-4">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 px-3 py-1 text-xs font-semibold text-text-secondary">
+                      <Zap className="h-3 w-3" />
+                      AI-powered
+                    </span>
+                    <div className="grid grid-cols-2 gap-3">
+                      {pricingAiItems.map((item) => (
+                        <motion.div
+                          key={item.label}
+                          whileHover={{ y: -2, transition: { duration: 0.2 } }}
+                          className="flex items-center gap-3 rounded-xl border border-border/40 bg-[color-mix(in_srgb,var(--canvas),transparent_50%)] p-3 transition-all duration-200 hover:border-interaction/30 hover:shadow-[0_4px_16px_color-mix(in_srgb,var(--interaction),transparent_92%)]"
+                        >
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-interaction/10 text-interaction">
+                            <item.icon className="h-4 w-4" />
+                          </div>
+                          <span className="text-sm font-medium leading-snug text-text-primary">{item.label}</span>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </Surface>
-            </FadeUp>
+              </FadeUp>
+            </div>
           </div>
         </section>
 
