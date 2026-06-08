@@ -8,6 +8,9 @@ export const useQualityReport = (projectId: number, documentId: number) =>
     queryFn: () => qualityApi.getQuality(projectId, documentId),
     enabled: projectId > 0 && documentId > 0,
     retry: false,
+    refetchInterval: (query) => {
+      return query.state.data ? 30000 : 5000;
+    },
   });
 
 export const useRunQuality = (projectId: number, documentId: number) => {
@@ -16,9 +19,7 @@ export const useRunQuality = (projectId: number, documentId: number) => {
     mutationFn: () => qualityApi.runQuality(projectId, documentId),
     onSuccess: () => {
       toast.success('Quality analysis started');
-      setTimeout(() => {
-        void queryClient.invalidateQueries({ queryKey: ['quality', projectId, documentId] });
-      }, 3000);
+      queryClient.invalidateQueries({ queryKey: ['quality', projectId, documentId] });
     },
     onError: () => toast.error('Failed to start quality analysis'),
   });

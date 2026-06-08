@@ -162,15 +162,13 @@ export function OutlinePanel({
                 <span className="flex items-center gap-1.5 text-text-muted">
                   <ShieldCheck className="h-3 w-3" />
                   Quality
-                  {qualityData != null && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onRunQuality(); }}
-                      className="rounded p-0.5 text-text-muted transition-colors hover:bg-interaction-muted hover:text-interaction-hover"
-                      title="Run quality analysis"
-                    >
-                      <RotateCw className="h-2.5 w-2.5" />
-                    </button>
-                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRunQuality(); }}
+                    className="rounded p-0.5 text-text-muted transition-colors hover:bg-interaction-muted hover:text-interaction-hover"
+                    title="Run quality analysis"
+                  >
+                    <RotateCw className="h-2.5 w-2.5" />
+                  </button>
                 </span>
                 <span className="flex items-center gap-1.5">
                   {StatDot(qualityDot)}

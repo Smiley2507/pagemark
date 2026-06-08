@@ -191,8 +191,9 @@ def _run_async(coro):
 def score_quality_task(self, document_id: int):
     """Main quality scoring Celery task."""
     from app.database import sync_session_factory
-    from app.models.document import Document, Section, SectionStatus
+    from app.models.document import Document, Section, SectionStatus, SectionContentLifecycle
     from app.models.quality import QualityReport, QualityIssue, BrokenLink, IssueSeverity
+    from sqlalchemy import or_
     from sqlalchemy.orm import selectinload
 
     with sync_session_factory() as db:
@@ -209,7 +210,10 @@ def score_quality_task(self, document_id: int):
             db.query(Section)
             .filter(
                 Section.document_id == doc.id,
-                Section.status == SectionStatus.FINALIZED,
+                or_(
+                    Section.status == SectionStatus.FINALIZED,
+                    Section.content_lifecycle == SectionContentLifecycle.REVIEWED,
+                ),
             )
             .order_by(Section.order_index)
             .all()
@@ -285,7 +289,7 @@ def score_quality_task(self, document_id: int):
         db.commit()
 
     return {
-        "project_id": project_id,
+        "project_id": doc.project_id,
         "overall": round(overall, 1),
         "completeness": round(completeness, 1),
         "readability": round(readability, 1),
