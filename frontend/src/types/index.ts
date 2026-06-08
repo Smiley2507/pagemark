@@ -359,7 +359,7 @@ export interface FileNode {
 
 export interface QualityReport {
   id: number;
-  project_id: number;
+  document_id: number;
   overall_score: number;
   completeness: number;
   consistency: number;

@@ -39,7 +39,7 @@ import { SectionStatusBadge } from '@/components/ui/section-status-badge';
 import { Tooltip } from '@/components/ui/tooltip';
 import { documentsApi, type Document } from '@/api/documents';
 import { useDocumentAutosave, useDocumentSections, useUpdateDocumentSection, useAcceptSectionReview } from '@/hooks/useSections';
-import { useQualityReport } from '@/hooks/useQuality';
+import { useQualityReport, useRunQuality } from '@/hooks/useQuality';
 import { getSectionState } from '@/lib/section-state';
 import { cn } from '@/lib/utils';
 import { OutlinePanel } from '@/components/editor/OutlinePanel';
@@ -94,18 +94,6 @@ function countWords(sections: Section[]): number {
       .replace(/[#*_`>\-[\]()]/g, ' ');
     const words = text.trim().match(/\b[\w']+\b/g);
     return total + (words?.length || 0);
-  }, 0);
-}
-
-function countQualityIssues(sections: Section[]): number {
-  return sections.reduce((total, section) => {
-    const metadata = section.workflow_metadata || {};
-    const raw =
-      metadata.grammar_issue_count ??
-      metadata.style_issue_count ??
-      metadata.quality_issue_count ??
-      metadata.issue_count;
-    return total + (typeof raw === 'number' && Number.isFinite(raw) ? raw : 0);
   }, 0);
 }
 
@@ -343,7 +331,6 @@ export function DocumentEditorPage() {
   ), [localContentBySectionId, sections]);
   const tocItems = useMemo(() => buildToc(sectionsForStats), [sectionsForStats]);
   const wordCount = useMemo(() => countWords(sectionsForStats), [sectionsForStats]);
-  const issueCount = useMemo(() => countQualityIssues(sectionsForStats), [sectionsForStats]);
   const reviewedCount = useMemo(
     () => sections.filter((section) => getSectionState(section).key === 'reviewed').length,
     [sections],
@@ -354,6 +341,7 @@ export function DocumentEditorPage() {
   const acceptSectionReview = useAcceptSectionReview(pid, did);
   const updateDocumentSection = useUpdateDocumentSection(pid, did);
   const { data: qualityData } = useQualityReport(pid, did);
+  const runQuality = useRunQuality(pid, did);
 
   const canAcceptAll = sections.length > 0 && reviewedCount < reviewTotal;
 
@@ -660,10 +648,10 @@ export function DocumentEditorPage() {
             wordCount={wordCount}
             reviewedCount={reviewedCount}
             reviewTotal={reviewTotal}
-            issueCount={issueCount}
-            qualityScore={qualityData?.overall_score}
+            qualityData={qualityData}
             canAcceptAll={canAcceptAll}
             onAcceptAll={handleAcceptAllReview}
+            onRunQuality={() => runQuality.mutate()}
             onCreateSection={() => createSection.mutate({})}
             onClose={() => setTocOpen(false)}
           />

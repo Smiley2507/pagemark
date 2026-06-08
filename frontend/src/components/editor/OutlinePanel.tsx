@@ -1,6 +1,8 @@
-import { PanelRightOpen, Plus, CheckCheck, FileText, Sparkles, BookOpen, ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
+import { PanelRightOpen, Plus, CheckCheck, RotateCw, FileText, Sparkles, BookOpen, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import type { QualityReportFull } from '@/api/quality';
 import type { KeyboardEvent } from 'react';
 
 export type TocItem = {
@@ -18,10 +20,10 @@ interface OutlinePanelProps {
   wordCount: number;
   reviewedCount: number;
   reviewTotal: number;
-  issueCount: number;
-  qualityScore: number | null | undefined;
+  qualityData: QualityReportFull | null | undefined;
   canAcceptAll: boolean;
   onAcceptAll: () => void;
+  onRunQuality: () => void;
   onCreateSection: () => void;
   onClose: () => void;
 }
@@ -38,13 +40,14 @@ export function OutlinePanel({
   wordCount,
   reviewedCount,
   reviewTotal,
-  issueCount,
-  qualityScore,
+  qualityData,
   canAcceptAll,
   onAcceptAll,
+  onRunQuality,
   onCreateSection,
   onClose,
 }: OutlinePanelProps) {
+  const [showSubScores, setShowSubScores] = useState(false);
 
   const reviewDot =
     reviewTotal === 0 ? 'bg-text-muted' :
@@ -53,14 +56,24 @@ export function OutlinePanel({
     'bg-status-danger-foreground';
 
   const qualityDot =
-    qualityScore == null ? 'bg-text-muted' :
-    qualityScore >= 80 ? 'bg-status-success-foreground' :
-    qualityScore >= 60 ? 'bg-status-warning-foreground' :
+    qualityData == null ? 'bg-text-muted' :
+    qualityData.overall_score >= 80 ? 'bg-status-success-foreground' :
+    qualityData.overall_score >= 60 ? 'bg-status-warning-foreground' :
     'bg-status-danger-foreground';
 
+  const qualityIssues = qualityData?.issues ?? [];
+  const brokenLinks = qualityData?.broken_links ?? [];
+  const hasErrorIssues = qualityIssues.some((i) => i.severity === 'error');
+
   const issueDot =
-    issueCount === 0 ? 'bg-status-success-foreground' :
-    issueCount <= 5 ? 'bg-status-warning-foreground' :
+    qualityData == null ? 'bg-text-muted' :
+    qualityIssues.length === 0 ? 'bg-status-success-foreground' :
+    hasErrorIssues ? 'bg-status-danger-foreground' :
+    'bg-status-warning-foreground';
+
+  const brokenLinkDot =
+    qualityData == null ? 'bg-text-muted' :
+    brokenLinks.length === 0 ? 'bg-status-success-foreground' :
     'bg-status-danger-foreground';
 
   return (
@@ -129,6 +142,7 @@ export function OutlinePanel({
               </span>
               <span className="font-medium text-text-primary">{wordCount.toLocaleString()}</span>
             </div>
+
             <div className="flex items-center justify-between gap-2 text-meta-sm">
               <span className="flex items-center gap-1.5 text-text-muted">
                 <Sparkles className="h-3 w-3" />
@@ -139,18 +153,54 @@ export function OutlinePanel({
                 <span className="font-medium text-text-primary">{reviewedCount}/{reviewTotal}</span>
               </span>
             </div>
-            <div className="flex items-center justify-between gap-2 text-meta-sm">
-              <span className="flex items-center gap-1.5 text-text-muted">
-                <ShieldCheck className="h-3 w-3" />
-                Quality
-              </span>
-              <span className="flex items-center gap-1.5">
-                {StatDot(qualityDot)}
-                <span className="font-medium text-text-primary">
-                  {qualityScore != null ? `${Math.round(qualityScore)}%` : '—'}
+
+            <div>
+              <button
+                onClick={() => setShowSubScores(!showSubScores)}
+                className="flex w-full items-center justify-between gap-2 text-meta-sm text-left"
+              >
+                <span className="flex items-center gap-1.5 text-text-muted">
+                  <ShieldCheck className="h-3 w-3" />
+                  Quality
+                  {qualityData != null && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onRunQuality(); }}
+                      className="rounded p-0.5 text-text-muted transition-colors hover:bg-interaction-muted hover:text-interaction-hover"
+                      title="Run quality analysis"
+                    >
+                      <RotateCw className="h-2.5 w-2.5" />
+                    </button>
+                  )}
                 </span>
-              </span>
+                <span className="flex items-center gap-1.5">
+                  {StatDot(qualityDot)}
+                  <span className="font-medium text-text-primary">
+                    {qualityData != null ? `${Math.round(qualityData.overall_score)}%` : '—'}
+                  </span>
+                </span>
+              </button>
+              {showSubScores && qualityData && (
+                <div className="ml-5 mt-1 space-y-1 border-l border-separator pl-2">
+                  <div className="flex items-center justify-between text-[10px] text-text-muted">
+                    <span>Completeness</span>
+                    <span className="font-medium">{Math.round(qualityData.completeness)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-text-muted">
+                    <span>Readability</span>
+                    <span className="font-medium">{Math.round(qualityData.readability)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-text-muted">
+                    <span>Consistency</span>
+                    <span className="font-medium">{Math.round(qualityData.consistency)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-text-muted">
+                    <span>Accuracy</span>
+                    <span className="font-medium">{Math.round(qualityData.accuracy)}%</span>
+                  </div>
+                </div>
+              )}
             </div>
+
             <div className="flex items-center justify-between gap-2 text-meta-sm">
               <span className="flex items-center gap-1.5 text-text-muted">
                 <BookOpen className="h-3 w-3" />
@@ -158,7 +208,18 @@ export function OutlinePanel({
               </span>
               <span className="flex items-center gap-1.5">
                 {StatDot(issueDot)}
-                <span className="font-medium text-text-primary">{issueCount}</span>
+                <span className="font-medium text-text-primary">{qualityIssues.length}</span>
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 text-meta-sm">
+              <span className="flex items-center gap-1.5 text-text-muted">
+                <BookOpen className="h-3 w-3" />
+                Broken links
+              </span>
+              <span className="flex items-center gap-1.5">
+                {StatDot(brokenLinkDot)}
+                <span className="font-medium text-text-primary">{brokenLinks.length}</span>
               </span>
             </div>
           </div>

@@ -19,7 +19,6 @@ export interface BrokenLink {
 }
 
 export interface QualityReportFull extends QualityReport {
-  project_id: number;
   issues: QualityIssue[];
   broken_links: BrokenLink[];
 }
