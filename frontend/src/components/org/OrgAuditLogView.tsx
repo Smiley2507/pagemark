@@ -8,6 +8,12 @@ import { Activity, Calendar, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/dashboard/DashboardViews';
 
+function formatAction(action: string): string {
+  return action
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export const OrgAuditLogView: React.FC = () => {
   const { activeOrgId } = useOrgStore();
   const [page, setPage] = useState(1);
@@ -39,44 +45,51 @@ export const OrgAuditLogView: React.FC = () => {
       <h2 className="text-section font-semibold">Audit Log</h2>
 
       {logs && logs.length > 0 ? (
-        <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-muted/50 text-muted-foreground border-b border-border">
-              <tr className="divide-x divide-border">
-                <th className="px-4 py-3 font-medium">Action</th>
-                <th className="px-4 py-3 font-medium">User</th>
-                <th className="px-4 py-3 font-medium">Resource</th>
-                <th className="px-4 py-3 font-medium">Date</th>
+        <div className="border-2 border-double border-border bg-card rounded-sm overflow-hidden">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b-2 border-double border-border bg-panel-muted/80">
+                <th className="px-3 py-2.5 text-meta-sm font-mono uppercase tracking-widest text-text-muted">Action</th>
+                <th className="px-3 py-2.5 text-meta-sm font-mono uppercase tracking-widest text-text-muted">User</th>
+                <th className="px-3 py-2.5 text-meta-sm font-mono uppercase tracking-widest text-text-muted">Resource</th>
+                <th className="px-3 py-2.5 text-meta-sm font-mono uppercase tracking-widest text-text-muted">Timestamp</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody>
               {logs.map((log) => (
-                <tr key={log.id} className="hover:bg-muted/30 transition-colors">
-                  <td className="px-4 py-3">
+                <tr
+                  key={log.id}
+                  className="even:bg-panel-muted/20 hover:bg-interaction-muted/10 transition-colors border-b border-separator/40 last:border-b-0"
+                >
+                  <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2">
-                      <Activity className="h-3 w-3 text-muted-foreground" />
-                      {log.action}
+                      <span className="inline-flex items-center gap-1.5 rounded-sm bg-panel-muted/60 px-2 py-0.5 font-mono text-meta font-medium text-text-secondary tracking-tight">
+                        <Activity className="h-3 w-3 text-text-muted shrink-0" />
+                        {formatAction(log.action)}
+                      </span>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <User className="h-3 w-3 text-muted-foreground" />
-                      {log.user_name || 'Unknown User'}
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-1.5 text-meta text-text-secondary">
+                      <User className="h-3 w-3 text-text-muted shrink-0" />
+                      <span className="truncate max-w-[140px]">{log.user_name || 'Unknown User'}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {log.resource || 'N/A'}
+                  <td className="px-3 py-2.5 font-mono text-meta text-text-muted">
+                    <span className="truncate max-w-[200px] inline-block align-middle leading-none">
+                      {log.resource || '—'}
+                    </span>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-3 w-3" />
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-1.5 text-meta text-text-muted whitespace-nowrap">
+                      <Calendar className="h-3 w-3 shrink-0" />
                       {new Date(log.created_at).toLocaleString()}
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table >
+          </table>
         </div>
       ) : (
         <EmptyState
@@ -106,7 +119,7 @@ export const OrgAuditLogView: React.FC = () => {
         >
           Next
         </Button>
-      </div >
-    </div >
+      </div>
+    </div>
   );
 };

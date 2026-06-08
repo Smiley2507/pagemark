@@ -62,7 +62,7 @@ export function SettingsPage() {
 
         <div className="bg-panel-muted/55 p-3">
           <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-            <div className="space-y-2 self-start">
+            <div className="space-y-2 self-start sticky top-0">
               {filteredSections.map((section) => {
                 const Icon = section.icon;
                 const selected = section.id === activeSection.id;
@@ -87,7 +87,7 @@ export function SettingsPage() {
               })}
             </div>
 
-            <div className="space-y-5">
+            <div className="space-y-5 max-h-[calc(100vh-14rem)] overflow-y-auto">
               <div className="border-b border-separator pb-4">
                 <h2 className="text-section font-semibold text-text-primary">{activeSection.label}</h2>
               </div>
