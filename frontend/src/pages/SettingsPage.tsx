@@ -42,12 +42,10 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="space-y-5">
-      <Surface variant="panel" padding="lg">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-section font-semibold text-text-primary">Settings</h1>
-          </div>
+    <div className="space-y-6 px-6 py-6">
+      <Surface variant="panel" padding="none" className="overflow-hidden">
+        <div className="flex flex-col gap-4 border-b border-separator px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+          <h1 className="text-section font-semibold text-text-primary">Settings</h1>
           <div className="w-full max-w-sm">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
@@ -61,51 +59,49 @@ export function SettingsPage() {
             </div>
           </div>
         </div>
-      </Surface>
 
-      <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <Surface variant="muted" padding="default" className="space-y-2 self-start">
-          {filteredSections.map((section) => {
-            const Icon = section.icon;
-            const selected = section.id === activeSection.id;
-            return (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => setTab(section.id)}
-                className={cn(
-                  'w-full rounded border px-3 py-3 text-left transition-colors',
-                  selected
-                    ? 'border-interaction bg-panel text-text-primary'
-                    : 'border-transparent bg-transparent text-text-secondary hover:border-separator hover:bg-panel'
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div>
+        <div className="bg-panel-muted/55 p-3">
+          <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+            <div className="space-y-2 self-start">
+              {filteredSections.map((section) => {
+                const Icon = section.icon;
+                const selected = section.id === activeSection.id;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => setTab(section.id)}
+                    className={cn(
+                      'w-full rounded border px-3 py-3 text-left transition-colors',
+                      selected
+                        ? 'border-interaction bg-panel text-text-primary'
+                        : 'border-transparent bg-transparent text-text-secondary hover:border-separator hover:bg-panel'
+                    )}
+                  >
+                    <div className="flex items-start gap-3">
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
                       <p className="text-body font-medium">{section.label}</p>
                     </div>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </Surface>
+                  </button>
+                );
+              })}
+            </div>
 
-        <Surface variant="panel" padding="lg" className="space-y-5">
-          <div className="border-b border-separator pb-4">
-            <h2 className="text-section font-semibold text-text-primary">{activeSection.label}</h2>
+            <div className="space-y-5">
+              <div className="border-b border-separator pb-4">
+                <h2 className="text-section font-semibold text-text-primary">{activeSection.label}</h2>
+              </div>
+
+              {activeSection.id === 'profile' && <ProfileSection />}
+              {activeSection.id === 'organization' && <OrgSettingsView />}
+              {activeSection.id === 'notifications' && <NotificationPreferencesSection />}
+              {activeSection.id === 'ai-providers' && <AiProvidersSection />}
+              {activeSection.id === 'api-keys' && <OrgApiKeysView />}
+              {activeSection.id === 'activity' && <OrgAuditLogView />}
+            </div>
           </div>
-
-          {activeSection.id === 'profile' && <ProfileSection />}
-          {activeSection.id === 'organization' && <OrgSettingsView />}
-          {activeSection.id === 'notifications' && <NotificationPreferencesSection />}
-          {activeSection.id === 'ai-providers' && <AiProvidersSection />}
-          {activeSection.id === 'api-keys' && <OrgApiKeysView />}
-          {activeSection.id === 'activity' && <OrgAuditLogView />}
-        </Surface>
-      </div>
+        </div>
+      </Surface>
     </div>
   );
 }

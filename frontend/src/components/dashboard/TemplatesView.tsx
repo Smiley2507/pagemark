@@ -56,9 +56,9 @@ export const TemplatesView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <Surface variant="panel" padding="lg" className="space-y-4">
-        <div className="flex items-center justify-between">
+    <div className="space-y-6 px-6 py-6">
+      <Surface variant="panel" padding="none" className="overflow-hidden">
+        <div className="flex items-center justify-between border-b border-separator px-5 py-4">
           <div>
             <p className="text-meta uppercase tracking-[0.18em] text-text-muted">Templates</p>
             <h2 className="text-section font-semibold text-text-primary">Document structures</h2>
@@ -68,55 +68,63 @@ export const TemplatesView: React.FC = () => {
             Create template
           </Button>
         </div>
-      </Surface>
 
-      {templatesError && (
-        <ErrorBanner
-          message="Failed to load templates"
-          onRetry={() => refetchTemplates()}
-        />
-      )}
-
-      {templatesLoading && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} className="h-48 w-full" />
-          ))}
-        </div>
-      )}
-
-      {!templatesLoading && !templatesError && templatesList && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {templatesList.map((tmpl) => (
-            <TemplateCard
-              key={tmpl.id}
-              template={tmpl}
-              onUse={(t: Template) =>
-                navigate(`/new-project?template_id=${t.id}`)
-              }
-              onEdit={(t) => {
-                setEditTemplate(t);
-                setNewTemplateName(t.name);
-                setNewTemplateDesc(t.description || '');
-                setNewTemplateCategory(t.category || 'Technical');
-                setNewTemplateSections([]);
-                setNewTemplateSystemPrompt(t.system_prompt || '');
-                setIsTemplateModalOpen(true);
-              }}
-              onDelete={async (t) => {
-                if (!confirm(`Delete template "${t.name}"?`)) return;
-                try {
-                  await projectsApi.deleteTemplate(t.id);
-                  toast.success('Template deleted');
-                  refetchTemplates();
-                } catch (e: any) {
-                  toast.error(e?.response?.data?.detail || 'Failed to delete template');
-                }
-              }}
+        <div className="bg-panel-muted/55 p-3">
+          {templatesError && (
+            <ErrorBanner
+              message="Failed to load templates"
+              onRetry={() => refetchTemplates()}
             />
-          ))}
+          )}
+
+          {templatesLoading && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-48 w-full" />
+              ))}
+            </div>
+          )}
+
+          {!templatesLoading && !templatesError && templatesList && templatesList.length > 0 && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {templatesList.map((tmpl) => (
+                <TemplateCard
+                  key={tmpl.id}
+                  template={tmpl}
+                  onUse={(t: Template) =>
+                    navigate(`/new-project?template_id=${t.id}`)
+                  }
+                  onEdit={(t) => {
+                    setEditTemplate(t);
+                    setNewTemplateName(t.name);
+                    setNewTemplateDesc(t.description || '');
+                    setNewTemplateCategory(t.category || 'Technical');
+                    setNewTemplateSections([]);
+                    setNewTemplateSystemPrompt(t.system_prompt || '');
+                    setIsTemplateModalOpen(true);
+                  }}
+                  onDelete={async (t) => {
+                    if (!confirm(`Delete template "${t.name}"?`)) return;
+                    try {
+                      await projectsApi.deleteTemplate(t.id);
+                      toast.success('Template deleted');
+                      refetchTemplates();
+                    } catch (e: any) {
+                      toast.error(e?.response?.data?.detail || 'Failed to delete template');
+                    }
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {!templatesLoading && !templatesError && (!templatesList || templatesList.length === 0) && (
+            <div className="flex min-h-48 flex-col items-center justify-center text-center">
+              <p className="text-text-secondary">No templates yet.</p>
+            </div>
+          )}
         </div>
-      )}
+      </Surface>
 
       {isTemplateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm">

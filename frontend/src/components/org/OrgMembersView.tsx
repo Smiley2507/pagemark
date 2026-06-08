@@ -280,7 +280,7 @@ export const OrgMembersView: React.FC = () => {
 
       {members && members.length > 0 ? (
         <Surface variant="panel" padding="none" className="overflow-hidden">
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-left text-sm [&_tr:last-child_td:first-child]:rounded-bl-lg [&_tr:last-child_td:last-child]:rounded-br-lg">
             <thead className="text-muted-foreground border-b border-border">
               <tr>
                 <th className="px-4 py-3 font-medium">Member</th>
