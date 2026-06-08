@@ -31,6 +31,9 @@ EVENT_WEIGHTS: dict[str, float] = {
     "freshness_rejected": 1.0,
     "project_created": 3.0,
     "project_updated": 0.5,
+    "document_shared": 2.0,
+    "share_updated": 1.5,
+    "share_revoked": 1.5,
 }
 
 EVENT_MESSAGES: dict[str, str] = {
@@ -51,6 +54,9 @@ EVENT_MESSAGES: dict[str, str] = {
     "freshness_rejected": "Freshness update rejected",
     "project_created": "Project created",
     "project_updated": "Project updated",
+    "document_shared": "Document shared",
+    "share_updated": "Share updated",
+    "share_revoked": "Share revoked",
 }
 
 

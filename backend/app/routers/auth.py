@@ -322,6 +322,9 @@ NOTIFICATION_CATEGORY_MAP: dict[str, str] = {
     "freshness_detected": "stale_sections",
     "freshness_accepted": "stale_sections",
     "freshness_rejected": "stale_sections",
+    "document_shared": "document_sharing",
+    "share_updated": "document_sharing",
+    "share_revoked": "document_sharing",
 }
 
 # Event types excluded from the category filter — always shown

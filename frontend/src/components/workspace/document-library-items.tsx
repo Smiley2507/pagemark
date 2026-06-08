@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -26,11 +26,13 @@ export function DocumentSummaryRow({
   onOpen,
   onEdit,
   onDelete,
+  onShare,
 }: {
   document: WorkspaceDocumentItem;
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onShare?: () => void;
 }) {
   return (
     <div className="grid gap-3 rounded-md border border-border bg-panel px-3 py-3 transition-colors hover:bg-canvas lg:grid-cols-[minmax(0,1fr)_180px_132px_auto] lg:items-center">
@@ -61,7 +63,7 @@ export function DocumentSummaryRow({
 
       <div className="flex items-center justify-between gap-2 lg:justify-end">
         <span className="text-meta text-text-muted">{formatDate(document.lastActivityAt)}</span>
-        <DocumentActions onEdit={onEdit} onDelete={onDelete} />
+        <DocumentActions onEdit={onEdit} onDelete={onDelete} onShare={onShare} />
       </div>
     </div>
   );
@@ -134,9 +136,14 @@ function DocumentAttentionBadges({ document }: { document: WorkspaceDocumentItem
   );
 }
 
-function DocumentActions({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+function DocumentActions({ onEdit, onDelete, onShare }: { onEdit: () => void; onDelete: () => void; onShare?: () => void }) {
   return (
     <div className="flex shrink-0 items-center gap-1">
+      <Tooltip content="Share Document">
+        <Button type="button" variant="ghost" size="icon" onClick={onShare} aria-label="Share Document">
+          <Share2 className="h-4 w-4" />
+        </Button>
+      </Tooltip>
       <Tooltip content="Edit Document">
         <Button type="button" variant="ghost" size="icon" onClick={onEdit} aria-label="Edit Document">
           <Pencil className="h-4 w-4" />

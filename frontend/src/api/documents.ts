@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { CollaborationNote, Section, SectionTreeResponse } from '../types';
+import type { CollaborationNote, Section, SectionTreeResponse, DocumentShare, ShareListResponse } from '../types';
 import type {
   TemplateRecommendation,
   OutlineProposal,
@@ -406,5 +406,26 @@ export const documentsApi = {
       `/projects/${projectId}/documents/${documentId}/sections/${sectionId}/freshness/reject`
     );
     return data;
+  },
+
+  async listShares(projectId: number, documentId: number): Promise<ShareListResponse> {
+    const { data } = await apiClient.get(
+      `/projects/${projectId}/documents/${documentId}/shares`
+    );
+    return data;
+  },
+
+  async addShare(projectId: number, documentId: number, userId: number, permission: 'view' | 'comment' | 'edit'): Promise<DocumentShare> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/shares`,
+      { user_id: userId, permission }
+    );
+    return data;
+  },
+
+  async revokeShare(projectId: number, documentId: number, shareId: number): Promise<void> {
+    await apiClient.delete(
+      `/projects/${projectId}/documents/${documentId}/shares/${shareId}`
+    );
   },
 };

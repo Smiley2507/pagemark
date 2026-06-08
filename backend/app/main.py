@@ -16,6 +16,7 @@ from app.routers import quality as quality_router
 from app.routers import export as export_router
 from app.routers import organizations as org_router
 from app.routers import keys as keys_router
+from app.routers import shares as shares_router
 
 
 # ── Built-in template seed data ─────────────────────────────────
@@ -172,6 +173,7 @@ app.include_router(keys_router.router)
 app.include_router(notes_router.router)
 app.include_router(nlp_router.router)
 app.include_router(uploads_router.router)
+app.include_router(shares_router.router)
 
 app.mount("/static", StaticFiles(directory=settings.UPLOAD_DIR), name="static")
 

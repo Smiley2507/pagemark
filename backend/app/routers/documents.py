@@ -7,7 +7,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.dependencies import get_current_user, verify_project_ownership
+from app.dependencies import get_current_user, verify_project_ownership, require_document_permission, verify_document_access
 from app.models.activity import ActivityEvent
 from app.models.document import (
     Document,
@@ -360,25 +360,20 @@ async def create_document(
 
 @router.get("/{project_id}/documents/{document_id}", response_model=DocumentResponse)
 async def get_document(
-    document_id: int,
-    project: Project = Depends(verify_project_ownership),
+    document: Document = Depends(verify_document_access),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    document = await _get_document_for_project(db, project.id, document_id)
     return _document_to_response(document)
 
 
 @router.patch("/{project_id}/documents/{document_id}", response_model=DocumentResponse)
 async def update_document(
-    document_id: int,
     body: DocumentUpdateRequest,
-    project: Project = Depends(verify_project_ownership),
+    document: Document = Depends(require_document_permission("edit")),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    document = await _get_document_for_project(db, project.id, document_id)
-
     if body.template_id is not None:
         template = await db.get(Template, body.template_id)
         if template is None:
@@ -403,17 +398,15 @@ async def update_document(
 
     document.updated_at = datetime.utcnow()
     await db.commit()
-    return await _load_document_response(db, project.id, document.id)
+    return await _load_document_response(db, document.project_id, document.id)
 
 
 @router.delete("/{project_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
-    document_id: int,
-    project: Project = Depends(verify_project_ownership),
+    document: Document = Depends(require_document_permission("edit")),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    document = await _get_document_for_project(db, project.id, document_id)
     await db.execute(
         ActivityEvent.__table__.update()
         .where(ActivityEvent.document_id == document.id)
@@ -429,12 +422,10 @@ async def delete_document(
     response_model=DocumentSetupStateResponse,
 )
 async def get_document_setup_state(
-    document_id: int,
-    project: Project = Depends(verify_project_ownership),
+    document: Document = Depends(verify_document_access),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    document = await _get_document_for_project(db, project.id, document_id)
     recommendations = await template_recommendation_service.list_recommendations(db, document.id)
     proposals = await template_recommendation_service.list_outline_proposals(db, document.id)
     clarification_result = await db.execute(
@@ -832,13 +823,11 @@ async def get_document_sections(
     response_model=SectionResponse,
 )
 async def create_document_section(
-    document_id: int,
     body: CustomSectionRequest,
-    project: Project = Depends(verify_project_ownership),
+    document: Document = Depends(require_document_permission("edit")),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    document = await _get_document_for_project(db, project.id, document_id)
     max_index_res = await db.execute(
         select(func.max(Section.order_index)).where(Section.document_id == document.id)
     )

@@ -478,6 +478,24 @@ export interface ExportSettings {
   margins?: 'normal' | 'narrow' | 'wide';
 }
 
+export interface DocumentShare {
+  id: number;
+  document_id: number;
+  user_id: number;
+  permission: 'view' | 'comment' | 'edit';
+  created_by: number;
+  created_at: string;
+  revoked_at: string | null;
+  user_name?: string;
+  user_email?: string;
+  user_avatar?: string;
+}
+
+export interface ShareListResponse {
+  shares: DocumentShare[];
+  total: number;
+}
+
 export interface NLPReport {
   id: number;
   project_id: number;

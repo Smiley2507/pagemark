@@ -36,6 +36,7 @@ from app.models.key import UserAPIKey
 from app.models.clarification import ClarificationRequest, ClarificationStatus
 from app.models.note import CollaborationNote
 from app.models.nlp import NLPReport
+from app.models.document_share import DocumentShare, DocumentSharePermission
 
 __all__ = [
     "User",
@@ -87,4 +88,6 @@ __all__ = [
     "ClarificationStatus",
     "CollaborationNote",
     "NLPReport",
+    "DocumentShare",
+    "DocumentSharePermission",
 ]

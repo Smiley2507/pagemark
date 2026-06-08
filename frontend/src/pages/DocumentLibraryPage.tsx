@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Select } from '@/components/ui/select';
 import { Surface } from '@/components/ui/surface';
+import { ShareDialog } from '@/components/shared/ShareDialog';
 import { documentsApi } from '@/api/documents';
 import {
   DocumentSummaryRow,
@@ -38,6 +39,7 @@ export function DocumentLibraryPage() {
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [editingDocument, setEditingDocument] = useState<WorkspaceDocumentItem | null>(null);
   const [deletingDocument, setDeletingDocument] = useState<WorkspaceDocumentItem | null>(null);
+  const [sharingDocument, setSharingDocument] = useState<WorkspaceDocumentItem | null>(null);
   const [title, setTitle] = useState('');
   const [purpose, setPurpose] = useState('');
   const [audience, setAudience] = useState('');
@@ -268,11 +270,20 @@ export function DocumentLibraryPage() {
                 onOpen={() => navigate(`/projects/${projectId}/documents/${document.id}`)}
                 onEdit={() => openEditDocument(document)}
                 onDelete={() => setDeletingDocument(document)}
+                onShare={() => setSharingDocument(document)}
               />
             ))}
           </div>
         )}
       </Surface>
+
+      <ShareDialog
+        open={sharingDocument !== null}
+        onOpenChange={(open) => { if (!open) setSharingDocument(null); }}
+        projectId={pid}
+        documentId={sharingDocument?.id ?? 0}
+        documentTitle={sharingDocument?.title || 'Document'}
+      />
 
       <Dialog open={editingDocument !== null} onOpenChange={(open) => { if (!open) setEditingDocument(null); }}>
         <DialogContent className="sm:max-w-lg">

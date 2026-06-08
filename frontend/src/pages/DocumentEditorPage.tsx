@@ -19,6 +19,7 @@ import {
   FileText,
   BookOpen,
   Check,
+  Share2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -27,6 +28,7 @@ import { AiPanel } from '@/components/editor/AiPanel';
 import { NotesPanel } from '@/components/editor/NotesPanel';
 import { QualityModal } from '@/components/editor/QualityModal';
 import { ExportModal } from '@/components/editor/ExportModal';
+import { ShareDialog } from '@/components/shared/ShareDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
@@ -322,6 +324,7 @@ export function DocumentEditorPage() {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
   const [localContentBySectionId, setLocalContentBySectionId] = useState<Record<number, string>>({});
   const tocKeyboard = useTocKeyboardNavigation();
@@ -601,6 +604,16 @@ export function DocumentEditorPage() {
           <Button
             variant="ghost"
             size="sm"
+            onClick={() => setShareModalOpen(true)}
+            className="gap-1.5"
+          >
+            <Share2 className="h-4 w-4" />
+            <span className="hidden text-xs sm:inline">Share</span>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setExportModalOpen(true)}
             className="gap-1.5"
           >
@@ -827,6 +840,14 @@ export function DocumentEditorPage() {
         open={exportModalOpen}
         onClose={() => setExportModalOpen(false)}
         initialSettings={undefined}
+      />
+
+      <ShareDialog
+        open={shareModalOpen}
+        onOpenChange={setShareModalOpen}
+        projectId={pid}
+        documentId={did}
+        documentTitle={document?.title || 'Document'}
       />
 
       <ConfirmDialog
