@@ -163,7 +163,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
   const hasDocumentContext = Number.isFinite(documentId) && (documentId ?? 0) > 0;
 
   const { data: report, isLoading, error, refetch } = useQuery({
-    queryKey: ['quality', projectId, documentId],
+    queryKey: ['quality-modal', projectId, documentId],
     queryFn: async () => {
       try {
         return await qualityApi.getQuality(projectId, documentId!);
