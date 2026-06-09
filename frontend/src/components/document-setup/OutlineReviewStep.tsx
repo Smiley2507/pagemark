@@ -92,8 +92,7 @@ export function OutlineReviewStep({
       <div className="max-w-3xl">
         <h1 className="text-title text-text-primary">Review the Outline</h1>
         <p className="mt-3 text-body text-text-secondary">
-          Confirm the Section structure before any prose generation. Rename, reorder, add, or remove
-          Sections while keeping relevant repository evidence visible.
+          Review and adjust the section outline. Rename, reorder, add, or remove sections as needed.
         </p>
       </div>
 

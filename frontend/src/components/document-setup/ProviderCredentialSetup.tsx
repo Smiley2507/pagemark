@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Notice } from '@/components/ui/notice';
+import { Select } from '@/components/ui/select';
 import { Surface } from '@/components/ui/surface';
 
 interface ProviderCredentialSetupProps {
@@ -61,14 +62,13 @@ export function ProviderCredentialSetup({
         <div>
           <h2 className="text-body font-semibold text-text-primary">Configure a provider in-flow</h2>
           <p className="mt-1 text-meta text-text-secondary">
-            This credential is needed only for {actionLabel}. It stays embedded in the first-Document
-            journey so you do not lose setup context.
+            Your API key is needed for {actionLabel}. It's encrypted before storage.
           </p>
         </div>
       </div>
 
-      <Notice variant="info" title="Security and billing">
-        Your API key is encrypted before storage. Pagemark shows approximate usage before provider-consuming actions; estimates are not guaranteed billing amounts.
+      <Notice variant="info" title="Security">
+        Your API key is encrypted before storage. Usage estimates are approximate, not guaranteed billing.
       </Notice>
 
       <form
@@ -85,7 +85,7 @@ export function ProviderCredentialSetup({
       >
         <div className="space-y-2">
           <Label htmlFor="provider">Provider</Label>
-          <select
+          <Select
             id="provider"
             value={selectedProvider}
             onChange={(event) => {
@@ -93,7 +93,6 @@ export function ProviderCredentialSetup({
               setSelectedModel('');
             }}
             disabled={isLoading}
-            className="h-9 w-full rounded-md border border-input bg-panel px-3 text-body text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="">Select a provider</option>
             {catalog.map((provider) => (
@@ -101,24 +100,27 @@ export function ProviderCredentialSetup({
                 {provider.label}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {providerDefinition && (
           <div className="space-y-2">
             <Label htmlFor="model">Model</Label>
-            <select
+            <Select
               id="model"
               value={selectedModel}
               onChange={(event) => setSelectedModel(event.target.value)}
-              className="h-9 w-full rounded-md border border-input bg-panel px-3 text-body text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {providerDefinition.models.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.label}
-                </option>
-              ))}
-            </select>
+              {providerDefinition.models.length > 0 ? (
+                providerDefinition.models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.label}
+                  </option>
+                ))
+              ) : (
+                <option value="" disabled>No models available</option>
+              )}
+            </Select>
           </div>
         )}
 

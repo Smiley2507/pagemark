@@ -35,6 +35,7 @@ class Analysis(Base):
     endpoints_json = Column(JSON, nullable=True)
     complexity_json = Column(JSON, nullable=True)
     analysis_data = Column(JSON, nullable=True)
+    file_contents_json = Column(JSON, nullable=True)
     error_message = Column(Text, nullable=True)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)

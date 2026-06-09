@@ -134,7 +134,7 @@ export function SourceStep({ isSubmitting = false, onConnect, onSkip }: SourceSt
         </div>
         <h1 className="text-title font-semibold text-text-primary">Connect the codebase</h1>
         <p className="text-body text-text-secondary">
-          Select how you want to link your project codebase to enable context-aware template selection and fact extraction.
+          Connect your codebase to enable AI-powered analysis and template recommendations.
         </p>
       </div>
 

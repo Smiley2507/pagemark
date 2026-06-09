@@ -54,16 +54,15 @@ export function TemplateRecommendationStep({
       <div className="max-w-3xl">
         <h1 className="text-title text-text-primary">Choose the first Document structure</h1>
         <p className="mt-3 text-body text-text-secondary">
-          Recommendations stay explainable. Rule-based recommendations cite repository traits when
-          available, while AI-personalized recommendations explicitly disclose provider usage.
+          Choose a documentation structure based on your code analysis. Rule-based picks work
+          without an AI provider; AI-personalized ones tailor the outline to your project.
         </p>
       </div>
 
       {!sourceConnected && (
         <Notice variant="warning" title="No source connected">
-          Analysis-grounded recommendations and repository evidence are unavailable. You can still
-          choose a reusable Template or create a Custom Outline, but the structure will not be tied
-          to repository facts yet.
+          No analysis data is available. You can still pick a template or create a custom outline,
+          but recommendations won't be based on your code.
         </Notice>
       )}
 
@@ -94,7 +93,7 @@ export function TemplateRecommendationStep({
               </div>
             ) : (
               <p className="text-meta text-text-secondary">
-                Rule-based recommendations will appear here after Template recommendation generation completes.
+                No rule-based recommendations available yet.
               </p>
             )}
           </Surface>
@@ -104,15 +103,15 @@ export function TemplateRecommendationStep({
               <div>
                 <h2 className="text-body font-semibold text-text-primary">AI-personalized recommendation</h2>
                 <p className="mt-1 text-meta text-text-secondary">
-                  Uses the maintainer&apos;s active provider to adapt the recommendation to this Project.
+                  Uses your AI provider to tailor the outline to your project.
                 </p>
               </div>
               <Badge variant="generation">Provider-consuming action</Badge>
             </div>
 
             {!sourceConnected ? (
-              <Notice variant="warning" title="Source connection required">
-                AI-personalized recommendations remain disabled until source code is connected because there is no Analysis to personalize from.
+                <Notice variant="warning" title="Source connection required">
+                Connect a source code repository first to enable AI-personalized recommendations.
               </Notice>
             ) : aiPersonalized.length > 0 ? (
               <div className="grid gap-3">
@@ -128,10 +127,9 @@ export function TemplateRecommendationStep({
               </div>
             ) : (
               <>
-                <Notice variant="generation" title="Approximate provider usage">
-                  Creating an AI-personalized recommendation uses your active provider and may
-                  consume tokens. The resulting recommendation remains explainable and persisted.
-                </Notice>
+              <Notice variant="generation" title="Provider usage required">
+                Creating an AI-personalized recommendation uses your provider and may consume tokens.
+              </Notice>
                 <div className="flex flex-wrap gap-3">
                   {hasActiveProvider ? (
                     <Button
@@ -156,7 +154,7 @@ export function TemplateRecommendationStep({
               <div>
                 <h2 className="text-body font-semibold text-text-primary">Other Templates</h2>
                 <p className="mt-1 text-meta text-text-secondary">
-                  Browse built-in alternatives when the top recommendations are close but not quite right.
+                  Browse all available templates.
                 </p>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setShowAllTemplates((value) => !value)}>
@@ -194,11 +192,11 @@ export function TemplateRecommendationStep({
         </div>
 
         <Surface variant="muted" padding="lg">
-          <h2 className="text-body font-semibold text-text-primary">Selection rules</h2>
+          <h2 className="text-body font-semibold text-text-primary">How it works</h2>
           <ul className="mt-3 space-y-2 text-meta text-text-secondary">
-            <li>Rule-based recommendations can work without a provider.</li>
-            <li>AI-personalized recommendations require provider usage disclosure first.</li>
-            <li>Custom Outline starts from project-specific intent when no Template fits.</li>
+            <li>Rule-based picks work without an AI provider.</li>
+            <li>AI-personalized picks require a configured provider.</li>
+            <li>Custom outlines let you start from scratch.</li>
           </ul>
         </Surface>
       </div>

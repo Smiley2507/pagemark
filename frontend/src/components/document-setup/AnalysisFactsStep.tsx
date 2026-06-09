@@ -121,8 +121,7 @@ export function AnalysisFactsStep({
       <div className="max-w-3xl">
         <h1 className="text-title text-text-primary">Repository Analysis</h1>
         <p className="mt-3 text-body text-text-secondary">
-          Analysis produces a reusable Project snapshot. Repository facts reveal progressively so
-          later recommendations remain explainable.
+          Analyzing your code to understand its structure, languages, APIs, and dependencies.
         </p>
       </div>
 
@@ -133,7 +132,7 @@ export function AnalysisFactsStep({
               {analysisStatus?.current_step || 'Preparing Analysis'}
             </h2>
             <p className="mt-1 text-meta text-text-secondary">
-              {analysisStatus?.step_detail || 'Repository facts will appear as each analysis stage completes.'}
+              {analysisStatus?.step_detail || 'Waiting for analysis results…'}
             </p>
           </div>
           <div className="text-right">
@@ -146,15 +145,14 @@ export function AnalysisFactsStep({
         <Progress value={progress} />
 
         {partialFailure && (
-          <Notice variant="warning" title="Partial Analysis preserved usable facts">
-            Some analysis steps did not finish, but available facts remain usable. Recommendations
-            that depend on missing data will disclose reduced confidence.
+          <Notice variant="warning" title="Partial analysis preserved usable facts">
+            Some analysis steps did not finish, but available facts remain usable.
           </Notice>
         )}
 
         {isFailed && (
           <Notice variant="danger" title="Analysis could not complete">
-            {analysisStatus?.error_message || 'Retry the source analysis or continue with fewer source-grounded signals.'}
+            {analysisStatus?.error_message || 'Analysis failed. You can retry or continue without it.'}
           </Notice>
         )}
       </Surface>
@@ -165,8 +163,8 @@ export function AnalysisFactsStep({
           status={fileTreeStep}
           summary={
             analysisResults?.file_tree_json
-              ? `${countFiles(analysisResults.file_tree_json)} files indexed into the current Analysis snapshot.`
-              : 'File tree facts will appear here as soon as the repository structure step completes.'
+              ? `${countFiles(analysisResults.file_tree_json)} files indexed.`
+              : 'Waiting for repository structure data.'
           }
         />
         <FactCard
@@ -175,7 +173,7 @@ export function AnalysisFactsStep({
           summary={
             analysisResults?.languages_json?.primary?.length
               ? `Primary languages: ${analysisResults.languages_json.primary.join(', ')}.`
-              : 'Language detection is still gathering the primary stack and breakdown.'
+              : 'Detecting languages used in the codebase.'
           }
         />
         <FactCard
@@ -184,7 +182,7 @@ export function AnalysisFactsStep({
           summary={
             analysisResults?.endpoints_json
               ? `${analysisResults.endpoints_json.count} endpoints detected across ${analysisResults.endpoints_json.frameworks.join(', ') || 'the repository'}.`
-              : 'Endpoint facts will appear when route extraction finishes, or show clearly if unavailable.'
+              : 'Extracting API endpoints from the codebase.'
           }
         />
         <FactCard
@@ -193,18 +191,18 @@ export function AnalysisFactsStep({
           summary={
             analysisResults?.complexity_json
               ? `${analysisResults.complexity_json.total_files} files and ${analysisResults.complexity_json.total_lines.toLocaleString()} lines analyzed.`
-              : 'Complexity metrics will summarize repository scale and hotspots once available.'
+              : 'Computing complexity metrics.'
           }
         />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <Surface variant="muted" padding="lg">
-          <h2 className="text-body font-semibold text-text-primary">What this Analysis unlocks</h2>
+          <h2 className="text-body font-semibold text-text-primary">What analysis enables</h2>
           <ul className="mt-3 space-y-2 text-meta text-text-secondary">
-            <li>Explainable Template recommendations tied to repository traits.</li>
-            <li>Outline evidence that references real files, endpoints, and implementation areas.</li>
-            <li>Later freshness checks for reviewed Sections when the source changes.</li>
+            <li>Template recommendations based on your code structure.</li>
+            <li>Outline evidence referencing actual files and endpoints.</li>
+            <li>Freshness checks when source code changes.</li>
           </ul>
         </Surface>
         <Surface variant="muted" padding="lg">

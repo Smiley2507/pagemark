@@ -87,7 +87,7 @@ export const useStreamMessage = (threadId: number | null) => {
   const abortControllerRef = useRef<AbortController | null>(null);
   const queryClient = useQueryClient();
 
-  const sendMessage = useCallback((message: string) => {
+  const sendMessage = useCallback((message: string, resourceIds?: number[], references?: string[]) => {
     if (!threadId) return;
 
     setIsStreaming(true);
@@ -112,7 +112,9 @@ export const useStreamMessage = (threadId: number | null) => {
       (error) => {
         console.error('Streaming error:', error);
         toast.error('Error generating response');
-      }
+      },
+      resourceIds,
+      references,
     );
   }, [threadId, queryClient]);
 
@@ -131,6 +133,16 @@ export const useStreamMessage = (threadId: number | null) => {
     streamingContent,
     cancelStream,
   };
+};
+
+export const useSuggestStructure = () => {
+  return useMutation({
+    mutationFn: (documentId: number) => aiApi.suggestStructure(documentId),
+    onError: (error) => {
+      console.error('Failed to suggest structure:', error);
+      toast.error('Failed to generate structural suggestions');
+    },
+  });
 };
 
 export const useUpdateProjectContext = (projectId: number) => {

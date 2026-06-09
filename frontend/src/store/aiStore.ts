@@ -19,9 +19,10 @@ export interface AiModelOption {
 
 export interface AiAttachment {
   id: string;
-  type: 'file' | 'note' | 'section' | 'document' | 'source' | 'template';
+  type: 'file' | 'note' | 'section' | 'document' | 'source' | 'template' | 'transient';
   label: string;
   reference?: string;
+  resourceId?: number;
 }
 
 export const AVAILABLE_MODELS: AiModelOption[] = [

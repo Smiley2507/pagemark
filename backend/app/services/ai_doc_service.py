@@ -10,15 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.models.analysis import Analysis, AnalysisStatus
-from app.models.chat import ChatMessage, ChatThread, MessageRole
+from app.models.chat import ChatMessage, ChatMessageResource, ChatThread, MessageRole
 from app.models.document import Document, Section, SectionStatus
 from app.models.project import Project
+from app.models.resource import Resource
 from app.models.template import Template
 from app.prompts.chat import build_chat_prompt
 from app.prompts.refine import build_refine_prompt
 from app.prompts.section import build_section_prompt
 from app.services import ai_credential_service
 from app.services.ai_service import AiServiceError, complete_text
+from app.services.context_assembly import context_assembly_service
 from app.exceptions import NeedsClarificationException
 
 MAX_TOKENS_SECTION = 2000
@@ -408,6 +410,7 @@ class AIService:
         temperature: float | None = None,
         max_tokens: int | None = None,
         references: list[str] | None = None,
+        resources: list[Resource] | None = None,
     ) -> AsyncGenerator[str, None]:
         """Stream a chat response for the given thread.
 
@@ -416,6 +419,7 @@ class AIService:
 
         model_name, temperature, max_tokens override the credential defaults.
         references: section headings to fetch and include as context.
+        resources: pre-resolved Resource objects to attach and include as context.
         """
         cred = await self._get_active_credential(db, user_id, model_name)
 
@@ -434,7 +438,18 @@ class AIService:
             content=user_message,
         )
         db.add(user_msg)
-        await db.commit()
+        await db.flush()
+
+        # Persist resource attachments
+        if resources:
+            for resource in resources:
+                db.add(ChatMessageResource(
+                    message_id=user_msg.id,
+                    resource_id=resource.id,
+                ))
+            await db.commit()
+        else:
+            await db.commit()
 
         # Fetch last 10 messages for context
         msgs_result = await db.execute(
@@ -488,6 +503,13 @@ class AIService:
             if resolved:
                 system_prompt += "\n\n## Referenced Sections\n" + "\n\n".join(resolved)
 
+        # Inject attached resources as context via context_assembly_service
+        assembly_result = None
+        if resources:
+            assembly_result = context_assembly_service.assemble(resources, cred.provider)
+            if assembly_result.system_context:
+                system_prompt += assembly_result.system_context
+
         # Stream response
         full_response = []
         effective_max_tokens = max_tokens or MAX_TOKENS_CHAT
@@ -501,11 +523,24 @@ class AIService:
                 import anthropic as _anthropic
 
                 client = _anthropic.AsyncAnthropic(api_key=cred.api_key)
+
+                # Inject vision content blocks for image resources
+                msgs = list(api_messages)
+                if assembly_result and assembly_result.image_count > 0:
+                    vision_blocks = context_assembly_service.get_vision_content_blocks(resources)
+                    if vision_blocks and msgs:
+                        last = msgs[-1]
+                        if last["role"] == "user":
+                            last["content"] = [
+                                {"type": "text", "text": last["content"]},
+                                *vision_blocks,
+                            ]
+
                 kwargs = {
                     "model": cred.model_id,
                     "max_tokens": effective_max_tokens,
                     "system": system_prompt,
-                    "messages": api_messages,
+                    "messages": msgs,
                 }
                 if effective_temperature is not None:
                     kwargs["temperature"] = effective_temperature
@@ -583,6 +618,107 @@ class AIService:
             pass
 
         return ["Could not generate suggestions. Please try again."]
+
+    async def suggest_structure(
+        self,
+        document_id: int,
+        db: AsyncSession,
+        user_id: int,
+    ) -> list[dict]:
+        """Ask AI to suggest structural improvements for a document's sections.
+
+        Returns a list of suggestion dicts with keys:
+          type (reorder|rename|add|remove|merge),
+          section_id, heading, suggested_heading, suggested_order,
+          suggested_parent_heading, target_section_id, reasoning.
+        """
+        document = await self._fetch_document(db, document_id)
+        project = await self._fetch_project(db, document.project_id)
+
+        # Fetch active sections ordered by index
+        result = await db.execute(
+            select(Section)
+            .where(
+                Section.document_id == document_id,
+                Section.lifecycle_status != "DELETED",
+            )
+            .order_by(Section.order_index)
+        )
+        sections = result.scalars().all()
+
+        analysis = await self._fetch_latest_analysis(db, project.id)
+        analysis_detail = self._analysis_detail(analysis) if analysis else {}
+
+        current_structure = [
+            {
+                "id": s.id,
+                "heading": s.heading,
+                "order": s.order_index,
+                "has_content": bool(s.content_md and s.content_md.strip()),
+                "parent_id": s.parent_id,
+            }
+            for s in sections
+        ]
+
+        project_ctx = self._project_context(project)
+
+        prompt = (
+            f"You are a documentation structure expert. Analyze the document '"
+            f'{document.title}\' for the project "{project.name}" and suggest '
+            f"structural improvements to its section outline.\n\n"
+            f"## Project Context\n"
+            f"- Name: {project_ctx.get('name', '')}\n"
+            f"- Language: {project_ctx.get('language', '')}\n"
+            f"- Framework: {project_ctx.get('framework', '')}\n"
+            f"- Description: {project_ctx.get('key_features', '')}\n\n"
+            f"## Current Section Structure (in order)\n"
+            f"{json.dumps(current_structure, indent=2)}\n\n"
+            f"## Analysis Facts\n"
+            f"- Languages: {analysis_detail.get('languages', '')}\n"
+            f"- Classes: {json.dumps(analysis_detail.get('classes', [])[:10])}\n"
+            f"- Functions: {json.dumps(analysis_detail.get('functions', [])[:10])}\n"
+            f"- Endpoints: {json.dumps(analysis_detail.get('endpoints', [])[:15])}\n"
+            f"- Dependencies: {json.dumps(analysis_detail.get('dependencies', [])[:10])}\n"
+            f"- File count: {analysis_detail.get('file_count', 0)}\n"
+            f"- Complexity notes: {analysis_detail.get('complexity_notes', '')}\n\n"
+            f"## Task\n"
+            f"Suggest structural improvements. Consider:\n"
+            f"1. **Reorder** — if logical ordering could be improved\n"
+            f"2. **Rename** — if a heading is unclear or too generic\n"
+            f"3. **Add** — if a heading is missing based on analysis facts\n"
+            f"4. **Remove** — if a section is irrelevant, empty, or redundant\n"
+            f"5. **Merge** — if two adjacent sections overlap or one is too short\n\n"
+            f"Return a JSON object with a single key 'suggestions' containing an array "
+            f"of objects, each with:\n"
+            f'- "type": one of "reorder", "rename", "add", "remove", "merge"\n'
+            f'- "section_id": int (the section id for rename/reorder/remove, null for add)\n'
+            f'- "target_section_id": int (for merge — the section to merge into)\n'
+            f'- "heading": str (current heading, null for add)\n'
+            f'- "suggested_heading": str (new heading for rename, or heading for add)\n'
+            f'- "suggested_order": int (new position index, for reorder)\n'
+            f'- "suggested_parent_heading": str or null (for add, which section to add under)\n'
+            f'- "reasoning": str (why this change is suggested)\n\n'
+            f"If the structure is already optimal, return an empty suggestions array.\n\n"
+            f"Return ONLY valid JSON. No preamble."
+        )
+
+        content = await self._complete_with_active_provider(
+            db,
+            user_id,
+            system="Return only valid JSON with structural suggestions.",
+            user=prompt,
+            max_tokens=2000,
+        )
+
+        try:
+            data = json.loads(content)
+            suggestions = data.get("suggestions", [])
+            if isinstance(suggestions, list):
+                return suggestions[:15]
+            return []
+        except (json.JSONDecodeError, TypeError):
+            return []
+
 
 # Module-level singleton
 ai_service = AIService()

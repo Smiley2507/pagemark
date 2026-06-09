@@ -45,3 +45,13 @@ class AiCredentialListResponse(BaseModel):
 class AiCredentialUpsertRequest(BaseModel):
     api_key: str = Field(..., min_length=8)
     model_id: str
+
+
+class AiCredentialTestRequest(BaseModel):
+    api_key: str = Field(..., min_length=8)
+    model_id: str
+
+
+class AiCredentialTestResponse(BaseModel):
+    success: bool
+    message: str

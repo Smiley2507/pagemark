@@ -398,6 +398,7 @@ export const EditorPage: React.FC = () => {
             <MiddlePanel
               ref={middlePanelRef}
               sections={editorSections}
+              projectId={projectId}
               activeSectionId={activeSectionId}
               onSectionVisible={(id) => {
                 if (mode !== 'diff') setActiveSectionId(id);

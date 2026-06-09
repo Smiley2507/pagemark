@@ -1,8 +1,26 @@
 import axios from 'axios';
 import { useAuthStore } from '@/store/authStore';
 import { useOrgStore } from '@/store/orgStore';
+import { authApi } from './auth';
 
 const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password'];
+
+let isRefreshing = false;
+let refreshSubscribers: Array<() => void> = [];
+
+function onRefreshed() {
+  refreshSubscribers.forEach((cb) => cb());
+  refreshSubscribers = [];
+}
+
+function clearAuth() {
+  useAuthStore.getState().clearUser();
+  const currentPath = window.location.pathname;
+  const isOnPublicPath = PUBLIC_PATHS.some((p) => currentPath.startsWith(p));
+  if (!isOnPublicPath) {
+    window.location.href = '/login';
+  }
+}
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
@@ -23,23 +41,36 @@ apiClient.interceptors.request.use(
 
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      // Clear the user from the Zustand store so React Router's
-      // <ProtectedRoute> picks up the state change and redirects
-      // cleanly without a full page reload.
-      useAuthStore.getState().clearUser();
-
-      // Only force a hard redirect when the user is NOT already on a
-      // public auth page, to prevent an infinite reload loop where
-      // unauthenticated /me checks on /login itself trigger a redirect.
-      const currentPath = window.location.pathname;
-      const isOnPublicPath = PUBLIC_PATHS.some((p) => currentPath.startsWith(p));
-      if (!isOnPublicPath) {
-        window.location.href = '/login';
-      }
+  async (error) => {
+    if (!error.response || error.response.status !== 401) {
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
+
+    // Don't try to refresh if the failing request is itself a refresh
+    if (error.config?.url?.includes('/auth/refresh')) {
+      clearAuth();
+      return Promise.reject(error);
+    }
+
+    if (isRefreshing) {
+      return new Promise((resolve) => {
+        refreshSubscribers.push(() => resolve(apiClient(error.config)));
+      });
+    }
+
+    isRefreshing = true;
+
+    try {
+      await authApi.refreshSession();
+      onRefreshed();
+      isRefreshing = false;
+      return apiClient(error.config);
+    } catch {
+      isRefreshing = false;
+      refreshSubscribers = [];
+      clearAuth();
+      return Promise.reject(error);
+    }
   }
 );
 

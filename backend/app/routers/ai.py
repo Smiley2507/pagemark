@@ -16,9 +16,11 @@ from app.models.analysis import Analysis, AnalysisStatus
 from app.models.chat import ChatMessage, ChatThread, MessageRole
 from app.models.document import Document, SectionStatus
 from app.models.project import Project
+from app.models.resource import Resource
 from app.models.user import User
 from app.models.version import AuthorType
 from app.prompts.outline import build_outline_prompt
+from app.schemas.ai import SuggestStructureResponse
 from app.schemas.chat import (
     ChatMessageResponse,
     ChatThreadResponse,
@@ -68,6 +70,26 @@ async def _require_analysis_complete(db: AsyncSession, project_id: int) -> Analy
                    "Please wait for the analysis to finish.",
         )
     return analysis
+
+
+# ── POST /documents/{id}/ai/suggest-structure ─────────────────────
+
+@router.post(
+    "/documents/{document_id}/ai/suggest-structure",
+    response_model=SuggestStructureResponse,
+)
+async def suggest_document_structure(
+    document_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Suggest structural changes (reorder, rename, add, remove, merge) for a document."""
+    suggestions = await ai_service.suggest_structure(
+        document_id=document_id,
+        db=db,
+        user_id=current_user.id,
+    )
+    return SuggestStructureResponse(suggestions=suggestions)
 
 
 # ── POST /projects/{id}/ai/generate-outline ──────────────────────
@@ -355,6 +377,25 @@ async def stream_chat_message(
 
     await _require_project(db, thread.project_id, current_user.id)
 
+    # Resolve resource_ids and verify they belong to the project
+    resolved_resources: list[Resource] = []
+    if body.resource_ids:
+        result = await db.execute(
+            select(Resource).where(
+                Resource.id.in_(body.resource_ids),
+                Resource.project_id == thread.project_id,
+            )
+        )
+        resources = result.scalars().all()
+        found_ids = {r.id for r in resources}
+        missing = set(body.resource_ids) - found_ids
+        if missing:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Resources not found in this project: {sorted(missing)}",
+            )
+        resolved_resources = list(resources)
+
     async def event_generator():
         stream_gen = await ai_service.stream_chat(
             thread_id=thread_id,
@@ -365,6 +406,7 @@ async def stream_chat_message(
             temperature=body.temperature,
             max_tokens=body.max_tokens,
             references=body.references,
+            resources=resolved_resources,
         )
         async for chunk in stream_gen:
             if chunk:

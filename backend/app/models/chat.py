@@ -42,3 +42,16 @@ class ChatMessage(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     thread = relationship("ChatThread", back_populates="messages")
+    resources = relationship("ChatMessageResource", back_populates="message", cascade="all, delete-orphan")
+
+
+class ChatMessageResource(Base):
+    __tablename__ = "chat_message_resources"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("chat_messages.id"), nullable=False)
+    resource_id = Column(Integer, ForeignKey("resources.id"), nullable=False)
+    order_index = Column(Integer, nullable=False, default=0)
+
+    message = relationship("ChatMessage", back_populates="resources")
+    resource = relationship("Resource")

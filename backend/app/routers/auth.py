@@ -28,6 +28,7 @@ from app.ai_providers import PROVIDERS
 from app.schemas.ai_credential import (
     AiProviderCatalogResponse, AiProviderCatalogItem, AiModelOption,
     AiProviderModelsResponse, AiCredentialListResponse, AiCredentialResponse, AiCredentialUpsertRequest,
+    AiCredentialTestRequest, AiCredentialTestResponse,
 )
 from app.schemas.notification import (
     NotificationPreferences, NotificationPreferencesResponse, UpdateNotificationPreferencesRequest,
@@ -427,6 +428,19 @@ async def list_ai_credential_models(
         models=[AiModelOption(**model) for model in models],
         source=source,
     )
+
+
+@router.post("/me/ai-credentials/{provider}/test", response_model=AiCredentialTestResponse)
+async def test_ai_credential(
+    provider: str, body: AiCredentialTestRequest,
+    current_user: User = Depends(get_current_user),
+):
+    from app.services.ai_service import validate_credential, AiServiceError
+    try:
+        validate_credential(provider, body.api_key, body.model_id)
+        return AiCredentialTestResponse(success=True, message="Connection successful")
+    except AiServiceError as e:
+        return AiCredentialTestResponse(success=False, message=str(e))
 
 
 @router.put("/me/ai-credentials/{provider}", response_model=AiCredentialResponse)

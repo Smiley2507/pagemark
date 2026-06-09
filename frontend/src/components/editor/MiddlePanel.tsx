@@ -50,6 +50,7 @@ export interface DiffData {
 
 export interface MiddlePanelProps {
   sections: Section[];
+  projectId: number;
   activeSectionId: number | null;
   onSectionVisible: (sectionId: number) => void;
   onSectionsChange?: (sections: Section[]) => void;
@@ -81,6 +82,7 @@ function SortableSection({
   sectionRefCallback,
   isApproved,
   grammarIssues,
+  projectId,
 }: {
   isApproved?: boolean;
   section: Section;
@@ -94,6 +96,7 @@ function SortableSection({
   editorRefCallback: (ref: any) => void;
   sectionRefCallback: (el: HTMLDivElement | null) => void;
   grammarIssues?: GrammarIssue[];
+  projectId?: number;
 }) {
   const {
     attributes,
@@ -205,6 +208,7 @@ function SortableSection({
           ref={editorRefCallback}
           value={content}
           onChange={(val) => onChange(val)}
+          projectId={projectId}
           grammarIssues={grammarIssues}
         />
       </div>
@@ -227,6 +231,7 @@ function DndEditorWrapper({
   sectionRefCallback,
   isApproved,
   grammarIssues,
+  projectId,
 }: {
   isApproved?: boolean;
   sections: Section[];
@@ -242,6 +247,7 @@ function DndEditorWrapper({
   onAddSection: (projectId: number) => void;
   sectionRefCallback: (id: number, el: HTMLDivElement | null) => void;
   grammarIssues?: Record<number, GrammarIssue[]>;
+  projectId?: number;
 }) {
   const pointerSensor = useSensor(PointerSensor);
   const keyboardSensor = useSensor(KeyboardSensor, {
@@ -266,7 +272,7 @@ function DndEditorWrapper({
               content={localContent[section.id] ?? section.content_md}
               onChange={(val) => handleSectionChange(section.id, val)}
               onTitleCommit={(title) => handleTitleCommit(section.id, title)}
-              onDelete={(id) => handleDeleteSection(id)}
+              onDelete={() => handleDeleteSection(section.id)}
               activeSectionId={activeSectionId}
               setActiveSectionId={setActiveSectionId}
               onPolish={(text) => onPolish(section.id, text)}
@@ -274,6 +280,7 @@ function DndEditorWrapper({
               sectionRefCallback={(el) => sectionRefCallback(section.id, el)}
               isApproved={isApproved}
               grammarIssues={grammarIssues?.[section.id]}
+              projectId={projectId}
             />
             {idx < sections.length - 1 && (
               <div className="my-8 flex justify-center">
@@ -431,6 +438,7 @@ function renderInlineMarkdown(text: string): ReactNode {
 
 function MiddlePanelImpl({
   sections,
+  projectId,
   activeSectionId,
   onSectionVisible,
   onSectionsChange,
@@ -797,6 +805,7 @@ function MiddlePanelImpl({
               }}
               isApproved={isApproved}
               grammarIssues={grammarIssues}
+              projectId={projectId}
             />
             {sortedSections.length > 0 && (
                <div className="my-8 flex justify-center">

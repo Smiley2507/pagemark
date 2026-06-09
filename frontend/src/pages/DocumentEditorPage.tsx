@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 
 import { MarkdownEditor } from '@/components/editor/MarkdownEditor';
 import { AiPanel } from '@/components/editor/AiPanel';
+import { ResourcePalette } from '@/components/editor/ResourcePalette';
 import { NotesPanel } from '@/components/editor/NotesPanel';
 import { QualityModal } from '@/components/editor/QualityModal';
 import { ExportModal } from '@/components/editor/ExportModal';
@@ -306,6 +307,7 @@ export function DocumentEditorPage() {
   const [rightTab, setRightTab] = useState<RightTab>('ai');
   const [sectionToDelete, setSectionToDelete] = useState<Section | null>(null);
   const [savingSectionIds, setSavingSectionIds] = useState<Set<number>>(() => new Set());
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
@@ -541,11 +543,7 @@ export function DocumentEditorPage() {
         key: 'k',
         mod: 'metaKey',
         handler: () => {
-          setRightPanelOpen(true);
-          setRightTab('ai');
-          requestAnimationFrame(() => {
-            globalThis.document.querySelector<HTMLTextAreaElement>('[data-ai-input="true"]')?.focus();
-          });
+          setPaletteOpen(true);
         },
       },
     ],
@@ -763,7 +761,7 @@ export function DocumentEditorPage() {
               </div>
               <div className="min-h-0 flex-1 overflow-hidden">
                 {rightTab === 'ai' ? (
-                  <AiPanel
+                   <AiPanel
                     projectId={pid}
                     documentId={did}
                     activeSectionId={activeSection?.id ?? null}
@@ -774,6 +772,7 @@ export function DocumentEditorPage() {
                     onApplyContent={handleApplyContent}
                     onReplaceContent={handleReplaceContent}
                     onInsertAtCursor={handleInsertAtCursor}
+                    onOpenPalette={() => setPaletteOpen(true)}
                   />
                 ) : (
                   <NotesPanel
@@ -829,6 +828,12 @@ export function DocumentEditorPage() {
         projectId={pid}
         documentId={did}
         documentTitle={document?.title || 'Document'}
+      />
+
+      <ResourcePalette
+        projectId={pid}
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
       />
 
       <ConfirmDialog

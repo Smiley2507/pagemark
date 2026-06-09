@@ -17,6 +17,8 @@ from app.routers import export as export_router
 from app.routers import organizations as org_router
 from app.routers import keys as keys_router
 from app.routers import shares as shares_router
+from app.routers import resources as resources_router
+from app.routers import context_search as context_search_router
 
 
 # ── Built-in template seed data ─────────────────────────────────
@@ -174,6 +176,8 @@ app.include_router(notes_router.router)
 app.include_router(nlp_router.router)
 app.include_router(uploads_router.router)
 app.include_router(shares_router.router)
+app.include_router(resources_router.router)
+app.include_router(context_search_router.router)
 
 app.mount("/static", StaticFiles(directory=settings.UPLOAD_DIR), name="static")
 

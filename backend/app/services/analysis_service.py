@@ -187,6 +187,9 @@ EXTENSION_TO_LANGUAGE = {
 
 PRIMARY_LANGUAGES = {"python", "typescript", "javascript", "java"}
 
+MAX_FILE_CONTENTS_FILES = 50
+MAX_FILE_CONTENT_BYTES = 100 * 1024  # 100KB
+
 ENDPOINT_PATTERNS = [
     (
         "fastapi",
@@ -226,6 +229,7 @@ class RepoFile:
     language: Optional[str]
     lines: int = 0
     complexity: int = 0
+    content: str = ""
 
 
 @dataclass
@@ -376,14 +380,16 @@ def collect_repo_files(root_path: str) -> list[RepoFile]:
             ext = abs_path.suffix.lower()
             lang = EXTENSION_TO_LANGUAGE.get(ext)
             lines = 0
+            content = ""
             try:
                 text = abs_path.read_text(encoding="utf-8", errors="ignore")
+                content = text
                 lines = text.count("\n") + (1 if text else 0)
                 complexity = calculate_complexity(text)
             except OSError:
                 pass
             files.append(
-                RepoFile(rel_path=rel, abs_path=str(abs_path), language=lang, lines=lines, complexity=complexity)
+                RepoFile(rel_path=rel, abs_path=str(abs_path), language=lang, lines=lines, complexity=complexity, content=content)
             )
             if len(files) > MAX_FILES:
                 raise ValueError(f"Repository exceeds {MAX_FILES} files")
@@ -574,6 +580,24 @@ def compute_complexity(files: list[RepoFile]) -> dict:
     }
 
 
+def build_file_contents_json(files: list[RepoFile]) -> dict[str, str]:
+    """Build a {rel_path: content} dict from RepoFiles.
+
+    Capped at MAX_FILE_CONTENTS_FILES, MAX_FILE_CONTENT_BYTES per file.
+    Primary-language files sorted by line count (most first).
+    """
+    candidates = [
+        f for f in files
+        if f.language and f.content
+        and len(f.content.encode("utf-8")) <= MAX_FILE_CONTENT_BYTES
+    ]
+    candidates.sort(key=lambda f: (0 if f.language in PRIMARY_LANGUAGES else 1, -f.lines))
+    result: dict[str, str] = {}
+    for f in candidates[:MAX_FILE_CONTENTS_FILES]:
+        result[f.rel_path] = f.content
+    return result
+
+
 def run_static_analysis(
     root_path: str,
     on_step_detail: Optional[Callable[[str], None]] = None,
@@ -650,6 +674,7 @@ async def update_analysis_step(
             analysis.languages_json = artifacts.languages_json
             analysis.endpoints_json = artifacts.endpoints_json
             analysis.complexity_json = artifacts.complexity_json
+            analysis.file_contents_json = build_file_contents_json(artifacts.files)
             analysis.analysis_data = build_analysis_data(
                 artifacts,
                 unavailable_facts=unavailable_facts,
@@ -715,6 +740,7 @@ def update_analysis_step_sync(
             analysis.languages_json = artifacts.languages_json
             analysis.endpoints_json = artifacts.endpoints_json
             analysis.complexity_json = artifacts.complexity_json
+            analysis.file_contents_json = build_file_contents_json(artifacts.files)
             analysis.analysis_data = build_analysis_data(
                 artifacts,
                 unavailable_facts=unavailable_facts,
@@ -799,6 +825,7 @@ def complete_analysis_snapshot_sync(
         analysis.languages_json = artifacts.languages_json
         analysis.endpoints_json = artifacts.endpoints_json
         analysis.complexity_json = artifacts.complexity_json
+        analysis.file_contents_json = build_file_contents_json(artifacts.files)
         analysis.analysis_data = build_analysis_data(
             artifacts,
             unavailable_facts=unavailable_facts,

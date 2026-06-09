@@ -1,328 +1,510 @@
 from __future__ import annotations
 
-import base64
-import mimetypes
-import os
-from typing import TYPE_CHECKING, Optional
+from html import escape
+from pathlib import Path
+from typing import Optional, Any
+import re
 
-import markdown as md_lib
-
-if TYPE_CHECKING:
-    from app.models.document import Section
-
-from app.config import settings
+import weasyprint
 
 
-_HTML_TEMPLATE = """\
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>{title}</title>
-  <style>
-    :root {{
-      --h1-color: {h1_color};
-      --h2-color: {h2_color};
-      --primary-color: {primary_color};
-      --font-family: {font_family};
-      --body-font-size: {body_font_size};
-      --h1-font-size: {h1_font_size};
-      --h2-font-size: {h2_font_size};
-    }}
-    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
-    html {{
-      font-family: var(--font-family), -apple-system, BlinkMacSystemFont, "Segoe UI",
-                   Roboto, Helvetica, Arial, sans-serif;
-      font-size: var(--body-font-size);
-      line-height: 1.7;
-      color: #1a202c;
-    }}
-    body {{
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 2rem 2.5rem 6rem;
-    }}
-    h1 {{ font-size: var(--h1-font-size); border-bottom: 2px solid var(--h1-color); padding-bottom: .4rem; margin-top: 2rem; color: var(--h1-color); }}
-    h2 {{ font-size: var(--h2-font-size); border-bottom: 1px solid var(--h2-color); padding-bottom: .3rem; margin-top: 2rem; color: var(--h2-color); }}
-    h3 {{ font-size: 1.25rem; margin-top: 1.5rem; color: var(--h1-color); }}
-    h4, h5, h6 {{ margin-top: 1.25rem; color: var(--h2-color); }}
-    p  {{ margin: .75rem 0; }}
-    a  {{ color: var(--primary-color); text-decoration: underline; }}
-    code {{
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-      font-size: .88em;
-      background: #edf2f7;
-      padding: .15em .4em;
-      border-radius: 3px;
-    }}
-    pre {{
-      background: #2d3748;
-      color: #e2e8f0;
-      padding: 1rem 1.25rem;
-      border-radius: 6px;
-      overflow-x: auto;
-      margin: 1rem 0;
-    }}
-    pre code {{ background: transparent; padding: 0; color: inherit; font-size: .85em; }}
-    table {{ border-collapse: collapse; width: 100%; margin: 1rem 0; }}
-    th, td {{ border: 1px solid #e2e8f0; padding: .5rem .75rem; text-align: left; }}
-    th {{ background: #f7fafc; font-weight: 600; }}
-    tr:nth-child(even) {{ background: #f7fafc; }}
-    blockquote {{
-      border-left: 4px solid var(--primary-color);
-      margin: 1rem 0;
-      padding: .5rem 1rem;
-      color: #4a5568;
-      background: #f7fafc;
-    }}
-    hr {{ border: none; border-top: 1px solid #e2e8f0; margin: 2rem 0; }}
-    img {{ max-width: 100%; }}
-
-    /* ── Running header / footer — repeat on every printed page ── */
-    .page-header {{
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 10;
-      padding: 0.6cm 2cm 0.3cm;
-      font-size: 0.85em;
-      color: #718096;
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      background: white;
-      {header_display}
-    }}
-    .page-header .h-left {{ margin-right: auto; }}
-    .page-header .h-center {{ margin: 0 auto; }}
-    .page-header .h-right {{ margin-left: auto; }}
-    .page-header img.logo-header {{ max-height: {logo_height}; vertical-align: middle; }}
-
-    .page-footer {{
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      z-index: 10;
-      padding: 0.3cm 2cm 0.6cm;
-      font-size: 0.85em;
-      color: #718096;
-      border-top: 1px solid #e2e8f0;
-      display: flex;
-      align-items: center;
-      background: white;
-      {footer_display}
-    }}
-    .page-footer .f-left {{ margin-right: auto; }}
-    .page-footer .f-center {{ margin: 0 auto; }}
-    .page-footer .f-right {{ margin-left: auto; }}
-    .page-footer img.logo-footer {{ max-height: {logo_height}; vertical-align: middle; }}
-
-    .title-page-logo {{
-      text-align: center;
-      margin-bottom: 2rem;
-    }}
-    .title-page-logo img {{ max-height: {logo_height}; }}
-
-    /* ── Print: move body content out from under fixed header/footer ── */
-    @media print {{
-      html {{ font-size: var(--body-font-size); }}
-      body {{
-        max-width: 100%;
-        padding: 1.5cm 1.5cm 2cm;
-      }}
-      .page-header, .page-footer {{ background: none; }}
-
-      @page {{
-        {page_style}
-        margin-top: 2.5cm;
-        margin-bottom: 2cm;
-        margin-left: 2cm;
-        margin-right: 2cm;
-      }}
-    }}
-  </style>
-</head>
-<body>
-{logo_title_html}
-{body}
-{header_fixed_html}
-{footer_fixed_html}
-</body>
-</html>
-"""
+try:
+    import markdown
+except ImportError:
+    markdown = None
 
 
-def _resolve(settings: dict, key: str, default: str) -> str:
-    val = settings.get(key)
-    return val if val else default
+def _get_section_title(section: Any, fallback: str) -> str:
+    return (
+        getattr(section, "title", None)
+        or getattr(section, "heading", None)
+        or getattr(section, "name", None)
+        or fallback
+    )
 
 
-def _maybe_embed_logo(logo_url: str) -> str:
-    if not logo_url or logo_url.startswith("data:"):
-        return logo_url
-    if logo_url.startswith("/static/"):
-        local_path = os.path.join(settings.UPLOAD_DIR, *logo_url.split("/")[2:])
-        if os.path.isfile(local_path):
-            mime_type, _ = mimetypes.guess_type(local_path)
-            if not mime_type:
-                mime_type = "image/png"
-            with open(local_path, "rb") as f:
-                data = f.read()
-            return f"data:{mime_type};base64,{base64.b64encode(data).decode()}"
-    return logo_url
+def _get_section_content(section: Any) -> str:
+    return (
+        getattr(section, "content", None)
+        or getattr(section, "body", None)
+        or getattr(section, "text", None)
+        or ""
+    )
 
 
-def export_markdown(sections: list["Section"], doc_title: str = "Documentation") -> str:
-    parts: list[str] = [f"# {doc_title}\n"]
-    for section in sorted(sections, key=lambda s: s.order_index):
-        parts.append(f"\n## {section.title or section.heading}\n")
-        content = (section.content_md or "").strip()
-        if content:
-            parts.append(f"\n{content}\n")
-    return "\n".join(parts)
+def _markdown_to_html(text: str) -> str:
+    if not text:
+        return ""
+
+    if markdown:
+        return markdown.markdown(
+            text,
+            extensions=[
+                "extra",
+                "tables",
+                "fenced_code",
+                "toc",
+                "sane_lists",
+            ],
+            output_format="html5",
+        )
+
+    escaped = escape(text)
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+    escaped = escaped.replace("\n\n", "</p><p>").replace("\n", "<br/>")
+    return f"<p>{escaped}</p>"
+
+
+def _css_value(value: Optional[str], default: str) -> str:
+    return str(value).strip() if value else default
+
+
+def _safe_page_size(value: Optional[str]) -> str:
+    value = (value or "A4").strip().lower()
+    if value in {"a4", "letter"}:
+        return value.upper()
+    if value in {"a4 landscape", "letter landscape"}:
+        return value.upper()
+    return "A4"
+
+
+def _safe_margin_box(position: Optional[str]) -> str:
+    allowed = {
+        "bottom-left",
+        "bottom-center",
+        "bottom-right",
+        "top-left",
+        "top-center",
+        "top-right",
+    }
+    position = (position or "bottom-center").strip().lower()
+    return position if position in allowed else "bottom-center"
+
+
+def _build_logo_html(export_settings: dict) -> str:
+    logo_url = export_settings.get("logo_url") or export_settings.get("logo_path")
+    if not logo_url:
+        return ""
+
+    title = escape(export_settings.get("organization_name", "") or "")
+    logo_url = escape(str(logo_url))
+
+    return f"""
+    <section class="title-page">
+      <div class="title-page-logo">
+        <img src="{logo_url}" alt="{title} logo"/>
+      </div>
+    </section>
+    """
 
 
 def export_html(
-    sections: list["Section"],
+    sections: list[Any],
     project_name: str,
     doc_title: str = "Documentation",
     export_settings: Optional[dict] = None,
-) -> bytes:
+) -> str:
     settings = export_settings or {}
 
-    h1_color = _resolve(settings, "h1_color", "#0F172A")
-    h2_color = _resolve(settings, "h2_color", "#0F172A")
-    primary_color = _resolve(settings, "primary_color", "#6366f1")
-    font_family = _resolve(settings, "font_family", "Inter")
-    body_font_size = _resolve(settings, "body_font_size", "16px")
-    h1_font_size = _resolve(settings, "h1_font_size", "2.2rem")
-    h2_font_size = _resolve(settings, "h2_font_size", "1.6rem")
-    logo_url = settings.get("logo_url")
-    logo_position = settings.get("logo_position", "none")
-    logo_height = settings.get("logo_height", "60px")
-    header_left = settings.get("header_left", "")
-    header_center = settings.get("header_center", "")
-    header_right = settings.get("header_right", "")
-    page_numbers = settings.get("page_numbers", False)
-    page_number_position = settings.get("page_number_position", "center")
-    page_number_format = settings.get("page_number_format", "number")
-    paper_size = settings.get("paper_size", "a4")
-    margins = settings.get("margins", "normal")
+    organization_name = settings.get("organization_name") or project_name
+    title = settings.get("title") or doc_title
 
-    # ---- sanitise font-family (remove accidental quotes) ----
-    font_family = font_family.strip().strip("'\"")
+    body_parts = [
+        f"""
+        <section class="cover">
+          <div class="cover-inner">
+            {_build_logo_html(settings)}
+            <p class="eyebrow">{escape(organization_name)}</p>
+            <h1>{escape(title)}</h1>
+            <p class="subtitle">Technical Documentation</p>
+          </div>
+        </section>
+        """
+    ]
 
-    # ---- resolve logo to base64 ----
-    embedded = _maybe_embed_logo(logo_url) if logo_url else None
+    if settings.get("include_toc", True):
+        toc_items = []
+        for index, section in enumerate(sections, start=1):
+            heading = escape(_get_section_title(section, f"Section {index}"))
+            toc_items.append(f'<li><a href="#section-{index}">{heading}</a></li>')
 
-    # ---- title-page logo (body flow) ----
-    logo_title_html = ""
-    if embedded and logo_position == "title-page":
-        logo_title_html = (
-            f'<div class="title-page-logo">'
-            f'<img src="{embedded}" alt="logo"/>'
-            f"</div>"
+        body_parts.append(
+            f"""
+            <section class="toc page-break-after">
+              <h1>Table of Contents</h1>
+              <ol>
+                {''.join(toc_items)}
+              </ol>
+            </section>
+            """
         )
 
-    # ---- fixed header bar ----
-    has_header = bool(header_left or header_center or header_right or
-                      (embedded and logo_position in ("header-left", "header-center", "header-right")))
-    header_fixed_html = ""
-    if has_header:
-        cells = []
-        if embedded and logo_position == "header-left":
-            cells.append(f'<span class="h-left"><img class="logo-header" src="{embedded}" alt="logo"/></span>')
-        elif header_left:
-            cells.append(f'<span class="h-left">{header_left}</span>')
-        else:
-            cells.append('<span class="h-left"></span>')
+    for index, section in enumerate(sections, start=1):
+        heading = escape(_get_section_title(section, f"Section {index}"))
+        content = _markdown_to_html(_get_section_content(section))
 
-        if embedded and logo_position == "header-center":
-            cells.append(f'<span class="h-center"><img class="logo-header" src="{embedded}" alt="logo"/></span>')
-        elif header_center:
-            cells.append(f'<span class="h-center">{header_center}</span>')
-        else:
-            cells.append('<span class="h-center"></span>')
+        body_parts.append(
+            f"""
+            <section class="doc-section" id="section-{index}">
+              <h1>{heading}</h1>
+              <div class="section-content">
+                {content}
+              </div>
+            </section>
+            """
+        )
 
-        if embedded and logo_position == "header-right":
-            cells.append(f'<span class="h-right"><img class="logo-header" src="{embedded}" alt="logo"/></span>')
-        elif header_right:
-            cells.append(f'<span class="h-right">{header_right}</span>')
-        else:
-            cells.append('<span class="h-right"></span>')
+    body = "\n".join(body_parts)
 
-        header_fixed_html = f'<div class="page-header">{" ".join(cells)}</div>'
+    page_number_position = _safe_margin_box(settings.get("page_number_position"))
 
-    # ---- fixed footer bar ----
-    footer_parts = []
-    has_footer = False
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>{escape(title)}</title>
 
-    if page_numbers:
-        has_footer = True
-        pn = '<span class="page"></span>'
-        fmt = f"{pn}" if page_number_format == "number" else f"Page {pn}"
-        pos_class = {"left": "f-left", "center": "f-center", "right": "f-right"}.get(page_number_position, "f-center")
-        footer_parts.append(f'<span class="{pos_class}">{fmt}</span>')
-    elif embedded and logo_position in ("footer-left", "footer-center", "footer-right"):
-        has_footer = True
+  <style>
+    :root {{
+      --primary-color: {_css_value(settings.get("primary_color"), "#4f46e5")};
+      --h1-color: {_css_value(settings.get("h1_color"), "#111827")};
+      --h2-color: {_css_value(settings.get("h2_color"), "#1f2937")};
+      --text-color: {_css_value(settings.get("text_color"), "#1f2937")};
+      --muted-color: {_css_value(settings.get("muted_color"), "#6b7280")};
+      --border-color: {_css_value(settings.get("border_color"), "#e5e7eb")};
+      --table-header-bg: {_css_value(settings.get("table_header_bg"), "#f9fafb")};
+      --code-bg: {_css_value(settings.get("code_bg"), "#111827")};
+      --code-color: {_css_value(settings.get("code_color"), "#f9fafb")};
+      --font-family: {_css_value(settings.get("font_family"), "Inter")};
+      --body-font-size: {_css_value(settings.get("body_font_size"), "10.5pt")};
+      --h1-font-size: {_css_value(settings.get("h1_font_size"), "22pt")};
+      --h2-font-size: {_css_value(settings.get("h2_font_size"), "16pt")};
+      --logo-height: {_css_value(settings.get("logo_height"), "54px")};
+    }}
 
-    if embedded and logo_position == "footer-left":
-        footer_parts.insert(0, f'<span class="f-left"><img class="logo-footer" src="{embedded}" alt="logo"/></span>')
-    if embedded and logo_position == "footer-center":
-        footer_parts.append(f'<span class="f-center"><img class="logo-footer" src="{embedded}" alt="logo"/></span>')
-    if embedded and logo_position == "footer-right":
-        footer_parts.append(f'<span class="f-right"><img class="logo-footer" src="{embedded}" alt="logo"/></span>')
+    @page {{
+      size: {_safe_page_size(settings.get("paper_size"))};
+      margin-top: {_css_value(settings.get("margin_top"), "22mm")};
+      margin-bottom: {_css_value(settings.get("margin_bottom"), "20mm")};
+      margin-left: {_css_value(settings.get("margin_left"), "18mm")};
+      margin-right: {_css_value(settings.get("margin_right"), "18mm")};
 
-    footer_fixed_html = ""
-    if has_footer:
-        footer_fixed_html = f'<div class="page-footer">{" ".join(footer_parts)}</div>'
+      @top-left {{
+        content: "{escape(str(settings.get("header_left", organization_name)))}";
+        font-family: var(--font-family), Arial, sans-serif;
+        font-size: 8.5pt;
+        color: #6b7280;
+      }}
 
-    # ---- @page style ----
-    size_map = {"a4": "A4", "letter": "Letter"}
-    margin_map = {"normal": "2cm", "narrow": "1cm", "wide": "3cm"}
-    ps = size_map.get(paper_size, "A4")
-    mg = margin_map.get(margins, "2cm")
-    page_style = f"size: {ps}; margin: {mg};"
+      @top-center {{
+        content: "{escape(str(settings.get("header_center", title)))}";
+        font-family: var(--font-family), Arial, sans-serif;
+        font-size: 8.5pt;
+        color: #6b7280;
+      }}
 
-    # ---- body ----
-    md_text = export_markdown(sections, doc_title)
-    body_html = md_lib.markdown(
-        md_text,
-        extensions=["fenced_code", "tables", "toc", "nl2br"],
-    )
+      @top-right {{
+        content: "{escape(str(settings.get("header_right", "")))}";
+        font-family: var(--font-family), Arial, sans-serif;
+        font-size: 8.5pt;
+        color: #6b7280;
+      }}
 
-    html = _HTML_TEMPLATE.format(
-        title=project_name,
-        h1_color=h1_color,
-        h2_color=h2_color,
-        primary_color=primary_color,
-        font_family=font_family,
-        body_font_size=body_font_size,
-        h1_font_size=h1_font_size,
-        h2_font_size=h2_font_size,
-        logo_height=logo_height,
-        logo_title_html=logo_title_html,
-        header_fixed_html=header_fixed_html,
-        footer_fixed_html=footer_fixed_html,
-        header_display="block" if has_header else "none",
-        footer_display="block" if has_footer else "none",
-        page_style=page_style,
-        body=body_html,
-    )
-    return html.encode("utf-8")
+      @{page_number_position} {{
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: var(--font-family), Arial, sans-serif;
+        font-size: 8.5pt;
+        color: #6b7280;
+      }}
+    }}
+
+    * {{
+      box-sizing: border-box;
+    }}
+
+    html, body {{
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-family), -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      font-size: var(--body-font-size);
+      line-height: 1.62;
+      color: var(--text-color);
+      background: transparent;
+    }}
+
+    .cover {{
+      min-height: 220mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      page-break-after: always;
+    }}
+
+    .cover-inner {{
+      max-width: 140mm;
+      margin: 0 auto;
+    }}
+
+    .title-page-logo img {{
+      max-height: var(--logo-height);
+      max-width: 180px;
+      object-fit: contain;
+      margin-bottom: 28px;
+    }}
+
+    .eyebrow {{
+      color: var(--primary-color);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 9pt;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }}
+
+    .cover h1 {{
+      font-size: 30pt;
+      line-height: 1.15;
+      margin: 0;
+      color: var(--h1-color);
+    }}
+
+    .subtitle {{
+      color: var(--muted-color);
+      font-size: 12pt;
+      margin-top: 16px;
+    }}
+
+    .page-break-after {{
+      page-break-after: always;
+    }}
+
+    .toc h1,
+    .doc-section h1 {{
+      font-size: var(--h1-font-size);
+      color: var(--h1-color);
+      border-bottom: 2px solid var(--primary-color);
+      padding-bottom: 8px;
+      margin: 0 0 18px 0;
+      page-break-after: avoid;
+      break-after: avoid;
+    }}
+
+    .toc ol {{
+      padding-left: 20px;
+      margin-top: 18px;
+    }}
+
+    .toc li {{
+      margin: 8px 0;
+      color: var(--text-color);
+    }}
+
+    .toc a {{
+      color: var(--text-color);
+      text-decoration: none;
+    }}
+
+    .doc-section {{
+      margin-bottom: 24px;
+    }}
+
+    h2 {{
+      font-size: var(--h2-font-size);
+      color: var(--h2-color);
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 5px;
+      margin-top: 24px;
+      page-break-after: avoid;
+      break-after: avoid;
+    }}
+
+    h3, h4, h5, h6 {{
+      color: var(--h2-color);
+      margin-top: 18px;
+      page-break-after: avoid;
+      break-after: avoid;
+    }}
+
+    p {{
+      margin: 8px 0;
+      orphans: 3;
+      widows: 3;
+    }}
+
+    a {{
+      color: var(--primary-color);
+      text-decoration: underline;
+    }}
+
+    ul, ol {{
+      padding-left: 22px;
+    }}
+
+    li {{
+      margin: 4px 0;
+    }}
+
+    code {{
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 0.88em;
+      background: #f3f4f6;
+      color: #111827;
+      padding: 0.12em 0.35em;
+      border-radius: 4px;
+    }}
+
+    pre {{
+      background: var(--code-bg);
+      color: var(--code-color);
+      padding: 12px 14px;
+      border-radius: 8px;
+      margin: 12px 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }}
+
+    pre code {{
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      font-size: 8.7pt;
+    }}
+
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 9.5pt;
+      page-break-inside: auto;
+      break-inside: auto;
+    }}
+
+    thead {{
+      display: table-header-group;
+    }}
+
+    tr {{
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }}
+
+    th, td {{
+      border: 1px solid var(--border-color);
+      padding: 7px 9px;
+      text-align: left;
+      vertical-align: top;
+      word-break: break-word;
+    }}
+
+    th {{
+      background: var(--table-header-bg);
+      font-weight: 700;
+    }}
+
+    tr:nth-child(even) td {{
+      background: #fafafa;
+    }}
+
+    img {{
+      max-width: 100%;
+      height: auto;
+      border-radius: 6px;
+    }}
+
+    blockquote {{
+      margin: 14px 0;
+      padding: 8px 14px;
+      border-left: 4px solid var(--primary-color);
+      color: #4b5563;
+      background: #f9fafb;
+    }}
+
+    hr {{
+      border: 0;
+      border-top: 1px solid var(--border-color);
+      margin: 22px 0;
+    }}
+  </style>
+</head>
+
+<body>
+  {body}
+</body>
+</html>
+"""
+    return html
+
+def export_markdown(
+    sections: list[Any],
+    project_name: str,
+    doc_title: str = "Documentation",
+    export_settings: Optional[dict] = None,
+) -> str:
+    lines = [
+        f"# {doc_title}",
+        "",
+        f"Project: {project_name}",
+        "",
+    ]
+
+    for index, section in enumerate(sections, start=1):
+        heading = _get_section_title(section, f"Section {index}")
+        content = _get_section_content(section)
+
+        lines.extend([
+            f"## {heading}",
+            "",
+            content.strip(),
+            "",
+        ])
+
+    return "\n".join(lines).strip() + "\n"
 
 
 def export_pdf(
-    sections: list["Section"],
+    sections: list[Any],
     project_name: str,
     doc_title: str = "Documentation",
     export_settings: Optional[dict] = None,
 ) -> bytes:
-    from weasyprint import HTML as WeasyHTML
+    """
+    Generate a production-ready PDF for software documentation using WeasyPrint.
 
-    html_bytes = export_html(sections, project_name, doc_title, export_settings)
-    html_str = html_bytes.decode("utf-8")
-    return WeasyHTML(string=html_str).write_pdf()
+    Supports:
+    - A4 / Letter page sizes
+    - Headers
+    - Footers
+    - Page numbers
+    - Logo
+    - Organization colors
+    - Custom fonts if installed on the server
+    - Markdown tables
+    - Code blocks
+    - API-reference-friendly wrapping
+    """
+    settings = export_settings or {}
+
+    html = export_html(
+        sections=sections,
+        project_name=project_name,
+        doc_title=doc_title,
+        export_settings=settings,
+    )
+
+    base_url = settings.get("base_url")
+
+    if not base_url:
+        logo_path = settings.get("logo_path")
+        if logo_path:
+            base_url = str(Path(str(logo_path)).parent.resolve())
+        else:
+            base_url = str(Path.cwd())
+
+    return weasyprint.HTML(
+        string=html,
+        base_url=base_url,
+    ).write_pdf()

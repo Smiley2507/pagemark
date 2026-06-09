@@ -60,6 +60,19 @@ export const useActivateAiCredential = () => {
   });
 };
 
+export const useTestAiCredential = () =>
+  useMutation({
+    mutationFn: ({
+      provider,
+      api_key,
+      model_id,
+    }: {
+      provider: string;
+      api_key: string;
+      model_id: string;
+    }) => aiCredentialsApi.testConnection(provider, { api_key, model_id }),
+  });
+
 export const useDeleteAiCredential = () => {
   const queryClient = useQueryClient();
   return useMutation({

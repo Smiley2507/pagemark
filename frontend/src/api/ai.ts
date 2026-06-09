@@ -3,6 +3,17 @@ import type { Section, ChatMessage } from '@/types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export interface StructuralSuggestion {
+  type: 'reorder' | 'rename' | 'add' | 'remove' | 'merge';
+  section_id: number | null;
+  target_section_id: number | null;
+  heading: string | null;
+  suggested_heading: string | null;
+  suggested_order: number | null;
+  suggested_parent_heading: string | null;
+  reasoning: string;
+}
+
 export interface RefineDiff {
   original: string;
   refined: string;
@@ -52,6 +63,12 @@ export const aiApi = {
     return data;
   },
 
+  /** Suggest structural changes (reorder, rename, add, remove, merge) for a document */
+  async suggestStructure(documentId: number): Promise<StructuralSuggestion[]> {
+    const { data } = await apiClient.post(`/documents/${documentId}/ai/suggest-structure`);
+    return data.suggestions ?? [];
+  },
+
   /** Generate a documentation outline for a project */
   async generateOutline(projectId: number): Promise<OutlineSuggestion[]> {
     const { data } = await apiClient.post(`/projects/${projectId}/ai/generate-outline`);
@@ -81,6 +98,8 @@ export const aiApi = {
   /**
    * Stream a chat message via SSE fetch.
    * onChunk is called for each text chunk; onDone when the stream completes.
+   * resourceIds: IDs of Resource objects to attach as context.
+   * references: section heading strings to include as context.
    */
   streamMessage(
     threadId: number,
@@ -88,17 +107,27 @@ export const aiApi = {
     onChunk: (chunk: string) => void,
     onDone: () => void,
     onError?: (err: Error) => void,
+    resourceIds?: number[],
+    references?: string[],
   ): AbortController {
     const controller = new AbortController();
 
     const baseURL =
       import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
+    const body: Record<string, unknown> = { message };
+    if (resourceIds && resourceIds.length > 0) {
+      body.resource_ids = resourceIds;
+    }
+    if (references && references.length > 0) {
+      body.references = references;
+    }
+
     fetch(`${baseURL}/chat/threads/${threadId}/messages/stream`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     })
       .then(async (res) => {

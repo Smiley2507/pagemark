@@ -3,7 +3,8 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { analysisApi } from '@/api/analysis';
-import { useGenerateSection, useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread } from '@/hooks/useAI';
+import { useGenerateSection, useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread, useSuggestStructure } from '@/hooks/useAI';
+import { useAiStore } from '@/store/aiStore';
 import type { Section } from '@/types';
 
 import { AiPanelHeader } from './ai/AiPanelHeader';
@@ -12,6 +13,7 @@ import { AiPanelMessages } from './ai/AiPanelMessages';
 import { AiPanelContextBar } from './ai/AiPanelContextBar';
 import { AiPanelComposer } from './ai/AiPanelComposer';
 import { AiPanelAttachments } from './ai/AiPanelAttachments';
+import { StructuralSuggestions } from './StructuralSuggestions';
 
 interface AiPanelProps {
   projectId: number;
@@ -25,6 +27,7 @@ interface AiPanelProps {
   onReplaceContent: (content: string, sectionId: number) => void;
   onInsertAtCursor: (content: string) => void;
   isApproved?: boolean;
+  onOpenPalette?: () => void;
 }
 
 const quickChips = [
@@ -33,6 +36,7 @@ const quickChips = [
   { label: 'Expand', text: 'Expand with more detail and examples' },
   { label: 'Summarise', text: 'Summarise the key points of this section' },
   { label: 'Fix', text: 'Fix any inconsistencies or errors in this section' },
+  { label: 'Structure', text: 'Suggest structural improvements (reorder, rename, add)' },
 ];
 
 export function AiPanel({
@@ -47,6 +51,7 @@ export function AiPanel({
   onReplaceContent,
   onInsertAtCursor,
   isApproved,
+  onOpenPalette,
 }: AiPanelProps) {
   const [inputValue, setInputValue] = useState('');
   const [clarification, setClarification] = useState<{ question: string } | null>(null);
@@ -56,9 +61,11 @@ export function AiPanel({
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(2000);
   const [showAttachments, setShowAttachments] = useState(false);
+  const [structureSuggestions, setStructureSuggestions] = useState<import('@/api/ai').StructuralSuggestion[] | null>(null);
 
   const generateSection = useGenerateSection(projectId);
   const refineSection = useRefineSection();
+  const suggestStructure = useSuggestStructure();
 
   const { data: threads } = useThreads(projectId);
   const createThread = useCreateThread(projectId);
@@ -89,9 +96,25 @@ export function AiPanel({
     const { cleanText, references } = parseMentions(inputValue.trim());
     setInputValue('');
 
-    const messagePayload = references.length > 0
-      ? `${cleanText}\n\n(referencing: ${references.join(', ')})`
-      : cleanText;
+    // Collect transient context from store
+    const { attachments, removeAttachment } = useAiStore.getState();
+    const transientItems = attachments.filter((a) => a.type === 'transient');
+    let messagePayload = cleanText;
+    if (transientItems.length > 0) {
+      const contextBlocks = transientItems
+        .map((a) => a.reference || '')
+        .filter(Boolean)
+        .join('\n\n');
+      if (contextBlocks) {
+        messagePayload = `Context from selection:\n${contextBlocks}\n\n---\n\n${cleanText}`;
+      }
+      // Clear transient attachments after using them
+      transientItems.forEach((a) => removeAttachment(a.id));
+    }
+
+    if (references.length > 0) {
+      messagePayload = `${messagePayload}\n\n(referencing: ${references.join(', ')})`;
+    }
 
     if (activeThreadId) {
       streamMessage(messagePayload);
@@ -118,7 +141,56 @@ export function AiPanel({
   const isGenerating = generateSection.isPending;
   const isRefining = refineSection.isPending;
 
-  const handleAction = async (type: 'generate' | 'refine' | 'expand', instruction?: string) => {
+  const handleSuggestStructure = async () => {
+    if (!documentId) return;
+    try {
+      const suggestions = await suggestStructure.mutateAsync(documentId);
+      setStructureSuggestions(suggestions);
+    } catch {
+      toast.error('Failed to generate structural suggestions');
+    }
+  };
+
+  const handleAcceptSuggestion = async (suggestion: import('@/api/ai').StructuralSuggestion) => {
+    if (!documentId) return;
+    try {
+      if (suggestion.type === 'rename' && suggestion.section_id && suggestion.suggested_heading) {
+        await import('@/api/sections').then((m) =>
+          m.sectionsApi.updateSectionTitle(suggestion.section_id!, suggestion.suggested_heading!),
+        );
+        toast.success(`Renamed to "${suggestion.suggested_heading}"`);
+      }
+    } catch {
+      toast.error('Failed to apply suggestion');
+    }
+  };
+
+  const handleRejectSuggestion = (index: number) => {
+    setStructureSuggestions((prev) => (prev ? prev.filter((_, i) => i !== index) : null));
+  };
+
+  const handleApplyAllSuggestions = async () => {
+    if (!structureSuggestions || !documentId) return;
+    const renameSuggestions = structureSuggestions.filter(
+      (s) => s.type === 'rename' && s.section_id && s.suggested_heading,
+    );
+    try {
+      const { sectionsApi } = await import('@/api/sections');
+      for (const s of renameSuggestions) {
+        await sectionsApi.updateSectionTitle(s.section_id!, s.suggested_heading!);
+      }
+      toast.success(`Applied ${renameSuggestions.length} change(s)`);
+      setStructureSuggestions(null);
+    } catch {
+      toast.error('Failed to apply all changes');
+    }
+  };
+
+  const handleAction = async (type: 'generate' | 'refine' | 'expand' | 'structure', instruction?: string) => {
+    if (type === 'structure') {
+      await handleSuggestStructure();
+      return;
+    }
     if (!activeSectionId) return;
     try {
       if (type === 'generate') {
@@ -203,6 +275,19 @@ export function AiPanel({
           />
         )}
 
+        {structureSuggestions !== null && (
+          <div className="px-3 py-3">
+            <StructuralSuggestions
+              suggestions={structureSuggestions}
+              onAccept={handleAcceptSuggestion}
+              onReject={handleRejectSuggestion}
+              onApplyAll={handleApplyAllSuggestions}
+              onClose={() => setStructureSuggestions(null)}
+              isApplying={suggestStructure.isPending}
+            />
+          </div>
+        )}
+
         {hasMessages && !clarification && activeSectionId && (
           <div className="border-t border-separator px-4 py-2">
             <div className="flex flex-wrap gap-1">
@@ -216,6 +301,13 @@ export function AiPanel({
                   {chip.label}
                 </button>
               ))}
+              <button
+                onClick={() => handleAction('structure')}
+                disabled={suggestStructure.isPending}
+                className="rounded px-2 py-1 text-[11px] text-accent transition-colors hover:bg-accent/10 disabled:opacity-40"
+              >
+                {suggestStructure.isPending ? 'Thinking…' : 'Structure'}
+              </button>
             </div>
           </div>
         )}
@@ -227,7 +319,10 @@ export function AiPanel({
       />
 
       {showAttachments && (
-        <AiPanelAttachments onClose={() => setShowAttachments(false)} />
+        <AiPanelAttachments
+          onClose={() => setShowAttachments(false)}
+          onOpenPalette={onOpenPalette}
+        />
       )}
 
       <div className="shrink-0 px-3 pb-3 pt-2">

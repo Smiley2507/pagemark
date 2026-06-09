@@ -1,4 +1,4 @@
-import { X, FileText, BookOpen, FileCode, Layout } from 'lucide-react';
+import { X, FileText, BookOpen, FileCode, Layout, Search, Highlighter } from 'lucide-react';
 import { useAiStore } from '@/store/aiStore';
 import type { AiAttachment } from '@/store/aiStore';
 
@@ -9,6 +9,7 @@ const TYPE_ICONS: Record<string, typeof FileText> = {
   document: BookOpen,
   source: FileCode,
   template: Layout,
+  transient: Highlighter,
 };
 
 const TYPE_LABELS: Record<string, string> = {
@@ -18,20 +19,22 @@ const TYPE_LABELS: Record<string, string> = {
   document: 'Document',
   source: 'Source Code',
   template: 'Template',
+  transient: 'Selection',
 };
 
-const PRESET_RESOURCES: { label: string; type: AiAttachment['type']; reference: string }[] = [
-  { label: 'Current Section', type: 'section', reference: 'current-section' },
-  { label: 'Document Context', type: 'document', reference: 'current-document' },
-  { label: 'Repository Source', type: 'source', reference: 'repository-source' },
-  { label: 'Document Template', type: 'template', reference: 'document-template' },
+const PRESET_RESOURCES: { label: string; type: AiAttachment['type']; ref: string }[] = [
+  { label: 'Current Section', type: 'section', ref: 'current-section' },
+  { label: 'Document Context', type: 'document', ref: 'current-document' },
+  { label: 'Repository Source', type: 'source', ref: 'repository-source' },
+  { label: 'Document Template', type: 'template', ref: 'document-template' },
 ];
 
 interface AiPanelAttachmentsProps {
   onClose: () => void;
+  onOpenPalette?: () => void;
 }
 
-export function AiPanelAttachments({ onClose }: AiPanelAttachmentsProps) {
+export function AiPanelAttachments({ onClose, onOpenPalette }: AiPanelAttachmentsProps) {
   const { attachments, addAttachment, removeAttachment } = useAiStore();
 
   return (
@@ -50,29 +53,29 @@ export function AiPanelAttachments({ onClose }: AiPanelAttachmentsProps) {
       <div className="mb-2 flex flex-wrap gap-1.5">
         {PRESET_RESOURCES.map((r) => {
           const Icon = TYPE_ICONS[r.type];
-          const isAttached = attachments.some((a) => a.reference === r.reference);
+          const isAttached = attachments.some((a) => a.reference === r.ref);
           return (
             <button
-              key={r.reference}
+              key={r.ref}
               onClick={() => {
                 if (isAttached) {
-                  const found = attachments.find((a) => a.reference === r.reference);
+                  const found = attachments.find((a) => a.reference === r.ref);
                   if (found) removeAttachment(found.id);
                 } else {
                   addAttachment({
-                    id: `preset-${r.reference}-${Date.now()}`,
+                    id: `preset-${r.ref}`,
                     type: r.type,
                     label: r.label,
-                    reference: r.reference,
+                    reference: r.ref,
                   });
                 }
               }}
-              className={[
-                'inline-flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
-                isAttached
+              className={
+                'inline-flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors ' +
+                (isAttached
                   ? 'bg-interaction-muted text-interaction-hover'
-                  : 'border border-separator text-text-muted hover:bg-panel-muted hover:text-text-primary',
-              ].join(' ')}
+                  : 'border border-separator text-text-muted hover:bg-panel-muted hover:text-text-primary')
+              }
             >
               <Icon className="h-3 w-3 shrink-0" />
               {r.label}
@@ -80,6 +83,16 @@ export function AiPanelAttachments({ onClose }: AiPanelAttachmentsProps) {
             </button>
           );
         })}
+
+        {onOpenPalette && (
+          <button
+            onClick={onOpenPalette}
+            className="inline-flex items-center gap-1 rounded border border-dashed border-separator px-2 py-1 text-xs text-text-muted transition-colors hover:bg-panel-muted hover:text-text-primary"
+          >
+            <Search className="h-3 w-3" />
+            Browse resources…
+          </button>
+        )}
       </div>
 
       {attachments.length > 0 && (

@@ -397,6 +397,32 @@ export interface ChatMessage {
   created_at: string;
 }
 
+export interface Resource {
+  id: number;
+  project_id: number;
+  type: string;
+  original_name: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  file_path: string | null;
+  symbol_name: string | null;
+  reference_type: string | null;
+  reference_id: number | null;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContextSearchItem {
+  type: string;
+  id: string;
+  label: string;
+  subtitle: string;
+  score: number;
+  reference_type: string | null;
+  reference_id: number | null;
+}
+
 export interface Organization {
   id: number;
   name: string;

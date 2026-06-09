@@ -33,6 +33,8 @@ from app.models.key import UserAPIKey
 from app.models.note import CollaborationNote
 from app.models.nlp import NLPReport
 from app.models.document_share import DocumentShare
+from app.models.resource import Resource
+from app.models.chat import ChatMessageResource
 
 # Alembic Config object
 config = context.config

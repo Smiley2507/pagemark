@@ -29,7 +29,8 @@ from app.models.activity import ActivityEvent
 from app.models.workspace_preference import WorkspacePreference
 from app.models.oauth_token import OAuthToken
 from app.models.ai_credential import UserAiCredential
-from app.models.chat import ChatThread, ChatMessage
+from app.models.chat import ChatThread, ChatMessage, ChatMessageResource
+from app.models.resource import Resource, ResourceType
 from app.models.quality import QualityReport, QualityIssue, BrokenLink
 from app.models.audit import AuditLog
 from app.models.key import UserAPIKey
@@ -79,6 +80,9 @@ __all__ = [
     "UserAiCredential",
     "ChatThread",
     "ChatMessage",
+    "ChatMessageResource",
+    "Resource",
+    "ResourceType",
     "QualityReport",
     "QualityIssue",
     "BrokenLink",

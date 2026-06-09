@@ -12,3 +12,6 @@
 {"sessionId": "be49b0", "hypothesisId": "A", "location": "analysis_worker.py:clone_and_analyze_task", "message": "task_start", "data": {"project_id": 14, "analysis_id": 8}, "timestamp": 1779485976145}
 {"sessionId": "be49b0", "hypothesisId": "A", "location": "analysis_worker.py:clone_and_analyze_task", "message": "step1_ok", "data": {"analysis_id": 8}, "timestamp": 1779485976224}
 {"sessionId": "be49b0", "hypothesisId": "A", "location": "analysis_worker.py:clone_and_analyze_task", "message": "task_done", "data": {"analysis_id": 8}, "timestamp": 1779485979290}
+{"sessionId": "be49b0", "hypothesisId": "A", "location": "analysis_worker.py:clone_and_analyze_task", "message": "task_start", "data": {"project_id": 9, "analysis_id": 6}, "timestamp": 1780966657425}
+{"sessionId": "be49b0", "hypothesisId": "A", "location": "analysis_worker.py:clone_and_analyze_task", "message": "step1_ok", "data": {"analysis_id": 6}, "timestamp": 1780966657491}
+{"sessionId": "be49b0", "hypothesisId": "A", "location": "analysis_worker.py:clone_and_analyze_task", "message": "task_done", "data": {"analysis_id": 6}, "timestamp": 1780966662370}

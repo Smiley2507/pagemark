@@ -26,6 +26,10 @@ export const authApi = {
     return data;
   },
 
+  async refreshSession(): Promise<void> {
+    await apiClient.post('/auth/refresh');
+  },
+
   async forgotPassword(email: string): Promise<void> {
     await apiClient.post('/auth/forgot-password', { email });
   },

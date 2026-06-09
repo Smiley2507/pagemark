@@ -15,9 +15,12 @@ import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { closeBrackets } from '@codemirror/autocomplete';
 import { cn } from '@/lib/utils';
+import { useAiStore } from '@/store/aiStore';
+import { resourcesApi } from '@/api/resources';
 import { SlashCommandMenu } from './SlashCommandMenu';
 import { BubbleMenu } from './BubbleMenu';
 import { TableAssistant } from './TableAssistant';
+import { EditorContextMenu } from './EditorContextMenu';
 import { findTableAtCursor, type TableContext } from './tableUtils';
 import { findBlockAtCursor, type BlockContext } from './blockUtils';
 import { pairingExtension } from './markdownPairing';
@@ -331,6 +334,7 @@ interface MarkdownEditorProps {
   onChange: (value: string) => void;
   className?: string;
   sectionId?: number;
+  projectId?: number;
   onPolish?: (text: string) => void;
   grammarIssues?: GrammarIssue[];
 }
@@ -353,15 +357,18 @@ interface TableAssistantState {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorProps>(
-  function MarkdownEditor({ value, onChange, className, sectionId, onPolish, grammarIssues }, ref) {
+  function MarkdownEditor({ value, onChange, className, sectionId, projectId, onPolish, grammarIssues }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const viewRef      = useRef<EditorView | null>(null);
     const [menuState, setMenuState] = useState<MenuState | null>(null);
     const [bubbleMenuState, setBubbleMenuState] = useState<BubbleMenuState | null>(null);
     const [tableAssistantState, setTableAssistantState] = useState<TableAssistantState | null>(null);
+    const [contextMenuState, setContextMenuState] = useState<{ position: { top: number; left: number }; selectedText: string } | null>(null);
 
     const onChangeRef = useRef(onChange);
+    const projectIdRef = useRef(projectId);
     useEffect(() => { onChangeRef.current = onChange; });
+    useEffect(() => { projectIdRef.current = projectId; });
 
     useImperativeHandle(ref, () => ({
       focus: () => viewRef.current?.focus(),
@@ -503,6 +510,31 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         setTableAssistantState(null);
       };
 
+      const uploadAndInsertImage = async (file: File, pos: number, idx: number) => {
+        const pid = projectIdRef.current;
+        if (!pid) {
+          const url = URL.createObjectURL(file);
+          view.dispatch({
+            changes: { from: pos + (idx * 2), insert: `![${file.name}|300](${url})\n` },
+          });
+          return;
+        }
+        try {
+          const resource = await resourcesApi.upload(pid, file);
+          const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+          const imgUrl = `${baseURL}/projects/${pid}/resources/${resource.id}/data`;
+          view.dispatch({
+            changes: { from: pos + (idx * 2), insert: `![${resource.original_name}|300](${imgUrl})\n` },
+          });
+        } catch {
+          // Fallback to local URL on upload failure
+          const url = URL.createObjectURL(file);
+          view.dispatch({
+            changes: { from: pos + (idx * 2), insert: `![${file.name}|300](${url})\n` },
+          });
+        }
+      };
+
       const handleDrop = (e: DragEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -511,20 +543,49 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
         const images = files.filter(f => f.type.startsWith('image/'));
 
         if (images.length > 0) {
-          const { state } = view;
-          const pos = state.selection.main.head;
+          const pos = view.state.selection.main.head;
+          images.forEach((file, idx) => uploadAndInsertImage(file, pos, idx));
+          view.focus();
+        }
+      };
 
-          images.forEach((file, idx) => {
-            // In a real app, this would be an upload call.
-            // For now, we'll use a local object URL for immediate feedback.
-            const url = URL.createObjectURL(file);
-            const markdown = `![${file.name}|300](${url})\n`;
+      const handleContextMenu = (e: MouseEvent) => {
+        e.preventDefault();
+        setMenuState(null);
+        setBubbleMenuState(null);
+        setTableAssistantState(null);
 
-            view.dispatch({
-              changes: { from: pos + (idx * markdown.length), insert: markdown },
-            });
-          });
+        const { main } = view.state.selection;
+        if (main.empty) {
+          // Click at a position — select word under cursor
+          const pos = view.posFromCoords({ x: e.clientX, y: e.clientY });
+          if (pos === null) return;
+          const word = view.state.wordAt(pos);
+          if (!word) return;
+          const text = view.state.sliceDoc(word.from, word.to);
+          setContextMenuState({ position: { top: e.clientY, left: e.clientX }, selectedText: text });
+          return;
+        }
 
+        const text = view.state.sliceDoc(main.from, main.to);
+        setContextMenuState({ position: { top: e.clientY, left: e.clientX }, selectedText: text });
+      };
+
+      const handlePaste = (e: ClipboardEvent) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        const imageFiles: File[] = [];
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) imageFiles.push(file);
+          }
+        }
+        if (imageFiles.length > 0) {
+          e.preventDefault();
+          const pos = view.state.selection.main.head;
+          imageFiles.forEach((file, idx) => uploadAndInsertImage(file, pos, idx));
           view.focus();
         }
       };
@@ -532,10 +593,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
       view.contentDOM.addEventListener('blur', handleBlur);
       view.contentDOM.addEventListener('drop', handleDrop);
       view.contentDOM.addEventListener('dragover', (e) => e.preventDefault());
+      view.contentDOM.addEventListener('contextmenu', handleContextMenu);
+      view.contentDOM.addEventListener('paste', handlePaste);
 
       return () => {
         view.contentDOM.removeEventListener('blur', handleBlur);
         view.contentDOM.removeEventListener('drop', handleDrop);
+        view.contentDOM.removeEventListener('contextmenu', handleContextMenu);
+        view.contentDOM.removeEventListener('paste', handlePaste);
         view.destroy();
         viewRef.current = null;
       };
@@ -586,6 +651,26 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, MarkdownEditorPro
               position={tableAssistantState.position}
               context={tableAssistantState.context}
               editor={viewRef.current}
+            />,
+            document.body,
+          )
+        }
+        {contextMenuState && viewRef.current &&
+          createPortal(
+            <EditorContextMenu
+              position={contextMenuState.position}
+              hasSelection={contextMenuState.selectedText.length > 0}
+              selectedText={contextMenuState.selectedText}
+              onAddContext={(text) => {
+                const addAttachment = useAiStore.getState().addAttachment;
+                addAttachment({
+                  id: `transient-${Date.now()}`,
+                  type: 'transient',
+                  label: 'Selection',
+                  reference: text,
+                });
+              }}
+              onClose={() => { setContextMenuState(null); viewRef.current?.focus(); }}
             />,
             document.body,
           )

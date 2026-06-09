@@ -1,7 +1,8 @@
-import { FileText, X, BookOpen, FileCode, Layout, Sparkles } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useState, useRef, useEffect } from 'react';
+import { FileText, X, BookOpen, FileCode, Layout, Sparkles, Circle, Highlighter } from 'lucide-react';
 import { useAiStore } from '@/store/aiStore';
 import type { AiAttachment } from '@/store/aiStore';
+import { ResourcePreview } from './ResourcePreview';
 
 const ATTACHMENT_ICONS: Record<string, typeof FileText> = {
   file: FileText,
@@ -10,19 +11,43 @@ const ATTACHMENT_ICONS: Record<string, typeof FileText> = {
   document: BookOpen,
   source: FileCode,
   template: Layout,
+  transient: Highlighter,
+};
+
+const TYPE_DOT_COLORS: Record<string, string> = {
+  file: 'bg-blue-400',
+  note: 'bg-amber-400',
+  section: 'bg-emerald-400',
+  document: 'bg-violet-400',
+  source: 'bg-cyan-400',
+  template: 'bg-orange-400',
+  transient: 'bg-pink-400',
 };
 
 interface AiPanelContextBarProps {
   activeSectionHeading: string | null;
   activeSectionStatus?: string;
-  attachmentCount?: number;
 }
 
 export function AiPanelContextBar({
   activeSectionHeading,
   activeSectionStatus,
 }: AiPanelContextBarProps) {
-  const { contextBarOpen, setContextBarOpen, attachments, removeAttachment, clearAttachments } = useAiStore();
+  const { contextBarOpen, attachments, removeAttachment, clearAttachments } = useAiStore();
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (previewRef.current && !previewRef.current.contains(e.target as Node)) {
+        setPreviewId(null);
+      }
+    };
+    if (previewId) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [previewId]);
 
   if (!contextBarOpen) return null;
 
@@ -39,6 +64,7 @@ export function AiPanelContextBar({
         <div className="ml-1 flex flex-1 flex-wrap gap-1">
           {activeSectionHeading && (
             <span className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary">
+              <Circle className="h-1.5 w-1.5 fill-emerald-400 text-emerald-400" />
               <FileText className="h-3 w-3 shrink-0" />
               <span className="max-w-[80px] truncate">{activeSectionHeading}</span>
               {activeSectionStatus && (
@@ -46,25 +72,45 @@ export function AiPanelContextBar({
               )}
             </span>
           )}
+
           {attachments.map((a) => {
             const Icon = ATTACHMENT_ICONS[a.type];
+            const dotColor = TYPE_DOT_COLORS[a.type] || 'bg-text-muted';
+            const showPreview = previewId === a.id;
+
             return (
-              <span
-                key={a.id}
-                className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary"
-              >
-                <Icon className="h-3 w-3 shrink-0" />
-                <span className="max-w-[60px] truncate">{a.label}</span>
+              <span key={a.id} className="relative inline-flex">
                 <button
-                  onClick={() => removeAttachment(a.id)}
-                  className="ml-0.5 rounded-sm text-text-muted hover:text-text-primary"
-                  aria-label={`Remove ${a.label}`}
+                  onClick={() => setPreviewId(showPreview ? null : a.id)}
+                  className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary transition-colors hover:bg-interaction-muted hover:text-interaction-hover"
                 >
-                  <X className="h-2.5 w-2.5" />
+                  <Circle className={`h-1.5 w-1.5 fill-current ${dotColor.replace('bg-', 'text-')}`} />
+                  <Icon className="h-3 w-3 shrink-0" />
+                  <span className="max-w-[60px] truncate">{a.label}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeAttachment(a.id); setPreviewId(null); }}
+                    className="ml-0.5 rounded-sm text-text-muted hover:text-text-primary"
+                    aria-label={`Remove ${a.label}`}
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
                 </button>
+
+                {showPreview && (
+                  <div
+                    ref={previewRef}
+                    className="absolute bottom-full left-0 z-50 mb-1.5"
+                  >
+                    <ResourcePreview
+                      attachment={a}
+                      onRemove={(id) => { removeAttachment(id); setPreviewId(null); }}
+                    />
+                  </div>
+                )}
               </span>
             );
           })}
+
           {!hasContext && (
             <span className="text-[10px] text-text-muted italic">
               No context selected

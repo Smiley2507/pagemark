@@ -47,15 +47,14 @@ export function GenerationChoiceStep({
       <div className="max-w-3xl">
         <h1 className="text-title text-text-primary">Choose how to enter the Document</h1>
         <p className="mt-3 text-body text-text-secondary">
-          Generation choices compare relative usage, approximate cost, uncertainty, and Section-level
-          breakdown before provider-consuming work begins.
+          Choose how to fill in the document. You can write manually, generate sections on demand,
+          or generate the full document in the background.
         </p>
       </div>
 
       {!hasActiveProvider && (
         <Notice variant="warning" title="No active provider is configured">
-          You can still enter the editor immediately and write manually. Configure a provider only
-          when you choose an AI-powered generation action.
+          You can enter the editor and write manually. Configure an AI provider when you're ready for AI-powered generation.
         </Notice>
       )}
 
