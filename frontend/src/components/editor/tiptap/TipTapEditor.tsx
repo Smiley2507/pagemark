@@ -8,10 +8,10 @@ import { useAiStore } from '@/store/aiStore'
 import { resourcesApi } from '@/api/resources'
 import { createExtensions } from './editorSetup'
 import { SlashCommandMenu } from './SlashCommandMenu'
+import { BubbleMenuContent } from './BubbleMenuContent'
 import { TableToolbar } from './TableToolbar'
 import { detectSpreadsheetData, insertTableFromSpreadsheet } from './tableUtils'
 import { EditorContextMenu } from '../EditorContextMenu'
-import { EditorToolbar } from '../EditorToolbar'
 import type { GrammarIssue } from '../grammarDecoration'
 import './tiptap-editor.css'
 
@@ -52,7 +52,7 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
       },
       editorProps: {
         attributes: {
-          class: 'prose prose-sm prose-neutral dark:prose-invert max-w-none focus:outline-none min-h-[180px]',
+          class: 'prose prose-sm prose-neutral dark:prose-invert max-w-none focus:outline-none min-h-[120px]',
         },
       },
       immediatelyRender: false,
@@ -178,66 +178,27 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
     }, [editor, onSplitSection])
 
     return (
-      <div className={cn('relative min-h-44 w-full min-w-0 overflow-x-hidden', className)}>
+      <div className={cn('relative min-h-36 w-full min-w-0 overflow-x-hidden', className)}>
         {editor && (
           <BubbleMenu
             editor={editor}
-            className="flex items-center gap-0.5 rounded-lg border border-border bg-card px-1 py-1 shadow-lg"
+            className="flex"
             shouldShow={({ editor }) => {
               const { selection } = editor.state
               const { empty } = selection
               const node = selection.$head.node()
-              const inTable = editor.isActive('table')
-              const inCodeBlock = node.type.name === 'codeBlock' || node.type.name === 'code'
-              const inCallout = editor.isActive('callout')
-              return !empty && !inTable && !inCodeBlock && !inCallout
+              return !empty
+                && !editor.isActive('table')
+                && node.type.name !== 'codeBlock'
+                && node.type.name !== 'code'
+                && !editor.isActive('callout')
             }}
           >
-            <FormatButton onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} label="Bold" shortcut="Ctrl+B">
-              <strong className="text-xs">B</strong>
-            </FormatButton>
-            <FormatButton onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} label="Italic" shortcut="Ctrl+I">
-              <em className="text-xs">I</em>
-            </FormatButton>
-            <FormatButton onClick={() => editor.chain().focus().toggleStrike().run()} isActive={editor.isActive('strike')} label="Strikethrough">
-              <span className="text-xs line-through">S</span>
-            </FormatButton>
-            <FormatButton onClick={() => editor.chain().focus().toggleCode().run()} isActive={editor.isActive('code')} label="Inline Code">
-              <code className="text-xs">&lt;/&gt;</code>
-            </FormatButton>
-            <div className="mx-1 h-4 w-px bg-border" />
-            <FormatButton onClick={() => {
-              const prevUrl = editor.getAttributes('link').href
-              const url = window.prompt('URL', prevUrl || '')
-              if (url === null) return
-              if (url === '') {
-                editor.chain().focus().unsetLink().run()
-              } else {
-                editor.chain().focus().setLink({ href: url }).run()
-              }
-            }} isActive={editor.isActive('link')} label="Link">
-              <span className="text-xs underline">L</span>
-            </FormatButton>
-            <div className="mx-1 h-4 w-px bg-border" />
-            <FormatButton
-              onClick={() => {
-                const selectedText = editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)
-                onPolish?.(selectedText)
-              }}
-              isActive={false}
-              label="AI Actions"
-              className="text-primary hover:text-foreground"
-            >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 3l1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5z" />
-                <path d="M3 20l3-3 3 3" />
-              </svg>
-            </FormatButton>
+            <BubbleMenuContent editor={editor} onClose={() => {}} />
           </BubbleMenu>
         )}
-        <EditorToolbar editor={editor} />
         {editor && showTableToolbar && (
-          <div className="mb-2 flex justify-center">
+          <div className="mb-1 flex justify-center">
             <TableToolbar editor={editor} />
           </div>
         )}
@@ -265,34 +226,3 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
     )
   }
 )
-
-function FormatButton({
-  onClick,
-  isActive,
-  label,
-  shortcut,
-  children,
-  className,
-}: {
-  onClick: () => void
-  isActive: boolean
-  label: string
-  shortcut?: string
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={`${label}${shortcut ? ` (${shortcut})` : ''}`}
-      className={cn(
-        'rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-        isActive && 'bg-accent text-foreground',
-        className,
-      )}
-    >
-      {children}
-    </button>
-  )
-}

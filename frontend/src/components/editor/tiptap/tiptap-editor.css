@@ -278,6 +278,7 @@
   display: flex;
   justify-content: center;
   width: 100%;
+  position: relative;
 }
 .tiptap-editor .ProseMirror figure[data-alignment="left"] .figure-img-wrapper {
   justify-content: flex-start;
@@ -298,38 +299,34 @@
 .tiptap-editor .ProseMirror figure {
   position: relative;
 }
+.tiptap-editor .ProseMirror figure .figure-img-wrapper {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
 .tiptap-editor .ProseMirror .figure-resize-handle {
   position: absolute;
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border: 2px solid var(--interaction, var(--primary));
   background: var(--background);
-  border-radius: 2px;
+  border-radius: 1px;
   z-index: 10;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.12s;
 }
 .tiptap-editor .ProseMirror figure:hover .figure-resize-handle {
   opacity: 1;
 }
-.tiptap-editor .ProseMirror .figure-resize-handle--nw {
-  top: -5px;
-  left: -5px;
-  cursor: nw-resize;
-}
-.tiptap-editor .ProseMirror .figure-resize-handle--ne {
-  top: -5px;
-  right: -5px;
-  cursor: ne-resize;
-}
 .tiptap-editor .ProseMirror .figure-resize-handle--sw {
-  bottom: -5px;
-  left: -5px;
+  bottom: -4px;
+  left: -4px;
   cursor: sw-resize;
 }
 .tiptap-editor .ProseMirror .figure-resize-handle--se {
-  bottom: -5px;
-  right: -5px;
+  bottom: -4px;
+  right: -4px;
   cursor: se-resize;
 }
 .tiptap-editor .ProseMirror figure figcaption {

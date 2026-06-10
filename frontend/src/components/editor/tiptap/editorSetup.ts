@@ -19,7 +19,7 @@ import { MermaidDiagram } from './extensions/MermaidDiagram'
 import { H1SplitPlugin } from './extensions/H1SplitPlugin'
 import { EvidenceMark } from './extensions/EvidenceMark'
 import { CodeBlockCopy } from './extensions/codeBlockCopy'
-import { SlashCommandExtension } from './SlashCommandMenu'
+import { slashCommandPlugin } from './SlashCommandMenu'
 
 const lowlight = createLowlight(common)
 
@@ -52,12 +52,19 @@ export function createExtensions(placeholderText?: string) {
     Callout,
     EvidenceMark,
     CodeBlockCopy,
-    SlashCommandExtension,
     H1SplitPlugin,
     Placeholder.configure({
       placeholder: placeholderText ?? "Type '/' for commands",
       showOnlyWhenEditable: true,
       showOnlyCurrent: true,
     }),
+    {
+      extensions: [{
+        name: 'slashCommand',
+        addProseMirrorPlugins() {
+          return [slashCommandPlugin]
+        },
+      }],
+    },
   ]
 }

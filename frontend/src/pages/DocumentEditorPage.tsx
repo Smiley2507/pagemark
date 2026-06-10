@@ -781,6 +781,10 @@ export function DocumentEditorPage() {
             </div>
           ) : (
             <div className="min-w-0 px-5 py-3">
+              <div className="mx-auto max-w-5xl mb-4 flex items-center justify-between text-xs text-muted-foreground border-b border-border/50 pb-2">
+                <span>{sections.length} section{sections.length !== 1 ? 's' : ''}</span>
+                <span>{wordCount.toLocaleString()} words</span>
+              </div>
               {sections.map((section, index) => (
                 <SectionBlock
                   key={section.id}
