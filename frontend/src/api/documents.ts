@@ -108,6 +108,7 @@ export const documentsApi = {
       context?: string;
       setup_stage?: string;
       tags?: string[];
+      export_settings?: Record<string, unknown>;
       custom_outline_metadata?: Record<string, unknown>;
     }
   ): Promise<Document> {

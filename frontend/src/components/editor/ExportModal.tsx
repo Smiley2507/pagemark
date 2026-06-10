@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { documentsApi } from '@/api/documents';
 import { projectsApi } from '@/api/projects';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -179,20 +180,23 @@ export function ExportModal({
   const [h1Color, setH1Color] = useState(initialSettings?.h1_color || DEFAULT_HEADING_COLOR);
   const [h2Color, setH2Color] = useState(initialSettings?.h2_color || DEFAULT_HEADING_COLOR);
   const [fontFamily, setFontFamily] = useState(initialSettings?.font_family || FONTS[0].value);
-  const [bodyFontSize, setBodyFontSize] = useState(initialSettings?.body_font_size || '16px');
-  const [h1FontSize, setH1FontSize] = useState(initialSettings?.h1_font_size || '2.2rem');
-  const [h2FontSize, setH2FontSize] = useState(initialSettings?.h2_font_size || '1.6rem');
+  const [bodyFontSize, setBodyFontSize] = useState(initialSettings?.body_font_size || '10pt');
+  const [h1FontSize, setH1FontSize] = useState(initialSettings?.h1_font_size || '22pt');
+  const [h2FontSize, setH2FontSize] = useState(initialSettings?.h2_font_size || '16pt');
   const [logoUrl, setLogoUrl] = useState(initialSettings?.logo_url || '');
   const [logoPosition, setLogoPosition] = useState(initialSettings?.logo_position || 'none');
-  const [logoHeight, setLogoHeight] = useState(initialSettings?.logo_height || '50px');
+  const [logoHeight, setLogoHeight] = useState(initialSettings?.logo_height || '48px');
   const [headerLeft, setHeaderLeft] = useState(initialSettings?.header_left || '');
   const [headerCenter, setHeaderCenter] = useState(initialSettings?.header_center || '');
   const [headerRight, setHeaderRight] = useState(initialSettings?.header_right || '');
   const [pageNumbers, setPageNumbers] = useState(initialSettings?.page_numbers ?? true);
   const [pageNumberPosition, setPageNumberPosition] = useState(initialSettings?.page_number_position || 'center');
-  const [pageNumberFormat, setPageNumberFormat] = useState(initialSettings?.page_number_format || 'number');
+  const [pageNumberFormat, setPageNumberFormat] = useState(initialSettings?.page_number_format || 'page-n-of-m');
   const [paperSize, setPaperSize] = useState(initialSettings?.paper_size || 'a4');
+  const [orientation, setOrientation] = useState(initialSettings?.orientation || 'portrait');
   const [margins, setMargins] = useState(initialSettings?.margins || 'normal');
+  const [organizationName, setOrganizationName] = useState(initialSettings?.organization_name || '');
+  const [subtitle, setSubtitle] = useState(initialSettings?.subtitle || 'Technical Documentation');
 
   const isPreviewable = selected === 'pdf' || selected === 'html';
 
@@ -202,24 +206,28 @@ export function ExportModal({
     setH1Color(initialSettings?.h1_color || DEFAULT_HEADING_COLOR);
     setH2Color(initialSettings?.h2_color || DEFAULT_HEADING_COLOR);
     setFontFamily(initialSettings?.font_family || FONTS[0].value);
-    setBodyFontSize(initialSettings?.body_font_size || '16px');
-    setH1FontSize(initialSettings?.h1_font_size || '2.2rem');
-    setH2FontSize(initialSettings?.h2_font_size || '1.6rem');
+    setBodyFontSize(initialSettings?.body_font_size || '10pt');
+    setH1FontSize(initialSettings?.h1_font_size || '22pt');
+    setH2FontSize(initialSettings?.h2_font_size || '16pt');
     setLogoUrl(initialSettings?.logo_url || '');
     setLogoPosition(initialSettings?.logo_position || 'none');
-    setLogoHeight(initialSettings?.logo_height || '50px');
+    setLogoHeight(initialSettings?.logo_height || '48px');
     setHeaderLeft(initialSettings?.header_left || '');
     setHeaderCenter(initialSettings?.header_center || '');
     setHeaderRight(initialSettings?.header_right || '');
     setPageNumbers(initialSettings?.page_numbers ?? true);
     setPageNumberPosition(initialSettings?.page_number_position || 'center');
-    setPageNumberFormat(initialSettings?.page_number_format || 'number');
+    setPageNumberFormat(initialSettings?.page_number_format || 'page-n-of-m');
     setPaperSize(initialSettings?.paper_size || 'a4');
+    setOrientation(initialSettings?.orientation || 'portrait');
     setMargins(initialSettings?.margins || 'normal');
+    setOrganizationName(initialSettings?.organization_name || '');
+    setSubtitle(initialSettings?.subtitle || 'Technical Documentation');
   }, [initialSettings, open]);
 
   const buildParams = useCallback(() => {
     const params = new URLSearchParams({ format: selected });
+    params.set('include_page_numbers', pageNumbers ? 'true' : 'false');
     params.set('primary_color', primaryColor);
     params.set('h1_color', h1Color);
     params.set('h2_color', h2Color);
@@ -229,11 +237,13 @@ export function ExportModal({
     params.set('h2_font_size', h2FontSize);
     params.set('logo_position', logoPosition);
     params.set('logo_height', logoHeight);
-    params.set('page_numbers', pageNumbers ? 'true' : 'false');
     params.set('page_number_position', pageNumberPosition);
     params.set('page_number_format', pageNumberFormat);
     params.set('paper_size', paperSize);
+    params.set('orientation', orientation);
     params.set('margins', margins);
+    if (organizationName) params.set('organization_name', organizationName);
+    if (subtitle) params.set('subtitle', subtitle);
     if (logoUrl) params.set('logo_url', logoUrl);
     if (headerLeft) params.set('header_left', headerLeft);
     if (headerCenter) params.set('header_center', headerCenter);
@@ -253,12 +263,15 @@ export function ExportModal({
     logoPosition,
     logoUrl,
     margins,
+    orientation,
+    organizationName,
     pageNumberFormat,
     pageNumberPosition,
     pageNumbers,
     paperSize,
     primaryColor,
     selected,
+    subtitle,
   ]);
 
   const exportPath = documentId
@@ -322,13 +335,19 @@ export function ExportModal({
     page_number_position: pageNumberPosition,
     page_number_format: pageNumberFormat,
     paper_size: paperSize,
+    orientation,
     margins,
+    organization_name: organizationName || undefined,
+    subtitle: subtitle || undefined,
   };
 
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
       await projectsApi.updateProject(projectId, { export_settings: settingsPayload });
+      if (documentId) {
+        await documentsApi.updateDocument(projectId, documentId, { export_settings: settingsPayload });
+      }
       toast.success('Export defaults saved');
     } catch {
       toast.error('Failed to save export defaults');
@@ -373,9 +392,9 @@ export function ExportModal({
     return {
       value: format.id,
       label: (
-        <span className="inline-flex items-center gap-1.5">
-          <Icon className="h-3.5 w-3.5" />
-          {format.label}
+        <span className="inline-flex items-center justify-center gap-1">
+          <Icon className="h-3 w-3 shrink-0" />
+          <span>{format.label}</span>
         </span>
       ),
     };
@@ -419,8 +438,29 @@ export function ExportModal({
                   value={selected}
                   onValueChange={(value) => setSelected(value as ExportFormat)}
                   options={formatOptions}
-                  className="w-full justify-between"
+                  className="w-full"
                 />
+              </section>
+
+              <section className="space-y-3">
+                <div className="flex items-center gap-2 text-meta font-medium uppercase text-text-muted">
+                  <FileText className="h-3.5 w-3.5" />
+                  Document Info
+                </div>
+                <Field label="Organization">
+                  <Input
+                    placeholder="Organization name"
+                    value={organizationName}
+                    onChange={(event) => setOrganizationName(event.target.value)}
+                  />
+                </Field>
+                <Field label="Subtitle">
+                  <Input
+                    placeholder="Technical Documentation"
+                    value={subtitle}
+                    onChange={(event) => setSubtitle(event.target.value)}
+                  />
+                </Field>
               </section>
 
               <section className="space-y-3">
@@ -428,18 +468,22 @@ export function ExportModal({
                   <Ruler className="h-3.5 w-3.5" />
                   Page
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label="Paper">
-                    <NativeSelect value={paperSize} onChange={(value) => setPaperSize(value as typeof paperSize)} ariaLabel="Paper size">
-                      {PAPER_SIZES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                    </NativeSelect>
-                  </Field>
-                  <Field label="Margins">
-                    <NativeSelect value={margins} onChange={(value) => setMargins(value as typeof margins)} ariaLabel="Page margins">
-                      {MARGIN_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                    </NativeSelect>
-                  </Field>
-                </div>
+                <Field label="Paper">
+                  <NativeSelect value={paperSize} onChange={(value) => setPaperSize(value as typeof paperSize)} ariaLabel="Paper size">
+                    {PAPER_SIZES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </NativeSelect>
+                </Field>
+                <Field label="Orientation">
+                  <NativeSelect value={orientation} onChange={(value) => setOrientation(value as typeof orientation)} ariaLabel="Orientation">
+                    <option value="portrait">Portrait</option>
+                    <option value="landscape">Landscape</option>
+                  </NativeSelect>
+                </Field>
+                <Field label="Margins">
+                  <NativeSelect value={margins} onChange={(value) => setMargins(value as typeof margins)} ariaLabel="Page margins">
+                    {MARGIN_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </NativeSelect>
+                </Field>
               </section>
 
               <section className="space-y-3">

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { documentsApi } from '@/api/documents';
 import { projectsApi } from '@/api/projects';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -74,7 +75,7 @@ export function ExportPage() {
   const [settings, setSettings] = useState<ExportSettings>({});
   const [previewHtml, setPreviewHtml] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [exportFormat, setExportFormat] = useState<'html' | 'pdf'>('html');
+  const [exportFormat, setExportFormat] = useState<'html' | 'pdf' | 'markdown'>('html');
   const [exporting, setExporting] = useState(false);
   const [saving, setSaving] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -177,7 +178,8 @@ export function ExportPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${(project?.name ?? 'documentation').replace(/[^\w\-. ]/g, '_')}.${exportFormat === 'html' ? 'html' : 'pdf'}`;
+      const ext = exportFormat === 'markdown' ? 'md' : exportFormat;
+      a.download = `${(project?.name ?? 'documentation').replace(/[^\w\-. ]/g, '_')}.${ext}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -204,10 +206,11 @@ export function ExportPage() {
         {saving && <span className="text-xs text-muted-foreground animate-pulse">Saving\u2026</span>}
         <Select
           value={exportFormat}
-          onChange={(e) => setExportFormat(e.target.value as 'html' | 'pdf')}
+          onChange={(e) => setExportFormat(e.target.value as 'html' | 'pdf' | 'markdown')}
         >
-          <option value="html">HTML</option>
           <option value="pdf">PDF</option>
+          <option value="html">HTML</option>
+          <option value="markdown">Markdown</option>
         </Select>
         <Button onClick={handleExport} disabled={exporting}>
           {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}

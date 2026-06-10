@@ -1,20 +1,29 @@
 from __future__ import annotations
 
+import base64
+import mimetypes
 from html import escape
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any, Optional, Sequence
 import re
 
 import weasyprint
 
+from app.config import settings as app_settings
+from app.schemas.export_settings import ExportSettings
+
 
 try:
-    import markdown
+    import markdown as _md_lib
 except ImportError:
-    markdown = None
+    _md_lib = None
 
 
-def _get_section_title(section: Any, fallback: str) -> str:
+# ── Section helpers ─────────────────────────────────────────────
+
+def _section_title(section: Any, fallback: str = "Untitled") -> str:
+    if isinstance(section, dict):
+        return section.get("title") or section.get("heading") or section.get("name") or fallback
     return (
         getattr(section, "title", None)
         or getattr(section, "heading", None)
@@ -23,488 +32,590 @@ def _get_section_title(section: Any, fallback: str) -> str:
     )
 
 
-def _get_section_content(section: Any) -> str:
+def _section_content(section: Any) -> str:
+    if isinstance(section, dict):
+        return section.get("content") or section.get("content_md") or section.get("body") or section.get("text") or ""
     return (
         getattr(section, "content", None)
+        or getattr(section, "content_md", None)
         or getattr(section, "body", None)
         or getattr(section, "text", None)
         or ""
     )
 
 
+# ── Markdown → HTML ────────────────────────────────────────────
+
 def _markdown_to_html(text: str) -> str:
     if not text:
         return ""
-
-    if markdown:
-        return markdown.markdown(
+    if _md_lib:
+        return _md_lib.markdown(
             text,
-            extensions=[
-                "extra",
-                "tables",
-                "fenced_code",
-                "toc",
-                "sane_lists",
-            ],
+            extensions=["extra", "tables", "fenced_code", "toc", "sane_lists"],
             output_format="html5",
         )
-
     escaped = escape(text)
     escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
     escaped = escaped.replace("\n\n", "</p><p>").replace("\n", "<br/>")
     return f"<p>{escaped}</p>"
 
 
-def _css_value(value: Optional[str], default: str) -> str:
-    return str(value).strip() if value else default
+# ── Settings normalization ─────────────────────────────────────
+
+def normalize_settings(raw: Optional[dict]) -> dict:
+    return ExportSettings.model_validate(raw or {}).to_safe_dict()
 
 
-def _safe_page_size(value: Optional[str]) -> str:
-    value = (value or "A4").strip().lower()
-    if value in {"a4", "letter"}:
-        return value.upper()
-    if value in {"a4 landscape", "letter landscape"}:
-        return value.upper()
-    return "A4"
+# ── Asset helpers ──────────────────────────────────────────────
+
+def _resolve_base_url(settings: dict) -> str:
+    logo_url = settings.get("logo_url") or settings.get("logo_path")
+    if logo_url:
+        p = Path(str(logo_url))
+        if p.is_absolute():
+            return str(p.parent.resolve())
+        return str(Path.cwd())
+    return str(Path.cwd())
 
 
-def _safe_margin_box(position: Optional[str]) -> str:
-    allowed = {
-        "bottom-left",
-        "bottom-center",
-        "bottom-right",
-        "top-left",
-        "top-center",
-        "top-right",
-    }
-    position = (position or "bottom-center").strip().lower()
-    return position if position in allowed else "bottom-center"
-
-
-def _build_logo_html(export_settings: dict) -> str:
-    logo_url = export_settings.get("logo_url") or export_settings.get("logo_path")
-    if not logo_url:
+def _build_logo_html(settings: dict) -> str:
+    url = settings.get("logo_url") or settings.get("logo_path")
+    if not url:
         return ""
+    pos = settings.get("logo_position", "title-page")
+    if pos == "none":
+        return ""
+    height = settings.get("logo_height", "48px")
+    alt = escape(settings.get("organization_name", "") or "Logo")
+    src = _resolve_logo_src(str(url))
+    escaped_src = escape(src)
+    return (
+        f'<div class="title-page-logo">'
+        f'<img src="{escaped_src}" alt="{alt}" style="height:{height}"/>'
+        f"</div>"
+    )
 
-    title = escape(export_settings.get("organization_name", "") or "")
-    logo_url = escape(str(logo_url))
+
+def _resolve_logo_src(url: str) -> str:
+    if url.startswith("data:"):
+        return url
+    if url.startswith("/static/logos/"):
+        filename = url[len("/static/logos/"):]
+        filepath = Path(app_settings.UPLOAD_DIR) / "logos" / filename
+        if filepath.is_file():
+            raw = filepath.read_bytes()
+            mime = mimetypes.guess_type(str(filepath))[0] or "image/png"
+            b64 = base64.b64encode(raw).decode("ascii")
+            return f"data:{mime};base64,{b64}"
+    return url
+
+
+# ── Cover page ─────────────────────────────────────────────────
+
+def _render_cover(settings: dict, organization_name: str, title: str) -> str:
+    if not settings.get("include_cover_page", True):
+        return ""
+    logo = _build_logo_html(settings)
+    subtitle = settings.get("subtitle", "Technical Documentation")
+    parts = [
+        '<section class="cover page-break-after">',
+        '<div class="cover-inner">',
+    ]
+    if logo:
+        parts.append(logo)
+    parts.append(f'<p class="eyebrow">{escape(organization_name)}</p>')
+    parts.append(f"<h1>{escape(title)}</h1>")
+    if subtitle:
+        parts.append(f'<p class="subtitle">{escape(subtitle)}</p>')
+    parts.append("</div></section>")
+    return "\n".join(parts)
+
+
+# ── Table of Contents ──────────────────────────────────────────
+
+def _render_toc(sections: Sequence[Any], settings: dict) -> str:
+    if not settings.get("include_toc", True):
+        return ""
+    items = []
+    for i, sec in enumerate(sections, start=1):
+        heading = escape(_section_title(sec, f"Section {i}"))
+        items.append(f'<li><a href="#section-{i}">{heading}</a></li>')
+    return (
+        '<section class="toc page-break-after">'
+        "<h1>Table of Contents</h1>"
+        f"<ol>{''.join(items)}</ol>"
+        "</section>"
+    )
+
+
+# ── Section rendering ──────────────────────────────────────────
+
+def _render_sections(sections: Sequence[Any]) -> str:
+    parts = []
+    for i, sec in enumerate(sections, start=1):
+        heading = escape(_section_title(sec, f"Section {i}"))
+        content = _markdown_to_html(_section_content(sec))
+        parts.append(
+            f'<section class="doc-section" id="section-{i}">'
+            f"<h1>{heading}</h1>"
+            f'<div class="section-content">{content}</div>'
+            f"</section>"
+        )
+    return "\n".join(parts)
+
+
+# ── CSS generation ─────────────────────────────────────────────
+
+def _build_css(s: dict) -> str:
+    ps = s.get("paper_size", "a4")
+    orient = s.get("orientation", "portrait")
+    size_css = f"{ps} landscape" if orient == "landscape" else ps
+
+    margin_top = s.get("margin_top", "25mm")
+    margin_bottom = s.get("margin_bottom", "22mm")
+    margin_left = s.get("margin_left", "20mm")
+    margin_right = s.get("margin_right", "20mm")
+
+    include_pn = s.get("include_page_numbers", True)
+    pn_pos = s.get("page_number_position", "bottom-center")
+    pn_fmt = s.get("page_number_format", "page-n-of-m")
+
+    header_left = s.get("header_left", "")
+    header_center = s.get("header_center", "")
+    header_right = s.get("header_right", "")
+    footer_left = s.get("footer_left", "")
+    footer_center = s.get("footer_center", "")
+    footer_right = s.get("footer_right", "")
+
+    font_family = s.get("font_family", "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif")
+    body_fs = s.get("body_font_size", "10pt")
+    h1_fs = s.get("h1_font_size", "22pt")
+    h2_fs = s.get("h2_font_size", "16pt")
+    h3_fs = s.get("h3_font_size", "13pt")
+    code_fs = s.get("code_font_size", "8.5pt")
+
+    primary = s.get("primary_color", "#4f46e5")
+    h1_c = s.get("h1_color", "#111827")
+    h2_c = s.get("h2_color", "#1f2937")
+    text_c = s.get("text_color", "#374151")
+    muted_c = s.get("muted_color", "#6b7280")
+    border_c = s.get("border_color", "#e5e7eb")
+    table_hdr_bg = s.get("table_header_bg", "#f9fafb")
+    code_bg = s.get("code_bg", "#1e293b")
+    code_c = s.get("code_color", "#f8fafc")
+
+    logo_height = s.get("logo_height", "48px")
+
+    table_style = s.get("table_style", "striped")
+    code_theme = s.get("code_theme", "dark")
+
+    watermark = s.get("watermark_text", "")
+
+    # ── Headers in @page ──
+    top_left = f'content: "{escape(str(header_left))}";' if header_left else "content: none;"
+    top_center = f'content: "{escape(str(header_center))}";' if header_center else "content: none;"
+    top_right = f'content: "{escape(str(header_right))}";' if header_right else "content: none;"
+
+    # ── Footer / page numbers ──
+    if include_pn:
+        if pn_fmt == "page-n-of-m":
+            pn_content = '"Page " counter(page) " of " counter(pages)'
+        elif pn_fmt == "page-n":
+            pn_content = '"Page " counter(page)'
+        else:
+            pn_content = f'"{escape(str(include_pn))}"' if isinstance(include_pn, str) else 'counter(page)'
+        bottom_left = (
+            f'content: "{escape(str(footer_left))}";' if footer_left else "content: none;"
+        )
+        bottom_center = (
+            f"content: {pn_content};" if pn_pos in ("bottom-center", "center", "") else "content: none;"
+        )
+        bottom_right = (
+            f'content: "{escape(str(footer_right))}";' if footer_right else "content: none;"
+        )
+        if pn_pos == "bottom-left":
+            bottom_left = f"content: {pn_content};"
+        elif pn_pos == "bottom-right":
+            bottom_right = f"content: {pn_content};"
+    else:
+        bottom_left = f'content: "{escape(str(footer_left))}";' if footer_left else "content: none;"
+        bottom_center = f'content: "{escape(str(footer_center))}";' if footer_center else "content: none;"
+        bottom_right = f'content: "{escape(str(footer_right))}";' if footer_right else "content: none;"
+
+    # ── Table style variants ──
+    if table_style == "minimal":
+        table_css = """
+    table { width:100%; border-collapse:collapse; margin:12px 0; font-size:9pt; page-break-inside:auto; }
+    thead { display:table-header-group; }
+    tr { page-break-inside:avoid; }
+    th, td { padding:6px 8px; text-align:left; vertical-align:top; word-break:break-word; border-bottom:1px solid var(--border-color); }
+    th { font-weight:700; color:var(--h1-color); }
+"""
+    elif table_style == "bordered":
+        table_css = """
+    table { width:100%; border-collapse:collapse; margin:12px 0; font-size:9pt; page-break-inside:auto; border:2px solid var(--border-color); }
+    thead { display:table-header-group; }
+    tr { page-break-inside:avoid; }
+    th, td { border:1px solid var(--border-color); padding:6px 8px; text-align:left; vertical-align:top; word-break:break-word; }
+    th { background:var(--table-header-bg); font-weight:700; }
+    tr:nth-child(even) td { background:#fafafa; }
+"""
+    elif table_style == "simple":
+        table_css = """
+    table { width:100%; border-collapse:collapse; margin:12px 0; font-size:9pt; page-break-inside:auto; }
+    thead { display:table-header-group; }
+    tr { page-break-inside:avoid; }
+    th, td { padding:6px 8px; text-align:left; vertical-align:top; word-break:break-word; border-bottom:1px solid var(--border-color); }
+    th { font-weight:700; background:transparent; }
+"""
+    else:  # striped (default)
+        table_css = """
+    table { width:100%; border-collapse:collapse; margin:14px 0; font-size:9.5pt; page-break-inside:auto; }
+    thead { display:table-header-group; }
+    tr { page-break-inside:avoid; }
+    th, td { border:1px solid var(--border-color); padding:7px 9px; text-align:left; vertical-align:top; word-break:break-word; }
+    th { background:var(--table-header-bg); font-weight:700; }
+    tr:nth-child(even) td { background:#fafafa; }
+"""
+
+    # ── Code theme variants ──
+    if code_theme == "light":
+        code_bg_actual = "#f3f4f6"
+        code_c_actual = "#1f2937"
+    elif code_theme == "github":
+        code_bg_actual = "#f6f8fa"
+        code_c_actual = "#24292e"
+    elif code_theme == "monokai":
+        code_bg_actual = "#272822"
+        code_c_actual = "#f8f8f2"
+    else:  # dark (default)
+        code_bg_actual = code_bg
+        code_c_actual = code_c
 
     return f"""
-    <section class="title-page">
-      <div class="title-page-logo">
-        <img src="{logo_url}" alt="{title} logo"/>
-      </div>
-    </section>
-    """
+:root {{
+  --primary-color: {primary};
+  --h1-color: {h1_c};
+  --h2-color: {h2_c};
+  --text-color: {text_c};
+  --muted-color: {muted_c};
+  --border-color: {border_c};
+  --table-header-bg: {table_hdr_bg};
+  --code-bg: {code_bg_actual};
+  --code-color: {code_c_actual};
+  --font-family: {font_family};
+  --body-font-size: {body_fs};
+  --h1-font-size: {h1_fs};
+  --h2-font-size: {h2_fs};
+  --h3-font-size: {h3_fs};
+  --code-font-size: {code_fs};
+  --logo-height: {logo_height};
+}}
 
+@page {{
+  size: {size_css};
+  margin-top: {margin_top};
+  margin-bottom: {margin_bottom};
+  margin-left: {margin_left};
+  margin-right: {margin_right};
+
+  @top-left {{ {top_left} font-family:var(--font-family); font-size:8pt; color:{muted_c}; }}
+  @top-center {{ {top_center} font-family:var(--font-family); font-size:8pt; color:{muted_c}; }}
+  @top-right {{ {top_right} font-family:var(--font-family); font-size:8pt; color:{muted_c}; }}
+
+  @bottom-left {{ {bottom_left} font-family:var(--font-family); font-size:8pt; color:{muted_c}; }}
+  @bottom-center {{ {bottom_center} font-family:var(--font-family); font-size:8pt; color:{muted_c}; }}
+  @bottom-right {{ {bottom_right} font-family:var(--font-family); font-size:8pt; color:{muted_c}; }}
+
+  @page :first {{
+    @top-left {{ content:none; }}
+    @top-center {{ content:none; }}
+    @top-right {{ content:none; }}
+    @bottom-left {{ content:none; }}
+    @bottom-center {{ content:none; }}
+    @bottom-right {{ content:none; }}
+  }}
+}}
+
+* {{ box-sizing:border-box; }}
+
+html, body {{
+  margin:0; padding:0;
+  font-family:var(--font-family);
+  font-size:var(--body-font-size);
+  line-height:1.65;
+  color:var(--text-color);
+  background:transparent;
+}}
+
+h1 {{
+  font-size:var(--h1-font-size);
+  color:var(--h1-color);
+  line-height:1.25;
+  margin:28px 0 12px 0;
+  page-break-after:avoid;
+  break-after:avoid;
+}}
+h2 {{
+  font-size:var(--h2-font-size);
+  color:var(--h2-color);
+  line-height:1.3;
+  margin:22px 0 8px 0;
+  page-break-after:avoid;
+  break-after:avoid;
+}}
+h3 {{
+  font-size:var(--h3-font-size);
+  color:var(--h2-color);
+  line-height:1.35;
+  margin:18px 0 6px 0;
+  page-break-after:avoid;
+  break-after:avoid;
+}}
+h4, h5, h6 {{
+  color:var(--h2-color);
+  margin:14px 0 4px 0;
+  page-break-after:avoid;
+  break-after:avoid;
+}}
+
+p {{ margin:6px 0; orphans:3; widows:3; }}
+
+a {{ color:var(--primary-color); text-decoration:underline; }}
+
+ul, ol {{ padding-left:22px; }}
+li {{ margin:3px 0; }}
+
+code {{
+  font-family:"SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size:0.88em;
+  background:#f3f4f6;
+  color:var(--h1-color);
+  padding:0.12em 0.35em;
+  border-radius:3px;
+}}
+
+pre {{
+  background:var(--code-bg);
+  color:var(--code-color);
+  padding:12px 14px;
+  border-radius:6px;
+  margin:12px 0;
+  white-space:pre-wrap;
+  word-break:break-word;
+  overflow-wrap:anywhere;
+  page-break-inside:avoid;
+  break-inside:avoid;
+  font-size:var(--code-font-size);
+  line-height:1.5;
+}}
+pre code {{
+  background:transparent;
+  color:inherit;
+  padding:0;
+  font-size:inherit;
+}}
+
+img {{
+  max-width:100%;
+  height:auto;
+  border-radius:4px;
+}}
+
+blockquote {{
+  margin:14px 0;
+  padding:8px 16px;
+  border-left:4px solid var(--primary-color);
+  color:#4b5563;
+  background:#f9fafb;
+  page-break-inside:avoid;
+}}
+
+hr {{
+  border:0;
+  border-top:1px solid var(--border-color);
+  margin:18px 0;
+}}
+
+/* ── Cover page ── */
+.cover {{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  page-break-after:always;
+  min-height:80vh;
+}}
+.cover-inner {{
+  max-width:140mm;
+  margin:0 auto;
+}}
+.title-page-logo img {{
+  max-height:var(--logo-height);
+  max-width:200px;
+  object-fit:contain;
+  margin-bottom:24px;
+}}
+.eyebrow {{
+  color:var(--primary-color);
+  text-transform:uppercase;
+  letter-spacing:0.08em;
+  font-size:9pt;
+  font-weight:700;
+  margin-bottom:8px;
+}}
+.cover h1 {{
+  font-size:28pt;
+  line-height:1.15;
+  margin:0;
+  color:var(--h1-color);
+}}
+.subtitle {{
+  color:var(--muted-color);
+  font-size:12pt;
+  margin-top:12px;
+}}
+
+/* ── TOC ── */
+.toc {{
+  page-break-after:always;
+}}
+.toc h1 {{
+  font-size:var(--h1-font-size);
+  color:var(--h1-color);
+  border-bottom:2px solid var(--primary-color);
+  padding-bottom:8px;
+  margin:0 0 14px 0;
+}}
+.toc ol {{
+  padding-left:20px;
+  margin-top:14px;
+  list-style-type:decimal;
+}}
+.toc li {{
+  margin:6px 0;
+}}
+.toc a {{
+  color:var(--text-color);
+  text-decoration:none;
+}}
+
+/* ── Sections ── */
+.doc-section {{
+  margin-bottom:18px;
+}}
+.doc-section h1 {{
+  font-size:var(--h1-font-size);
+  color:var(--h1-color);
+  border-bottom:2px solid var(--primary-color);
+  padding-bottom:6px;
+  margin:0 0 14px 0;
+  page-break-after:avoid;
+  break-after:avoid;
+}}
+.section-content h1:first-child,
+.section-content h2:first-child {{
+  margin-top:0;
+}}
+
+/* ── Tables ── */
+{table_css}
+
+/* ── Page breaks ── */
+.page-break-after {{ page-break-after:always; }}
+.page-break-before {{ page-break-before:always; }}
+
+/* ── Watermark ── */
+{"body::after { content: ''; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 80pt; color: rgba(0,0,0,0.04); white-space: nowrap; pointer-events: none; z-index: 9999; }" if watermark else ""}
+"""
+
+
+# ── Full HTML document ────────────────────────────────────────
 
 def export_html(
-    sections: list[Any],
-    project_name: str,
+    sections: Sequence[Any],
+    project_name: str = "Documentation",
     doc_title: str = "Documentation",
     export_settings: Optional[dict] = None,
 ) -> str:
-    settings = export_settings or {}
+    s = normalize_settings(export_settings)
+    org_name = s.get("organization_name") or project_name
+    title = s.get("title") or doc_title
 
-    organization_name = settings.get("organization_name") or project_name
-    title = settings.get("title") or doc_title
+    body_parts = []
+    cover = _render_cover(s, org_name, title)
+    if cover:
+        body_parts.append(cover)
 
-    body_parts = [
-        f"""
-        <section class="cover">
-          <div class="cover-inner">
-            {_build_logo_html(settings)}
-            <p class="eyebrow">{escape(organization_name)}</p>
-            <h1>{escape(title)}</h1>
-            <p class="subtitle">Technical Documentation</p>
-          </div>
-        </section>
-        """
-    ]
+    toc = _render_toc(sections, s)
+    if toc:
+        body_parts.append(toc)
 
-    if settings.get("include_toc", True):
-        toc_items = []
-        for index, section in enumerate(sections, start=1):
-            heading = escape(_get_section_title(section, f"Section {index}"))
-            toc_items.append(f'<li><a href="#section-{index}">{heading}</a></li>')
+    body_parts.append(_render_sections(sections))
 
-        body_parts.append(
-            f"""
-            <section class="toc page-break-after">
-              <h1>Table of Contents</h1>
-              <ol>
-                {''.join(toc_items)}
-              </ol>
-            </section>
-            """
-        )
-
-    for index, section in enumerate(sections, start=1):
-        heading = escape(_get_section_title(section, f"Section {index}"))
-        content = _markdown_to_html(_get_section_content(section))
-
-        body_parts.append(
-            f"""
-            <section class="doc-section" id="section-{index}">
-              <h1>{heading}</h1>
-              <div class="section-content">
-                {content}
-              </div>
-            </section>
-            """
-        )
-
+    css = _build_css(s)
     body = "\n".join(body_parts)
 
-    page_number_position = _safe_margin_box(settings.get("page_number_position"))
-
-    html = f"""<!DOCTYPE html>
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <title>{escape(title)}</title>
-
-  <style>
-    :root {{
-      --primary-color: {_css_value(settings.get("primary_color"), "#4f46e5")};
-      --h1-color: {_css_value(settings.get("h1_color"), "#111827")};
-      --h2-color: {_css_value(settings.get("h2_color"), "#1f2937")};
-      --text-color: {_css_value(settings.get("text_color"), "#1f2937")};
-      --muted-color: {_css_value(settings.get("muted_color"), "#6b7280")};
-      --border-color: {_css_value(settings.get("border_color"), "#e5e7eb")};
-      --table-header-bg: {_css_value(settings.get("table_header_bg"), "#f9fafb")};
-      --code-bg: {_css_value(settings.get("code_bg"), "#111827")};
-      --code-color: {_css_value(settings.get("code_color"), "#f9fafb")};
-      --font-family: {_css_value(settings.get("font_family"), "Inter")};
-      --body-font-size: {_css_value(settings.get("body_font_size"), "10.5pt")};
-      --h1-font-size: {_css_value(settings.get("h1_font_size"), "22pt")};
-      --h2-font-size: {_css_value(settings.get("h2_font_size"), "16pt")};
-      --logo-height: {_css_value(settings.get("logo_height"), "54px")};
-    }}
-
-    @page {{
-      size: {_safe_page_size(settings.get("paper_size"))};
-      margin-top: {_css_value(settings.get("margin_top"), "22mm")};
-      margin-bottom: {_css_value(settings.get("margin_bottom"), "20mm")};
-      margin-left: {_css_value(settings.get("margin_left"), "18mm")};
-      margin-right: {_css_value(settings.get("margin_right"), "18mm")};
-
-      @top-left {{
-        content: "{escape(str(settings.get("header_left", organization_name)))}";
-        font-family: var(--font-family), Arial, sans-serif;
-        font-size: 8.5pt;
-        color: #6b7280;
-      }}
-
-      @top-center {{
-        content: "{escape(str(settings.get("header_center", title)))}";
-        font-family: var(--font-family), Arial, sans-serif;
-        font-size: 8.5pt;
-        color: #6b7280;
-      }}
-
-      @top-right {{
-        content: "{escape(str(settings.get("header_right", "")))}";
-        font-family: var(--font-family), Arial, sans-serif;
-        font-size: 8.5pt;
-        color: #6b7280;
-      }}
-
-      @{page_number_position} {{
-        content: "Page " counter(page) " of " counter(pages);
-        font-family: var(--font-family), Arial, sans-serif;
-        font-size: 8.5pt;
-        color: #6b7280;
-      }}
-    }}
-
-    * {{
-      box-sizing: border-box;
-    }}
-
-    html, body {{
-      margin: 0;
-      padding: 0;
-      font-family: var(--font-family), -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-      font-size: var(--body-font-size);
-      line-height: 1.62;
-      color: var(--text-color);
-      background: transparent;
-    }}
-
-    .cover {{
-      min-height: 220mm;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      page-break-after: always;
-    }}
-
-    .cover-inner {{
-      max-width: 140mm;
-      margin: 0 auto;
-    }}
-
-    .title-page-logo img {{
-      max-height: var(--logo-height);
-      max-width: 180px;
-      object-fit: contain;
-      margin-bottom: 28px;
-    }}
-
-    .eyebrow {{
-      color: var(--primary-color);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      font-size: 9pt;
-      font-weight: 700;
-      margin-bottom: 12px;
-    }}
-
-    .cover h1 {{
-      font-size: 30pt;
-      line-height: 1.15;
-      margin: 0;
-      color: var(--h1-color);
-    }}
-
-    .subtitle {{
-      color: var(--muted-color);
-      font-size: 12pt;
-      margin-top: 16px;
-    }}
-
-    .page-break-after {{
-      page-break-after: always;
-    }}
-
-    .toc h1,
-    .doc-section h1 {{
-      font-size: var(--h1-font-size);
-      color: var(--h1-color);
-      border-bottom: 2px solid var(--primary-color);
-      padding-bottom: 8px;
-      margin: 0 0 18px 0;
-      page-break-after: avoid;
-      break-after: avoid;
-    }}
-
-    .toc ol {{
-      padding-left: 20px;
-      margin-top: 18px;
-    }}
-
-    .toc li {{
-      margin: 8px 0;
-      color: var(--text-color);
-    }}
-
-    .toc a {{
-      color: var(--text-color);
-      text-decoration: none;
-    }}
-
-    .doc-section {{
-      margin-bottom: 24px;
-    }}
-
-    h2 {{
-      font-size: var(--h2-font-size);
-      color: var(--h2-color);
-      border-bottom: 1px solid var(--border-color);
-      padding-bottom: 5px;
-      margin-top: 24px;
-      page-break-after: avoid;
-      break-after: avoid;
-    }}
-
-    h3, h4, h5, h6 {{
-      color: var(--h2-color);
-      margin-top: 18px;
-      page-break-after: avoid;
-      break-after: avoid;
-    }}
-
-    p {{
-      margin: 8px 0;
-      orphans: 3;
-      widows: 3;
-    }}
-
-    a {{
-      color: var(--primary-color);
-      text-decoration: underline;
-    }}
-
-    ul, ol {{
-      padding-left: 22px;
-    }}
-
-    li {{
-      margin: 4px 0;
-    }}
-
-    code {{
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-      font-size: 0.88em;
-      background: #f3f4f6;
-      color: #111827;
-      padding: 0.12em 0.35em;
-      border-radius: 4px;
-    }}
-
-    pre {{
-      background: var(--code-bg);
-      color: var(--code-color);
-      padding: 12px 14px;
-      border-radius: 8px;
-      margin: 12px 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      overflow-wrap: anywhere;
-      page-break-inside: avoid;
-      break-inside: avoid;
-    }}
-
-    pre code {{
-      background: transparent;
-      color: inherit;
-      padding: 0;
-      font-size: 8.7pt;
-    }}
-
-    table {{
-      width: 100%;
-      border-collapse: collapse;
-      margin: 14px 0;
-      font-size: 9.5pt;
-      page-break-inside: auto;
-      break-inside: auto;
-    }}
-
-    thead {{
-      display: table-header-group;
-    }}
-
-    tr {{
-      page-break-inside: avoid;
-      break-inside: avoid;
-    }}
-
-    th, td {{
-      border: 1px solid var(--border-color);
-      padding: 7px 9px;
-      text-align: left;
-      vertical-align: top;
-      word-break: break-word;
-    }}
-
-    th {{
-      background: var(--table-header-bg);
-      font-weight: 700;
-    }}
-
-    tr:nth-child(even) td {{
-      background: #fafafa;
-    }}
-
-    img {{
-      max-width: 100%;
-      height: auto;
-      border-radius: 6px;
-    }}
-
-    blockquote {{
-      margin: 14px 0;
-      padding: 8px 14px;
-      border-left: 4px solid var(--primary-color);
-      color: #4b5563;
-      background: #f9fafb;
-    }}
-
-    hr {{
-      border: 0;
-      border-top: 1px solid var(--border-color);
-      margin: 22px 0;
-    }}
-  </style>
+<meta charset="UTF-8"/>
+<title>{escape(title)}</title>
+<style>{css}</style>
 </head>
-
 <body>
-  {body}
+{body}
 </body>
-</html>
-"""
-    return html
+</html>"""
+
+
+# ── Markdown export ──────────────────────────────────────────
 
 def export_markdown(
-    sections: list[Any],
-    project_name: str,
+    sections: Sequence[Any],
+    project_name: str = "Documentation",
     doc_title: str = "Documentation",
     export_settings: Optional[dict] = None,
 ) -> str:
-    lines = [
-        f"# {doc_title}",
-        "",
-        f"Project: {project_name}",
-        "",
-    ]
-
-    for index, section in enumerate(sections, start=1):
-        heading = _get_section_title(section, f"Section {index}")
-        content = _get_section_content(section)
-
-        lines.extend([
-            f"## {heading}",
-            "",
-            content.strip(),
-            "",
-        ])
-
+    s = normalize_settings(export_settings)
+    title = s.get("title") or doc_title
+    lines = [f"# {title}", "", f"Project: {project_name}", ""]
+    for i, sec in enumerate(sections, start=1):
+        heading = _section_title(sec, f"Section {i}")
+        content = _section_content(sec)
+        lines.extend([f"## {heading}", "", content.strip(), ""])
     return "\n".join(lines).strip() + "\n"
 
 
+# ── PDF export ───────────────────────────────────────────────
+
 def export_pdf(
-    sections: list[Any],
-    project_name: str,
+    sections: Sequence[Any],
+    project_name: str = "Documentation",
     doc_title: str = "Documentation",
     export_settings: Optional[dict] = None,
 ) -> bytes:
-    """
-    Generate a production-ready PDF for software documentation using WeasyPrint.
-
-    Supports:
-    - A4 / Letter page sizes
-    - Headers
-    - Footers
-    - Page numbers
-    - Logo
-    - Organization colors
-    - Custom fonts if installed on the server
-    - Markdown tables
-    - Code blocks
-    - API-reference-friendly wrapping
-    """
-    settings = export_settings or {}
-
+    s = normalize_settings(export_settings)
     html = export_html(
         sections=sections,
         project_name=project_name,
         doc_title=doc_title,
-        export_settings=settings,
+        export_settings=s,
     )
+    base_url = _resolve_base_url(s)
+    return weasyprint.HTML(string=html, base_url=base_url).write_pdf()
 
-    base_url = settings.get("base_url")
 
-    if not base_url:
-        logo_path = settings.get("logo_path")
-        if logo_path:
-            base_url = str(Path(str(logo_path)).parent.resolve())
-        else:
-            base_url = str(Path.cwd())
+# ── Debug: save generated HTML ───────────────────────────────
 
-    return weasyprint.HTML(
-        string=html,
-        base_url=base_url,
-    ).write_pdf()
+def debug_save_html(
+    html: str,
+    project_name: str = "export",
+) -> Path:
+    out = Path.cwd() / ".export-debug"
+    out.mkdir(parents=True, exist_ok=True)
+    safe = re.sub(r"[^\w\-]", "_", project_name)
+    path = out / f"{safe}.html"
+    path.write_text(html, encoding="utf-8")
+    return path

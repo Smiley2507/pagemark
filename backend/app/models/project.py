@@ -41,6 +41,7 @@ class Project(Base):
     tags = Column(ARRAY(String), default=[], server_default="{}")
     starred = Column(Boolean, default=False)
     context_md = Column(Text, nullable=True)
+    export_settings = Column(JSON, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

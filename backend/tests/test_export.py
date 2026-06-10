@@ -1,0 +1,309 @@
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+from weasyprint import HTML
+
+from app.schemas.export_settings import ExportSettings, PAGE_SIZES, MARGIN_PRESETS
+from app.services.export_service import (
+    export_markdown,
+    export_html,
+    export_pdf,
+    normalize_settings,
+)
+
+
+# ── Fixtures ───────────────────────────────────────────────────
+
+@pytest.fixture
+def sample_sections() -> list[dict[str, Any]]:
+    return [
+        {"heading": "Introduction", "content": "This is the **introduction**.\n\nIt has multiple paragraphs."},
+        {"heading": "Architecture", "content": "## Overview\n\nThe system uses a modular design.\n\n```python\ndef hello():\n    print('Hello, World!')\n```"},
+        {"heading": "API Reference", "content": "| Method | Endpoint | Description |\n|--------|----------|-------------|\n| GET | /users | List users |\n| POST | /users | Create user |"},
+        {"heading": "Images", "content": "![Diagram](https://via.placeholder.com/400x200)"},
+    ]
+
+
+@pytest.fixture
+def default_settings() -> dict[str, Any]:
+    return {}
+
+
+# ── ExportSettings Schema ─────────────────────────────────────
+
+class TestExportSettingsSchema:
+    def test_defaults(self):
+        s = ExportSettings()
+        assert s.paper_size == "a4"
+        assert s.orientation == "portrait"
+        assert s.margins == "normal"
+        assert s.include_page_numbers is True
+        assert s.font_family == "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
+        assert s.body_font_size == "10pt"
+        assert s.h1_font_size == "22pt"
+        assert s.h2_font_size == "16pt"
+
+    def test_margins_preset_expanded(self):
+        s = ExportSettings(margins="wide")
+        assert s.margin_top == "35mm"
+        assert s.margin_bottom == "30mm"
+        assert s.margin_left == "28mm"
+        assert s.margin_right == "28mm"
+
+    def test_narrow_margins(self):
+        s = ExportSettings(margins="narrow")
+        assert s.margin_top == "15mm"
+        assert s.margin_left == "12mm"
+
+    def test_custom_margins_override_preset(self):
+        s = ExportSettings(margins="normal", margin_top="10mm", margin_left="15mm")
+        assert s.margin_top == "10mm"
+        assert s.margin_left == "15mm"
+
+    def test_page_size_css_a4(self):
+        s = ExportSettings(paper_size="a4", orientation="portrait")
+        assert s.page_size_css() == "a4"
+
+    def test_page_size_css_letter_landscape(self):
+        s = ExportSettings(paper_size="letter", orientation="landscape")
+        assert s.page_size_css() == "letter landscape"
+
+    def test_normalize_empty(self):
+        result = normalize_settings(None)
+        assert result["paper_size"] == "a4"
+        assert result["body_font_size"] == "10pt"
+
+    def test_normalize_partial(self):
+        result = normalize_settings({"paper_size": "letter"})
+        assert result["paper_size"] == "letter"
+        assert result["body_font_size"] == "10pt"  # default
+
+
+# ── Markdown Export ────────────────────────────────────────────
+
+class TestMarkdownExport:
+    def test_basic_export(self, sample_sections):
+        result = export_markdown(sample_sections, "MyProject", "MyDoc")
+        assert result.startswith("# MyDoc")
+        assert "Project: MyProject" in result
+        assert "## Introduction" in result
+        assert "## Architecture" in result
+        assert "## API Reference" in result
+        assert result.endswith("\n")
+
+    def test_with_custom_title(self, sample_sections):
+        result = export_markdown(sample_sections, "Proj", doc_title="Custom", export_settings={"title": "Overridden"})
+        assert result.startswith("# Overridden")
+
+    def test_empty_sections(self):
+        result = export_markdown([], "Proj", "Doc")
+        assert result == "# Doc\n\nProject: Proj\n"
+
+
+# ── HTML Export ───────────────────────────────────────────────
+
+class TestHtmlExport:
+    def test_basic_html(self, sample_sections):
+        result = export_html(sample_sections, "MyProject", "MyDoc")
+        assert "<!DOCTYPE html>" in result
+        assert "<title>MyDoc</title>" in result
+        assert "Introduction" in result
+        assert "Architecture" in result
+        assert "API Reference" in result
+        assert "<style>" in result
+        assert "</style>" in result
+
+    def test_cover_page(self, sample_sections):
+        result = export_html(sample_sections, "MyProject", "MyDoc")
+        assert 'class="cover' in result
+        assert 'class="subtitle"' in result
+        assert "MyProject" in result
+
+    def test_cover_page_disabled(self, sample_sections):
+        result = export_html(sample_sections, "MyProject", "MyDoc", {"include_cover_page": False})
+        assert 'class="cover' not in result
+
+    def test_toc_included(self, sample_sections):
+        result = export_html(sample_sections, "MyProject", "MyDoc")
+        assert "Table of Contents" in result
+        assert "#section-1" in result
+
+    def test_toc_disabled(self, sample_sections):
+        result = export_html(sample_sections, "MyProject", "MyDoc", {"include_toc": False})
+        assert "Table of Contents" not in result
+
+    def test_css_variables_applied(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc", {
+            "primary_color": "#ff0000",
+            "h1_color": "#00ff00",
+        })
+        assert "#ff0000" in result
+        assert "#00ff00" in result
+
+    def test_page_numbers_css(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc", {"include_page_numbers": True})
+        assert "counter(page)" in result
+
+    def test_page_numbers_disabled(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc", {"include_page_numbers": False})
+        assert "content: none" in result
+
+    def test_a4_size_in_css(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc", {"paper_size": "a4", "orientation": "portrait"})
+        assert "size: a4" in result or "size: A4" in result
+
+    def test_letter_landscape_in_css(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc", {"paper_size": "letter", "orientation": "landscape"})
+        assert "letter landscape" in result.lower()
+
+    def test_margins_in_css(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc", {"margins": "wide"})
+        assert "35mm" in result
+        assert "30mm" in result
+
+    def test_header_footer_in_css(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc", {
+            "header_left": "Draft",
+            "footer_right": "Confidential",
+            "include_page_numbers": False,
+        })
+        assert "Draft" in result
+        assert "Confidential" in result
+
+    def test_logo_html(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc", {
+            "logo_url": "https://example.com/logo.png",
+            "logo_position": "title-page",
+        })
+        assert "logo.png" in result
+        assert 'class="title-page-logo"' in result
+
+    def test_organization_name(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc", {
+            "organization_name": "Acme Corp",
+        })
+        assert "Acme Corp" in result
+
+    def test_subtitle(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc", {
+            "subtitle": "API Reference v2",
+        })
+        assert "API Reference v2" in result
+
+    def test_table_style(self, sample_sections):
+        for style in ("simple", "striped", "bordered", "minimal"):
+            result = export_html(sample_sections, "Proj", "Doc", {"table_style": style})
+            # Should not crash
+            assert "<table" in result or "Table of Contents" in result
+
+    def test_code_theme(self, sample_sections):
+        for theme in ("dark", "light", "github", "monokai"):
+            result = export_html(sample_sections, "Proj", "Doc", {"code_theme": theme})
+            # Should not crash
+            assert "pre" in result
+
+    def test_empty_sections(self):
+        result = export_html([], "Proj", "Doc")
+        assert "<!DOCTYPE html>" in result
+
+    def test_markdown_table_renders(self):
+        sections = [{"heading": "Table", "content": "| A | B |\n|---|---|\n| 1 | 2 |"}]
+        result = export_html(sections, "Proj", "Doc")
+        assert "<table" in result
+
+    def test_markdown_code_block_renders(self):
+        sections = [{"heading": "Code", "content": "```python\nx = 1\n```"}]
+        result = export_html(sections, "Proj", "Doc")
+        assert "<pre" in result
+
+    def test_markdown_image_renders(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc")
+        assert "<img" in result
+
+    def test_first_page_no_header_footer(self, sample_sections):
+        """The cover page should suppress headers/footers via @page :first."""
+        result = export_html(sample_sections, "Proj", "Doc")
+        assert "@page :first" in result
+
+
+# ── PDF Export ────────────────────────────────────────────────
+
+class TestPdfExport:
+    """Test PDF export using WeasyPrint (basic smoke/integration tests)."""
+
+    def test_pdf_generates_bytes(self, sample_sections):
+        pdf_bytes = export_pdf(sample_sections, "MyProject", "MyDoc")
+        assert isinstance(pdf_bytes, bytes)
+        assert len(pdf_bytes) > 100
+        # PDF magic bytes
+        assert pdf_bytes.startswith(b"%PDF")
+
+    def test_pdf_a4(self, sample_sections):
+        pdf_bytes = export_pdf(sample_sections, "Proj", "Doc", {"paper_size": "a4"})
+        assert pdf_bytes.startswith(b"%PDF")
+
+    def test_pdf_letter(self, sample_sections):
+        pdf_bytes = export_pdf(sample_sections, "Proj", "Doc", {"paper_size": "letter"})
+        assert pdf_bytes.startswith(b"%PDF")
+
+    def test_pdf_landscape(self, sample_sections):
+        pdf_bytes = export_pdf(sample_sections, "Proj", "Doc", {"paper_size": "a4", "orientation": "landscape"})
+        assert pdf_bytes.startswith(b"%PDF")
+
+    def test_pdf_with_logo_url(self, sample_sections):
+        """At minimum should not crash when given a logo URL."""
+        pdf_bytes = export_pdf(sample_sections, "Proj", "Doc", {
+            "logo_url": "https://via.placeholder.com/100",
+        })
+        assert pdf_bytes.startswith(b"%PDF")
+
+    def test_pdf_empty_sections(self):
+        pdf_bytes = export_pdf([], "Proj", "Doc")
+        assert pdf_bytes.startswith(b"%PDF")
+
+    def test_pdf_with_all_settings(self, sample_sections):
+        pdf_bytes = export_pdf(sample_sections, "Proj", "Doc", {
+            "paper_size": "a4",
+            "orientation": "portrait",
+            "margins": "normal",
+            "primary_color": "#4f46e5",
+            "h1_color": "#111827",
+            "font_family": "Inter",
+            "include_toc": True,
+            "include_cover_page": True,
+            "include_page_numbers": True,
+            "header_left": "My Header",
+        })
+        assert pdf_bytes.startswith(b"%PDF")
+        assert len(pdf_bytes) > 200
+
+
+# ── Normalization ──────────────────────────────────────────────
+
+class TestNormalization:
+    def test_bool_coercion(self):
+        result = normalize_settings({"include_page_numbers": "false"})
+        assert result["include_page_numbers"] is False
+
+    def test_missing_keys_have_defaults(self):
+        result = normalize_settings({})
+        for key in ("body_font_size", "h1_font_size", "text_color", "primary_color"):
+            assert key in result
+
+    def test_logo_url_preserved(self):
+        result = normalize_settings({"logo_url": "https://example.com/logo.svg"})
+        assert result["logo_url"] == "https://example.com/logo.svg"
+
+    def test_watermark(self):
+        result = normalize_settings({"watermark_text": "DRAFT"})
+        assert result["watermark_text"] == "DRAFT"
+
+    def test_table_style_default(self):
+        result = normalize_settings({})
+        assert result["table_style"] == "striped"
+
+    def test_code_theme_default(self):
+        result = normalize_settings({})
+        assert result["code_theme"] == "dark"

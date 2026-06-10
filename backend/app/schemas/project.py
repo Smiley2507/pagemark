@@ -55,6 +55,7 @@ class ProjectUpdateRequest(BaseModel):
     starred: Optional[bool] = None
     status: Optional[ProjectStatusEnum] = None
     tags: Optional[List[str]] = None
+    export_settings: Optional[dict] = None
 
 
 # ── Response schemas ─────────────────────────────────────────────
@@ -77,6 +78,7 @@ class ProjectResponse(BaseModel):
     last_synced_commit: Optional[str] = None
     source_metadata: Optional[dict] = None
     source_exclusions: List[ProjectSourceExclusionResponse] = []
+    export_settings: Optional[dict] = None
     starred: bool
     tags: List[str] = []
     documents_count: int = 0

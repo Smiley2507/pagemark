@@ -26,7 +26,7 @@ function SegmentedControl({
     <div
       role="radiogroup"
       aria-label={label}
-      className={cn('inline-flex rounded-lg bg-panel-muted p-1 text-meta text-text-secondary', className)}
+      className={cn('flex rounded-lg bg-panel-muted p-1 text-meta text-text-secondary', className)}
     >
       {options.map((option) => {
         const active = option.value === value;
@@ -39,7 +39,7 @@ function SegmentedControl({
             disabled={option.disabled}
             onClick={() => onValueChange(option.value)}
             className={cn(
-              'rounded-md px-3 py-1.5 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring whitespace-nowrap',
               active
                 ? 'bg-panel text-text-primary shadow-sm'
                 : 'text-text-secondary hover:bg-accent hover:text-accent-foreground',

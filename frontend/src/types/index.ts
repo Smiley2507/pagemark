@@ -483,6 +483,12 @@ export interface APIKey {
 }
 
 export interface ExportSettings {
+  organization_name?: string;
+  title?: string;
+  subtitle?: string;
+  include_toc?: boolean;
+  include_cover_page?: boolean;
+  include_page_numbers?: boolean;
   logo_url?: string | null;
   logo_position?: 'title-page' | 'header-left' | 'header-center' | 'header-right'
     | 'footer-left' | 'footer-center' | 'footer-right' | 'none';
@@ -490,18 +496,30 @@ export interface ExportSettings {
   h1_color?: string;
   h2_color?: string;
   primary_color?: string;
+  text_color?: string;
+  muted_color?: string;
+  border_color?: string;
   font_family?: string;
   body_font_size?: string;
   h1_font_size?: string;
   h2_font_size?: string;
+  h3_font_size?: string;
+  code_font_size?: string;
   header_left?: string;
   header_center?: string;
   header_right?: string;
+  footer_left?: string;
+  footer_center?: string;
+  footer_right?: string;
   page_numbers?: boolean;
   page_number_position?: 'left' | 'center' | 'right';
-  page_number_format?: 'number' | 'page-n';
+  page_number_format?: 'number' | 'page-n' | 'page-n-of-m';
   paper_size?: 'a4' | 'letter';
+  orientation?: 'portrait' | 'landscape';
   margins?: 'normal' | 'narrow' | 'wide';
+  table_style?: 'simple' | 'striped' | 'bordered' | 'minimal';
+  code_theme?: 'dark' | 'light' | 'github' | 'monokai';
+  watermark_text?: string;
 }
 
 export interface DocumentShare {

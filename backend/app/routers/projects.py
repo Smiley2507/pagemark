@@ -84,6 +84,7 @@ async def _project_to_response(
         ],
         starred=project.starred,
         tags=project.tags or [],
+        export_settings=project.export_settings,
         documents_count=summary.documents_count,
         sections_count=summary.sections_count,
         active_generation=summary.active_generation,
@@ -415,6 +416,8 @@ async def update_project(
         project.tags = body.tags
     if body.status is not None:
         project.status = ProjectStatus(body.status.value)
+    if body.export_settings is not None:
+        project.export_settings = body.export_settings
 
     project.updated_at = datetime.utcnow()
     await db.commit()
