@@ -79,22 +79,27 @@ def _resolve_base_url(settings: dict) -> str:
     return str(Path.cwd())
 
 
-def _build_logo_html(settings: dict) -> str:
+def _logo_img_tag(settings: dict) -> str:
+    """Return resolved <img> tag for the logo, or empty string."""
     url = settings.get("logo_url") or settings.get("logo_path")
     if not url:
-        return ""
-    pos = settings.get("logo_position", "title-page")
-    if pos == "none":
         return ""
     height = settings.get("logo_height", "48px")
     alt = escape(settings.get("organization_name", "") or "Logo")
     src = _resolve_logo_src(str(url))
-    escaped_src = escape(src)
-    return (
-        f'<div class="title-page-logo">'
-        f'<img src="{escaped_src}" alt="{alt}" style="height:{height}"/>'
-        f"</div>"
-    )
+    return f'<img src="{escape(src)}" alt="{alt}" style="height:{height}"/>'
+
+
+def _logo_position(settings: dict) -> str:
+    pos = settings.get("logo_position", "title-page")
+    return pos if pos in LOGO_POSITIONS else "title-page"
+
+
+LOGO_POSITIONS = {
+    "none", "title-page",
+    "header-left", "header-center", "header-right",
+    "footer-left", "footer-center", "footer-right",
+}
 
 
 def _resolve_logo_src(url: str) -> str:
@@ -116,14 +121,15 @@ def _resolve_logo_src(url: str) -> str:
 def _render_cover(settings: dict, organization_name: str, title: str) -> str:
     if not settings.get("include_cover_page", True):
         return ""
-    logo = _build_logo_html(settings)
     subtitle = settings.get("subtitle", "Technical Documentation")
     parts = [
         '<section class="cover page-break-after">',
         '<div class="cover-inner">',
     ]
-    if logo:
-        parts.append(logo)
+    if _logo_position(settings) == "title-page":
+        img = _logo_img_tag(settings)
+        if img:
+            parts.append(f'<div class="title-page-logo">{img}</div>')
     parts.append(f'<p class="eyebrow">{escape(organization_name)}</p>')
     parts.append(f"<h1>{escape(title)}</h1>")
     if subtitle:
@@ -526,9 +532,58 @@ hr {{
 .page-break-after {{ page-break-after:always; }}
 .page-break-before {{ page-break-before:always; }}
 
+/* ── Per-page header/footer logo ── */
+.page-header-logo,
+.page-footer-logo {{
+  position:fixed;
+  z-index:1000;
+  pointer-events:none;
+}}
+.page-header-logo {{ top:0; }}
+.page-footer-logo {{ bottom:0; }}
+.page-header-logo.left,
+.page-footer-logo.left {{ left:10px; }}
+.page-header-logo.center,
+.page-footer-logo.center {{ left:50%; transform:translateX(-50%); }}
+.page-header-logo.right,
+.page-footer-logo.right {{ right:10px; }}
+
 /* ── Watermark ── */
 {"body::after { content: ''; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 80pt; color: rgba(0,0,0,0.04); white-space: nowrap; pointer-events: none; z-index: 9999; }" if watermark else ""}
 """
+
+
+# ── Per-page header/footer logo ──────────────────────────────
+
+_HEADER_ALIGN_MAP = {
+    "header-left": "left",
+    "header-center": "center",
+    "header-right": "right",
+    "footer-left": "left",
+    "footer-center": "center",
+    "footer-right": "right",
+}
+
+_PAGE_ZONE_MAP = {
+    "header-left": "header",
+    "header-center": "header",
+    "header-right": "header",
+    "footer-left": "footer",
+    "footer-center": "footer",
+    "footer-right": "footer",
+}
+
+
+def _render_page_logo(settings: dict) -> str:
+    pos = _logo_position(settings)
+    if pos == "none" or pos == "title-page":
+        return ""
+    img = _logo_img_tag(settings)
+    if not img:
+        return ""
+    zone = _PAGE_ZONE_MAP.get(pos, "header")
+    align = _HEADER_ALIGN_MAP.get(pos, "left")
+    return f'<div class="page-{zone}-logo {align}">{img}</div>'
 
 
 # ── Full HTML document ────────────────────────────────────────
@@ -553,6 +608,10 @@ def export_html(
         body_parts.append(toc)
 
     body_parts.append(_render_sections(sections))
+
+    page_logo = _render_page_logo(s)
+    if page_logo:
+        body_parts.append(page_logo)
 
     css = _build_css(s)
     body = "\n".join(body_parts)
