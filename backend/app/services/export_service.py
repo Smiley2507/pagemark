@@ -627,10 +627,12 @@ def export_html(
 
     zone = _page_logo_zone(s)
     body_style = ""
+    margin_top_value = s.get("margin_top", "25mm")
+    margin_bottom_value = s.get("margin_bottom", "22mm")
     if zone == "header":
-        body_style = ' style="padding-top:var(--margin-top)"'
+        body_style = f' style="padding-top:{margin_top_value}"'
     elif zone == "footer":
-        body_style = ' style="padding-bottom:var(--margin-bottom)"'
+        body_style = f' style="padding-bottom:{margin_bottom_value}"'
 
     return f"""<!DOCTYPE html>
 <html lang="en">
