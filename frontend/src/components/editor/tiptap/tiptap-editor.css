@@ -62,6 +62,39 @@
   background: transparent;
 }
 
+/* ── Code block copy button ───────────────────────────────────────── */
+.tiptap-editor .ProseMirror pre {
+  position: relative;
+}
+.tiptap-editor .ProseMirror .code-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  z-index: 5;
+}
+.tiptap-editor .ProseMirror pre:hover .code-copy-btn,
+.tiptap-editor .ProseMirror .code-copy-btn--done {
+  opacity: 1;
+}
+.tiptap-editor .ProseMirror .code-copy-btn:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+.tiptap-editor .ProseMirror .code-copy-btn--done {
+  border-color: var(--status-success-foreground);
+  color: var(--status-success-foreground);
+}
+
 /* ── Callouts ──────────────────────────────────────────────────────────── */
 .tiptap-editor .ProseMirror div[data-callout-type] {
   margin: 0.75em 0;
@@ -107,26 +140,53 @@
 .tiptap-editor .ProseMirror table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0.5em 0;
-  font-size: 0.9em;
-  line-height: 1.5;
-  overflow-x: auto;
+  margin: 1em 0;
+  overflow: hidden;
+  font-size: 14px;
+}
+.tiptap-editor .ProseMirror th,
+.tiptap-editor .ProseMirror td {
+  border: 1px solid var(--separator, var(--border));
+  padding: 8px 12px;
+  vertical-align: top;
+  min-width: 60px;
+  position: relative;
 }
 .tiptap-editor .ProseMirror th {
-  text-align: left;
+  background: var(--panel-muted, var(--muted));
   font-weight: 600;
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  color: var(--foreground);
-  background: color-mix(in oklch, var(--muted), transparent 50%);
+  text-align: left;
 }
 .tiptap-editor .ProseMirror td {
-  padding: 5px 12px;
-  border: 1px solid var(--border);
-  color: var(--foreground);
+  background: var(--panel, transparent);
+}
+.tiptap-editor .ProseMirror th p,
+.tiptap-editor .ProseMirror td p {
+  margin: 0;
 }
 .tiptap-editor .ProseMirror tbody tr:hover {
   background: color-mix(in oklch, var(--muted), transparent 70%);
+}
+
+/* ── Table column resize handles ───────────────────────────────────── */
+.tiptap-editor .ProseMirror .column-resize-handle {
+  display: inline-block;
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+.tiptap-editor .ProseMirror .column-resize-handle:hover,
+.tiptap-editor .ProseMirror .column-resize-handle:active {
+  background: var(--interaction, var(--primary));
+}
+.tiptap-editor .ProseMirror .resize-cursor {
+  cursor: col-resize;
 }
 
 /* ── Images ────────────────────────────────────────────────────────────── */
@@ -231,6 +291,46 @@
   border-radius: 8px;
   object-fit: contain;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  user-select: none;
+}
+
+/* ── Figure Resize Handles ─────────────────────────────────────────── */
+.tiptap-editor .ProseMirror figure {
+  position: relative;
+}
+.tiptap-editor .ProseMirror .figure-resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--interaction, var(--primary));
+  background: var(--background);
+  border-radius: 2px;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.tiptap-editor .ProseMirror figure:hover .figure-resize-handle {
+  opacity: 1;
+}
+.tiptap-editor .ProseMirror .figure-resize-handle--nw {
+  top: -5px;
+  left: -5px;
+  cursor: nw-resize;
+}
+.tiptap-editor .ProseMirror .figure-resize-handle--ne {
+  top: -5px;
+  right: -5px;
+  cursor: ne-resize;
+}
+.tiptap-editor .ProseMirror .figure-resize-handle--sw {
+  bottom: -5px;
+  left: -5px;
+  cursor: sw-resize;
+}
+.tiptap-editor .ProseMirror .figure-resize-handle--se {
+  bottom: -5px;
+  right: -5px;
+  cursor: se-resize;
 }
 .tiptap-editor .ProseMirror figure figcaption {
   font-size: 13px;
@@ -249,36 +349,6 @@
   border-bottom-color: var(--interaction);
 }
 
-/* ── Tables ────────────────────────────────────────────────────────── */
-
-.tiptap-editor .ProseMirror table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 1em 0;
-  overflow: hidden;
-  font-size: 14px;
-}
-.tiptap-editor .ProseMirror th,
-.tiptap-editor .ProseMirror td {
-  border: 1px solid var(--separator);
-  padding: 8px 12px;
-  vertical-align: top;
-  min-width: 60px;
-  position: relative;
-}
-.tiptap-editor .ProseMirror th {
-  background: var(--panel-muted);
-  font-weight: 600;
-  text-align: left;
-}
-.tiptap-editor .ProseMirror td {
-  background: var(--panel);
-}
-.tiptap-editor .ProseMirror th p,
-.tiptap-editor .ProseMirror td p {
-  margin: 0;
-}
-
 /* ── Evidence Markers ──────────────────────────────────────────────── */
 
 .tiptap-editor .ProseMirror .evidence-mark {
@@ -291,4 +361,59 @@
 }
 .tiptap-editor .ProseMirror .evidence-mark:hover {
   background: var(--interaction-muted);
+}
+
+/* ── Mermaid Diagrams ──────────────────────────────────────────────── */
+.tiptap-editor .ProseMirror .mermaid-diagram {
+  margin: 1em 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--panel);
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+}
+.tiptap-editor .ProseMirror .mermaid-diagram:hover {
+  border-color: var(--interaction);
+}
+.tiptap-editor .ProseMirror .mermaid-svg {
+  overflow-x: auto;
+  min-height: 60px;
+}
+.tiptap-editor .ProseMirror .mermaid-svg svg {
+  max-width: 100%;
+  height: auto;
+}
+.tiptap-editor .ProseMirror .mermaid-code-hint {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.tiptap-editor .ProseMirror .mermaid-diagram:hover .mermaid-code-hint {
+  opacity: 1;
+}
+.tiptap-editor .ProseMirror .mermaid-textarea {
+  width: 100%;
+  min-height: 120px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--muted);
+  color: var(--foreground);
+  resize: vertical;
+  outline: none;
+}
+.tiptap-editor .ProseMirror .mermaid-textarea:focus {
+  border-color: var(--interaction);
+}
+.tiptap-editor .ProseMirror .mermaid-error {
+  color: var(--status-danger-foreground);
+  font-size: 13px;
+  padding: 12px;
 }

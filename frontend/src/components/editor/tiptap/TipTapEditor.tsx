@@ -11,6 +11,7 @@ import { SlashCommandMenu } from './SlashCommandMenu'
 import { TableToolbar } from './TableToolbar'
 import { detectSpreadsheetData, insertTableFromSpreadsheet } from './tableUtils'
 import { EditorContextMenu } from '../EditorContextMenu'
+import { EditorToolbar } from '../EditorToolbar'
 import type { GrammarIssue } from '../grammarDecoration'
 import './tiptap-editor.css'
 
@@ -28,10 +29,11 @@ interface TipTapEditorProps {
   projectId?: number
   onPolish?: (text: string) => void
   grammarIssues?: GrammarIssue[]
+  onSplitSection?: (heading: string, contentAfter: string) => void
 }
 
 export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
-  function TipTapEditor({ value, onChange, className, sectionId, projectId, onPolish, grammarIssues }, ref) {
+  function TipTapEditor({ value, onChange, className, sectionId, projectId, onPolish, grammarIssues, onSplitSection }, ref) {
     const editorRef = useRef<Editor | null>(null)
     const [contextMenuState, setContextMenuState] = useState<{ position: { top: number; left: number }; selectedText: string } | null>(null)
     const [showTableToolbar, setShowTableToolbar] = useState(false)
@@ -160,12 +162,36 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
       }
     }, [editor])
 
+    useEffect(() => {
+      if (!editor || !onSplitSection) return
+      const id = window.setInterval(() => {
+        const ext = editor.extensionManager.extensions.find(e => e.name === 'h1Split')
+        if (!ext) return
+        const storage = ext.storage as { pendingSplit: { heading: string; contentAfter: string } | null }
+        if (storage.pendingSplit) {
+          const { heading, contentAfter } = storage.pendingSplit
+          storage.pendingSplit = null
+          onSplitSection(heading, contentAfter)
+        }
+      }, 200)
+      return () => clearInterval(id)
+    }, [editor, onSplitSection])
+
     return (
       <div className={cn('relative min-h-44 w-full min-w-0 overflow-x-hidden', className)}>
         {editor && (
           <BubbleMenu
             editor={editor}
             className="flex items-center gap-0.5 rounded-lg border border-border bg-card px-1 py-1 shadow-lg"
+            shouldShow={({ editor }) => {
+              const { selection } = editor.state
+              const { empty } = selection
+              const node = selection.$head.node()
+              const inTable = editor.isActive('table')
+              const inCodeBlock = node.type.name === 'codeBlock' || node.type.name === 'code'
+              const inCallout = editor.isActive('callout')
+              return !empty && !inTable && !inCodeBlock && !inCallout
+            }}
           >
             <FormatButton onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} label="Bold" shortcut="Ctrl+B">
               <strong className="text-xs">B</strong>
@@ -209,6 +235,7 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
             </FormatButton>
           </BubbleMenu>
         )}
+        <EditorToolbar editor={editor} />
         {editor && showTableToolbar && (
           <div className="mb-2 flex justify-center">
             <TableToolbar editor={editor} />

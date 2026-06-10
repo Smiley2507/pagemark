@@ -155,6 +155,7 @@ function SectionBlock({
   onAcceptReview,
   onJumpToSection,
   onVersionHistory,
+  onSplitSection,
   staleSectionMeta,
   onAcceptStaleness,
   onRejectStaleness,
@@ -175,6 +176,7 @@ function SectionBlock({
   onAcceptReview?: (sectionId: number) => void;
   onJumpToSection?: (sectionId: number) => void;
   onVersionHistory?: (sectionId: number) => void;
+  onSplitSection?: (sectionId: number, heading: string, contentAfter: string) => void;
   staleSectionMeta?: Map<number, { reviewed_at: string | null }>;
   onAcceptStaleness?: (sectionId: number) => void;
   onRejectStaleness?: (sectionId: number) => void;
@@ -308,7 +310,11 @@ function SectionBlock({
         )}
 
         <div className="min-w-0 overflow-x-hidden px-1 py-2">
-          <MarkdownEditor value={content} onChange={handleContentChange} />
+          <MarkdownEditor
+            value={content}
+            onChange={handleContentChange}
+            onSplitSection={(heading, contentAfter) => onSplitSection?.(section.id, heading, contentAfter)}
+          />
         </div>
       </div>
     </section>
@@ -739,6 +745,7 @@ export function DocumentEditorPage() {
             onRunQuality={() => runQuality.mutate()}
             onCreateSection={() => createSection.mutate({})}
             onClose={() => setTocOpen(false)}
+            onReorderSections={(sectionIds) => reorderSections.mutate(sectionIds)}
           />
         )}
 
@@ -792,6 +799,16 @@ export function DocumentEditorPage() {
                   onAcceptReview={(sectionId) => acceptSectionReview.mutate(sectionId)}
                   onJumpToSection={(sectionId) => { setActiveSectionId(sectionId); setRightPanelOpen(true); setRightTab('notes'); }}
                   onVersionHistory={setVersionHistorySectionId}
+                  onSplitSection={(sectionId, heading, contentAfter) => {
+                    const currentContent = localContentBySectionId[sectionId] ?? sections.find(s => s.id === sectionId)?.content_md ?? ''
+                    const h1Index = currentContent.indexOf(`# ${heading}`)
+                    if (h1Index >= 0) {
+                      const beforeH1 = currentContent.slice(0, h1Index).trim()
+                      onLocalContentChange(sectionId, beforeH1)
+                      updateDocumentSection.mutate({ id: sectionId, data: { content_md: beforeH1 } })
+                      createSection.mutate({ heading, content_md: contentAfter })
+                    }
+                  }}
                   staleSectionMeta={staleSectionMeta}
                   onAcceptStaleness={(sectionId) => acceptFreshness.mutate(sectionId)}
                   onRejectStaleness={(sectionId) => rejectFreshness.mutate(sectionId)}

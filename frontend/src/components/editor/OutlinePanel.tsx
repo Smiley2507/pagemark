@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { PanelRightOpen, Plus, CheckCheck, RotateCw, FileText, Sparkles, BookOpen, ShieldCheck } from 'lucide-react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { PanelRightOpen, Plus, CheckCheck, RotateCw, FileText, Sparkles, BookOpen, ShieldCheck, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { QualityReportFull } from '@/api/quality';
@@ -26,10 +29,84 @@ interface OutlinePanelProps {
   onRunQuality: () => void;
   onCreateSection: () => void;
   onClose: () => void;
+  onReorderSections?: (sectionIds: number[]) => void;
 }
 
 function StatDot(className: string) {
   return <span className={cn('inline-block h-1.5 w-1.5 rounded-full shrink-0', className)} />;
+}
+
+function SortableTocItem({
+  item,
+  isActive,
+  onClick,
+  onKeyboard,
+}: {
+  item: TocItem;
+  isActive: boolean;
+  onClick: () => void;
+  onKeyboard: (e: KeyboardEvent<HTMLButtonElement>) => void;
+}) {
+  const isDraggable = item.kind === 'section';
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: item.id,
+    disabled: !isDraggable,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'flex items-center gap-0.5 rounded py-1 pr-2 transition-all duration-150',
+        isDragging && 'opacity-50 shadow-md z-10',
+        isActive && !isDragging ? 'bg-interaction-muted' : 'hover:bg-panel-muted',
+      )}
+    >
+      {isDraggable && (
+        <button
+          type="button"
+          className="flex items-center justify-center w-5 h-5 shrink-0 cursor-grab text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground"
+          {...attributes}
+          {...listeners}
+          tabIndex={-1}
+          aria-label={`Drag ${item.label}`}
+        >
+          <GripVertical className="h-3 w-3" />
+        </button>
+      )}
+      {!isDraggable && <span className="w-5 shrink-0" />}
+      <button
+        type="button"
+        data-toc-item="true"
+        onClick={onClick}
+        onKeyDown={onKeyboard}
+        className={cn(
+          'flex-1 text-left text-meta focus-visible:ring-2 focus-visible:ring-ring',
+          item.kind === 'h1' && 'pl-6',
+          item.kind === 'h2' && 'pl-8',
+          isActive && !isDragging
+            ? 'text-interaction-hover font-medium'
+            : 'text-text-muted opacity-60 hover:opacity-100 hover:text-text-primary',
+        )}
+        aria-current={isActive ? 'true' : undefined}
+      >
+        <span className="block truncate">{item.label}</span>
+      </button>
+    </div>
+  );
 }
 
 export function OutlinePanel({
@@ -46,8 +123,32 @@ export function OutlinePanel({
   onRunQuality,
   onCreateSection,
   onClose,
+  onReorderSections,
 }: OutlinePanelProps) {
   const [showSubScores, setShowSubScores] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const sectionItems = tocItems.filter(i => i.kind === 'section');
+  const sectionIds = sectionItems.map(i => i.id);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = sectionItems.findIndex(i => i.id === active.id);
+    const newIndex = sectionItems.findIndex(i => i.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const newOrder = [...sectionItems];
+    const [moved] = newOrder.splice(oldIndex, 1);
+    newOrder.splice(newIndex, 0, moved);
+
+    onReorderSections?.(newOrder.map(i => i.sectionId));
+  };
 
   const reviewDot =
     reviewTotal === 0 ? 'bg-text-muted' :
@@ -101,29 +202,22 @@ export function OutlinePanel({
       </div>
 
       <nav aria-label="Document table of contents" className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
-        {tocItems.map((item) => {
-          const isActive = activeTocId === item.id || activeTocId === `section-${item.sectionId}`;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              data-toc-item="true"
-              onClick={() => onTocItemClick(item)}
-              onKeyDown={onTocKeyboard}
-              className={cn(
-                'block w-full rounded py-1 text-left text-meta transition-all duration-150 focus-visible:ring-2 focus-visible:ring-ring',
-                item.kind === 'h1' && 'pl-6',
-                item.kind === 'h2' && 'pl-8',
-                isActive
-                  ? 'bg-interaction-muted text-interaction-hover font-medium'
-                  : 'text-text-muted opacity-60 hover:opacity-100 hover:bg-panel-muted hover:text-text-primary',
-              )}
-              aria-current={isActive ? 'true' : undefined}
-            >
-              <span className="block truncate">{item.label}</span>
-            </button>
-          );
-        })}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={sectionIds} strategy={verticalListSortingStrategy}>
+            {tocItems.map((item) => {
+              const isActive = activeTocId === item.id || activeTocId === `section-${item.sectionId}`;
+              return (
+                <SortableTocItem
+                  key={item.id}
+                  item={item}
+                  isActive={isActive}
+                  onClick={() => onTocItemClick(item)}
+                  onKeyboard={onTocKeyboard}
+                />
+              );
+            })}
+          </SortableContext>
+        </DndContext>
         {tocItems.length === 0 && (
           <Button type="button" size="sm" onClick={onCreateSection} className="w-full gap-2">
             <Plus className="h-4 w-4" />
@@ -174,7 +268,7 @@ export function OutlinePanel({
                   </button>
                   {StatDot(qualityDot)}
                   <span className="font-medium text-text-primary">
-                    {qualityData != null ? `${Math.round(qualityData.overall_score)}%` : '—'}
+                    {qualityData != null ? `${Math.round(qualityData.overall_score)}%` : '\u2014'}
                   </span>
                 </span>
               </div>
