@@ -30,13 +30,23 @@ import { NotesPanel } from '@/components/editor/NotesPanel';
 import { QualityModal } from '@/components/editor/QualityModal';
 import { ExportModal } from '@/components/editor/ExportModal';
 import { ShareDialog } from '@/components/shared/ShareDialog';
+import { OutlineDiffBanner } from '@/components/editor/OutlineDiffBanner';
+import { VersionHistory } from '@/components/editor/VersionHistory';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Surface } from '@/components/ui/surface';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
+import { StaleSectionBanner } from '@/components/ui/stale-section-banner';
 import { Notice } from '@/components/ui/notice';
-import { SectionStatusBadge } from '@/components/ui/section-status-badge';
+import { SectionStatusDot } from '@/components/ui/section-status-dot';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { Tooltip } from '@/components/ui/tooltip';
 import { documentsApi, type Document } from '@/api/documents';
 import { useDocumentAutosave, useDocumentSections, useUpdateDocumentSection, useAcceptSectionReview } from '@/hooks/useSections';
@@ -144,6 +154,11 @@ function SectionBlock({
   onLocalContentChange,
   onAcceptReview,
   onJumpToSection,
+  onVersionHistory,
+  staleSectionMeta,
+  onAcceptStaleness,
+  onRejectStaleness,
+  isStalenessProcessing,
 }: {
   projectId: number;
   documentId: number;
@@ -159,6 +174,11 @@ function SectionBlock({
   onLocalContentChange: (sectionId: number, content: string) => void;
   onAcceptReview?: (sectionId: number) => void;
   onJumpToSection?: (sectionId: number) => void;
+  onVersionHistory?: (sectionId: number) => void;
+  staleSectionMeta?: Map<number, { reviewed_at: string | null }>;
+  onAcceptStaleness?: (sectionId: number) => void;
+  onRejectStaleness?: (sectionId: number) => void;
+  isStalenessProcessing?: boolean;
 }) {
   const [content, setContent] = useState(section.content_md);
   const [title, setTitle] = useState(section.title || section.heading || 'Untitled Section');
@@ -198,6 +218,8 @@ function SectionBlock({
 
   const sectionState = getSectionState(section);
   const isReviewed = sectionState.key === 'reviewed';
+  const isStale = staleSectionMeta?.has(section.id) ?? false;
+  const staleMeta = staleSectionMeta?.get(section.id);
 
   return (
     <section
@@ -205,10 +227,11 @@ function SectionBlock({
       data-editor-section="true"
       className="group min-w-0 scroll-mt-24 overflow-x-hidden py-6"
     >
-      <div className="relative mx-auto max-w-4xl min-w-0 rounded-sm px-4 py-3 transition-colors duration-150 focus-within:bg-panel/45 hover:bg-panel/35">
-        <div className="pointer-events-none absolute bottom-3 left-0 top-3 w-0.5 rounded-full bg-interaction opacity-0 transition-opacity duration-150 group-focus-within:opacity-70 group-hover:opacity-50" />
+      <div className="relative mx-auto max-w-5xl min-w-0 rounded-sm px-4 py-3 transition-colors duration-150 focus-within:bg-panel/45 hover:bg-panel/35">
         <div className="mb-4 flex items-start gap-3">
-          <GripVertical className="mt-4 h-4 w-4 shrink-0 text-text-muted opacity-0 transition-opacity duration-150 group-focus-within:opacity-60 group-hover:opacity-50" aria-hidden="true" />
+          <div className="mt-[13px] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+            <SectionStatusDot section={section} />
+          </div>
           <div className="min-w-0 flex-1">
             <Input
               value={title}
@@ -218,76 +241,75 @@ function SectionBlock({
                 if (event.key === 'Enter') event.currentTarget.blur();
               }}
               aria-label={`Heading for ${section.heading}`}
-              className="h-auto rounded-none border-0 border-b border-transparent bg-transparent px-0 py-1 text-[2rem] font-semibold leading-tight text-text-primary shadow-none focus-visible:border-interaction focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="h-auto rounded-none border-0 border-b border-transparent bg-transparent px-0 py-1 text-3xl font-semibold leading-tight text-text-primary shadow-none focus-visible:border-interaction focus-visible:ring-0 focus-visible:ring-offset-0"
             />
-            {!isReviewed && (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <SectionStatusBadge section={section} compact />
-                <span className="text-meta text-text-muted opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">{sectionState.summary}</span>
-              </div>
-            )}
           </div>
-          <div className="flex shrink-0 flex-wrap justify-end gap-1 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
-            {isReviewed ? (
-              <span className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-review">
-                <CheckCircle2 className="h-3 w-3" />
-                Reviewed
-              </span>
-            ) : onAcceptReview ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => onAcceptReview(section.id)}
-                aria-label="Accept section review"
-                className="text-review hover:text-review"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-              </Button>
-            ) : null}
-            <Button type="button" variant="ghost" size="icon" onClick={() => onAdd(section.id, 'above')} aria-label="Add section above">
-              <Plus className="h-4 w-4" />
+          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+            <Button type="button" variant="ghost" size="icon" onClick={() => onAdd(section.id, 'above')} aria-label="Add section above" className="text-muted-foreground hover:text-foreground">
+              <Plus className="h-3.5 w-3.5" />
             </Button>
-            <Button type="button" variant="ghost" size="icon" onClick={() => onAdd(section.id, 'below')} aria-label="Add section below">
-              <Plus className="h-4 w-4 rotate-180" />
+            <Button type="button" variant="ghost" size="icon" onClick={() => onAdd(section.id, 'below')} aria-label="Add section below" className="text-muted-foreground hover:text-foreground">
+              <Plus className="h-3.5 w-3.5 rotate-180" />
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => onMove(section.id, 'up')}
-              disabled={index === 0}
-              aria-label="Move section up"
-            >
-              <ArrowUp className="h-4 w-4" />
+            <Button type="button" variant="ghost" size="icon" onClick={() => onDeleteRequest(section)} aria-label="Delete section" className="text-muted-foreground hover:text-status-danger-foreground">
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={() => onMove(section.id, 'down')}
-              disabled={index >= total - 1}
-              aria-label="Move section down"
-            >
-              <ArrowDown className="h-4 w-4" />
-            </Button>
-            <Button type="button" variant="ghost" size="icon" onClick={() => onDeleteRequest(section)} aria-label="Delete section">
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="ghost" size="icon" aria-label="More actions" className="text-muted-foreground hover:text-foreground">
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={index === 0} onClick={() => onMove(section.id, 'up')}>
+                  <ArrowUp className="h-3.5 w-3.5" />
+                  Move Up
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={index >= total - 1} onClick={() => onMove(section.id, 'down')}>
+                  <ArrowDown className="h-3.5 w-3.5" />
+                  Move Down
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {!isReviewed && onAcceptReview ? (
+                  <DropdownMenuItem onClick={() => onAcceptReview(section.id)}>
+                    <CheckCircle2 className="h-3.5 w-3.5 text-review" />
+                    Accept Review
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem disabled className="text-review">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Reviewed
+                  </DropdownMenuItem>
+                )}
+                {onJumpToSection && (
+                  <DropdownMenuItem onClick={() => onJumpToSection(section.id)}>
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Notes
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => onVersionHistory?.(section.id)}>
+                  <FileText className="h-3.5 w-3.5" />
+                  Version History
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
+
+        {isStale && staleMeta && (
+          <StaleSectionBanner
+            sectionId={section.id}
+            reviewedAt={staleMeta.reviewed_at}
+            onAccept={(id) => onAcceptStaleness?.(id)}
+            onReject={(id) => onRejectStaleness?.(id)}
+            isProcessing={isStalenessProcessing}
+          />
+        )}
 
         <div className="min-w-0 overflow-x-hidden px-1 py-2">
           <MarkdownEditor value={content} onChange={handleContentChange} />
         </div>
-        {onJumpToSection && (
-          <div className="mt-2 flex justify-end opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
-            <Button type="button" variant="ghost" size="sm" onClick={() => onJumpToSection(section.id)} className="text-xs">
-              <BookOpen className="mr-1 h-3 w-3" />
-              Notes
-            </Button>
-          </div>
-        )}
       </div>
     </section>
   );
@@ -313,6 +335,10 @@ export function DocumentEditorPage() {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
+  const [versionHistorySectionId, setVersionHistorySectionId] = useState<number | null>(null);
+  const [focusMode, setFocusMode] = useState(false);
+  const [focusBarVisible, setFocusBarVisible] = useState(false);
+  const focusBarTimer = useRef<number | null>(null);
   const [localContentBySectionId, setLocalContentBySectionId] = useState<Record<number, string>>({});
   const tocKeyboard = useTocKeyboardNavigation();
   const scrollRootRef = useRef<HTMLDivElement>(null);
@@ -367,6 +393,34 @@ export function DocumentEditorPage() {
     enabled: pid > 0 && did > 0,
     refetchInterval: 30000,
   });
+
+  const staleSectionIds = useMemo(() => {
+    if (!freshnessData?.stale_sections) return new Set<number>()
+    return new Set(freshnessData.stale_sections.map(s => s.id))
+  }, [freshnessData])
+
+  const staleSectionMeta = useMemo(() => {
+    if (!freshnessData?.stale_sections) return new Map<number, { reviewed_at: string | null }>()
+    return new Map(freshnessData.stale_sections.map(s => [s.id, { reviewed_at: s.reviewed_at }]))
+  }, [freshnessData])
+
+  const acceptFreshness = useMutation({
+    mutationFn: (sectionId: number) => documentsApi.acceptFreshnessUpdate(pid, did, sectionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['freshness', pid, did] })
+      toast.success('Staleness accepted')
+    },
+    onError: () => toast.error('Failed to accept staleness update'),
+  })
+
+  const rejectFreshness = useMutation({
+    mutationFn: (sectionId: number) => documentsApi.rejectFreshnessUpdate(pid, did, sectionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['freshness', pid, did] })
+      toast.success('Staleness dismissed')
+    },
+    onError: () => toast.error('Failed to dismiss staleness update'),
+  })
 
   useEffect(() => {
     if (document) setTitleDraft(document.title || 'Untitled Document');
@@ -546,6 +600,12 @@ export function DocumentEditorPage() {
           setPaletteOpen(true);
         },
       },
+      {
+        key: 'F',
+        mod: 'ctrlKey',
+        shift: true,
+        handler: () => setFocusMode((prev) => !prev),
+      },
     ],
   });
 
@@ -567,7 +627,34 @@ export function DocumentEditorPage() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-workspace text-text-primary">
+    <div className={cn('flex h-screen flex-col bg-workspace text-text-primary', focusMode && 'focus-mode')}>
+      <style>{`
+        .focus-mode > header { display: none; }
+        .focus-mode > .flex > div:first-child { display: none; }
+        .focus-mode > .flex > div:last-child { display: none; }
+      `}</style>
+      <div
+        className={cn(
+          'flex h-10 items-center justify-center border-b border-separator bg-panel/80 backdrop-blur-sm transition-all duration-200 shrink-0',
+          focusMode && focusBarVisible ? 'opacity-100' : 'opacity-0 pointer-events-none absolute inset-x-0 -translate-y-full',
+        )}
+        onMouseEnter={() => {
+          if (focusBarTimer.current !== null) window.clearTimeout(focusBarTimer.current)
+          setFocusBarVisible(true)
+        }}
+        onMouseLeave={() => {
+          focusBarTimer.current = window.setTimeout(() => setFocusBarVisible(false), 1500)
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setFocusMode(false)}
+          className="flex items-center gap-1.5 rounded-md px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+          <kbd className="rounded border border-border bg-panel-muted px-1 py-0.5 text-meta-sm">Ctrl+Shift+F</kbd>
+          Exit focus mode
+        </button>
+      </div>
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-separator bg-panel px-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => navigate(`/projects/${pid}`)} aria-label="Back to project">
@@ -666,6 +753,7 @@ export function DocumentEditorPage() {
               Outline
             </button>
           )}
+          <OutlineDiffBanner projectId={pid} documentId={did} />
           {showSourceNotice && (
             <div className="mx-auto max-w-4xl px-4 pt-5">
               <Notice variant="warning" title="Potentially Stale Sections">
@@ -703,6 +791,11 @@ export function DocumentEditorPage() {
                   onLocalContentChange={handleLocalContentChange}
                   onAcceptReview={(sectionId) => acceptSectionReview.mutate(sectionId)}
                   onJumpToSection={(sectionId) => { setActiveSectionId(sectionId); setRightPanelOpen(true); setRightTab('notes'); }}
+                  onVersionHistory={setVersionHistorySectionId}
+                  staleSectionMeta={staleSectionMeta}
+                  onAcceptStaleness={(sectionId) => acceptFreshness.mutate(sectionId)}
+                  onRejectStaleness={(sectionId) => rejectFreshness.mutate(sectionId)}
+                  isStalenessProcessing={acceptFreshness.isPending || rejectFreshness.isPending}
                 />
               ))}
               <div className="mx-auto max-w-4xl py-8">
@@ -848,6 +941,13 @@ export function DocumentEditorPage() {
           if (sectionToDelete) deleteSection.mutate(sectionToDelete.id);
           setSectionToDelete(null);
         }}
+      />
+
+      <VersionHistory
+        sectionId={versionHistorySectionId ?? 0}
+        projectId={pid}
+        open={versionHistorySectionId !== null}
+        onOpenChange={(open) => { if (!open) setVersionHistorySectionId(null); }}
       />
     </div>
   );

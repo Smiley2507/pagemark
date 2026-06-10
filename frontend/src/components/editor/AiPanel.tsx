@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Check, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { analysisApi } from '@/api/analysis';
 import { useGenerateSection, useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread, useSuggestStructure } from '@/hooks/useAI';
 import { useAiStore } from '@/store/aiStore';
 import type { Section } from '@/types';
+import { DiffViewer } from './DiffViewer';
 
 import { AiPanelHeader } from './ai/AiPanelHeader';
 import { AiPanelEmptyState } from './ai/AiPanelEmptyState';
@@ -61,6 +62,7 @@ export function AiPanel({
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(2000);
   const [showAttachments, setShowAttachments] = useState(false);
+  const [diffPreview, setDiffPreview] = useState<{ original: string; refined: string } | null>(null);
   const [structureSuggestions, setStructureSuggestions] = useState<import('@/api/ai').StructuralSuggestion[] | null>(null);
 
   const generateSection = useGenerateSection(projectId);
@@ -201,7 +203,7 @@ export function AiPanel({
           ? 'Expand this section with more detail, examples, and explanations'
           : (instruction || 'Improve the clarity, completeness, and readability');
         const data = await refineSection.mutateAsync({ sectionId: activeSectionId, instruction: inst });
-        onApplyContent(data.refined);
+        setDiffPreview({ original: activeSectionContent, refined: data.refined });
       }
     } catch {
       toast.error(`AI ${type} failed`);
@@ -285,6 +287,46 @@ export function AiPanel({
               onClose={() => setStructureSuggestions(null)}
               isApplying={suggestStructure.isPending}
             />
+          </div>
+        )}
+
+        {diffPreview && (
+          <div className="px-3 py-3">
+            <div className="rounded-lg border border-border bg-panel">
+              <div className="flex items-center justify-between border-b border-border px-4 py-2">
+                <h4 className="text-sm font-medium">Review Changes</h4>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="success"
+                    size="sm"
+                    onClick={() => {
+                      onApplyContent(diffPreview.refined);
+                      setDiffPreview(null);
+                    }}
+                    className="h-7 gap-1 text-xs"
+                  >
+                    <Check className="h-3 w-3" />
+                    Apply
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDiffPreview(null)}
+                    className="h-7 gap-1 text-xs"
+                  >
+                    <X className="h-3 w-3" />
+                    Discard
+                  </Button>
+                </div>
+              </div>
+              <div className="max-h-80 overflow-y-auto p-3">
+                <DiffViewer
+                  oldText={diffPreview.original}
+                  newText={diffPreview.refined}
+                  viewMode="side-by-side"
+                />
+              </div>
+            </div>
           </div>
         )}
 
