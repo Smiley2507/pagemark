@@ -8,7 +8,6 @@ import { useAiStore } from '@/store/aiStore'
 import { resourcesApi } from '@/api/resources'
 import { createExtensions } from './editorSetup'
 import { SlashCommandMenu } from './SlashCommandMenu'
-import { BubbleMenuContent } from './BubbleMenuContent'
 import { TableToolbar } from './TableToolbar'
 import { detectSpreadsheetData, insertTableFromSpreadsheet } from './tableUtils'
 import { EditorContextMenu } from '../EditorContextMenu'
@@ -29,14 +28,13 @@ interface TipTapEditorProps {
   projectId?: number
   onPolish?: (text: string) => void
   grammarIssues?: GrammarIssue[]
-  onSplitSection?: (heading: string, contentAfter: string) => void
+  onFocusChange?: (editor: Editor | null) => void
 }
 
 export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
-  function TipTapEditor({ value, onChange, className, sectionId, projectId, onPolish, grammarIssues, onSplitSection }, ref) {
+  function TipTapEditor({ value, onChange, className, sectionId, projectId, onPolish, grammarIssues, onFocusChange }, ref) {
     const editorRef = useRef<Editor | null>(null)
     const [contextMenuState, setContextMenuState] = useState<{ position: { top: number; left: number }; selectedText: string } | null>(null)
-    const [showTableToolbar, setShowTableToolbar] = useState(false)
     const projectIdRef = useRef(projectId)
     useEffect(() => { projectIdRef.current = projectId })
 
@@ -47,9 +45,6 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
       onUpdate: ({ editor }) => {
         onChange(editor.getMarkdown())
       },
-      onSelectionUpdate: ({ editor }) => {
-        setShowTableToolbar(editor.isActive('table'))
-      },
       editorProps: {
         attributes: {
           class: 'prose prose-sm prose-neutral dark:prose-invert max-w-none focus:outline-none min-h-[120px]',
@@ -59,6 +54,15 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
     })
 
     editorRef.current = editor ?? null
+
+    useEffect(() => {
+      if (!editor || !onFocusChange) return
+      const handleFocus = () => onFocusChange(editor)
+      editor.on('focus', handleFocus)
+      return () => {
+        editor.off('focus', handleFocus)
+      }
+    }, [editor, onFocusChange])
 
     useImperativeHandle(ref, () => ({
       focus: () => editor?.chain().focus().run(),
@@ -162,20 +166,32 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
       }
     }, [editor])
 
+    /* ── Copy button on code blocks ────────────────────────────── */
     useEffect(() => {
-      if (!editor || !onSplitSection) return
-      const id = window.setInterval(() => {
-        const ext = editor.extensionManager.extensions.find(e => e.name === 'h1Split')
-        if (!ext) return
-        const storage = ext.storage as { pendingSplit: { heading: string; contentAfter: string } | null }
-        if (storage.pendingSplit) {
-          const { heading, contentAfter } = storage.pendingSplit
-          storage.pendingSplit = null
-          onSplitSection(heading, contentAfter)
-        }
-      }, 200)
+      if (!editor) return
+      const id = setInterval(() => {
+        editor.view.dom.querySelectorAll<HTMLPreElement>('pre').forEach(pre => {
+          if (pre.querySelector('[data-code-copy]')) return
+          const btn = document.createElement('button')
+          btn.setAttribute('data-code-copy', '')
+          btn.textContent = 'Copy'
+          btn.className =
+            'rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground'
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation()
+            const text = pre.textContent || ''
+            try {
+              await navigator.clipboard.writeText(text)
+              btn.textContent = 'Copied!'
+              btn.className =
+                'rounded bg-accent px-1.5 py-0.5 text-[11px] text-foreground'
+            } catch {}
+          })
+          pre.appendChild(btn)
+        })
+      }, 500)
       return () => clearInterval(id)
-    }, [editor, onSplitSection])
+    }, [editor])
 
     return (
       <div className={cn('relative min-h-36 w-full min-w-0 overflow-x-hidden', className)}>
@@ -183,24 +199,11 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
           <BubbleMenu
             editor={editor}
             className="flex"
-            shouldShow={({ editor }) => {
-              const { selection } = editor.state
-              const { empty } = selection
-              const node = selection.$head.node()
-              return !empty
-                && !editor.isActive('table')
-                && node.type.name !== 'codeBlock'
-                && node.type.name !== 'code'
-                && !editor.isActive('callout')
-            }}
+            tippyOptions={{ maxWidth: 'none' }}
+            shouldShow={({ editor }) => editor.isActive('table')}
           >
-            <BubbleMenuContent editor={editor} onClose={() => {}} />
-          </BubbleMenu>
-        )}
-        {editor && showTableToolbar && (
-          <div className="mb-1 flex justify-center">
             <TableToolbar editor={editor} />
-          </div>
+          </BubbleMenu>
         )}
         <SlashCommandMenu editor={editor} />
         <EditorContent editor={editor} />

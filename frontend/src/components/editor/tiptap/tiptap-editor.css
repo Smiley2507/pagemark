@@ -50,6 +50,7 @@
   overflow: hidden;
   border: 1px solid var(--border);
   background: var(--muted);
+  position: relative;
 }
 .tiptap-editor .ProseMirror pre code {
   display: block;
@@ -63,8 +64,16 @@
 }
 
 /* ── Code block copy button ───────────────────────────────────────── */
-.tiptap-editor .ProseMirror pre {
-  position: relative;
+.tiptap-editor .ProseMirror [data-code-copy] {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 5;
+}
+.tiptap-editor .ProseMirror pre:hover [data-code-copy] {
+  opacity: 1 !important;
 }
 .tiptap-editor .ProseMirror .code-copy-btn {
   position: absolute;
@@ -146,7 +155,7 @@
 }
 .tiptap-editor .ProseMirror th,
 .tiptap-editor .ProseMirror td {
-  border: 1px solid var(--separator, var(--border));
+  border: 1px solid color-mix(in oklch, var(--separator), black 20%);
   padding: 8px 12px;
   vertical-align: top;
   min-width: 60px;
@@ -164,8 +173,14 @@
 .tiptap-editor .ProseMirror td p {
   margin: 0;
 }
-.tiptap-editor .ProseMirror tbody tr:hover {
-  background: color-mix(in oklch, var(--muted), transparent 70%);
+.tiptap-editor .ProseMirror tbody tr:nth-child(even) td {
+  background: color-mix(in oklch, var(--muted), transparent 80%);
+}
+.tiptap-editor .ProseMirror .selectedCell {
+  background: color-mix(in oklch, var(--interaction-muted, var(--primary)), transparent 85%);
+}
+.tiptap-editor .ProseMirror tbody tr:hover td {
+  background: color-mix(in oklch, var(--muted), transparent 60%);
 }
 
 /* ── Table column resize handles ───────────────────────────────────── */

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/core'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { cn } from '@/lib/utils'
 
 interface CommandItem {
@@ -43,7 +42,7 @@ const commandGroups: { label: string; items: CommandItem[] }[] = [
   {
     label: 'Media',
     items: [
-      { id: 'table', label: 'Table', description: 'Insert a 3×3 table', keywords: ['grid'], execute: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
+      { id: 'table', label: 'Table', description: 'Insert a 3x3 table', keywords: ['grid'], execute: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
       { id: 'image', label: 'Image', description: 'Insert an image', keywords: ['img', 'picture'], execute: (e) => {
         const input = document.createElement('input')
         input.type = 'file', input.accept = 'image/*'
@@ -59,9 +58,7 @@ const commandGroups: { label: string; items: CommandItem[] }[] = [
   },
 ]
 
-/* ── Plugin (single source of truth) ───────────────────────────────── */
-
-interface SlashPluginState {
+interface SlashState {
   open: boolean
   query: string
   range: { from: number; to: number } | null
@@ -69,243 +66,154 @@ interface SlashPluginState {
   position: { top: number; left: number }
 }
 
-let pluginState: SlashPluginState = {
-  open: false,
-  query: '',
-  range: null,
-  selectedIndex: 0,
-  position: { top: 0, left: 0 },
-}
-
-export const slashCommandPlugin = new Plugin({
-  key: new PluginKey('slashCommand'),
-  props: {
-    handleKeyDown(view, event) {
-      const { state } = view
-      const { selection } = state
-      const { $from } = selection
-
-      if (!pluginState.open) {
-        if (event.key === '/' && !event.ctrlKey && !event.metaKey) {
-          const isCode = $from.parent.type.name === 'codeBlock' || $from.parent.type.name === 'code'
-          if (isCode) return false
-          if ($from.parentOffset > 1) return false
-          const pos = view.coordsAtPos($from.pos)
-          pluginState = {
-            open: true,
-            query: '',
-            range: { from: $from.pos, to: $from.pos + 1 },
-            selectedIndex: 0,
-            position: { top: pos.bottom + 4, left: pos.left },
-          }
-          return true
-        }
-        return false
-      }
-
-      event.preventDefault()
-
-      if (event.key === 'Escape') {
-        pluginState = { ...pluginState, open: false }
-        return true
-      }
-      if (event.key === 'Enter') {
-        return true
-      }
-      if (event.key === 'ArrowDown') {
-        pluginState = { ...pluginState, selectedIndex: pluginState.selectedIndex + 1 }
-        return true
-      }
-      if (event.key === 'ArrowUp') {
-        pluginState = { ...pluginState, selectedIndex: Math.max(0, pluginState.selectedIndex - 1) }
-        return true
-      }
-      if (event.key === 'Backspace') {
-        if (pluginState.query.length === 0) {
-          pluginState = { ...pluginState, open: false }
-        } else {
-          pluginState = { ...pluginState, query: pluginState.query.slice(0, -1), selectedIndex: 0 }
-        }
-        return true
-      }
-      if (event.key === ' ') {
-        pluginState = { ...pluginState, open: false }
-        return true
-      }
-      if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
-        pluginState = { ...pluginState, query: pluginState.query + event.key, selectedIndex: 0 }
-        return true
-      }
-
-      return true
-    },
-  },
-})
-
-export function getSlashPluginState(): SlashPluginState {
-  return pluginState
-}
-
-export function resetSlashPluginState() {
-  pluginState = { ...pluginState, open: false }
-}
-
-export function setSlashSelectedIndex(index: number) {
-  pluginState = { ...pluginState, selectedIndex: index }
-}
-
-/* ── React Component ───────────────────────────────────────────────── */
-
-interface SlashCommandMenuProps {
-  editor: Editor | null
-}
-
-export function SlashCommandMenu({ editor }: SlashCommandMenuProps) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const [position, setPosition] = useState({ top: 0, left: 0 })
+export function SlashCommandMenu({ editor }: { editor: Editor | null }) {
+  const [state, setState] = useState<SlashState>({
+    open: false,
+    query: '',
+    range: null,
+    selectedIndex: 0,
+    position: { top: 0, left: 0 },
+  })
   const menuRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const openRef = useRef(false)
+
+  openRef.current = state.open
 
   const allItems = commandGroups.flatMap(g => g.items)
 
-  const filtered = query
+  const filtered = state.query
     ? allItems.filter(item =>
         [item.id, item.label, item.description, ...item.keywords].some(s =>
-          s.toLowerCase().includes(query.toLowerCase()),
+          s.toLowerCase().includes(state.query.toLowerCase()),
         ),
       )
     : allItems
 
-  const clampedIndex = Math.min(selectedIndex, Math.max(0, filtered.length - 1))
+  const clampedIndex = Math.min(state.selectedIndex, Math.max(0, filtered.length - 1))
 
-  const resultGroups = query
+  const resultGroups = state.query
     ? [{ label: 'Commands', items: filtered }]
     : commandGroups.map(g => ({ ...g, items: g.items })).filter(g => g.items.length > 0)
 
-  const execute = useCallback((item: CommandItem) => {
-    if (!editor) return
-    const range = pluginState.range
-    if (range) {
-      const tr = editor.state.tr.delete(range.from, range.to)
-      editor.view.dispatch(tr)
-    }
-    item.execute(editor)
-    resetSlashPluginState()
-  }, [editor])
+  const close = useCallback(() => {
+    setState(s => ({ ...s, open: false }))
+  }, [])
 
+  const execute = useCallback((item: CommandItem) => {
+    if (!editor || !state.range) return
+    editor
+      .chain()
+      .focus()
+      .deleteRange({ from: state.range.from, to: state.range.to })
+      .run()
+    item.execute(editor)
+    close()
+  }, [editor, state.range, close])
+
+  /* ── Poll editor state for / at cursor ──────────────────────────── */
   useEffect(() => {
+    if (!editor) return
     const poll = () => {
-      const s = getSlashPluginState()
-      setOpen(s.open)
-      if (s.open) {
-        setQuery(s.query)
-        setPosition(s.position)
-        const clamped = Math.min(s.selectedIndex, allItems.length - 1)
-        setSelectedIndex(clamped)
+      const { selection } = editor.state
+      const { $from } = selection
+      const node = $from.parent
+      if (node.type.name === 'codeBlock' || node.type.name === 'code') {
+        if (openRef.current) close()
+        return
+      }
+
+      const startPos = $from.start()
+      const cursorPos = $from.pos
+      const textBefore = editor.state.doc.textBetween(startPos, cursorPos)
+
+      if (textBefore.startsWith('/') && !textBefore.includes(' ')) {
+        const query = textBefore.slice(1)
+        const coords = editor.view.coordsAtPos(cursorPos)
+        setState(s => ({
+          ...s,
+          open: true,
+          query,
+          range: { from: startPos, to: cursorPos },
+          position: { top: coords.bottom + 4, left: coords.left },
+          selectedIndex: s.query !== query ? 0 : s.selectedIndex,
+        }))
+      } else if (openRef.current) {
+        close()
       }
     }
-    const id = setInterval(poll, 50)
+    const id = setInterval(poll, 100)
     return () => clearInterval(id)
-  }, [allItems.length])
+  }, [editor, close])
 
+  /* ── Capture-phase keydown interception ────────────────────────── */
   useEffect(() => {
-    if (!open || !editor) return
-    setTimeout(() => inputRef.current?.focus(), 10)
-
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (!pluginState.open) return
+    if (!state.open) return
+    const handler = (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
         e.preventDefault()
         e.stopPropagation()
-        const item = filtered[selectedIndex >= filtered.length ? 0 : selectedIndex]
+        const item = filtered[clampedIndex]
         if (item) execute(item)
-        return
-      }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault()
-        const next = (selectedIndex + 1) % filtered.length
-        setSelectedIndex(next)
-        setSlashSelectedIndex(next)
-        return
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault()
-        const prev = (selectedIndex - 1 + filtered.length) % filtered.length
-        setSelectedIndex(prev)
-        setSlashSelectedIndex(prev)
         return
       }
       if (e.key === 'Escape') {
         e.preventDefault()
-        resetSlashPluginState()
+        close()
         return
       }
-      if (e.key === 'Backspace') {
-        const s = getSlashPluginState()
-        if (!s.open) return
-        if (s.query.length === 0) {
-          resetSlashPluginState()
-          return
-        }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        e.stopPropagation()
+        setState(s => ({ ...s, selectedIndex: (s.selectedIndex + 1) % filtered.length }))
         return
       }
-      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        const s = getSlashPluginState()
-        setQuery(s.query)
-        setSelectedIndex(0)
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        e.stopPropagation()
+        setState(s => ({ ...s, selectedIndex: (s.selectedIndex - 1 + filtered.length) % filtered.length }))
+        return
+      }
+      if (e.key === ' ') {
+        e.preventDefault()
+        close()
       }
     }
+    document.addEventListener('keydown', handler, { capture: true })
+    return () => document.removeEventListener('keydown', handler, { capture: true })
+  }, [state.open, filtered, clampedIndex, execute, close])
 
-    document.addEventListener('keydown', handleGlobalKeyDown)
-    return () => document.removeEventListener('keydown', handleGlobalKeyDown)
-  }, [open, editor, selectedIndex, filtered, execute])
-
+  /* ── Click outside to close ────────────────────────────────────── */
   useEffect(() => {
-    if (!open) return
-    const handleClick = (e: MouseEvent) => {
+    if (!state.open) return
+    const handler = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        resetSlashPluginState()
+        close()
       }
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [open])
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [state.open, close])
 
+  /* ── Reset selectedIndex when query narrows ────────────────────── */
   useEffect(() => {
-    if (!open) return
-    const s = getSlashPluginState()
-    if (s.query !== query) {
-      setQuery(s.query)
-      setSelectedIndex(0)
-    }
-  }, [open, query])
+    if (state.open) setState(s => ({ ...s, selectedIndex: 0 }))
+  }, [state.query])
 
-  if (!open || !editor) return null
+  /* ── Auto-scroll selected item into view ─────────────────────── */
+  useEffect(() => {
+    if (!state.open || !menuRef.current) return
+    const selected = menuRef.current.querySelector<HTMLButtonElement>(`[data-slash-item="${clampedIndex}"]`)
+    selected?.scrollIntoView({ block: 'nearest' })
+  }, [state.open, clampedIndex])
+
+  if (!state.open || !editor) return null
 
   return (
     <div
       ref={menuRef}
       className="fixed z-50 w-64 rounded-lg border border-border bg-popover py-1 shadow-lg max-h-72 overflow-y-auto"
-      style={{ top: position.top, left: position.left }}
+      style={{ top: state.position.top, left: state.position.left }}
     >
-      <div className="px-2 pb-1 pt-1">
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={(e) => {
-            const val = e.target.value
-            pluginState = { ...pluginState, query: val, selectedIndex: 0 }
-            setQuery(val)
-            setSelectedIndex(0)
-          }}
-          placeholder="Search commands..."
-          className="w-full rounded border border-border bg-muted px-2 py-1 text-sm text-foreground outline-none focus:border-foreground/30"
-          onKeyDown={(e) => e.stopPropagation()}
-        />
-      </div>
       {resultGroups.map((group) => (
         <div key={group.label}>
           <div className="px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -318,8 +226,9 @@ export function SlashCommandMenu({ editor }: SlashCommandMenuProps) {
               <button
                 key={item.id}
                 type="button"
+                data-slash-item={globalIdx}
                 onMouseDown={(e) => { e.preventDefault(); execute(item) }}
-                onMouseEnter={() => { setSelectedIndex(globalIdx); setSlashSelectedIndex(globalIdx) }}
+                onMouseEnter={() => setState(s => ({ ...s, selectedIndex: globalIdx }))}
                 className={cn(
                   'flex w-full items-center gap-2 px-3 py-1 text-left text-sm transition-colors',
                   isSelected ? 'bg-accent text-accent-foreground' : 'text-foreground',
@@ -336,7 +245,7 @@ export function SlashCommandMenu({ editor }: SlashCommandMenuProps) {
       ))}
       {filtered.length === 0 && (
         <div className="px-3 py-3 text-center text-xs text-muted-foreground">
-          No commands match &quot;{query}&quot;
+          No commands match &quot;{state.query}&quot;
         </div>
       )}
     </div>

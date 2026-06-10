@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import type { Editor } from '@tiptap/core'
+import { FullToolbar } from '@/components/editor/tiptap/FullToolbar'
 import { MarkdownEditor } from '@/components/editor/MarkdownEditor';
 import { AiPanel } from '@/components/editor/AiPanel';
 import { ResourcePalette } from '@/components/editor/ResourcePalette';
@@ -155,11 +157,11 @@ function SectionBlock({
   onAcceptReview,
   onJumpToSection,
   onVersionHistory,
-  onSplitSection,
   staleSectionMeta,
   onAcceptStaleness,
   onRejectStaleness,
   isStalenessProcessing,
+  onFocusChange,
 }: {
   projectId: number;
   documentId: number;
@@ -176,11 +178,11 @@ function SectionBlock({
   onAcceptReview?: (sectionId: number) => void;
   onJumpToSection?: (sectionId: number) => void;
   onVersionHistory?: (sectionId: number) => void;
-  onSplitSection?: (sectionId: number, heading: string, contentAfter: string) => void;
   staleSectionMeta?: Map<number, { reviewed_at: string | null }>;
   onAcceptStaleness?: (sectionId: number) => void;
   onRejectStaleness?: (sectionId: number) => void;
   isStalenessProcessing?: boolean;
+  onFocusChange?: (editor: Editor | null) => void;
 }) {
   const [content, setContent] = useState(section.content_md);
   const [title, setTitle] = useState(section.title || section.heading || 'Untitled Section');
@@ -313,7 +315,7 @@ function SectionBlock({
           <MarkdownEditor
             value={content}
             onChange={handleContentChange}
-            onSplitSection={(heading, contentAfter) => onSplitSection?.(section.id, heading, contentAfter)}
+            onFocusChange={onFocusChange}
           />
         </div>
       </div>
@@ -340,6 +342,7 @@ export function DocumentEditorPage() {
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
   const [versionHistorySectionId, setVersionHistorySectionId] = useState<number | null>(null);
   const [focusMode, setFocusMode] = useState(false);
@@ -781,6 +784,9 @@ export function DocumentEditorPage() {
             </div>
           ) : (
             <div className="min-w-0 px-5 py-3">
+              <div className="sticky top-0 z-40 bg-panel pb-2 pt-2">
+                <FullToolbar editor={activeEditor} />
+              </div>
               <div className="mx-auto max-w-5xl mb-4 flex items-center justify-between text-xs text-muted-foreground border-b border-border/50 pb-2">
                 <span>{sections.length} section{sections.length !== 1 ? 's' : ''}</span>
                 <span>{wordCount.toLocaleString()} words</span>
@@ -803,20 +809,11 @@ export function DocumentEditorPage() {
                   onAcceptReview={(sectionId) => acceptSectionReview.mutate(sectionId)}
                   onJumpToSection={(sectionId) => { setActiveSectionId(sectionId); setRightPanelOpen(true); setRightTab('notes'); }}
                   onVersionHistory={setVersionHistorySectionId}
-                  onSplitSection={(sectionId, heading, contentAfter) => {
-                    const currentContent = localContentBySectionId[sectionId] ?? sections.find(s => s.id === sectionId)?.content_md ?? ''
-                    const h1Index = currentContent.indexOf(`# ${heading}`)
-                    if (h1Index >= 0) {
-                      const beforeH1 = currentContent.slice(0, h1Index).trim()
-                      onLocalContentChange(sectionId, beforeH1)
-                      updateDocumentSection.mutate({ id: sectionId, data: { content_md: beforeH1 } })
-                      createSection.mutate({ heading, content_md: contentAfter })
-                    }
-                  }}
                   staleSectionMeta={staleSectionMeta}
                   onAcceptStaleness={(sectionId) => acceptFreshness.mutate(sectionId)}
                   onRejectStaleness={(sectionId) => rejectFreshness.mutate(sectionId)}
                   isStalenessProcessing={acceptFreshness.isPending || rejectFreshness.isPending}
+                  onFocusChange={(editor) => setActiveEditor(editor)}
                 />
               ))}
               <div className="mx-auto max-w-4xl py-8">
