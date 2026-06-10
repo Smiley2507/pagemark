@@ -317,6 +317,8 @@ def _build_css(s: dict) -> str:
   --h3-font-size: {h3_fs};
   --code-font-size: {code_fs};
   --logo-height: {logo_height};
+  --margin-top: {margin_top};
+  --margin-bottom: {margin_bottom};
 }}
 
 @page {{
@@ -574,14 +576,21 @@ _PAGE_ZONE_MAP = {
 }
 
 
-def _render_page_logo(settings: dict) -> str:
+def _page_logo_zone(settings: dict) -> str:
     pos = _logo_position(settings)
     if pos == "none" or pos == "title-page":
+        return ""
+    return _PAGE_ZONE_MAP.get(pos, "")
+
+
+def _render_page_logo(settings: dict) -> str:
+    zone = _page_logo_zone(settings)
+    if not zone:
         return ""
     img = _logo_img_tag(settings)
     if not img:
         return ""
-    zone = _PAGE_ZONE_MAP.get(pos, "header")
+    pos = _logo_position(settings)
     align = _HEADER_ALIGN_MAP.get(pos, "left")
     return f'<div class="page-{zone}-logo {align}">{img}</div>'
 
@@ -616,6 +625,13 @@ def export_html(
     css = _build_css(s)
     body = "\n".join(body_parts)
 
+    zone = _page_logo_zone(s)
+    body_style = ""
+    if zone == "header":
+        body_style = ' style="padding-top:var(--margin-top)"'
+    elif zone == "footer":
+        body_style = ' style="padding-bottom:var(--margin-bottom)"'
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -623,7 +639,7 @@ def export_html(
 <title>{escape(title)}</title>
 <style>{css}</style>
 </head>
-<body>
+<body{body_style}>
 {body}
 </body>
 </html>"""
