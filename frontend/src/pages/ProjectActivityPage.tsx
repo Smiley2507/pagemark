@@ -1,11 +1,16 @@
-import type { ElementType } from 'react';
+import { useState, type ElementType } from 'react';
 import { useParams } from 'react-router-dom';
 import { Activity, BookOpen, Check, Code, FileText, GitCommit, Layers, TriangleAlert } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  Legend, ResponsiveContainer,
+} from 'recharts';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Surface } from '@/components/ui/surface';
-import { projectsApi, type ActivityEvent } from '@/api/projects';
+import { projectsApi, type ActivityEvent, type ActivityChartDay } from '@/api/projects';
 
 const EVENT_ICONS: Record<string, ElementType> = {
   source_sync: GitCommit,
@@ -22,33 +27,46 @@ const EVENT_ICONS: Record<string, ElementType> = {
   freshness_detected: TriangleAlert,
 };
 
-const HEATMAP_CLASSES = [
-  'bg-muted',
-  'bg-interaction-muted',
-  'bg-status-generation',
-  'bg-interaction',
-];
+const RANGE_OPTIONS = [7, 14, 30, 90, 180, 365] as const;
 
-const HEATMAP_DAYS = 365;
+const CATEGORY_COLORS: Record<string, string> = {
+  Source: '#3B82F6',
+  Documents: '#22C55E',
+  Generation: '#A855F7',
+  Review: '#F59E0B',
+  Sharing: '#14B8A6',
+  Project: '#6B7280',
+};
 
-const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const CATEGORY_ORDER = ['Source', 'Documents', 'Generation', 'Review', 'Sharing', 'Project'];
+
+function allCategories(data: ActivityChartDay[]): string[] {
+  const seen = new Set<string>();
+  for (const day of data) {
+    for (const cat of Object.keys(day.categories)) {
+      seen.add(cat);
+    }
+  }
+  return CATEGORY_ORDER.filter((c) => seen.has(c));
+}
 
 export function ProjectActivityPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const [selectedDays, setSelectedDays] = useState<number>(14);
 
-  const { data: activityData, isLoading } = useQuery({
+  const { data: activityData, isLoading: activityLoading } = useQuery({
     queryKey: ['activity', projectId],
     queryFn: () => projectsApi.getActivity(Number(projectId)),
     enabled: !!projectId,
   });
 
-  const { data: heatmapData } = useQuery({
-    queryKey: ['activity-heatmap', projectId],
-    queryFn: () => projectsApi.getActivityHeatmap(Number(projectId)),
+  const { data: chartData = [], isLoading: chartLoading } = useQuery({
+    queryKey: ['activity-heatmap', projectId, selectedDays],
+    queryFn: () => projectsApi.getActivityHeatmap(Number(projectId), selectedDays),
     enabled: !!projectId,
   });
 
-  if (isLoading) {
+  if (activityLoading && chartLoading) {
     return (
       <Surface variant="muted" padding="lg">
         <p className="text-body text-text-secondary">Loading activity...</p>
@@ -57,12 +75,9 @@ export function ProjectActivityPage() {
   }
 
   const activities = activityData?.events || [];
-  const heatmapSource = Object.keys(heatmapData || {}).length > 0
-    ? heatmapData || {}
-    : heatmapFromActivities(activities);
-  const heatmapDays = buildHeatmapDays(heatmapSource, HEATMAP_DAYS);
-  const heatmapWeeks = chunkWeeks(heatmapDays);
-  const activeDays = heatmapDays.filter((day) => day.weight > 0).length;
+  const categories = allCategories(chartData);
+  const totalEvents = activities.length;
+  const totalActivity = chartData.reduce((sum, d) => sum + d.total, 0);
 
   return (
     <div className="space-y-5">
@@ -73,46 +88,63 @@ export function ProjectActivityPage() {
             <h2 className="text-section font-semibold text-text-primary">Activity</h2>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="neutral" showIcon={false}>{activities.length} events</Badge>
-            <Badge variant="neutral" showIcon={false}>{activeDays} active days</Badge>
+            <Badge variant="neutral" showIcon={false}>{totalEvents} events</Badge>
+            <Badge variant="neutral" showIcon={false}>{totalActivity.toFixed(1)} weighted</Badge>
           </div>
         </div>
 
-        <div className="overflow-x-auto pb-2">
-          <div className="mx-auto w-max">
-            <div className="ml-12 grid grid-flow-col gap-1" aria-hidden="true">
-              {heatmapWeeks.map((week, index) => (
-                <div key={week[0]?.date || index} className="h-5 w-4 text-meta-sm text-text-muted">
-                  {monthLabelForWeek(week, index)}
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <div className="grid grid-rows-7 gap-1" aria-hidden="true">
-                {WEEKDAY_LABELS.map((label) => (
-                  <div key={label} className="flex h-4 w-10 items-center justify-end text-meta-sm text-text-muted">
-                    {label}
-                  </div>
-                ))}
-              </div>
-              <div
-                className="grid grid-flow-col grid-rows-7 gap-1"
-                role="list"
-                aria-label="Activity heatmap for the last year"
-              >
-                {heatmapDays.map(({ date, weight }) => (
-                  <div
-                    key={date}
-                    role="listitem"
-                    title={`${formatHeatmapDate(date)}: ${formatWeight(weight)}`}
-                    aria-label={`${formatHeatmapDate(date)}: ${formatWeight(weight)}`}
-                    className={`h-4 w-4 rounded ${heatmapClass(weight)}`}
+        <div className="flex flex-wrap gap-1">
+          {RANGE_OPTIONS.map((days) => (
+            <Button
+              key={days}
+              variant={selectedDays === days ? 'default' : 'secondary'}
+              size="sm"
+              onClick={() => setSelectedDays(days)}
+            >
+              {days}d
+            </Button>
+          ))}
+        </div>
+
+        {chartData.length > 0 ? (
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--separator)" />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                  axisLine={{ stroke: 'var(--separator)' }}
+                  tickLine={false}
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: 'var(--text-muted)' }}
+                  axisLine={false}
+                  tickLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip content={<CategoryTooltip />} cursor={{ fill: 'var(--interaction-muted)' }} />
+                <Legend
+                  wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                  iconType="square"
+                  iconSize={10}
+                />
+                {categories.map((cat) => (
+                  <Bar
+                    key={cat}
+                    dataKey={`categories.${cat}`}
+                    name={cat}
+                    stackId="stack"
+                    fill={CATEGORY_COLORS[cat] || '#6B7280'}
                   />
                 ))}
-              </div>
-            </div>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-        </div>
+        ) : (
+          <p className="text-body text-text-muted py-8 text-center">No activity in this period.</p>
+        )}
       </Surface>
 
       {activities.length === 0 ? (
@@ -127,6 +159,22 @@ export function ProjectActivityPage() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function CategoryTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number }[]; label?: string }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const total = payload.reduce((sum, entry) => sum + entry.value, 0);
+  return (
+    <div className="rounded-lg border border-separator bg-panel px-3 py-2 shadow-sm">
+      <p className="text-meta-sm font-medium text-text-primary">{label}</p>
+      <p className="text-meta-sm text-text-muted">Total: {total.toFixed(1)}</p>
+      {payload.map((entry) => (
+        <p key={entry.name} className="text-meta-sm text-text-secondary">
+          {entry.name}: {entry.value.toFixed(1)}
+        </p>
+      ))}
     </div>
   );
 }
@@ -154,71 +202,6 @@ function ActivityRow({ activity }: { activity: ActivityEvent }) {
   );
 }
 
-function buildHeatmapDays(source: Record<string, number>, days: number) {
-  const end = startOfDay(new Date());
-  const start = new Date(end);
-  start.setDate(start.getDate() - days + 1);
-  start.setDate(start.getDate() - start.getDay());
-
-  const entries: Array<{ date: string; weight: number }> = [];
-  for (const cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
-    const date = toDateKey(cursor);
-    entries.push({ date, weight: source[date] || 0 });
-  }
-  return entries;
-}
-
-function chunkWeeks(days: Array<{ date: string; weight: number }>) {
-  const weeks: Array<Array<{ date: string; weight: number }>> = [];
-  for (let index = 0; index < days.length; index += 7) {
-    weeks.push(days.slice(index, index + 7));
-  }
-  return weeks;
-}
-
-function monthLabelForWeek(week: Array<{ date: string; weight: number }>, index: number) {
-  const firstDay = week[0]?.date;
-  if (!firstDay) return '';
-  const date = new Date(`${firstDay}T00:00:00`);
-  const previousWeek = index > 0 ? new Date(`${week[0].date}T00:00:00`) : null;
-  if (previousWeek) {
-    previousWeek.setDate(previousWeek.getDate() - 7);
-  }
-  if (index !== 0 && previousWeek && previousWeek.getMonth() === date.getMonth()) {
-    return '';
-  }
-  return date.toLocaleDateString(undefined, { month: 'short' });
-}
-
-function heatmapFromActivities(activities: ActivityEvent[]) {
-  return activities.reduce<Record<string, number>>((days, activity) => {
-    if (!activity.created_at) return days;
-    const date = toDateKey(new Date(activity.created_at));
-    days[date] = (days[date] || 0) + activity.weight;
-    return days;
-  }, {});
-}
-
-function startOfDay(date: Date) {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function toDateKey(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function formatHeatmapDate(date: string) {
-  return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
 function formatTimelineDate(date: string) {
   return new Date(date).toLocaleString(undefined, {
     month: 'short',
@@ -230,22 +213,4 @@ function formatTimelineDate(date: string) {
 
 function formatEventType(eventType: string) {
   return eventType.replace(/_/g, ' ');
-}
-
-function formatWeight(weight: number) {
-  if (weight <= 0) return 'no activity';
-  return `${weight.toFixed(1)} weighted activity`;
-}
-
-function heatmapClass(weight: number) {
-  if (weight <= 0) {
-    return HEATMAP_CLASSES[0];
-  }
-  if (weight < 2) {
-    return HEATMAP_CLASSES[1];
-  }
-  if (weight < 5) {
-    return HEATMAP_CLASSES[2];
-  }
-  return HEATMAP_CLASSES[3];
 }

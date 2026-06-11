@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -57,6 +58,30 @@ EVENT_MESSAGES: dict[str, str] = {
     "document_shared": "Document shared",
     "share_updated": "Share updated",
     "share_revoked": "Share revoked",
+}
+
+
+EVENT_CATEGORIES: dict[str, str] = {
+    "source_sync": "Source",
+    "analysis_complete": "Source",
+    "analysis_started": "Source",
+    "analysis_failed": "Source",
+    "document_created": "Documents",
+    "outline_approved": "Documents",
+    "generation_run_started": "Generation",
+    "generation_run_completed": "Generation",
+    "generation_run_failed": "Generation",
+    "section_generated": "Generation",
+    "section_reviewed": "Review",
+    "section_updated": "Review",
+    "freshness_detected": "Review",
+    "freshness_accepted": "Review",
+    "freshness_rejected": "Review",
+    "project_created": "Project",
+    "project_updated": "Project",
+    "document_shared": "Sharing",
+    "share_updated": "Sharing",
+    "share_revoked": "Sharing",
 }
 
 
@@ -196,16 +221,22 @@ async def get_heatmap_data(
     project_id: int,
     *,
     days: int = 365,
-) -> dict[str, float]:
+) -> list[dict[str, Any]]:
     """
-    Generate GitHub-style heatmap data.
-    Returns {date_string: weighted_event_count} for the last N days.
+    Return daily/weekly activity data broken down by event category.
+    For days <= 90 uses daily aggregation; for > 90 uses weekly aggregation.
+
+    Returns a list of::
+        {"date": "2026-06-10", "total": 5.0, "categories": {"Source": 2.0, "Review": 1.5}}
     """
+    daily = days <= 90
+    trunc = func.date_trunc("day" if daily else "week", ActivityEvent.created_at)
     cutoff = datetime.utcnow() - timedelta(days=days)
 
     result = await db.execute(
         select(
-            func.date_trunc("day", ActivityEvent.created_at).label("day"),
+            trunc.label("bucket"),
+            ActivityEvent.event_type,
             func.sum(ActivityEvent.weight).label("total_weight"),
         )
         .where(
@@ -213,17 +244,45 @@ async def get_heatmap_data(
             ActivityEvent.created_at >= cutoff,
             ActivityEvent.weight >= 0.5,
         )
-        .group_by(func.date_trunc("day", ActivityEvent.created_at))
-        .order_by(func.date_trunc("day", ActivityEvent.created_at))
+        .group_by("bucket", ActivityEvent.event_type)
+        .order_by("bucket")
     )
 
-    heatmap: dict[str, float] = {}
+    buckets: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     for row in result.all():
-        day_str = row.day.strftime("%Y-%m-%d") if row.day else None
-        if day_str:
-            heatmap[day_str] = float(row.total_weight)
+        key = row.bucket.strftime("%Y-%m-%d")
+        cat = EVENT_CATEGORIES.get(row.event_type, "Other")
+        buckets[key][cat] += float(row.total_weight)
 
-    return heatmap
+    now = datetime.utcnow()
+    rows: list[dict[str, Any]] = []
+    if daily:
+        for i in range(days):
+            dt = now - timedelta(days=days - 1 - i)
+            key = dt.strftime("%Y-%m-%d")
+            cats = dict(buckets.get(key, {}))
+            rows.append({
+                "date": key,
+                "label": dt.strftime("%b %d"),
+                "total": sum(cats.values()),
+                "categories": cats,
+            })
+    else:
+        cutoff_dt = now - timedelta(days=days - 1)
+        cutoff_monday = cutoff_dt - timedelta(days=cutoff_dt.weekday())
+        num_weeks = (now - cutoff_monday).days // 7 + 1
+        for i in range(num_weeks):
+            dt = cutoff_monday + timedelta(weeks=i)
+            key = dt.strftime("%Y-%m-%d")
+            cats = dict(buckets.get(key, {}))
+            rows.append({
+                "date": key,
+                "label": f"Week of {dt.strftime('%b %d')}",
+                "total": sum(cats.values()),
+                "categories": cats,
+            })
+
+    return rows
 
 
 async def get_event_types(db: AsyncSession) -> list[str]:

@@ -1,5 +1,12 @@
 import apiClient from './client';
 
+export interface ActivityChartDay {
+  date: string;
+  label: string;
+  total: number;
+  categories: Record<string, number>;
+}
+
 export interface ActivityEvent {
   id: number;
   project_id?: number;
@@ -123,7 +130,7 @@ export const projectsApi = {
     return data;
   },
 
-  async getActivityHeatmap(projectId: number, days?: number): Promise<Record<string, number>> {
+  async getActivityHeatmap(projectId: number, days?: number): Promise<ActivityChartDay[]> {
     const { data } = await apiClient.get(`/projects/${projectId}/activity/heatmap`, {
       params: { days },
     });

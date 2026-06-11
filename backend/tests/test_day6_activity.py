@@ -137,26 +137,30 @@ def test_timeline_excludes_low_weight_events():
 
 
 def test_heatmap_structure():
-    """Test the structure of heatmap data."""
-    heatmap = {
-        "2026-06-01": 5.0,
-        "2026-06-02": 3.5,
-        "2026-06-03": 0.0,
+    """Test the structure of categorized heatmap data."""
+    day = {
+        "date": "2026-06-01",
+        "label": "Jun 01",
+        "total": 5.0,
+        "categories": {"Source": 2.0, "Review": 1.5},
     }
-    assert isinstance(heatmap, dict)
-    assert all(isinstance(k, str) for k in heatmap.keys())
-    assert all(isinstance(v, float) for v in heatmap.values())
+    assert "date" in day
+    assert "label" in day
+    assert "total" in day
+    assert "categories" in day
+    assert isinstance(day["date"], str)
+    assert isinstance(day["total"], float)
+    assert isinstance(day["categories"], dict)
 
 
 def test_heatmap_date_format():
     """Test that heatmap dates are in YYYY-MM-DD format."""
-    heatmap = {"2026-06-05": 2.5}
-    for date_str in heatmap:
-        parts = date_str.split("-")
-        assert len(parts) == 3
-        assert len(parts[0]) == 4  # Year
-        assert len(parts[1]) == 2  # Month
-        assert len(parts[2]) == 2  # Day
+    day = {"date": "2026-06-05", "label": "Jun 05", "total": 2.5, "categories": {}}
+    parts = day["date"].split("-")
+    assert len(parts) == 3
+    assert len(parts[0]) == 4  # Year
+    assert len(parts[1]) == 2  # Month
+    assert len(parts[2]) == 2  # Day
 
 
 def test_event_type_filtering():
@@ -209,7 +213,7 @@ def test_activity_service_verification_summary():
     ✓ ActivityEvent model has all required fields
     ✓ Timeline structure includes message, type, timestamp
     ✓ Timeline weight threshold for noise filtering
-    ✓ Heatmap data structure (date → float)
+    ✓ Heatmap data structure (categorized per-day)
     ✓ Event type filtering
     ✓ Optional payload support
     """
