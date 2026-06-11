@@ -217,7 +217,7 @@ class AIService:
         project_id: int,
         document_id: int | None = None,
     ) -> str | None:
-        """Return the system_prompt from the relevant document template, if any."""
+        """Return the system_prompt and guidance combined from the document template, if any."""
         document: Document | None = None
         if document_id is not None:
             document = await self._fetch_document(db, document_id)
@@ -238,7 +238,14 @@ class AIService:
             return None
         result = await db.execute(select(Template).where(Template.id == document.template_id))
         template = result.scalar_one_or_none()
-        return template.system_prompt if template else None
+        if template is None:
+            return None
+        parts: list[str] = []
+        if template.system_prompt:
+            parts.append(template.system_prompt)
+        if template.guidance:
+            parts.append(f"Writing guidance: {template.guidance}")
+        return "\n\n".join(parts) if parts else None
 
     # ── Public API ──────────────────────────────────────────────
 
@@ -270,12 +277,18 @@ class AIService:
             document_id=document.id,
         )
 
+        wf = section.workflow_metadata or {}
+        section_guidance = wf.get("guidance") if isinstance(wf, dict) else None
+        expected_sources = wf.get("expected_sources") if isinstance(wf, dict) else None
+
         prompt = build_section_prompt(
             section_heading=section.heading,
             project_context=project_ctx,
             analysis=analysis_detail,
             user_clarification=answer,
             template_system_prompt=template_prompt,
+            section_guidance=section_guidance,
+            expected_sources=expected_sources,
         )
 
         content = await self._complete_with_active_provider(

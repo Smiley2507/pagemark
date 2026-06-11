@@ -486,30 +486,43 @@ BUILTIN_TEMPLATES = [
 
 
 async def seed_builtin_templates() -> None:
-    """Seed built-in templates if the table is empty."""
+    """Upsert built-in templates by name so code changes always take effect."""
     async with async_session() as session:
-        result = await session.execute(select(Template).limit(1))
-        if result.scalar_one_or_none() is not None:
-            return  # table already has data
-
         for data in BUILTIN_TEMPLATES:
-            template = Template(
-                name=data["name"],
-                description=data["description"],
-                category=data["category"],
-                purpose=data["purpose"],
-                intended_audience=data["intended_audience"],
-                expected_outcome=data["expected_outcome"],
-                compatible_repository_traits=data["compatible_repository_traits"],
-                estimated_generation_scope=data["estimated_generation_scope"],
-                outline_preview=data["sections_json"],
-                sections_json=data["sections_json"],
-                guidance=data["guidance"],
-                system_prompt=data["system_prompt"],
-                is_builtin=True,
-                owner_id=None,
+            existing = await session.execute(
+                select(Template).where(Template.name == data["name"], Template.is_builtin == True)
             )
-            session.add(template)
+            tmpl = existing.scalar_one_or_none()
+            if tmpl is not None:
+                tmpl.description = data["description"]
+                tmpl.category = data["category"]
+                tmpl.purpose = data["purpose"]
+                tmpl.intended_audience = data["intended_audience"]
+                tmpl.expected_outcome = data["expected_outcome"]
+                tmpl.compatible_repository_traits = data["compatible_repository_traits"]
+                tmpl.estimated_generation_scope = data["estimated_generation_scope"]
+                tmpl.outline_preview = data["sections_json"]
+                tmpl.sections_json = data["sections_json"]
+                tmpl.guidance = data["guidance"]
+                tmpl.system_prompt = data["system_prompt"]
+            else:
+                tmpl = Template(
+                    name=data["name"],
+                    description=data["description"],
+                    category=data["category"],
+                    purpose=data["purpose"],
+                    intended_audience=data["intended_audience"],
+                    expected_outcome=data["expected_outcome"],
+                    compatible_repository_traits=data["compatible_repository_traits"],
+                    estimated_generation_scope=data["estimated_generation_scope"],
+                    outline_preview=data["sections_json"],
+                    sections_json=data["sections_json"],
+                    guidance=data["guidance"],
+                    system_prompt=data["system_prompt"],
+                    is_builtin=True,
+                    owner_id=None,
+                )
+                session.add(tmpl)
         await session.commit()
 
 

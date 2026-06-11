@@ -108,6 +108,8 @@ def _template_outline(template: Template) -> list[dict[str, Any]]:
                     "heading": str(heading),
                     "description": item.get("description"),
                     "purpose": item.get("purpose"),
+                    "guidance": item.get("guidance"),
+                    "expected_sources": item.get("expected_sources"),
                 }
             )
         else:
@@ -449,6 +451,8 @@ async def approve_outline_proposal(
                     "purpose": item.get("purpose"),
                     "description": item.get("description"),
                     "evidence": item.get("evidence"),
+                    "guidance": item.get("guidance"),
+                    "expected_sources": item.get("expected_sources"),
                 },
             )
             db.add(section)

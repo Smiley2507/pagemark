@@ -7,6 +7,8 @@ def build_section_prompt(
     analysis: dict,
     user_clarification: str | None = None,
     template_system_prompt: str | None = None,
+    section_guidance: str | None = None,
+    expected_sources: list[str] | None = None,
 ) -> str:
     """Return a prompt for generating a documentation section in markdown.
 
@@ -15,6 +17,8 @@ def build_section_prompt(
     analysis keys: classes, functions, endpoints, dependencies, languages,
                    file_count, complexity_notes
     template_system_prompt: optional writing instructions from the project's template.
+    section_guidance: per-section guidance from the template on what to include.
+    expected_sources: per-section source path hints for evidence.
     """
     name = project_context.get("name", "this project")
     language = project_context.get("language", "")
@@ -34,9 +38,9 @@ def build_section_prompt(
     complexity_notes = analysis.get("complexity_notes", "")
 
     lines = [
-        f"You are writing technical documentation for a software project.",
-        f"",
-        f"## Project Context",
+        "You are writing technical documentation for a software project.",
+        "",
+        "## Project Context",
         f"- **Name**: {name}",
     ]
     if language:
@@ -53,8 +57,8 @@ def build_section_prompt(
         lines.append(f"- **Preferred Terminology**: {preferred_terms}")
 
     lines += [
-        f"",
-        f"## Codebase Analysis",
+        "",
+        "## Codebase Analysis",
         f"- **Total Source Files**: {file_count}",
     ]
     if classes:
@@ -74,14 +78,29 @@ def build_section_prompt(
 
     if template_system_prompt:
         lines += [
-            f"",
-            f"## Template Instructions",
+            "",
+            "## Template Instructions",
             template_system_prompt,
         ]
 
+    if section_guidance:
+        lines += [
+            "",
+            "## Section Guidance",
+            section_guidance,
+        ]
+
+    if expected_sources:
+        srcs = ", ".join(expected_sources)
+        lines += [
+            "",
+            "## Expected Source Evidence",
+            f"Ground the content in these source paths when available: {srcs}",
+        ]
+
     lines += [
-        f"",
-        f"## Task",
+        "",
+        "## Task",
         f"Write the **{section_heading}** section of the documentation for {name}.",
         f"Use a {tone} tone appropriate for {audience}.",
     ]
@@ -89,17 +108,17 @@ def build_section_prompt(
         lines.append(f"Additional instructions: {custom_instructions}")
     if user_clarification:
         lines += [
-            f"",
-            f"## User Clarification",
-            f"The user provided the following additional context to help you write this section:",
+            "",
+            "## User Clarification",
+            "The user provided the following additional context to help you write this section:",
             f"{user_clarification}",
         ]
 
     lines += [
-        f"",
-        f"If you do not have enough business logic or context to document this section accurately, you MUST return a JSON response with the following structure: {{'action': 'ask_user', 'question': '<write a clear, targeted question asking for the missing detail>'}}.",
-        f"Otherwise, you MUST return a JSON response with the following structure: {{'content': '<the generated markdown content>', 'confidence_score': <integer 0-100 reflecting how confident you are in the accuracy based on the provided analysis>}}.",
-        f"Do not return any text outside the JSON object. No preamble.",
+        "",
+        "If you do not have enough business logic or context to document this section accurately, you MUST return a JSON response with the following structure: {'action': 'ask_user', 'question': '<write a clear, targeted question asking for the missing detail>'}.",
+        "Otherwise, you MUST return a JSON response with the following structure: {'content': '<the generated markdown content>', 'confidence_score': <integer 0-100 reflecting how confident you are in the accuracy based on the provided analysis>}.",
+        "Do not return any text outside the JSON object. No preamble.",
     ]
 
     return "\n".join(lines)
