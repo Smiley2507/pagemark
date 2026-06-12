@@ -45,7 +45,7 @@ export function ResourcePalette({ projectId, open, onClose }: ResourcePalettePro
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const addAttachment = useAiStore((s) => s.addAttachment);
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export function ResourcePalette({ projectId, open, onClose }: ResourcePalettePro
       return;
     }
     setIsLoading(true);
-    clearTimeout(debounceRef.current);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
         const res = await contextSearchApi.search(projectId, query, 20);
@@ -74,7 +74,9 @@ export function ResourcePalette({ projectId, open, onClose }: ResourcePalettePro
         setIsLoading(false);
       }
     }, 300);
-    return () => clearTimeout(debounceRef.current);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, [query, projectId]);
 
   const groupedResults = results.reduce<Record<string, ContextSearchItem[]>>((acc, item) => {

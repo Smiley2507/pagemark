@@ -43,8 +43,6 @@ export const projectsApi = {
     name: string;
     description?: string;
     source_type: 'zip' | 'git' | 'scratch';
-    git_repo_url?: string;
-    git_branch?: string;
     template_id?: number;
   }): Promise<Project> {
     const { data } = await apiClient.post('/projects', projectData);

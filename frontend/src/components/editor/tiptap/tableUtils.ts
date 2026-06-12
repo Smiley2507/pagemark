@@ -13,32 +13,17 @@ export function insertTableFromSpreadsheet(editor: Editor, text: string) {
   const lines = text.split('\n').filter(l => l.trim())
   const rows = lines.map(l => l.split('\t'))
   const cols = Math.max(...rows.map(r => r.length))
-
-  editor
-    .chain()
-    .focus()
-    .insertTable({ rows: rows.length, cols, withHeaderRow: true })
-    .run()
-
-  const { selection } = editor.state
-  const tableNode = selection.$anchor.node(1)
-  if (!tableNode) return
-
-  let rowIdx = 0
-  tableNode.forEach((row, rowOff) => {
-    if (row.type.name !== 'tableRow') return
-    let colIdx = 0
-    row.forEach((cell, cellOff) => {
-      if (colIdx === 0 && rows[rowIdx]) {
-        const pos = tableNode.start + rowOff + cellOff + 1
-        const cellText = rows[rowIdx]?.[colIdx] ?? ''
-        editor.chain().focus().setTextSelection(pos).insertContent(cellText).run()
-      } else if (rows[rowIdx]?.[colIdx]) {
-        const pos = tableNode.start + rowOff + cellOff + 1
-        editor.chain().focus().setTextSelection(pos).insertContent(rows[rowIdx][colIdx]).run()
-      }
-      colIdx++
-    })
-    rowIdx++
+  const normalizedRows = rows.map(row => {
+    const cells = [...row]
+    while (cells.length < cols) cells.push('')
+    return cells.map(cell => cell.trim().replace(/\|/g, '\\|'))
   })
+
+  const [header, ...body] = normalizedRows
+  const separator = Array.from({ length: cols }, () => '---')
+  const markdown = [header, separator, ...body]
+    .map(row => `| ${row.join(' | ')} |`)
+    .join('\n')
+
+  editor.chain().focus().insertContent(markdown, { contentType: 'markdown' }).run()
 }

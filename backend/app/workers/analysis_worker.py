@@ -5,7 +5,7 @@ from datetime import datetime
 
 from app.workers.celery_app import celery_app
 
-_DEBUG_LOG = "/app/.cursor-debug/debug-be49b0.log"
+_DEBUG_LOG = "/tmp/pagemark_agent_debug.log"
 
 
 def _agent_log(hypothesis_id: str, location: str, message: str, data: dict | None = None) -> None:
@@ -218,7 +218,7 @@ def _run_nlp_analysis(project_id: int, analysis_id: int):
         try:
             doc = db.query(Document).filter(Document.project_id == project_id).first()
             if not doc:
-                update_analysis_step_sync(analysis_id, 9, STEP_NAMES[9], status="failed", step_detail="No document found")
+                update_analysis_step_sync(analysis_id, 9, STEP_NAMES[9], status=AnalysisStatus.FAILED, step_detail="No document found")
                 return
 
             sections = db.query(Section).filter(
@@ -250,7 +250,7 @@ def _run_nlp_analysis(project_id: int, analysis_id: int):
         except Exception as e:
             update_analysis_step_sync(
                 analysis_id, 9, STEP_NAMES[9],
-                status="failed",
+                status=AnalysisStatus.FAILED,
                 step_detail=str(e)[:200],
             )
 
@@ -289,6 +289,58 @@ def generate_section_task(self, section_id: int, project_id: int, user_id: int):
         except Exception as e:
             _agent_log("A", "analysis_worker.py:generate_section_task", "error", {"error": str(e)})
             raise self.retry(exc=e, countdown=10)
+
+@celery_app.task(bind=True, max_retries=3)
+def check_freshness_after_analysis_task(self, project_id: int, analysis_id: int):
+    """After a webhook-triggered analysis, check all documents for stale sections."""
+    from app.database import SessionLocal
+    from app.models.analysis import Analysis
+    from app.models.document import Document, Section, SectionContentLifecycle, LifecycleStatus
+    from app.models.evidence import EvidenceReference
+
+    with SessionLocal() as db:
+        try:
+            new_analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
+            if not new_analysis:
+                return
+
+            documents = db.query(Document).filter(
+                Document.project_id == project_id,
+                Document.deleted_at.is_(None),
+            ).all()
+
+            for doc in documents:
+                sections = db.query(Section).filter(
+                    Section.document_id == doc.id,
+                    Section.lifecycle_status == LifecycleStatus.ACTIVE,
+                    Section.content_lifecycle == SectionContentLifecycle.REVIEWED,
+                ).all()
+
+                stale_ids: list[int] = []
+                for section in sections:
+                    if section.reviewed_against_analysis_id and section.reviewed_against_analysis_id != analysis_id:
+                        old = db.query(Analysis).filter(Analysis.id == section.reviewed_against_analysis_id).first()
+                        if old:
+                            if (old.source_commit and new_analysis.source_commit and
+                                    old.source_commit != new_analysis.source_commit):
+                                stale_ids.append(section.id)
+                                continue
+
+                    for ev in db.query(EvidenceReference).filter(
+                        EvidenceReference.section_id == section.id
+                    ).all():
+                        if ev.analysis_id != analysis_id:
+                            stale_ids.append(section.id)
+                            break
+
+                for sid in set(stale_ids):
+                    sec = db.query(Section).filter(Section.id == sid).first()
+                    if sec:
+                        sec.is_potentially_stale = True
+                db.commit()
+        except Exception:
+            pass
+
 
 @celery_app.task(bind=True, max_retries=3)
 def resume_generation_task(self, section_id: int, answer: str, project_id: int, user_id: int):

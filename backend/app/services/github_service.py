@@ -144,3 +144,44 @@ async def fetch_repo_metadata(token: str, owner: str, repo: str) -> Dict[str, An
 def build_authenticated_clone_url(token: str, owner: str, repo: str) -> str:
     """Builds a GitHub clone URL including the OAuth token for auth."""
     return f"https://{token}@github.com/{owner}/{repo}.git"
+
+
+async def register_webhook(
+    token: str, owner: str, repo: str, webhook_url: str, secret: str
+) -> dict[str, Any]:
+    url = f"{GITHUB_API_URL}/repos/{owner}/{repo}/hooks"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    payload = {
+        "name": "web",
+        "active": True,
+        "events": ["push"],
+        "config": {
+            "url": webhook_url,
+            "content_type": "json",
+            "secret": secret,
+            "insecure_ssl": "0",
+        },
+    }
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json=payload, headers=headers)
+        if response.status_code == 422:
+            detail = response.json().get("errors", [{}])[0].get("message", "Validation error")
+            raise HTTPException(status_code=400, detail=f"GitHub webhook registration failed: {detail}")
+        if response.status_code not in (201, 200):
+            raise HTTPException(status_code=400, detail="Failed to register webhook on GitHub")
+        return response.json()
+
+
+async def delete_webhook(token: str, owner: str, repo: str, hook_id: int) -> None:
+    url = f"{GITHUB_API_URL}/repos/{owner}/{repo}/hooks/{hook_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    async with httpx.AsyncClient() as client:
+        response = await client.delete(url, headers=headers)
+        if response.status_code not in (204, 404):
+            raise HTTPException(status_code=400, detail="Failed to delete webhook on GitHub")

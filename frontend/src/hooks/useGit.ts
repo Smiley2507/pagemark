@@ -38,3 +38,40 @@ export const useDisconnectGitHub = () => {
     onError: () => toast.error('Failed to disconnect GitHub'),
   });
 };
+
+export const useGenerateWebhookSecret = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: number) => analysisApi.generateWebhookSecret(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project'] });
+      toast.success('Webhook secret generated');
+    },
+    onError: () => toast.error('Failed to generate webhook secret'),
+  });
+};
+
+export const useRegisterGitHubWebhook = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ projectId, owner, repo }: { projectId: number; owner: string; repo: string }) =>
+      analysisApi.registerGitHubWebhook(projectId, owner, repo),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project'] });
+      toast.success('Webhook registered on GitHub');
+    },
+    onError: () => toast.error('Failed to register webhook'),
+  });
+};
+
+export const useDeleteWebhook = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: number) => analysisApi.deleteWebhook(projectId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project'] });
+      toast.success('Webhook removed');
+    },
+    onError: () => toast.error('Failed to delete webhook'),
+  });
+};

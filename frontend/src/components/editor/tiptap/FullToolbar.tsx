@@ -1,22 +1,17 @@
 import { type ReactNode, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import {
-  Undo2, Redo2, Bold, Italic, Underline, Strikethrough, Code,
+  Undo2, Redo2, Bold, Italic, Strikethrough, Code,
   List, ListOrdered, Quote, Code2, Minus, Table2, Image, Link2,
   RemoveFormatting,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-const FONT_COLORS = ['#dc2626','#ea580c','#d97706','#65a30d','#16a34a','#059669','#0891b2','#2563eb','#7c3aed','#9333ea','#c026d3','#be123c']
-const HIGHLIGHT_COLORS = ['#fef08a','#fde68a','#bfdbfe','#bbf7d0','#fecaca','#e9d5ff']
 
 interface FullToolbarProps {
   editor: Editor | null
 }
 
 export function FullToolbar({ editor }: FullToolbarProps) {
-  const [colorOpen, setColorOpen] = useState(false)
-  const [highlightOpen, setHighlightOpen] = useState(false)
   const [headingOpen, setHeadingOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
@@ -55,34 +50,12 @@ export function FullToolbar({ editor }: FullToolbarProps) {
       <TBtn onClick={() => e?.chain().focus().toggleItalic().run()} active={e?.isActive('italic')} disabled={!e} label="Italic">
         <Italic className="h-3.5 w-3.5" />
       </TBtn>
-      <TBtn onClick={() => e?.chain().focus().toggleUnderline().run()} active={e?.isActive('underline')} disabled={!e} label="Underline">
-        <Underline className="h-3.5 w-3.5" />
-      </TBtn>
       <TBtn onClick={() => e?.chain().focus().toggleStrike().run()} active={e?.isActive('strike')} disabled={!e} label="Strikethrough">
         <Strikethrough className="h-3.5 w-3.5" />
       </TBtn>
       <TBtn onClick={() => e?.chain().focus().toggleCode().run()} active={e?.isActive('code')} disabled={!e} label="Code">
         <Code className="h-3.5 w-3.5" />
       </TBtn>
-
-      <Sep />
-
-      <div className="relative">
-        <TBtn onClick={() => e && setColorOpen(!colorOpen)} active={!!(e && e.getAttributes('textStyle').color)} disabled={!e} label="Text color">
-          <span className="text-xs underline leading-none" style={{ color: (e?.getAttributes('textStyle').color) || 'inherit' }}>A</span>
-        </TBtn>
-        {colorOpen && e && (
-          <SwatchPicker colors={FONT_COLORS} current={e.getAttributes('textStyle').color || ''} onSelect={(c) => { if (c) e.chain().focus().setColor(c).run(); else e.chain().focus().unsetColor().run(); setColorOpen(false) }} onClose={() => setColorOpen(false)} />
-        )}
-      </div>
-      <div className="relative">
-        <TBtn onClick={() => e && setHighlightOpen(!highlightOpen)} active={e?.isActive('highlight')} disabled={!e} label="Highlight">
-          <span className="text-xs px-0.5 leading-none" style={{ background: (e?.getAttributes('highlight').color) || 'transparent', borderRadius: 2 }}>A</span>
-        </TBtn>
-        {highlightOpen && e && (
-          <SwatchPicker colors={HIGHLIGHT_COLORS} current={e.getAttributes('highlight').color || ''} onSelect={(c) => { if (c) e.chain().focus().toggleHighlight({ color: c }).run(); else e.chain().focus().toggleHighlight().run(); setHighlightOpen(false) }} onClose={() => setHighlightOpen(false)} />
-        )}
-      </div>
 
       <Sep />
 
@@ -116,7 +89,7 @@ export function FullToolbar({ editor }: FullToolbarProps) {
         input.type = 'file'; input.accept = 'image/*'
         input.onchange = () => {
           const file = input.files?.[0]
-          if (file) e.chain().focus().setFigure({ src: URL.createObjectURL(file), alt: file.name }).run()
+          if (file) e.chain().focus().setImage({ src: URL.createObjectURL(file), alt: file.name }).run()
         }
         input.click()
       }} disabled={!e} label="Image">
@@ -218,36 +191,4 @@ function LPopup({ editor, linkUrl, setLinkUrl, onClose }: { editor: Editor; link
     if (!linkUrl) editor.chain().focus().unsetLink().run()
     else editor.chain().focus().setLink({ href: linkUrl }).run()
   }
-}
-
-function SwatchPicker({
-  colors, current, onSelect, onClose,
-}: {
-  colors: string[]
-  current: string
-  onSelect: (c: string | null) => void
-  onClose: () => void
-}) {
-  return (
-    <div className="absolute top-full left-0 mt-1 z-50 w-36 rounded border border-border bg-popover p-1.5 shadow-lg" onMouseDown={e => e.stopPropagation()}>
-      <div className="flex flex-wrap gap-0.5">
-        <button
-          type="button"
-          title="Remove"
-          className="h-5 w-5 rounded border border-border flex items-center justify-center text-[10px] text-muted-foreground hover:bg-accent"
-          onClick={() => { onSelect(null); onClose() }}
-        >✕</button>
-        {colors.map(c => (
-          <button
-            key={c}
-            type="button"
-            title={c}
-            className={cn('h-5 w-5 rounded border transition-transform hover:scale-110', current === c ? 'border-foreground scale-110' : 'border-border')}
-            style={{ background: c }}
-            onClick={() => { onSelect(c); onClose() }}
-          />
-        ))}
-      </div>
-    </div>
-  )
 }

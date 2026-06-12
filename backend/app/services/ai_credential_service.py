@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai_providers import VALID_PROVIDERS, is_valid_model
+from app.ai_providers import VALID_PROVIDERS, is_plausible_model
 from app.models.ai_credential import UserAiCredential
 from app.services import crypto_service
 from app.services.ai_service import list_models, validate_credential, AiServiceError
@@ -44,7 +44,7 @@ async def upsert_credential(
 ) -> UserAiCredential:
     if provider not in VALID_PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
-    if not is_valid_model(provider, model_id):
+    if not is_plausible_model(provider, model_id):
         raise HTTPException(status_code=400, detail=f"Unsupported model: {model_id}")
 
     try:

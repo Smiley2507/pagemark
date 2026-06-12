@@ -165,8 +165,9 @@ export function DocumentSetupPage() {
       try {
         const projectId = Number(resumeProjectId);
         const project = await projectsApi.getProject(projectId);
-        const sourceType = sourceTypeFromProject(project.source_type, project.git_repo_url);
-        const sourceSummary = describeSource(sourceType, project.git_repo_url || undefined);
+        const repoUrl = project.source_metadata?.repo_url as string | undefined;
+        const sourceType = sourceTypeFromProject(project.source_type, repoUrl);
+        const sourceSummary = describeSource(sourceType, repoUrl);
 
         // --- Connect Source to Existing Project path ---
         // projectId supplied but NO documentId → user created a Project via the modal
@@ -348,14 +349,6 @@ export function DocumentSetupPage() {
           name: payload.projectName,
           description: payload.projectContext,
           source_type: payload.type === 'zip' ? 'zip' : payload.type === 'none' ? 'scratch' : 'git',
-          git_repo_url:
-            payload.type === 'github-oauth'
-              ? `https://github.com/${payload.repoData?.fullName}`
-              : payload.gitUrl,
-          git_branch:
-            payload.type === 'github-oauth'
-              ? payload.repoData?.branch
-              : payload.gitBranch,
         });
         projectId = project.id;
         projectName = project.name;

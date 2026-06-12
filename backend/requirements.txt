@@ -13,6 +13,7 @@ celery
 redis
 anthropic
 google-genai
+openai
 python-multipart
 aiofiles
 httpx

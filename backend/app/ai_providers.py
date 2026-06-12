@@ -28,6 +28,13 @@ PROVIDERS: dict[str, ProviderInfo] = {
             {"id": "gemini-1.5-flash", "label": "Gemini 1.5 Flash"},
         ],
     },
+    "openai": {
+        "label": "OpenAI",
+        "models": [
+            {"id": "gpt-5", "label": "GPT-5"},
+            {"id": "gpt-5-mini", "label": "GPT-5 mini"},
+        ],
+    },
     "opencode-go": {
         "label": "OpenCode Go",
         "models": [
@@ -45,8 +52,27 @@ PROVIDERS: dict[str, ProviderInfo] = {
 
 VALID_PROVIDERS = frozenset(PROVIDERS.keys())
 
+MODEL_PREFIXES: dict[str, tuple[str, ...]] = {
+    "anthropic": ("claude-",),
+    "google": ("gemini-",),
+    "openai": ("gpt-", "o"),
+    "opencode-go": (),
+}
+
 
 def is_valid_model(provider: str, model_id: str) -> bool:
     if provider not in PROVIDERS:
         return False
     return any(m["id"] == model_id for m in PROVIDERS[provider]["models"])
+
+
+def is_plausible_model(provider: str, model_id: str) -> bool:
+    if provider not in PROVIDERS:
+        return False
+    if is_valid_model(provider, model_id):
+        return True
+
+    prefixes = MODEL_PREFIXES.get(provider, ())
+    if provider == "opencode-go":
+        return bool(model_id.strip())
+    return any(model_id.startswith(prefix) for prefix in prefixes)

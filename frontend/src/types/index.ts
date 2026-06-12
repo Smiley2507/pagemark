@@ -18,9 +18,6 @@ export interface Project {
   completion_pct: number;
   language?: string;
   source_type: "zip" | "git" | "scratch";
-  git_repo_url?: string;
-  git_branch?: string;
-  git_provider?: "github" | "bitbucket";
   source_provider?: string;
   source_owner?: string;
   source_repository?: string;
@@ -40,6 +37,8 @@ export interface Project {
   recent_activity_at?: string;
   context_md?: string;
   export_settings?: ExportSettings;
+  webhook_secret?: string;
+  webhook_id?: number;
   created_at: string;
   updated_at: string;
 }
@@ -221,6 +220,10 @@ export interface Template {
   description?: string;
   category: string;
   is_builtin: boolean;
+  purpose?: string;
+  intended_audience?: string;
+  expected_outcome?: string;
+  guidance?: string;
   sections_json?: any[];
   system_prompt?: string;
 }

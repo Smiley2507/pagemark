@@ -78,6 +78,8 @@ class ProjectResponse(BaseModel):
     last_synced_commit: Optional[str] = None
     source_metadata: Optional[dict] = None
     source_exclusions: List[ProjectSourceExclusionResponse] = []
+    webhook_secret: Optional[str] = None
+    webhook_id: Optional[int] = None
     export_settings: Optional[dict] = None
     starred: bool
     tags: List[str] = []

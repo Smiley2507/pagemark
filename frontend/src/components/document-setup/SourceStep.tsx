@@ -45,7 +45,7 @@ const methods: Array<{
   {
     id: 'github',
     label: 'GitHub',
-    description: 'OAuth integration with sync support.',
+    description: 'GitHub is the primary source path with OAuth integration and sync support.',
   },
   {
     id: 'url',
@@ -361,11 +361,11 @@ export function SourceStep({ isSubmitting = false, onConnect, onSkip }: SourceSt
 
         {method === 'none' && (
           <div className="space-y-4">
-            <div className="rounded-md bg-panel-muted p-4 border border-border">
-              <p className="text-body text-text-secondary">
-                No codebase will be analyzed. Recommendations and evidence blocks will be manual.
-              </p>
-            </div>
+              <div className="rounded-md bg-panel-muted p-4 border border-border">
+                <p className="text-body text-text-secondary">
+                No codebase will be analyzed. Analysis-grounded recommendations, repository evidence, and source-change freshness will stay unavailable.
+                </p>
+              </div>
             <div className="pt-2">
               <Button
                 variant="outline"

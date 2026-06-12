@@ -3,6 +3,7 @@ Updated auth router — adds org creation on register,
 email verification flow, and login verification gate.
 All existing OAuth + BYOK endpoints are preserved unchanged.
 """
+import json
 import secrets
 from datetime import datetime, timedelta
 import re
@@ -34,6 +35,7 @@ from app.schemas.notification import (
     NotificationPreferences, NotificationPreferencesResponse, UpdateNotificationPreferencesRequest,
 )
 from app.services import ai_credential_service
+from app.services.rate_limiter import rate_limit
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -86,7 +88,7 @@ def _make_slug(name: str) -> str:
 # ── Registration ──────────────────────────────────────────────────────────────
 
 @router.post("/register", status_code=status.HTTP_201_CREATED, response_model=MeResponse)
-async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db), _: None = rate_limit(3, 60)):
     result = await db.execute(select(User).where(User.email == request.email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -103,7 +105,6 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db))
     db.add(UserRole(user_id=user.id, role=RoleEnum.USER))
 
     verification_token = secrets.token_urlsafe(32)
-    import json
     db.add(UserSettings(
         user_id=user.id,
         notifications_json=json.dumps(_get_default_notification_preferences()),
@@ -163,7 +164,7 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
 # ── Login ─────────────────────────────────────────────────────────────────────
 
 @router.post("/login", response_model=MeResponse)
-async def login(request: LoginRequest, response: Response, db: AsyncSession = Depends(get_db)):
+async def login(request: LoginRequest, response: Response, db: AsyncSession = Depends(get_db), _: None = rate_limit(10, 60)):
     result = await db.execute(select(User).where(User.email == request.email))
     user = result.scalar_one_or_none()
 
@@ -236,7 +237,7 @@ async def update_me(body: UpdateMeRequest, current_user: User = Depends(get_curr
 
 
 @router.post("/forgot-password")
-async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depends(get_db), _: None = rate_limit(3, 60)):
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
     if user:
@@ -252,7 +253,7 @@ async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depend
 
 
 @router.post("/reset-password")
-async def reset_password(body: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+async def reset_password(body: ResetPasswordRequest, db: AsyncSession = Depends(get_db), _: None = rate_limit(5, 60)):
     result = await db.execute(select(UserSettings).where(UserSettings.reset_token == body.token))
     us = result.scalar_one_or_none()
     if not us or us.reset_token_expires < datetime.utcnow():
@@ -276,7 +277,7 @@ async def github_authorize(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/github/callback")
-async def github_callback(code: str, state: str, db: AsyncSession = Depends(get_db)):
+async def github_callback(code: str, state: str, db: AsyncSession = Depends(get_db), _: None = rate_limit(10, 60)):
     payload = auth_service.decode_token(state)
     if not payload or payload.get("type") != "access":
         raise HTTPException(status_code=400, detail="Invalid state token")
@@ -316,6 +317,7 @@ async def github_disconnect(current_user: User = Depends(get_current_user), db: 
 
 
 NOTIFICATION_CATEGORY_MAP: dict[str, str] = {
+    "source_webhook_received": "source_sync",
     "source_sync": "source_sync",
     "generation_run_started": "generation",
     "generation_run_completed": "generation",
@@ -331,6 +333,7 @@ NOTIFICATION_CATEGORY_MAP: dict[str, str] = {
 
 # Event types excluded from the category filter — always shown
 ALWAYS_VISIBLE_EVENTS = {
+    "source_webhook_received",
     "analysis_started", "analysis_complete", "analysis_failed",
     "document_created", "outline_approved",
     "section_reviewed", "project_created",
@@ -372,7 +375,6 @@ async def get_notification_preferences(
     user_settings = result.scalar_one_or_none()
     preferences = _get_default_notification_preferences()
     if user_settings and user_settings.notifications_json:
-        import json
         try:
             stored = json.loads(user_settings.notifications_json)
             preferences.update(stored)
@@ -387,7 +389,6 @@ async def update_notification_preferences(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    import json
     result = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
     user_settings = result.scalar_one_or_none()
     if not user_settings:

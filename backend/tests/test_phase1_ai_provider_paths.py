@@ -2,9 +2,10 @@
 Phase 1 — AI Integration Completion tests.
 
 Proves that every provider-consuming AI path uses the active provider adapter
-(not Anthropic-only logic) for all three supported providers:
+(not Anthropic-only logic) for all supported providers:
   - anthropic
   - google
+  - openai
   - opencode-go
 
 All external HTTP calls are mocked via unittest.mock; no real API keys are needed.
@@ -35,6 +36,7 @@ pytestmark = pytest.mark.anyio
 PROVIDERS = [
     ("anthropic", "claude-sonnet-4-20250514"),
     ("google", "gemini-2.0-flash"),
+    ("openai", "gpt-5"),
     ("opencode-go", "deepseek-v4-flash"),
 ]
 
@@ -48,7 +50,7 @@ def _fake_complete_text(system: str, user: str, provider: str, api_key: str, mod
 
 
 class TestAiServiceProviderAdapter:
-    """Ensure ai_service.complete_text dispatches to all three providers."""
+    """Ensure ai_service.complete_text dispatches to all supported providers."""
 
     @patch("app.services.ai_service._complete_anthropic", return_value="anthropic ok")
     def test_complete_text_routes_anthropic(self, mock_fn):
@@ -66,6 +68,14 @@ class TestAiServiceProviderAdapter:
         assert result == "google ok"
         mock_fn.assert_called_once()
 
+    @patch("app.services.ai_service._complete_openai", return_value="openai ok")
+    def test_complete_text_routes_openai(self, mock_fn):
+        from app.services.ai_service import complete_text
+        with patch("app.services.ai_service.validate_credential"):
+            result = complete_text("sys", "user", "openai", "sk-test1234", "gpt-5")
+        assert result == "openai ok"
+        mock_fn.assert_called_once()
+
     @patch("app.services.ai_service._complete_opencode_go", return_value="opencode-go ok")
     def test_complete_text_routes_opencode_go(self, mock_fn):
         from app.services.ai_service import complete_text
@@ -78,6 +88,13 @@ class TestAiServiceProviderAdapter:
         from app.services.ai_service import complete_text, AiServiceError
         with pytest.raises(AiServiceError, match="Unsupported provider"):
             complete_text("sys", "user", "unknown-vendor", "key", "model")
+
+    @patch("app.services.ai_service._complete_google", side_effect=ValueError("boom"))
+    def test_complete_text_wraps_provider_errors(self, mock_fn):
+        from app.services.ai_service import complete_text, AiServiceError
+        with pytest.raises(AiServiceError, match="Could not complete google request"):
+            complete_text("sys", "user", "google", "AIza-test1234", "gemini-2.0-flash")
+        mock_fn.assert_called_once()
 
     def test_validate_credential_rejects_invalid_provider(self):
         from app.services.ai_service import validate_credential, AiServiceError
@@ -442,6 +459,7 @@ class TestGenerationServiceAllProviders:
         from app.services.generation_service import PROVIDER_PARALLELISM
         assert "anthropic" in PROVIDER_PARALLELISM
         assert "google" in PROVIDER_PARALLELISM
+        assert "openai" in PROVIDER_PARALLELISM
         assert "opencode-go" in PROVIDER_PARALLELISM
 
     def test_model_pricing_has_all_providers(self):

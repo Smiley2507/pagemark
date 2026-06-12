@@ -73,20 +73,17 @@ export const WikiLink = Node.create<WikiLinkOptions>({
     }
   },
 
-  parseMarkdown: {
-    handler: ({ leafText }) => {
-      const match = leafText.match(/^\[\[(.+?)\]\]$/)
-      if (match) {
-        return {
-          type: 'wikiLink',
-          attrs: { text: match[1] },
-        }
+  parseMarkdown: (token: any) => {
+    const leafText = token.raw || token.text || ''
+    const match = leafText.match(/^\[\[(.+?)\]\]$/)
+    if (match) {
+      return {
+        type: 'wikiLink',
+        attrs: { text: match[1] },
       }
-      return null
-    },
+    }
+    return []
   },
 
-  renderMarkdown: {
-    handler: (node) => `[[${node.attrs.text}]]`,
-  },
+  renderMarkdown: (node: any) => `[[${node.attrs.text}]]`,
 })

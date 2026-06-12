@@ -1,10 +1,13 @@
 """Activity event recording and timeline generation."""
 
 from __future__ import annotations
+import logging
 
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +18,7 @@ from app.models.project import Project
 
 
 EVENT_WEIGHTS: dict[str, float] = {
+    "source_webhook_received": 2.0,
     "source_sync": 2.0,
     "analysis_complete": 3.0,
     "analysis_started": 3.0,
@@ -38,6 +42,7 @@ EVENT_WEIGHTS: dict[str, float] = {
 }
 
 EVENT_MESSAGES: dict[str, str] = {
+    "source_webhook_received": "Webhook push received",
     "source_sync": "Source code synced",
     "analysis_complete": "Analysis completed",
     "analysis_started": "Analysis started",
@@ -62,6 +67,7 @@ EVENT_MESSAGES: dict[str, str] = {
 
 
 EVENT_CATEGORIES: dict[str, str] = {
+    "source_webhook_received": "Source",
     "source_sync": "Source",
     "analysis_complete": "Source",
     "analysis_started": "Source",
@@ -118,6 +124,7 @@ async def record_event(
     Only records events that have a defined weight.
     """
     if event_type not in EVENT_WEIGHTS:
+        logger.warning("Unknown event_type '%s' — skipping", event_type)
         return None
 
     merged_payload = dict(payload or {})

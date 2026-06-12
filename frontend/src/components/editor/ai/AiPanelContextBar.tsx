@@ -80,21 +80,25 @@ export function AiPanelContextBar({
 
             return (
               <span key={a.id} className="relative inline-flex">
-                <button
-                  onClick={() => setPreviewId(showPreview ? null : a.id)}
-                  className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary transition-colors hover:bg-interaction-muted hover:text-interaction-hover"
-                >
-                  <Circle className={`h-1.5 w-1.5 fill-current ${dotColor.replace('bg-', 'text-')}`} />
-                  <Icon className="h-3 w-3 shrink-0" />
-                  <span className="max-w-[60px] truncate">{a.label}</span>
+                <span className="inline-flex items-center rounded bg-panel-muted text-[10px] text-text-secondary transition-colors hover:bg-interaction-muted hover:text-interaction-hover">
                   <button
-                    onClick={(e) => { e.stopPropagation(); removeAttachment(a.id); setPreviewId(null); }}
-                    className="ml-0.5 rounded-sm text-text-muted hover:text-text-primary"
+                    type="button"
+                    onClick={() => setPreviewId(showPreview ? null : a.id)}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5"
+                  >
+                    <Circle className={`h-1.5 w-1.5 fill-current ${dotColor.replace('bg-', 'text-')}`} />
+                    <Icon className="h-3 w-3 shrink-0" />
+                    <span className="max-w-[60px] truncate">{a.label}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { removeAttachment(a.id); setPreviewId(null); }}
+                    className="mr-1 rounded-sm text-text-muted hover:text-text-primary"
                     aria-label={`Remove ${a.label}`}
                   >
                     <X className="h-2.5 w-2.5" />
                   </button>
-                </button>
+                </span>
 
                 {showPreview && (
                   <div

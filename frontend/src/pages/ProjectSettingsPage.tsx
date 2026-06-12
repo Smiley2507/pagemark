@@ -93,12 +93,12 @@ export function ProjectSettingsPage() {
           </div>
           <div className="flex items-center justify-between gap-4">
             <span>Branch</span>
-            <span className="text-text-primary">{project.selected_branch || project.git_branch || 'Not connected'}</span>
+            <span className="text-text-primary">{project.selected_branch || 'Not connected'}</span>
           </div>
           <div className="flex items-center justify-between gap-4">
             <span>Repository</span>
             <span className="truncate text-text-primary">
-              {project.source_repository || project.git_repo_url || 'Not connected'}
+              {project.source_repository || (project.source_metadata?.repo_url as string) || 'Not connected'}
             </span>
           </div>
         </div>

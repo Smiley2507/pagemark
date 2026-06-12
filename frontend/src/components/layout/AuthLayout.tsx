@@ -72,6 +72,10 @@ export function AuthLayout({
             Documentation grounded in your codebase.
           </h2>
           <p className="mt-3 text-body text-text-secondary">
+            Connect source once, then turn analysis into workspace-ready
+            documentation.
+          </p>
+          <p className="mt-3 text-body text-text-secondary">
             One Analysis snapshot powers every Document. Provider credentials stay
             optional until you choose an AI-powered action. Reviewed Sections are
             never silently overwritten.

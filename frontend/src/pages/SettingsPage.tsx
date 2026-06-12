@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Activity, Bell, Bot, Building2, Key, Search, User } from 'lucide-react';
+import { Activity, Bell, Bot, Building2, Key, Search, User, Users } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
@@ -12,10 +12,11 @@ import { OrgApiKeysView, OrgAuditLogView, OrgSettingsView } from '@/components/o
 const SECTIONS = [
   { id: 'profile', label: 'Profile', icon: User, keywords: ['account', 'identity', 'password', 'avatar'] },
   { id: 'organization', label: 'Organization', icon: Building2, keywords: ['org', 'workspace', 'quality'] },
+  { id: 'members', label: 'Members', icon: Users, keywords: ['team', 'roles', 'invites', 'workspace'] },
   { id: 'notifications', label: 'Notifications', icon: Bell, keywords: ['alert', 'preferences', 'events', 'bell'] },
-  { id: 'ai-providers', label: 'AI Providers', icon: Bot, keywords: ['model', 'provider', 'byok', 'claude', 'opencode', 'google'] },
+  { id: 'ai-providers', label: 'AI Providers', icon: Bot, keywords: ['model', 'provider', 'byok', 'claude', 'opencode', 'google', 'openai', 'chatgpt'] },
   { id: 'api-keys', label: 'API Keys', icon: Key, keywords: ['token', 'integration', 'automation'] },
-  { id: 'activity', label: 'Audit Log', icon: Activity, keywords: ['audit', 'history', 'events', 'activity'] },
+  { id: 'activity', label: 'Activity Log', icon: Activity, keywords: ['audit', 'history', 'events', 'activity'] },
 ] as const;
 
 export function SettingsPage() {
@@ -94,6 +95,7 @@ export function SettingsPage() {
 
               {activeSection.id === 'profile' && <ProfileSection />}
               {activeSection.id === 'organization' && <OrgSettingsView />}
+              {activeSection.id === 'members' && <OrgSettingsView />}
               {activeSection.id === 'notifications' && <NotificationPreferencesSection />}
               {activeSection.id === 'ai-providers' && <AiProvidersSection />}
               {activeSection.id === 'api-keys' && <OrgApiKeysView />}

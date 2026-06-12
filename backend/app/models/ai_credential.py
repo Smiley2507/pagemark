@@ -20,7 +20,7 @@ class UserAiCredential(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    provider = Column(String, nullable=False)  # anthropic | google
+    provider = Column(String, nullable=False)  # provider id from app.ai_providers
     api_key_encrypted = Column(String, nullable=False)
     model_id = Column(String, nullable=False)
     is_active = Column(Boolean, nullable=False, default=False)

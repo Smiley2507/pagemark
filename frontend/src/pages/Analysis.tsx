@@ -25,7 +25,11 @@ import {
   useSyncGitRepo,
   pollAnalysisUntilDone,
 } from '@/hooks/useAnalysis';
-import { detectProvider } from '@/lib/git';
+import { detectProvider, type GitProvider } from '@/lib/git';
+
+function asGitProvider(provider: string | null | undefined): GitProvider | null {
+  return provider === 'github' || provider === 'bitbucket' ? provider : null;
+}
 
 export const Analysis: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -50,11 +54,12 @@ export const Analysis: React.FC = () => {
   const applyOutline = useApplyOutline(projectId);
   const syncMutation = useSyncGitRepo();
 
-  const provider =
-    project?.git_provider ||
-    (project?.git_repo_url ? detectProvider(project.git_repo_url) : null);
+  const repoUrl = project?.source_metadata?.repo_url as string | undefined;
+  const provider: GitProvider | null =
+    asGitProvider(project?.source_provider) ||
+    (repoUrl ? detectProvider(repoUrl) : null);
 
-  const showGitSync = project?.source_type === 'git' && !!project?.git_repo_url;
+  const showGitSync = project?.source_type === 'git' && !!repoUrl;
 
   const handleSync = async () => {
     if (!projectId) return;
@@ -102,15 +107,15 @@ export const Analysis: React.FC = () => {
               ) : (
                 <h1 className="text-section font-semibold">{project?.name}</h1>
               )}
-              {project?.git_repo_url && provider && (
+              {repoUrl && provider && (
                 <a
-                  href={project.git_repo_url}
+                  href={repoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-1 flex items-center gap-1.5 text-meta text-muted-foreground hover:text-primary"
                 >
                   <GitProviderIcon provider={provider} className="h-3.5 w-3.5" />
-                  {project.git_repo_url.replace(/^https?:\/\//, '')}
+                  {repoUrl.replace(/^https?:\/\//, '')}
                   <ExternalLink className="h-3 w-3" />
                 </a>
               )}

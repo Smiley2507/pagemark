@@ -1,5 +1,4 @@
 import { Node, mergeAttributes } from '@tiptap/core'
-import type { MarkdownSerializerState } from '@tiptap/markdown'
 import type { DOMOutputSpec } from '@tiptap/pm/model'
 
 declare module '@tiptap/core' {
@@ -69,7 +68,7 @@ export const MermaidDiagram = Node.create({
   },
 
   addNodeView() {
-    return ({ editor, node, getPos, forwardAttributes }) => {
+    return ({ editor, node, getPos }) => {
       const wrapper = document.createElement('div')
       wrapper.className = 'mermaid-diagram'
       wrapper.setAttribute('data-mermaid', '')

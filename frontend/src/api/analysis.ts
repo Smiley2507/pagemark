@@ -104,4 +104,18 @@ export const analysisApi = {
     const { data } = await apiClient.get(`/projects/${projectId}/nlp-report`);
     return data;
   },
+
+  async generateWebhookSecret(projectId: number): Promise<{ webhook_url: string; webhook_secret: string }> {
+    const { data } = await apiClient.post(`/projects/${projectId}/webhook/generate-secret`);
+    return data;
+  },
+
+  async registerGitHubWebhook(projectId: number, owner: string, repo: string): Promise<{ webhook_id: number; webhook_url: string }> {
+    const { data } = await apiClient.post(`/projects/${projectId}/webhook/register`, { owner, repo });
+    return data;
+  },
+
+  async deleteWebhook(projectId: number): Promise<void> {
+    await apiClient.delete(`/projects/${projectId}/webhook`);
+  },
 };

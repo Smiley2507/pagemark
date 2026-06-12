@@ -37,6 +37,7 @@ from app.services.template_recommendation_service import get_current_analysis
 PROVIDER_PARALLELISM = {
     "anthropic": 2,
     "google": 3,
+    "openai": 2,
     "opencode-go": 2,
 }
 

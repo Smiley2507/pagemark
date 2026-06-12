@@ -216,7 +216,7 @@ function ProviderCard({
             value={keyDraft}
             onChange={(event) => setKeyDraft(event.target.value)}
             autoComplete="off"
-            state={upsert.isError ? "error" : undefined}
+            state={upsert.isError ? "invalid" : undefined}
           />
           {upsert.isError && (
             <p className="text-meta-sm text-text-danger">

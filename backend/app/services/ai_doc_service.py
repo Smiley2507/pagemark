@@ -530,8 +530,8 @@ class AIService:
 
         async def _stream() -> AsyncGenerator[str, None]:
             # Anthropic supports native async streaming via its SDK.
-            # All other providers (Google, OpenCode Go) deliver a single response
-            # via complete_text and it is emitted as a single chunk.
+            # All other providers (Google, OpenAI, OpenCode Go) deliver a single
+            # response via complete_text and it is emitted as a single chunk.
             if cred.provider == "anthropic":
                 import anthropic as _anthropic
 

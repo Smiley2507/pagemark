@@ -10,7 +10,8 @@ interface CommandItem {
   execute: (editor: Editor) => boolean
 }
 
-const commandGroups: { label: string; items: CommandItem[] }[] = [
+function createCommandGroups(onInsertImage?: (file: File) => void | Promise<void>): { label: string; items: CommandItem[] }[] {
+  return [
   {
     label: 'Text',
     items: [
@@ -45,10 +46,13 @@ const commandGroups: { label: string; items: CommandItem[] }[] = [
       { id: 'table', label: 'Table', description: 'Insert a 3x3 table', keywords: ['grid'], execute: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
       { id: 'image', label: 'Image', description: 'Insert an image', keywords: ['img', 'picture'], execute: (e) => {
         const input = document.createElement('input')
-        input.type = 'file', input.accept = 'image/*'
+        input.type = 'file'
+        input.accept = 'image/*'
         input.onchange = () => {
           const file = input.files?.[0]
-          if (file) e.chain().focus().setFigure({ src: URL.createObjectURL(file), alt: file.name }).run()
+          if (!file) return
+          if (onInsertImage) void onInsertImage(file)
+          else e.chain().focus().setImage({ src: URL.createObjectURL(file), alt: file.name }).run()
         }
         input.click()
         return true
@@ -56,7 +60,8 @@ const commandGroups: { label: string; items: CommandItem[] }[] = [
       { id: 'mermaid', label: 'Mermaid Diagram', description: 'Architecture diagram', keywords: ['diagram', 'chart'], execute: (e) => e.chain().focus().setMermaidDiagram({ code: 'graph TD\n  A-->B' }).run() },
     ],
   },
-]
+  ]
+}
 
 interface SlashState {
   open: boolean
@@ -66,7 +71,13 @@ interface SlashState {
   position: { top: number; left: number }
 }
 
-export function SlashCommandMenu({ editor }: { editor: Editor | null }) {
+export function SlashCommandMenu({
+  editor,
+  onInsertImage,
+}: {
+  editor: Editor | null
+  onInsertImage?: (file: File) => void | Promise<void>
+}) {
   const [state, setState] = useState<SlashState>({
     open: false,
     query: '',
@@ -77,8 +88,11 @@ export function SlashCommandMenu({ editor }: { editor: Editor | null }) {
   const menuRef = useRef<HTMLDivElement>(null)
   const openRef = useRef(false)
 
-  openRef.current = state.open
+  useEffect(() => {
+    openRef.current = state.open
+  }, [state.open])
 
+  const commandGroups = createCommandGroups(onInsertImage)
   const allItems = commandGroups.flatMap(g => g.items)
 
   const filtered = state.query

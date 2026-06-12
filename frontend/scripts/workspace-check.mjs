@@ -57,8 +57,8 @@ function assertOldRoutesRedirect() {
   if (/from ['"]\.\/pages\/Editor['"]/.test(routes)) {
     fail('legacy Editor import should be removed from App.tsx');
   }
-  const editorPage = read('src/pages/EditorPage.tsx');
-  assertContains(editorPage, 'EditorPage', 'EditorPage component should still exist as dead code reference');
+  const editorPage = read('src/pages/DocumentEditorPage.tsx');
+  assertContains(editorPage, 'DocumentEditorPage', 'document editor page should exist for active document routes');
 }
 
 function assertUnifiedLibrarySurfaces() {

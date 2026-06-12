@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     # Deprecated: AI uses BYOK user credentials in Settings. Optional legacy fallback only.
     ANTHROPIC_API_KEY: Optional[str] = None
     FRONTEND_URL: str
+    BACKEND_URL: str
     UPLOAD_DIR: str = "/tmp/opencode/uploads"
 
     MAIL_USERNAME: str
@@ -23,11 +24,6 @@ class Settings(BaseSettings):
     GITHUB_CLIENT_ID: str = ""
     GITHUB_CLIENT_SECRET: str = ""
     GITHUB_REDIRECT_URI: str = ""
-
-    # GitLab OAuth
-    GITLAB_CLIENT_ID: str = ""
-    GITLAB_CLIENT_SECRET: str = ""
-    GITLAB_REDIRECT_URI: str = ""
 
     # Fernet key for encrypting OAuth tokens at rest
     ENCRYPTION_KEY: str = ""

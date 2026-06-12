@@ -24,7 +24,6 @@ import {
 import { toast } from 'sonner';
 
 import type { Editor } from '@tiptap/core'
-import { FullToolbar } from '@/components/editor/tiptap/FullToolbar'
 import { MarkdownEditor } from '@/components/editor/MarkdownEditor';
 import { AiPanel } from '@/components/editor/AiPanel';
 import { ResourcePalette } from '@/components/editor/ResourcePalette';
@@ -42,6 +41,7 @@ import { Input } from '@/components/ui/input';
 import { StaleSectionBanner } from '@/components/ui/stale-section-banner';
 import { Notice } from '@/components/ui/notice';
 import { SectionStatusDot } from '@/components/ui/section-status-dot';
+import { SectionStatusBadge } from '@/components/ui/section-status-badge';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -229,11 +229,11 @@ function SectionBlock({
     <section
       id={`section-${section.id}`}
       data-editor-section="true"
-      className="group min-w-0 scroll-mt-24 overflow-x-hidden py-6"
+      className="group min-w-0 scroll-mt-24 overflow-x-hidden py-7"
     >
-      <div className="relative mx-auto max-w-5xl min-w-0 rounded-sm px-4 py-3 transition-colors duration-150 focus-within:bg-panel/45 hover:bg-panel/35">
-        <div className="mb-4 flex items-start gap-3">
-          <div className="mt-[13px] opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+      <div className="relative mx-auto max-w-4xl min-w-0 px-2 py-1 transition-colors duration-150 sm:px-4">
+        <div className="mb-3 flex items-start gap-3">
+          <div className="mt-[12px] opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
             <SectionStatusDot section={section} />
           </div>
           <div className="min-w-0 flex-1">
@@ -245,10 +245,11 @@ function SectionBlock({
                 if (event.key === 'Enter') event.currentTarget.blur();
               }}
               aria-label={`Heading for ${section.heading}`}
-              className="h-auto rounded-none border-0 border-b border-transparent bg-transparent px-0 py-1 text-3xl font-semibold leading-tight text-text-primary shadow-none focus-visible:border-interaction focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="h-auto rounded-none border-0 border-b border-transparent bg-transparent px-0 py-1 text-2xl font-semibold leading-tight text-text-primary shadow-none focus-visible:border-interaction focus-visible:ring-0 focus-visible:ring-offset-0 sm:text-3xl"
             />
           </div>
-          <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
+            <SectionStatusBadge section={section} compact />
             <Button type="button" variant="ghost" size="icon" onClick={() => onAdd(section.id, 'above')} aria-label="Add section above" className="text-muted-foreground hover:text-foreground">
               <Plus className="h-3.5 w-3.5" />
             </Button>
@@ -311,10 +312,12 @@ function SectionBlock({
           />
         )}
 
-        <div className="min-w-0 overflow-x-hidden px-1 py-2">
+        <div className="min-w-0 overflow-x-hidden px-1 py-1">
           <MarkdownEditor
             value={content}
             onChange={handleContentChange}
+            sectionId={section.id}
+            projectId={projectId}
             onFocusChange={onFocusChange}
           />
         </div>
@@ -587,8 +590,13 @@ export function DocumentEditorPage() {
   }, [updateDocumentSection]);
 
   const handleInsertAtCursor = useCallback((content: string) => {
-    toast.success('AI content ready to insert');
-  }, []);
+    if (!activeEditor) {
+      toast.error('Focus a section before inserting AI content');
+      return;
+    }
+    activeEditor.chain().focus().insertContent(content, { contentType: 'markdown' }).run();
+    toast.success('Inserted at cursor');
+  }, [activeEditor]);
 
   useKeyboardShortcuts({
     shortcuts: [
@@ -783,11 +791,8 @@ export function DocumentEditorPage() {
               </div>
             </div>
           ) : (
-            <div className="min-w-0 px-5 py-3">
-              <div className="sticky top-0 z-40 bg-panel pb-2 pt-2">
-                <FullToolbar editor={activeEditor} />
-              </div>
-              <div className="mx-auto max-w-5xl mb-4 flex items-center justify-between text-xs text-muted-foreground border-b border-border/50 pb-2">
+            <div className="min-w-0 px-4 py-5 sm:px-6">
+              <div className="mx-auto mb-2 flex max-w-4xl items-center justify-between border-b border-border/50 pb-3 text-xs text-muted-foreground">
                 <span>{sections.length} section{sections.length !== 1 ? 's' : ''}</span>
                 <span>{wordCount.toLocaleString()} words</span>
               </div>
@@ -877,7 +882,7 @@ export function DocumentEditorPage() {
                     documentId={did}
                     activeSectionId={activeSection?.id ?? null}
                     activeSectionHeading={activeSection?.title || activeSection?.heading || null}
-                    activeSectionContent={activeSection?.content_md || ''}
+                    activeSectionContent={activeSection ? (localContentBySectionId[activeSection.id] ?? activeSection.content_md ?? '') : ''}
                     activeSectionStatus={activeSection?.status || 'pending'}
                     sections={sections.map((s) => ({ id: s.id, heading: s.title || s.heading }))}
                     onApplyContent={handleApplyContent}

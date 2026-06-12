@@ -1,4 +1,5 @@
 """Prompt templates for documentation outline generation."""
+import json
 
 OUTLINE_SYSTEM = """You adapt documentation outline templates based on codebase analysis facts.
 Return ONLY valid JSON: an array of objects with keys: heading (string), description (string, optional), order_index (integer starting at 0).
@@ -26,8 +27,6 @@ def build_outline_user_message(
     file_count: int,
     complexity_notes: str,
 ) -> str:
-    import json
-
     return OUTLINE_USER_TEMPLATE.format(
         template_sections=json.dumps(template_sections, indent=2),
         languages_summary=languages_summary,

@@ -9,7 +9,7 @@ class OAuthToken(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    provider = Column(String, nullable=False)               # 'github', 'gitlab'
+    provider = Column(String, nullable=False)               # 'github'
     access_token_encrypted = Column(String, nullable=False)  # Fernet-encrypted
     token_scope = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -1,10 +1,14 @@
-"""Unified BYOK AI provider adapters (Anthropic + Google AI Studio)."""
+"""Unified BYOK AI provider adapters."""
 
 from collections.abc import Iterable
 
 import httpx
 
-from app.ai_providers import PROVIDERS, VALID_PROVIDERS, is_valid_model
+from app.ai_providers import (
+    PROVIDERS,
+    VALID_PROVIDERS,
+    is_plausible_model,
+)
 
 
 class AiServiceError(Exception):
@@ -16,7 +20,7 @@ def validate_credential(provider: str, api_key: str, model_id: str) -> None:
         raise AiServiceError(f"Unsupported provider: {provider}")
     if not api_key or len(api_key.strip()) < 8:
         raise AiServiceError("API key is too short or empty")
-    if not is_valid_model(provider, model_id):
+    if not is_plausible_model(provider, model_id):
         raise AiServiceError(f"Unsupported model '{model_id}' for {provider}")
 
     api_key = api_key.strip()
@@ -25,6 +29,8 @@ def validate_credential(provider: str, api_key: str, model_id: str) -> None:
             _validate_anthropic(api_key, model_id)
         elif provider == "google":
             _validate_google(api_key, model_id)
+        elif provider == "openai":
+            _validate_openai(api_key, model_id)
         elif provider == "opencode-go":
             _validate_opencode_go(api_key, model_id)
     except AiServiceError:
@@ -42,15 +48,26 @@ def complete_text(
     *,
     max_tokens: int = 4096,
 ) -> str:
-    validate_credential(provider, api_key, model_id)
+    if provider not in VALID_PROVIDERS:
+        raise AiServiceError(f"Unsupported provider: {provider}")
     api_key = api_key.strip()
+    if not api_key:
+        raise AiServiceError("API key is too short or empty")
 
-    if provider == "anthropic":
-        return _complete_anthropic(system, user, api_key, model_id, max_tokens)
-    if provider == "google":
-        return _complete_google(system, user, api_key, model_id, max_tokens)
-    if provider == "opencode-go":
-        return _complete_opencode_go(system, user, api_key, model_id, max_tokens)
+    try:
+        if provider == "anthropic":
+            return _complete_anthropic(system, user, api_key, model_id, max_tokens)
+        if provider == "google":
+            return _complete_google(system, user, api_key, model_id, max_tokens)
+        if provider == "openai":
+            return _complete_openai(system, user, api_key, model_id, max_tokens)
+        if provider == "opencode-go":
+            return _complete_opencode_go(system, user, api_key, model_id, max_tokens)
+    except AiServiceError:
+        raise
+    except Exception as e:
+        raise AiServiceError(f"Could not complete {provider} request: {_safe_error(e)}") from e
+
     raise AiServiceError(f"Unsupported provider: {provider}")
 
 
@@ -66,6 +83,8 @@ def list_models(provider: str, api_key: str) -> tuple[list[dict[str, str]], str]
             return _list_anthropic_models(api_key), "provider"
         if provider == "google":
             return _list_google_models(api_key), "provider"
+        if provider == "openai":
+            return _list_openai_models(api_key), "provider"
         if provider == "opencode-go":
             return _list_opencode_go_models(api_key), "provider"
     except AiServiceError:
@@ -187,6 +206,77 @@ def _list_google_models(api_key: str) -> list[dict[str, str]]:
             display_name = getattr(item, "display_name", None)
             models.append({"id": model_id, "label": display_name or _model_label(model_id)})
     return models or _curated_models("google")
+
+
+def _validate_openai(api_key: str, model_id: str) -> None:
+    from openai import OpenAI
+
+    client = OpenAI(api_key=api_key)
+    client.responses.create(
+        model=model_id,
+        input="Reply with OK",
+        max_output_tokens=16,
+    )
+
+
+def _complete_openai(
+    system: str, user: str, api_key: str, model_id: str, max_tokens: int
+) -> str:
+    from openai import OpenAI
+
+    client = OpenAI(api_key=api_key)
+    response = client.responses.create(
+        model=model_id,
+        input=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        max_output_tokens=max_tokens,
+    )
+    text = _extract_openai_text(response)
+    if text:
+        return text.strip()
+    raise AiServiceError("Empty response from OpenAI")
+
+
+def _extract_openai_text(response: object) -> str:
+    output_text = getattr(response, "output_text", None)
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text
+
+    chunks: list[str] = []
+    for item in getattr(response, "output", []) or []:
+        for content in getattr(item, "content", []) or []:
+            text = getattr(content, "text", None)
+            if isinstance(text, str):
+                chunks.append(text)
+    return "".join(chunks)
+
+
+def _list_openai_models(api_key: str) -> list[dict[str, str]]:
+    from openai import OpenAI
+
+    client = OpenAI(api_key=api_key)
+    response = client.models.list()
+    data = getattr(response, "data", response)
+    if not isinstance(data, Iterable):
+        return _curated_models("openai")
+
+    curated_labels = {
+        model["id"]: model["label"] for model in _curated_models("openai")
+    }
+    models = []
+    for item in data:
+        model_id = getattr(item, "id", None)
+        if not isinstance(model_id, str) or not model_id:
+            continue
+        if not model_id.startswith(("gpt-", "o")):
+            continue
+        models.append({
+            "id": model_id,
+            "label": curated_labels.get(model_id, _model_label(model_id)),
+        })
+    return models or _curated_models("openai")
 
 
 def _opencode_go_chat_completion(

@@ -90,32 +90,29 @@ export const Callout = Node.create<CalloutOptions>({
     }
   },
 
-  parseMarkdown: {
-    handler: ({ blockText }) => {
-      const lines = blockText.split('\n').filter((l: string) => l.startsWith('>'))
-      if (lines.length === 0) return null
-      const firstLine = lines[0].replace(/^>\s?/, '')
-      const match = firstLine.match(/^\[!(\w+)\]\s*(.*)/)
-      if (!match) return null
-      const type = match[1].toLowerCase()
-      const title = match[2]
-      const body = lines.slice(1).map((l: string) => l.replace(/^>\s?/, '')).join('\n')
-      return {
-        type: 'callout',
-        attrs: { type, calloutTitle: title },
-        content: body
-          ? [{ type: 'paragraph', content: [{ type: 'text', text: body }] }]
-          : [{ type: 'paragraph' }],
-      }
-    },
+  parseMarkdown: (token: any) => {
+    const blockText = token.raw || token.text || ''
+    const lines = blockText.split('\n').filter((l: string) => l.startsWith('>'))
+    if (lines.length === 0) return []
+    const firstLine = lines[0].replace(/^>\s?/, '')
+    const match = firstLine.match(/^\[!(\w+)\]\s*(.*)/)
+    if (!match) return []
+    const type = match[1].toLowerCase()
+    const title = match[2]
+    const body = lines.slice(1).map((l: string) => l.replace(/^>\s?/, '')).join('\n')
+    return {
+      type: 'callout',
+      attrs: { type, calloutTitle: title },
+      content: body
+        ? [{ type: 'paragraph', content: [{ type: 'text', text: body }] }]
+        : [{ type: 'paragraph' }],
+    }
   },
 
-  renderMarkdown: {
-    handler: (node, helpers) => {
-      const type = node.attrs.type || 'info'
-      const title = node.attrs.calloutTitle || type
-      const content = helpers.renderChildren(node.content || [])
-      return `> [!${type}] ${title}\n> ${content.trim().replace(/\n/g, '\n> ')}\n\n`
-    },
+  renderMarkdown: (node: any, helpers: any) => {
+    const type = node.attrs.type || 'info'
+    const title = node.attrs.calloutTitle || type
+    const content = helpers.renderChildren(node.content || [])
+    return `> [!${type}] ${title}\n> ${content.trim().replace(/\n/g, '\n> ')}\n\n`
   },
 })

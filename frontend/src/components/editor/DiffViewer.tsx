@@ -76,7 +76,7 @@ export function computeDiff(oldText: string, newText: string): DiffResult {
       }
     } else {
       if (!currentChange) currentChange = []
-      const words = entry.type !== 'unchanged' && entry.indexA >= 0 && entry.indexB >= 0
+      const words = entry.indexA >= 0 && entry.indexB >= 0
         ? wordDiff(paragraphsA[entry.indexA], paragraphsB[entry.indexB])
         : [{ text: entry.item as string, type: entry.type }]
       currentChange.push({ text: entry.item as string, type: entry.type, words })
@@ -93,7 +93,7 @@ export function computeDiff(oldText: string, newText: string): DiffResult {
 
 function renderInlineMarkdown(text: string): (string | { text: string; bold?: boolean; code?: boolean })[] {
   const parts: (string | { text: string; bold?: boolean; code?: boolean })[] = []
-  let remaining = text
+  const remaining = text
   const regex = /(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`)/g
   let lastIndex = 0
   let match: RegExpExecArray | null
@@ -116,14 +116,18 @@ function renderInlineMarkdown(text: string): (string | { text: string; bold?: bo
 }
 
 interface DiffViewerProps {
-  oldText: string
-  newText: string
+  oldText?: string
+  newText?: string
+  oldContent?: string
+  newContent?: string
   viewMode?: 'unified' | 'side-by-side'
   className?: string
 }
 
-export function DiffViewer({ oldText, newText, viewMode = 'side-by-side', className }: DiffViewerProps) {
-  const diff = computeDiff(oldText, newText)
+export function DiffViewer({ oldText, newText, oldContent, newContent, viewMode = 'side-by-side', className }: DiffViewerProps) {
+  const before = oldContent ?? oldText ?? ''
+  const after = newContent ?? newText ?? ''
+  const diff = computeDiff(before, after)
 
   if (viewMode === 'unified') {
     return (

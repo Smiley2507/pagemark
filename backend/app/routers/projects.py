@@ -1,3 +1,5 @@
+import json
+import secrets
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
@@ -48,6 +50,7 @@ from app.workers.analysis_worker import analyze_project_task, clone_and_analyze_
 from app.services import git_service, github_service, crypto_service, activity_service
 from app.services.project_summary_service import summarize_project
 from app.models.oauth_token import OAuthToken
+from app.config import settings
 
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -85,6 +88,8 @@ async def _project_to_response(
         starred=project.starred,
         tags=project.tags or [],
         export_settings=project.export_settings,
+        webhook_secret=project.webhook_secret,
+        webhook_id=project.webhook_id,
         documents_count=summary.documents_count,
         sections_count=summary.sections_count,
         active_generation=summary.active_generation,
@@ -194,6 +199,7 @@ async def _get_project(project_id: int, current_user: User, db: AsyncSession) ->
 # ── GET /projects/tags ────────────────────────────────────────────
 
 NOTIFICATION_CATEGORY_MAP: dict[str, str] = {
+    "source_webhook_received": "source_sync",
     "source_sync": "source_sync",
     "generation_run_started": "generation",
     "generation_run_completed": "generation",
@@ -208,6 +214,7 @@ NOTIFICATION_CATEGORY_MAP: dict[str, str] = {
 }
 
 ALWAYS_VISIBLE_EVENTS = {
+    "source_webhook_received",
     "analysis_started", "analysis_complete", "analysis_failed",
     "document_created", "outline_approved",
     "section_reviewed", "project_created",
@@ -246,7 +253,6 @@ async def get_recent_project_activity(
     user_settings = result.scalar_one_or_none()
     prefs = dict(DEFAULT_NOTIFICATION_PREFS)
     if user_settings and user_settings.notifications_json:
-        import json
         try:
             stored = json.loads(user_settings.notifications_json)
             prefs.update(stored)
@@ -563,6 +569,7 @@ async def duplicate_project(
         default_branch=original.default_branch,
         source_visibility=original.source_visibility,
         source_metadata=original.source_metadata,
+        export_settings=original.export_settings,
         status=ProjectStatus.PENDING,
     )
     db.add(new_project)
@@ -748,6 +755,17 @@ async def connect_oauth_git(
         "sync_supported": True,
     }
 
+    try:
+        if not project.webhook_secret:
+            project.webhook_secret = secrets.token_hex(32)
+        webhook_url = f"{settings.BACKEND_URL}/webhooks/github"
+        result = await github_service.register_webhook(
+            decrypted_token, body.owner, body.repo, webhook_url, project.webhook_secret
+        )
+        project.webhook_id = result.get("id")
+    except Exception:
+        pass
+
     analysis = await create_analysis_snapshot(
         db,
         project,
@@ -911,6 +929,104 @@ async def apply_analysis_outline(
     doc = doc_result.scalar_one_or_none()
     count = len(doc.sections) if doc else 0
     return ApplyOutlineResponse(applied=True, section_count=count)
+
+
+# ── Webhook Management ────────────────────────────────────────────
+
+
+class WebhookGenerateSecretResponse(BaseModel):
+    webhook_url: str
+    webhook_secret: str
+
+
+class WebhookRegisterRequest(BaseModel):
+    owner: str
+    repo: str
+
+
+class WebhookRegisterResponse(BaseModel):
+    webhook_id: int
+    webhook_url: str
+
+
+@router.post("/{project_id}/webhook/generate-secret", response_model=WebhookGenerateSecretResponse)
+async def generate_webhook_secret(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await _get_project(project_id, current_user, db)
+    project.webhook_secret = secrets.token_hex(32)
+    project.updated_at = datetime.utcnow()
+    await db.commit()
+    webhook_url = f"{settings.BACKEND_URL}/webhooks/github"
+    return WebhookGenerateSecretResponse(
+        webhook_url=webhook_url,
+        webhook_secret=project.webhook_secret,
+    )
+
+
+@router.post("/{project_id}/webhook/register", response_model=WebhookRegisterResponse)
+async def register_github_webhook(
+    project_id: int,
+    body: WebhookRegisterRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await _get_project(project_id, current_user, db)
+    if not project.webhook_secret:
+        raise HTTPException(status_code=400, detail="Generate a webhook secret first")
+
+    token_res = await db.execute(
+        select(OAuthToken).where(
+            OAuthToken.user_id == current_user.id,
+            OAuthToken.provider == "github",
+        )
+    )
+    token_obj = token_res.scalar_one_or_none()
+    if not token_obj:
+        raise HTTPException(status_code=400, detail="No GitHub connection found")
+
+    decrypted = crypto_service.decrypt_token(token_obj.access_token_encrypted)
+    webhook_url = f"{settings.BACKEND_URL}/webhooks/github"
+    result = await github_service.register_webhook(
+        decrypted, body.owner, body.repo, webhook_url, project.webhook_secret
+    )
+    project.webhook_id = result.get("id")
+    project.updated_at = datetime.utcnow()
+    await db.commit()
+
+    return WebhookRegisterResponse(
+        webhook_id=result["id"],
+        webhook_url=webhook_url,
+    )
+
+
+@router.delete("/{project_id}/webhook", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_github_webhook(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await _get_project(project_id, current_user, db)
+    if project.webhook_id:
+        token_res = await db.execute(
+            select(OAuthToken).where(
+                OAuthToken.user_id == current_user.id,
+                OAuthToken.provider == "github",
+            )
+        )
+        token_obj = token_res.scalar_one_or_none()
+        if token_obj:
+            decrypted = crypto_service.decrypt_token(token_obj.access_token_encrypted)
+            await github_service.delete_webhook(
+                decrypted, project.source_owner, project.source_repository, project.webhook_id
+            )
+    project.webhook_id = None
+    project.webhook_secret = None
+    project.updated_at = datetime.utcnow()
+    await db.commit()
+    return None
 
 
 # ── Activity Endpoints ────────────────────────────────────────────────
