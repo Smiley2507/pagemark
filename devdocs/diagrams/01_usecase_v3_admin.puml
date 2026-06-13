@@ -1,0 +1,47 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+left to right direction
+
+actor Administrator
+actor "Project Manager" as ProjectManager
+
+rectangle "Pagemark: Organization Administration" {
+  usecase "Create organization" as UC_CreateOrg
+  usecase "View organizations" as UC_ViewOrgs
+  usecase "Update organization settings" as UC_UpdateOrg
+  usecase "Invite members" as UC_Invite
+  usecase "Resend invite" as UC_ResendInvite
+  usecase "Update member role" as UC_UpdateRole
+  usecase "Remove member" as UC_RemoveMember
+  usecase "Create join link" as UC_CreateJoin
+  usecase "List join links" as UC_ListJoin
+  usecase "Revoke join link" as UC_RevokeJoin
+  usecase "View audit logs" as UC_Audit
+  usecase "Manage organization AI settings" as UC_OrgAI
+}
+
+Administrator -- UC_CreateOrg
+Administrator -- UC_ViewOrgs
+Administrator -- UC_UpdateOrg
+Administrator -- UC_Invite
+Administrator -- UC_ResendInvite
+Administrator -- UC_UpdateRole
+Administrator -- UC_RemoveMember
+Administrator -- UC_CreateJoin
+Administrator -- UC_ListJoin
+Administrator -- UC_RevokeJoin
+Administrator -- UC_Audit
+Administrator -- UC_OrgAI
+
+ProjectManager -- UC_ViewOrgs
+ProjectManager -- UC_Audit
+
+UC_CreateJoin ..> UC_ListJoin : <<include>>
+UC_ListJoin ..> UC_RevokeJoin : <<extend>>
+UC_UpdateOrg ..> UC_OrgAI : <<extend>>
+@enduml

@@ -1,0 +1,66 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+left to right direction
+
+actor Developer
+actor "Technical Writer" as TechnicalWriter
+actor Viewer
+
+rectangle "Pagemark: Collaboration and Review" {
+  usecase "View shared document" as UC_ViewShared
+  usecase "Share document" as UC_Share
+  usecase "Create collaboration note" as UC_CreateNote
+  usecase "View collaboration notes" as UC_ViewNotes
+  usecase "Join real-time section room" as UC_JoinRoom
+  usecase "Edit collaboratively" as UC_CollabEdit
+  usecase "Save section content" as UC_Snapshot
+  usecase "View section versions" as UC_Versions
+  usecase "Restore section version" as UC_Restore
+  usecase "Accept section review" as UC_AcceptReview
+  usecase "Resolve freshness update" as UC_Freshness
+  usecase "Preview/export reviewed content" as UC_Export
+}
+
+Developer -- UC_ViewShared
+Developer -- UC_Share
+Developer -- UC_CreateNote
+Developer -- UC_ViewNotes
+Developer -- UC_JoinRoom
+Developer -- UC_CollabEdit
+Developer -- UC_Snapshot
+Developer -- UC_Versions
+Developer -- UC_Restore
+Developer -- UC_AcceptReview
+Developer -- UC_Freshness
+Developer -- UC_Export
+
+TechnicalWriter -- UC_ViewShared
+TechnicalWriter -- UC_CreateNote
+TechnicalWriter -- UC_ViewNotes
+TechnicalWriter -- UC_JoinRoom
+TechnicalWriter -- UC_CollabEdit
+TechnicalWriter -- UC_Snapshot
+TechnicalWriter -- UC_Versions
+TechnicalWriter -- UC_AcceptReview
+TechnicalWriter -- UC_Export
+
+Viewer -- UC_ViewShared
+Viewer -- UC_ViewNotes
+Viewer -- UC_JoinRoom
+Viewer -- UC_Export
+
+UC_JoinRoom ..> UC_CollabEdit : <<extend>>
+UC_CollabEdit ..> UC_Snapshot : <<include>>
+UC_CollabEdit ..> UC_AcceptReview : <<extend>>
+
+note bottom of UC_JoinRoom
+Liveblocks stores presence, cursors, CRDT state,
+and inline threads externally.
+PostgreSQL stores Section.content_md snapshots.
+end note
+@enduml

@@ -1,0 +1,72 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+hide methods
+
+class Project {
+  id: Integer <<PK>>
+  org_id: Integer <<FK>>
+  created_by: Integer <<FK>>
+  name: String
+  status: Enum(ProjectStatus)
+  source_type: Enum(SourceType)
+}
+
+class ProjectSourceExclusion {
+  id: Integer <<PK>>
+  project_id: Integer <<FK>>
+  pattern: String
+  enabled: Boolean
+  created_by: Integer <<FK>>
+}
+
+class Analysis {
+  id: Integer <<PK>>
+  project_id: Integer <<FK>>
+  status: Enum(AnalysisStatus)
+  source_type: String
+  source_commit: String
+  is_current: Boolean
+}
+
+class Document {
+  id: Integer <<PK>>
+}
+
+class Template {
+  id: Integer <<PK>>
+  owner_id: Integer <<FK>>
+  name: String
+  category: String
+  purpose: Text
+  is_builtin: Boolean
+}
+
+class TemplateRecommendation {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  analysis_id: Integer <<FK>>
+  template_id: Integer <<FK>>
+  basis: Enum(TemplateRecommendationBasis)
+  score: Float
+}
+
+class OutlineProposal {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  analysis_id: Integer <<FK>>
+  basis: Enum(OutlineProposalBasis)
+  status: Enum(OutlineProposalStatus)
+  version: Integer
+}
+
+Project "1" *-- "0..*" ProjectSourceExclusion : source_exclusions
+Project "1" *-- "0..*" Analysis : analyses
+Analysis "1" -- "0..*" TemplateRecommendation : recommendations
+Template "0..1" -- "0..*" TemplateRecommendation : template
+Document "1" -- "0..*" OutlineProposal : outline_proposals
+@enduml

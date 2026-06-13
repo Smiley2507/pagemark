@@ -1,0 +1,60 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+hide methods
+
+class CollaborationNote {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  section_id: Integer <<FK>>
+  user_id: Integer <<FK>>
+  content: Text
+}
+
+class DocumentShare {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  user_id: Integer <<FK>>
+  permission: Enum(DocumentSharePermission)
+  created_by: Integer <<FK>>
+  revoked_at: DateTime
+}
+
+class ActivityEvent {
+  id: Integer <<PK>>
+  project_id: Integer <<FK>>
+  event_type: String
+  analysis_id: Integer <<FK>>
+  document_id: Integer <<FK>>
+  section_id: Integer <<FK>>
+}
+
+class ChatThread {
+  id: Integer <<PK>>
+  project_id: Integer <<FK>>
+  title: String
+}
+
+class ChatMessage {
+  id: Integer <<PK>>
+  thread_id: Integer <<FK>>
+  role: Enum(MessageRole)
+  content: Text
+}
+
+ChatThread "1" *-- "0..*" ChatMessage : messages
+
+note right of CollaborationNote
+Associations to Document, Section, User, Project,
+Analysis, and GenerationRun are defined in their
+respective class diagrams.
+
+Liveblocks handles real-time presence, cursors,
+CRDT sync, and inline comment threads externally.
+Pagemark persists Section.content_md snapshots.
+end note
+@enduml

@@ -1,0 +1,81 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+hide methods
+
+class Document {
+  id: Integer <<PK>>
+  project_id: Integer <<FK>>
+  template_id: Integer <<FK>>
+  title: String
+  status: Enum(DocumentStatus)
+  setup_stage: Enum(DocumentSetupStage)
+}
+
+class Section {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  parent_id: Integer <<FK>>
+  heading: String
+  content_lifecycle: Enum(SectionContentLifecycle)
+  status: Enum(SectionStatus)
+}
+
+class SectionVersion {
+  id: Integer <<PK>>
+  section_id: Integer <<FK>>
+  content_md: Text
+  author_type: Enum(AuthorType)
+  summary: String
+}
+
+class GenerationRun {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  mode: Enum(GenerationMode)
+  status: Enum(GenerationRunStatus)
+  failover_state: Enum(FailoverState)
+  intended_provider: String
+}
+
+class GenerationSectionTask {
+  id: Integer <<PK>>
+  generation_run_id: Integer <<FK>>
+  section_id: Integer <<FK>>
+  status: Enum(GenerationTaskStatus)
+  actual_provider: String
+  actual_model: String
+}
+
+class ClarificationRequest {
+  id: Integer <<PK>>
+  section_id: Integer <<FK>>
+  document_id: Integer <<FK>>
+  outline_proposal_id: Integer <<FK>>
+  question: Text
+  status: Enum(ClarificationStatus)
+}
+
+class EvidenceReference {
+  id: Integer <<PK>>
+  section_id: Integer <<FK>>
+  analysis_id: Integer <<FK>>
+  artifact_type: String
+  path: String
+  symbol: String
+}
+
+Document "1" *-- "0..*" Section : sections
+Section "0..1" -- "0..*" Section : children
+Section "1" *-- "0..*" SectionVersion : versions
+Document "1" *-- "0..*" GenerationRun : generation_runs
+GenerationRun "1" *-- "0..*" GenerationSectionTask : section_tasks
+Section "1" -- "0..*" GenerationSectionTask : generates
+Section "0..1" -- "0..*" ClarificationRequest : clarification_requests
+Document "0..1" -- "0..*" ClarificationRequest : clarification_requests
+Section "1" *-- "0..*" EvidenceReference : evidence_references
+@enduml
