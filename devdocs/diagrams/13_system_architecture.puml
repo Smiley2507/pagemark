@@ -1,0 +1,61 @@
+@startuml
+skinparam backgroundColor white
+skinparam componentBackgroundColor #F8F9FA
+skinparam componentBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+left to right direction
+
+package "Presentation Layer" {
+  component "React 19 + TypeScript\nFrontend (Vite)" as Frontend
+  component "Tiptap Editor with\nLiveblocks Yjs Provider" as Tiptap
+  component "TanStack Query + Zustand\nState Management" as State
+}
+
+package "Application Layer" {
+  component "FastAPI Backend\n(Python)" as Backend
+  component "SQLAlchemy 2 Async ORM\n+ Alembic Migrations" as ORM
+  component "Celery Workers" as Celery
+  component "AI Provider\nAbstraction Layer" as AIAbstraction
+  component "Export Service\n(WeasyPrint)" as Export
+}
+
+package "Data Layer" {
+  database "PostgreSQL 16\n(35 tables)" as PostgreSQL
+  database "Redis\n(Celery broker + result backend)" as Redis
+}
+
+package "External Services" {
+  component "Anthropic Claude API" as Anthropic
+  component "Google Gemini API" as Gemini
+  component "OpenCode Go API" as OpenCode
+  component "GitHub OAuth +\nRepository API" as GitHub
+  component "Liveblocks Platform\n(Room auth, Yjs CRDT sync,\nPresence, Inline threads)" as Liveblocks
+  component "WeasyPrint" as WeasyPrint
+}
+
+Frontend --> Backend : REST / SSE
+Frontend --> Liveblocks : CRDT sync, presence
+Frontend --> Tiptap : editor UI
+Frontend --> State : server/client state
+Tiptap --> Liveblocks : Yjs provider
+State --> Backend : query/mutation state
+
+Backend --> PostgreSQL : SQL / ORM
+Backend --> Redis : task queue
+Backend --> GitHub : OAuth + repo API
+Backend --> Liveblocks : room auth
+Backend --> Export : PDF rendering
+Backend --> ORM : schema / migrations
+
+Celery --> Redis : task broker
+Celery --> PostgreSQL : result storage
+Celery --> AIAbstraction : generation + analysis
+
+AIAbstraction --> Anthropic : Claude
+AIAbstraction --> Gemini : Gemini
+AIAbstraction --> OpenCode : OpenCode Go
+
+Export --> WeasyPrint : HTML -> PDF
+@enduml
