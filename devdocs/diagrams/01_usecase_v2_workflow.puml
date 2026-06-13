@@ -1,0 +1,56 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+left to right direction
+
+actor Developer
+actor "Technical Writer" as TechnicalWriter
+
+rectangle "Pagemark: Project, Document, and AI Workflow" {
+  usecase "Create project" as UC_CreateProject
+  usecase "Connect source code" as UC_ConnectSource
+  usecase "Run code analysis" as UC_RunAnalysis
+  usecase "View analysis results" as UC_ViewAnalysis
+  usecase "Create document" as UC_CreateDocument
+  usecase "Run setup wizard" as UC_SetupWizard
+  usecase "Review template recommendations" as UC_Templates
+  usecase "Approve outline" as UC_ApproveOutline
+  usecase "Generate sections with AI" as UC_Generate
+  usecase "Refine content with AI" as UC_Refine
+  usecase "Answer clarification request" as UC_Clarify
+  usecase "Export document" as UC_Export
+}
+
+Developer -- UC_CreateProject
+Developer -- UC_ConnectSource
+Developer -- UC_RunAnalysis
+Developer -- UC_ViewAnalysis
+Developer -- UC_CreateDocument
+Developer -- UC_SetupWizard
+Developer -- UC_Templates
+Developer -- UC_ApproveOutline
+Developer -- UC_Generate
+Developer -- UC_Refine
+Developer -- UC_Clarify
+Developer -- UC_Export
+
+TechnicalWriter -- UC_ViewAnalysis
+TechnicalWriter -- UC_CreateDocument
+TechnicalWriter -- UC_SetupWizard
+TechnicalWriter -- UC_Templates
+TechnicalWriter -- UC_ApproveOutline
+TechnicalWriter -- UC_Generate
+TechnicalWriter -- UC_Refine
+TechnicalWriter -- UC_Clarify
+TechnicalWriter -- UC_Export
+
+UC_CreateProject ..> UC_ConnectSource : <<extend>>
+UC_ConnectSource ..> UC_RunAnalysis : <<include>>
+UC_SetupWizard ..> UC_Templates : <<include>>
+UC_SetupWizard ..> UC_ApproveOutline : <<include>>
+UC_Generate ..> UC_Clarify : <<extend>>
+@enduml

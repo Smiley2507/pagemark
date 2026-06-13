@@ -1,0 +1,87 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+hide methods
+
+class User {
+  id: Integer <<PK>>
+  email: String
+  password_hash: String
+  name: String
+  is_verified: Boolean
+  login_count: Integer
+}
+
+class UserRole {
+  id: Integer <<PK>>
+  user_id: Integer <<FK>>
+  role: Enum(RoleEnum)
+}
+
+class UserSettings {
+  user_id: Integer <<PK, FK>>
+  notifications_json: Text
+  language: String
+  theme: String
+  verification_token: String
+}
+
+class UserAiCredential {
+  id: Integer <<PK>>
+  user_id: Integer <<FK>>
+  provider: String
+  model_id: String
+  is_active: Boolean
+  key_hint: String
+}
+
+class OAuthToken {
+  id: Integer <<PK>>
+  user_id: Integer <<FK>>
+  provider: String
+  access_token_encrypted: String
+  token_scope: String
+}
+
+class Organization {
+  id: Integer <<PK>>
+  name: String
+  slug: String
+  created_by: Integer <<FK>>
+  personal: Boolean
+  quality_threshold: Integer
+}
+
+class OrganizationMember {
+  id: Integer <<PK>>
+  org_id: Integer <<FK>>
+  user_id: Integer <<FK>>
+  role: Enum(OrgMemberRole)
+  invited_by: Integer <<FK>>
+  status: Enum(OrgMemberStatus)
+}
+
+class OrganizationJoinLink {
+  id: Integer <<PK>>
+  org_id: Integer <<FK>>
+  code: String
+  role: Enum(OrgMemberRole)
+  max_uses: Integer
+  created_by: Integer <<FK>>
+}
+
+User "1" *-- "0..*" UserRole : roles
+User "1" *-- "0..1" UserSettings : settings
+User "1" -- "0..*" UserAiCredential : ai_credentials
+User "1" -- "0..*" OAuthToken : oauth_tokens
+User "1" -- "0..*" Organization : created_by
+User "1" -- "0..*" OrganizationMember : memberships
+User "1" -- "0..*" OrganizationMember : invited_by
+User "1" -- "0..*" OrganizationJoinLink : created_by
+Organization "1" *-- "0..*" OrganizationMember : members
+Organization "1" -- "0..*" OrganizationJoinLink : join_links
+@enduml
