@@ -1,0 +1,91 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+actor "User A" as UserA
+actor "User B" as UserB
+participant "Frontend\n(Three-Panel Editor)" as Frontend
+participant "Backend API" as Backend
+participant Liveblocks
+participant "AI Doc Service" as AIDoc
+participant "AI Provider" as Provider
+database Database
+
+== AI Chat Refinement ==
+UserA -> Frontend : Type message in AI chat panel
+Frontend -> Backend : POST /chat/threads/{thread_id}/messages/stream
+Backend -> Database : Save user ChatMessage
+Backend -> Database : Load thread, history, project resources
+Backend -> AIDoc : stream_chat(thread, messages, provider, model, resources)
+AIDoc -> AIDoc : Build chat prompt with project context
+AIDoc -> Provider : Streaming AI call or complete_text fallback
+Provider --> AIDoc : Text chunks
+AIDoc --> Backend : SSE data events
+Backend --> Frontend : text/event-stream
+Frontend --> UserA : Render streamed tokens
+AIDoc -> Database : Save AI ChatMessage on completion
+opt User applies suggestion
+  UserA -> Frontend : Apply suggestion to section editor
+end
+
+== Accept AI Suggestion ==
+UserA -> Frontend : Click Accept on generated/refined content
+Frontend -> Backend : PATCH /sections/{section_id}
+Backend -> Database : Update Section.content_md
+Backend -> Database : Create SectionVersion(author_type=USER)
+Backend -> Database : Update content_lifecycle as generated draft
+Backend --> Frontend : Updated Section
+
+== Real-Time Collaborative Editing ==
+UserA -> Frontend : Open section
+Frontend -> Frontend : Derive room id\nproject:{project_id}:document:{document_id}:section:{section_id}
+Frontend -> Backend : POST /projects/{project_id}/documents/{document_id}/sections/{section_id}/collaboration/auth
+Backend -> Database : Verify project membership
+Backend -> Database : Verify document access and section ownership
+Backend -> Database : Resolve effective permission(view/comment/edit)
+Backend -> Backend : Map permission to Liveblocks access
+Backend -> Liveblocks : POST /v2/authorize-user with secret key
+Liveblocks --> Backend : Token response
+Backend --> Frontend : Liveblocks token
+Frontend -> Liveblocks : Connect to section room
+
+UserB -> Frontend : Open same section
+Frontend -> Backend : POST /projects/{project_id}/documents/{document_id}/sections/{section_id}/collaboration/auth
+Backend -> Database : Repeat membership, access, permission checks
+Backend -> Liveblocks : POST /v2/authorize-user with secret key
+Liveblocks --> Backend : Token response
+Backend --> Frontend : Liveblocks token
+Frontend -> Liveblocks : Join same section room
+Liveblocks --> Frontend : Presence and cursor updates for both users
+UserB -> Frontend : Edit content
+Frontend -> Liveblocks : Yjs CRDT update
+Liveblocks --> Frontend : Sync update to User A editor
+Frontend --> UserA : Editors converge
+
+... debounced collaborative snapshot ...
+Frontend -> Frontend : Convert Tiptap/Yjs state to Markdown
+Frontend -> Backend : PATCH /projects/{project_id}/documents/{document_id}/sections/{section_id}/collaboration/snapshot
+Backend -> Database : Check effective EDIT permission
+Backend -> Database : Check Document.status != APPROVED
+Backend -> Database : Update Section.content_md and updated_at
+Backend -> Database : Update Document.updated_at
+Backend -> Backend : clear_review_state_for_content_edit()
+Backend --> Frontend : SectionAutosaveResponse
+
+note right of Database
+The collaboration snapshot endpoint persists Markdown and clears review state.
+The current implementation does not add a Liveblocks-specific PostgreSQL table.
+end note
+
+== Section Review ==
+UserA -> Frontend : Click Accept Review
+Frontend -> Backend : POST /sections/{section_id}/accept-review
+Backend -> Database : Set content_lifecycle=REVIEWED
+Backend -> Database : Record reviewed_by and reviewed_at
+Backend -> Database : Record reviewed_against_analysis_id
+Backend --> Frontend : Updated Section
+@enduml

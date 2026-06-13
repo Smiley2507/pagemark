@@ -1,0 +1,179 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+hide methods
+
+class CollaborationNote {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  section_id: Integer <<FK>>
+  user_id: Integer <<FK>>
+  content: Text
+  created_at: DateTime
+}
+
+class DocumentShare {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  user_id: Integer <<FK>>
+  permission: Enum(DocumentSharePermission)
+  created_by: Integer <<FK>>
+  created_at: DateTime
+  revoked_at: DateTime
+}
+
+class ActivityEvent {
+  id: Integer <<PK>>
+  project_id: Integer <<FK>>
+  event_type: String
+  weight: Float
+  analysis_id: Integer <<FK>>
+  document_id: Integer <<FK>>
+  section_id: Integer <<FK>>
+  generation_run_id: Integer <<FK>>
+  payload: JSON
+  created_at: DateTime
+}
+
+class AuditLog {
+  id: Integer <<PK>>
+  user_id: Integer <<FK>>
+  org_id: Integer <<FK>>
+  action: String
+  resource: String
+  created_at: DateTime
+}
+
+class QualityReport {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  overall_score: Float
+  completeness: Float
+  consistency: Float
+  readability: Float
+  accuracy: Float
+  generated_at: DateTime
+}
+
+class QualityIssue {
+  id: Integer <<PK>>
+  report_id: Integer <<FK>>
+  severity: Enum(IssueSeverity)
+  section_ref: String
+  message: Text
+  suggestion: Text
+}
+
+class BrokenLink {
+  id: Integer <<PK>>
+  report_id: Integer <<FK>>
+  url: String
+  status_code: Integer
+  section_ref: String
+}
+
+class ChatThread {
+  id: Integer <<PK>>
+  project_id: Integer <<FK>>
+  title: String
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class ChatMessage {
+  id: Integer <<PK>>
+  thread_id: Integer <<FK>>
+  role: Enum(MessageRole)
+  content: Text
+  created_at: DateTime
+}
+
+class ChatMessageResource {
+  id: Integer <<PK>>
+  message_id: Integer <<FK>>
+  resource_id: Integer <<FK>>
+  order_index: Integer
+}
+
+class Resource {
+  id: Integer <<PK>>
+  project_id: Integer <<FK>>
+  type: Enum(ResourceType)
+  original_name: String
+  mime_type: String
+  size_bytes: Integer
+  data: LargeBinary
+  extracted_text: Text
+  thumbnail: LargeBinary
+  reference_type: String
+  reference_id: Integer
+  file_path: String
+  symbol_name: String
+  created_by: Integer <<FK>>
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class NLPReport {
+  id: Integer <<PK>>
+  project_id: Integer <<FK>>
+  readability_score: Float
+  entities: JSON
+  style_analysis: JSON
+  suggestions: JSON
+  created_at: DateTime
+}
+
+class WorkspacePreference {
+  id: Integer <<PK>>
+  user_id: Integer <<FK>>
+  surface: String
+  context_id: String
+  preferences_json: JSON
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class Document
+class Section
+class User
+class Project
+class Organization
+class Analysis
+class GenerationRun
+
+Document "1" -- "0..*" CollaborationNote : notes
+Section "0..1" -- "0..*" CollaborationNote : section notes
+User "1" -- "0..*" CollaborationNote : author
+Document "1" -- "0..*" DocumentShare : shares
+User "1" -- "0..*" DocumentShare : shared user
+User "1" -- "0..*" DocumentShare : creator
+Project "1" -- "0..*" ActivityEvent : activity
+Analysis "0..1" -- "0..*" ActivityEvent : analysis events
+Document "0..1" -- "0..*" ActivityEvent : document events
+Section "0..1" -- "0..*" ActivityEvent : section events
+GenerationRun "0..1" -- "0..*" ActivityEvent : generation events
+User "1" -- "0..*" AuditLog : actor
+Organization "0..1" -- "0..*" AuditLog : org
+Document "1" *-- "0..1" QualityReport : quality_report
+QualityReport "1" *-- "0..*" QualityIssue : issues
+QualityReport "1" *-- "0..*" BrokenLink : broken_links
+Project "1" *-- "0..*" ChatThread : chat_threads
+ChatThread "1" *-- "0..*" ChatMessage : messages
+ChatMessage "1" *-- "0..*" ChatMessageResource : resources
+Resource "1" -- "0..*" ChatMessageResource : attached_resource
+Project "1" -- "0..*" Resource : resources
+User "1" -- "0..*" Resource : creator
+Project "1" -- "0..*" NLPReport : nlp_reports
+User "1" -- "0..*" WorkspacePreference : preferences
+
+note right of CollaborationNote
+Real-time collaborative editing (presence, cursors, CRDT sync, inline comment threads)
+is handled by Liveblocks and is not represented as PostgreSQL entities.
+Pagemark persists only durable Markdown snapshots in Section.content_md.
+end note
+@enduml

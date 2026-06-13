@@ -1,0 +1,605 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+left to right direction
+
+package "Auth & Users" {
+  entity "users" as users {
+    * id : Integer <<PK>>
+    --
+    email : String <<NN, UNIQUE>>
+    password_hash : String <<NN>>
+    name : String
+    avatar_url : String
+    is_verified : Boolean <<NN>>
+    login_count : Integer <<NN>>
+    created_at : DateTime
+    updated_at : DateTime
+  }
+
+  entity "user_roles" as user_roles {
+    * id : Integer <<PK>>
+    --
+    user_id : Integer <<FK, NN>>
+    role : Enum(RoleEnum) <<NN>>
+    created_at : DateTime
+  }
+
+  entity "user_settings" as user_settings {
+    * user_id : Integer <<PK, FK>>
+    --
+    notifications_json : Text
+    language : String
+    theme : String
+    reset_token : String
+    reset_token_expires : DateTime
+    verification_token : String
+    verification_token_expires : DateTime
+  }
+
+  entity "user_api_keys" as user_api_keys {
+    * id : Integer <<PK>>
+    --
+    user_id : Integer <<FK, NN>>
+    name : String <<NN>>
+    key_hash : String <<NN, UNIQUE>>
+    created_at : DateTime
+    expires_at : DateTime
+  }
+
+  entity "oauth_tokens" as oauth_tokens {
+    * id : Integer <<PK>>
+    --
+    user_id : Integer <<FK, NN>>
+    provider : String <<NN>>
+    access_token_encrypted : String <<NN>>
+    token_scope : String
+    created_at : DateTime
+    updated_at : DateTime
+  }
+
+  entity "user_ai_credentials" as user_ai_credentials {
+    * id : Integer <<PK>>
+    --
+    user_id : Integer <<FK, NN>>
+    provider : String <<NN>>
+    api_key_encrypted : String <<NN>>
+    model_id : String <<NN>>
+    is_active : Boolean <<NN>>
+    key_hint : String <<NN>>
+    validated_at : DateTime
+    created_at : DateTime
+    updated_at : DateTime
+  }
+}
+
+package "Organizations" {
+  entity "organizations" as organizations {
+    * id : Integer <<PK>>
+    --
+    name : String <<NN>>
+    slug : String <<NN, UNIQUE>>
+    avatar_url : String
+    created_by : Integer <<FK, NN>>
+    created_at : DateTime
+    personal : Boolean <<NN>>
+    quality_threshold : Integer <<NN>>
+    ai_provider : String
+    ai_key_encrypted : String
+  }
+
+  entity "organization_members" as organization_members {
+    * id : Integer <<PK>>
+    --
+    org_id : Integer <<FK, NN>>
+    user_id : Integer <<FK, NN>>
+    role : Enum(OrgMemberRole) <<NN>>
+    invited_by : Integer <<FK>>
+    joined_at : DateTime
+    status : Enum(OrgMemberStatus) <<NN>>
+    invite_token : String
+    invite_token_expires : DateTime
+  }
+
+  entity "organization_join_links" as organization_join_links {
+    * id : Integer <<PK>>
+    --
+    org_id : Integer <<FK, NN>>
+    code : String <<NN, UNIQUE>>
+    role : Enum(OrgMemberRole) <<NN>>
+    max_uses : Integer
+    use_count : Integer <<NN>>
+    expires_at : DateTime
+    revoked_at : DateTime
+    created_by : Integer <<FK, NN>>
+    created_at : DateTime
+  }
+}
+
+package "Projects & Source" {
+  entity "projects" as projects {
+    * id : Integer <<PK>>
+    --
+    org_id : Integer <<FK, NN>>
+    created_by : Integer <<FK, NN>>
+    name : String <<NN>>
+    description : Text
+    status : Enum(ProjectStatus) <<NN>>
+    source_type : Enum(SourceType) <<NN>>
+    source_provider : String
+    source_owner : String
+    source_repository : String
+    selected_branch : String
+    default_branch : String
+    source_visibility : String
+    last_synced_commit : String
+    source_metadata : JSON
+    tags : ARRAY(String)
+    starred : Boolean
+    context_md : Text
+    export_settings : JSON
+    webhook_secret : String
+    webhook_id : Integer
+    deleted_at : DateTime
+    created_at : DateTime
+    updated_at : DateTime
+  }
+
+  entity "project_source_exclusions" as project_source_exclusions {
+    * id : Integer <<PK>>
+    --
+    project_id : Integer <<FK, NN>>
+    pattern : String <<NN>>
+    reason : Text
+    enabled : Boolean <<NN>>
+    created_by : Integer <<FK>>
+    created_at : DateTime
+    updated_at : DateTime
+  }
+}
+
+package "Templates & Outlines" {
+  entity "templates" as templates {
+    * id : Integer <<PK>>
+    --
+    name : String <<NN>>
+    description : Text
+    category : String
+    purpose : Text
+    intended_audience : Text
+    expected_outcome : Text
+    compatible_repository_traits : JSON
+    estimated_generation_scope : JSON
+    outline_preview : JSON
+    sections_json : JSON
+    guidance : Text
+    system_prompt : Text
+    owner_id : Integer <<FK>>
+    is_builtin : Boolean
+    created_at : DateTime
+  }
+
+  entity "template_recommendations" as template_recommendations {
+    * id : Integer <<PK>>
+    --
+    document_id : Integer <<FK, NN>>
+    analysis_id : Integer <<FK>>
+    template_id : Integer <<FK>>
+    basis : Enum(TemplateRecommendationBasis) <<NN>>
+    score : Float
+    explanation : Text
+    supporting_facts_json : JSON
+    provider_usage_ref : JSON
+    created_at : DateTime
+  }
+
+  entity "outline_proposals" as outline_proposals {
+    * id : Integer <<PK>>
+    --
+    document_id : Integer <<FK, NN>>
+    analysis_id : Integer <<FK>>
+    basis : Enum(OutlineProposalBasis) <<NN>>
+    status : Enum(OutlineProposalStatus) <<NN>>
+    version : Integer <<NN>>
+    outline_json : JSON <<NN>>
+    explanation_json : JSON
+    approved_by : Integer <<FK>>
+    approved_at : DateTime
+    approval_metadata : JSON
+    superseded_at : DateTime
+    created_at : DateTime
+  }
+}
+
+package "Analysis" {
+  entity "analyses" as analyses {
+    * id : Integer <<PK>>
+    --
+    project_id : Integer <<FK, NN>>
+    status : Enum(AnalysisStatus) <<NN>>
+    current_step : String
+    step_number : Integer
+    step_detail : String
+    total_steps : Integer
+    source_type : String <<NN>>
+    source_path : String
+    source_commit : String
+    is_current : Boolean <<NN>>
+    effective_exclusions_json : JSON
+    source_metadata : JSON
+    file_tree_json : JSON
+    languages_json : JSON
+    endpoints_json : JSON
+    complexity_json : JSON
+    analysis_data : JSON
+    file_contents_json : JSON
+    error_message : Text
+    started_at : DateTime
+    completed_at : DateTime
+    created_at : DateTime
+    updated_at : DateTime
+  }
+}
+
+package "Documents & Sections" {
+  entity "documents" as documents {
+    * id : Integer <<PK>>
+    --
+    project_id : Integer <<FK, NN>>
+    template_id : Integer <<FK>>
+    title : String <<NN>>
+    status : Enum(DocumentStatus) <<NN>>
+    setup_stage : Enum(DocumentSetupStage) <<NN>>
+    purpose : Text
+    audience : Text
+    context : Text
+    custom_outline_metadata : JSON
+    tags : JSON
+    export_settings : JSON
+    freshness_state : String
+    sharing_settings : JSON
+    reviewer_id : Integer <<FK>>
+    approved_at : DateTime
+    created_at : DateTime
+    updated_at : DateTime
+  }
+
+  entity "sections" as sections {
+    * id : Integer <<PK>>
+    --
+    document_id : Integer <<FK, NN>>
+    parent_id : Integer <<FK>>
+    order_index : Integer <<NN>>
+    heading : String <<NN>>
+    title : String
+    is_custom : Boolean
+    lifecycle_status : Enum(LifecycleStatus) <<NN>>
+    confidence_score : Integer
+    content_md : Text
+    content_lifecycle : Enum(SectionContentLifecycle) <<NN>>
+    status : Enum(SectionStatus) <<NN>>
+    needs_input : Boolean <<NN>>
+    is_generating : Boolean <<NN>>
+    has_failed : Boolean <<NN>>
+    is_potentially_stale : Boolean <<NN>>
+    workflow_metadata : JSON
+    reviewed_by : Integer <<FK>>
+    reviewed_at : DateTime
+    reviewed_against_analysis_id : Integer <<FK>>
+    created_at : DateTime
+    updated_at : DateTime
+  }
+
+  entity "section_versions" as section_versions {
+    * id : Integer <<PK>>
+    --
+    section_id : Integer <<FK, NN>>
+    content_md : Text <<NN>>
+    author_type : Enum(AuthorType) <<NN>>
+    summary : String
+    added : Integer <<NN>>
+    removed : Integer <<NN>>
+    modified : Integer <<NN>>
+    created_at : DateTime
+  }
+
+  entity "evidence_references" as evidence_references {
+    * id : Integer <<PK>>
+    --
+    section_id : Integer <<FK, NN>>
+    claim_anchor : String
+    analysis_id : Integer <<FK, NN>>
+    artifact_type : String <<NN>>
+    path : String
+    symbol : String
+    line_range_hint : JSON
+    reference_metadata : JSON
+    created_at : DateTime
+  }
+}
+
+package "Generation" {
+  entity "generation_runs" as generation_runs {
+    * id : Integer <<PK>>
+    --
+    document_id : Integer <<FK, NN>>
+    mode : Enum(GenerationMode) <<NN>>
+    intended_provider : String
+    intended_model : String
+    status : Enum(GenerationRunStatus) <<NN>>
+    failover_state : Enum(FailoverState) <<NN>>
+    estimated_prompt_tokens : Integer
+    estimated_completion_tokens : Integer
+    estimated_cost : Float
+    actual_prompt_tokens : Integer
+    actual_completion_tokens : Integer
+    actual_cost : Float
+    error_message : Text
+    run_metadata : JSON
+    started_at : DateTime
+    completed_at : DateTime
+    created_at : DateTime
+    updated_at : DateTime
+  }
+
+  entity "generation_section_tasks" as generation_section_tasks {
+    * id : Integer <<PK>>
+    --
+    generation_run_id : Integer <<FK, NN>>
+    section_id : Integer <<FK, NN>>
+    status : Enum(GenerationTaskStatus) <<NN>>
+    dependency_section_ids : JSON
+    actual_provider : String
+    actual_model : String
+    prompt_tokens : Integer
+    completion_tokens : Integer
+    cost : Float
+    error_message : Text
+    task_metadata : JSON
+    started_at : DateTime
+    completed_at : DateTime
+    created_at : DateTime
+    updated_at : DateTime
+  }
+
+  entity "clarification_requests" as clarification_requests {
+    * id : Integer <<PK>>
+    --
+    section_id : Integer <<FK>>
+    document_id : Integer <<FK>>
+    outline_proposal_id : Integer <<FK>>
+    question : Text <<NN>>
+    user_answer : Text
+    affected_sections_json : JSON
+    confidence_tradeoff : Text
+    status : Enum(ClarificationStatus) <<NN>>
+    created_at : DateTime
+    resolved_at : DateTime
+    skipped_at : DateTime
+  }
+}
+
+package "Collaboration & Quality" {
+  entity "collaboration_notes" as collaboration_notes {
+    * id : Integer <<PK>>
+    --
+    document_id : Integer <<FK, NN>>
+    section_id : Integer <<FK>>
+    user_id : Integer <<FK, NN>>
+    content : Text <<NN>>
+    created_at : DateTime
+  }
+
+  entity "document_shares" as document_shares {
+    * id : Integer <<PK>>
+    --
+    document_id : Integer <<FK, NN>>
+    user_id : Integer <<FK, NN>>
+    permission : Enum(DocumentSharePermission) <<NN>>
+    created_by : Integer <<FK, NN>>
+    created_at : DateTime
+    revoked_at : DateTime
+  }
+
+  entity "activity_events" as activity_events {
+    * id : Integer <<PK>>
+    --
+    project_id : Integer <<FK, NN>>
+    event_type : String <<NN>>
+    weight : Float <<NN>>
+    analysis_id : Integer <<FK>>
+    document_id : Integer <<FK>>
+    section_id : Integer <<FK>>
+    generation_run_id : Integer <<FK>>
+    payload : JSON
+    created_at : DateTime
+  }
+
+  entity "audit_logs" as audit_logs {
+    * id : Integer <<PK>>
+    --
+    user_id : Integer <<FK, NN>>
+    org_id : Integer <<FK>>
+    action : String <<NN>>
+    resource : String
+    created_at : DateTime
+  }
+
+  entity "quality_reports" as quality_reports {
+    * id : Integer <<PK>>
+    --
+    document_id : Integer <<FK, NN, UNIQUE>>
+    overall_score : Float <<NN>>
+    completeness : Float <<NN>>
+    consistency : Float <<NN>>
+    readability : Float <<NN>>
+    accuracy : Float <<NN>>
+    generated_at : DateTime
+  }
+
+  entity "quality_issues" as quality_issues {
+    * id : Integer <<PK>>
+    --
+    report_id : Integer <<FK, NN>>
+    severity : Enum(IssueSeverity) <<NN>>
+    section_ref : String
+    message : Text <<NN>>
+    suggestion : Text
+  }
+
+  entity "broken_links" as broken_links {
+    * id : Integer <<PK>>
+    --
+    report_id : Integer <<FK, NN>>
+    url : String <<NN>>
+    status_code : Integer
+    section_ref : String
+  }
+}
+
+package "Chat & Resources" {
+  entity "chat_threads" as chat_threads {
+    * id : Integer <<PK>>
+    --
+    project_id : Integer <<FK, NN>>
+    title : String <<NN>>
+    created_at : DateTime
+    updated_at : DateTime
+  }
+
+  entity "chat_messages" as chat_messages {
+    * id : Integer <<PK>>
+    --
+    thread_id : Integer <<FK, NN>>
+    role : Enum(MessageRole) <<NN>>
+    content : Text <<NN>>
+    created_at : DateTime
+  }
+
+  entity "chat_message_resources" as chat_message_resources {
+    * id : Integer <<PK>>
+    --
+    message_id : Integer <<FK, NN>>
+    resource_id : Integer <<FK, NN>>
+    order_index : Integer <<NN>>
+  }
+
+  entity "resources" as resources {
+    * id : Integer <<PK>>
+    --
+    project_id : Integer <<FK, NN>>
+    type : Enum(ResourceType) <<NN>>
+    original_name : String <<NN>>
+    mime_type : String
+    size_bytes : Integer
+    data : LargeBinary
+    extracted_text : Text
+    thumbnail : LargeBinary
+    reference_type : String
+    reference_id : Integer
+    file_path : String
+    symbol_name : String
+    created_by : Integer <<FK, NN>>
+    created_at : DateTime
+    updated_at : DateTime
+  }
+}
+
+package "Other" {
+  entity "nlp_reports" as nlp_reports {
+    * id : Integer <<PK>>
+    --
+    project_id : Integer <<FK, NN>>
+    readability_score : Float
+    entities : JSON
+    style_analysis : JSON
+    suggestions : JSON
+    created_at : DateTime
+  }
+
+  entity "workspace_preferences" as workspace_preferences {
+    * id : Integer <<PK>>
+    --
+    user_id : Integer <<FK, NN>>
+    surface : String <<NN>>
+    context_id : String
+    preferences_json : JSON <<NN>>
+    created_at : DateTime
+    updated_at : DateTime
+  }
+}
+
+users ||--o{ user_roles : user_id
+users ||--|| user_settings : user_id
+users ||--o{ user_api_keys : user_id
+users ||--o{ oauth_tokens : user_id
+users ||--o{ user_ai_credentials : user_id
+users ||--o{ organizations : created_by
+users ||--o{ organization_members : user_id
+users ||--o{ organization_members : invited_by
+users ||--o{ organization_join_links : created_by
+organizations ||--o{ organization_members : org_id
+organizations ||--o{ organization_join_links : org_id
+organizations ||--o{ projects : org_id
+users ||--o{ projects : created_by
+projects ||--o{ project_source_exclusions : project_id
+users ||--o{ project_source_exclusions : created_by
+users ||--o{ templates : owner_id
+projects ||--o{ analyses : project_id
+projects ||--o{ documents : project_id
+templates |o--o{ documents : template_id
+documents ||--o{ template_recommendations : document_id
+analyses |o--o{ template_recommendations : analysis_id
+templates |o--o{ template_recommendations : template_id
+documents ||--o{ outline_proposals : document_id
+analyses |o--o{ outline_proposals : analysis_id
+users |o--o{ outline_proposals : approved_by
+users |o--o{ documents : reviewer_id
+documents ||--o{ sections : document_id
+sections |o--o{ sections : parent_id
+users |o--o{ sections : reviewed_by
+analyses |o--o{ sections : reviewed_against_analysis_id
+sections ||--o{ section_versions : section_id
+sections ||--o{ evidence_references : section_id
+analyses ||--o{ evidence_references : analysis_id
+documents ||--o{ generation_runs : document_id
+generation_runs ||--o{ generation_section_tasks : generation_run_id
+sections ||--o{ generation_section_tasks : section_id
+sections |o--o{ clarification_requests : section_id
+documents |o--o{ clarification_requests : document_id
+outline_proposals |o--o{ clarification_requests : outline_proposal_id
+documents ||--o{ collaboration_notes : document_id
+sections |o--o{ collaboration_notes : section_id
+users ||--o{ collaboration_notes : user_id
+documents ||--o{ document_shares : document_id
+users ||--o{ document_shares : user_id
+users ||--o{ document_shares : created_by
+projects ||--o{ activity_events : project_id
+analyses |o--o{ activity_events : analysis_id
+documents |o--o{ activity_events : document_id
+sections |o--o{ activity_events : section_id
+generation_runs |o--o{ activity_events : generation_run_id
+users ||--o{ audit_logs : user_id
+organizations |o--o{ audit_logs : org_id
+documents ||--o| quality_reports : document_id
+quality_reports ||--o{ quality_issues : report_id
+quality_reports ||--o{ broken_links : report_id
+projects ||--o{ chat_threads : project_id
+chat_threads ||--o{ chat_messages : thread_id
+chat_messages ||--o{ chat_message_resources : message_id
+resources ||--o{ chat_message_resources : resource_id
+projects ||--o{ resources : project_id
+users ||--o{ resources : created_by
+projects ||--o{ nlp_reports : project_id
+users ||--o{ workspace_preferences : user_id
+
+note bottom
+Real-time collaborative editing state is not a PostgreSQL entity.
+Liveblocks stores room state, presence, cursors, CRDT sync, and inline comment threads externally.
+Pagemark persists durable collaborative Markdown snapshots in sections.content_md.
+end note
+@enduml

@@ -1,0 +1,251 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+left to right direction
+
+actor Developer
+actor "Technical Writer" as TechnicalWriter
+actor "Project Manager" as ProjectManager
+actor "Administrator" as Administrator
+actor Viewer
+
+rectangle "Pagemark" {
+  usecase "Register account" as UC_Register
+  usecase "Verify email" as UC_VerifyEmail
+  usecase "Log in" as UC_Login
+  usecase "Refresh session" as UC_Refresh
+  usecase "Log out" as UC_Logout
+  usecase "Reset password" as UC_ResetPassword
+  usecase "Manage profile" as UC_Profile
+  usecase "Manage notification preferences" as UC_Notifications
+  usecase "Manage AI credentials" as UC_AICreds
+  usecase "Manage API keys" as UC_APIKeys
+
+  usecase "Create organization" as UC_CreateOrg
+  usecase "View organizations" as UC_ViewOrgs
+  usecase "Update organization settings" as UC_UpdateOrg
+  usecase "Invite organization members" as UC_InviteMembers
+  usecase "Accept organization invite" as UC_AcceptInvite
+  usecase "Manage organization members" as UC_ManageMembers
+  usecase "Manage join links" as UC_JoinLinks
+  usecase "View audit logs" as UC_AuditLogs
+
+  usecase "Create project" as UC_CreateProject
+  usecase "View projects and dashboard" as UC_ViewProjects
+  usecase "Update project" as UC_UpdateProject
+  usecase "Delete project" as UC_DeleteProject
+  usecase "Duplicate project" as UC_DuplicateProject
+  usecase "Manage source exclusions" as UC_SourceExclusions
+  usecase "Upload ZIP source" as UC_UploadZip
+  usecase "Connect public Git URL" as UC_GitUrl
+  usecase "Connect GitHub repository" as UC_GitOAuth
+  usecase "Sync Git source" as UC_GitSync
+  usecase "View analysis results" as UC_ViewAnalysis
+  usecase "Apply analysis outline" as UC_ApplyOutline
+
+  usecase "Create document" as UC_CreateDocument
+  usecase "View document" as UC_ViewDocument
+  usecase "Update document" as UC_UpdateDocument
+  usecase "Delete document" as UC_DeleteDocument
+  usecase "Run setup wizard" as UC_SetupWizard
+  usecase "Manage template recommendations" as UC_TemplateRecommendations
+  usecase "Manage outline proposals" as UC_OutlineProposals
+  usecase "Approve outline proposal" as UC_ApproveOutline
+  usecase "Create custom section" as UC_CreateSection
+  usecase "Edit section content" as UC_EditSection
+  usecase "Reorder sections" as UC_ReorderSections
+  usecase "Accept section review" as UC_AcceptReview
+  usecase "View section versions" as UC_ViewVersions
+  usecase "Restore section version" as UC_RestoreVersion
+  usecase "Resolve freshness updates" as UC_Freshness
+
+  usecase "Generate section with AI" as UC_GenerateSection
+  usecase "Refine section with AI" as UC_RefineSection
+  usecase "Accept AI refinement" as UC_AcceptAI
+  usecase "Use AI chat" as UC_AIChat
+  usecase "Get phrasing suggestions" as UC_Phrasing
+  usecase "Suggest document structure" as UC_Structure
+  usecase "Create generation run" as UC_GenerationRun
+  usecase "Answer clarification request" as UC_Clarify
+
+  usecase "Share document" as UC_ShareDocument
+  usecase "Create collaboration note" as UC_CreateNote
+  usecase "View collaboration notes" as UC_ViewNotes
+  usecase "Join real-time section room" as UC_JoinRoom
+  usecase "Persist collaboration snapshot" as UC_Snapshot
+
+  usecase "Run quality check" as UC_RunQuality
+  usecase "View quality report" as UC_ViewQuality
+  usecase "Check grammar" as UC_Grammar
+  usecase "Resolve terminology" as UC_Terminology
+  usecase "Search workspace" as UC_Search
+  usecase "Upload resource" as UC_UploadResource
+  usecase "View resources" as UC_ViewResources
+  usecase "Delete resource" as UC_DeleteResource
+  usecase "View NLP report" as UC_NLP
+  usecase "View project activity" as UC_Activity
+  usecase "Export document" as UC_Export
+  usecase "Preview export" as UC_ExportPreview
+  usecase "Batch export projects" as UC_BatchExport
+  usecase "Manage templates" as UC_Templates
+}
+
+Developer -- UC_Register
+Developer -- UC_VerifyEmail
+Developer -- UC_Login
+Developer -- UC_Refresh
+Developer -- UC_Logout
+Developer -- UC_ResetPassword
+Developer -- UC_Profile
+Developer -- UC_Notifications
+Developer -- UC_AICreds
+Developer -- UC_APIKeys
+Developer -- UC_CreateOrg
+Developer -- UC_ViewOrgs
+Developer -- UC_AcceptInvite
+Developer -- UC_CreateProject
+Developer -- UC_ViewProjects
+Developer -- UC_UpdateProject
+Developer -- UC_DeleteProject
+Developer -- UC_DuplicateProject
+Developer -- UC_SourceExclusions
+Developer -- UC_UploadZip
+Developer -- UC_GitUrl
+Developer -- UC_GitOAuth
+Developer -- UC_GitSync
+Developer -- UC_ViewAnalysis
+Developer -- UC_ApplyOutline
+Developer -- UC_CreateDocument
+Developer -- UC_ViewDocument
+Developer -- UC_UpdateDocument
+Developer -- UC_DeleteDocument
+Developer -- UC_SetupWizard
+Developer -- UC_TemplateRecommendations
+Developer -- UC_OutlineProposals
+Developer -- UC_ApproveOutline
+Developer -- UC_CreateSection
+Developer -- UC_EditSection
+Developer -- UC_ReorderSections
+Developer -- UC_AcceptReview
+Developer -- UC_ViewVersions
+Developer -- UC_RestoreVersion
+Developer -- UC_Freshness
+Developer -- UC_GenerateSection
+Developer -- UC_RefineSection
+Developer -- UC_AcceptAI
+Developer -- UC_AIChat
+Developer -- UC_Phrasing
+Developer -- UC_Structure
+Developer -- UC_GenerationRun
+Developer -- UC_Clarify
+Developer -- UC_ShareDocument
+Developer -- UC_CreateNote
+Developer -- UC_ViewNotes
+Developer -- UC_JoinRoom
+Developer -- UC_Snapshot
+Developer -- UC_RunQuality
+Developer -- UC_ViewQuality
+Developer -- UC_Grammar
+Developer -- UC_Terminology
+Developer -- UC_Search
+Developer -- UC_UploadResource
+Developer -- UC_ViewResources
+Developer -- UC_DeleteResource
+Developer -- UC_NLP
+Developer -- UC_Activity
+Developer -- UC_Export
+Developer -- UC_ExportPreview
+Developer -- UC_BatchExport
+Developer -- UC_Templates
+
+TechnicalWriter -- UC_Login
+TechnicalWriter -- UC_ViewProjects
+TechnicalWriter -- UC_CreateDocument
+TechnicalWriter -- UC_ViewDocument
+TechnicalWriter -- UC_UpdateDocument
+TechnicalWriter -- UC_SetupWizard
+TechnicalWriter -- UC_CreateSection
+TechnicalWriter -- UC_EditSection
+TechnicalWriter -- UC_AcceptReview
+TechnicalWriter -- UC_AIChat
+TechnicalWriter -- UC_GenerateSection
+TechnicalWriter -- UC_RefineSection
+TechnicalWriter -- UC_CreateNote
+TechnicalWriter -- UC_ViewNotes
+TechnicalWriter -- UC_JoinRoom
+TechnicalWriter -- UC_Snapshot
+TechnicalWriter -- UC_Export
+TechnicalWriter -- UC_Search
+
+ProjectManager -- UC_Login
+ProjectManager -- UC_ViewProjects
+ProjectManager -- UC_UpdateProject
+ProjectManager -- UC_ViewAnalysis
+ProjectManager -- UC_ViewDocument
+ProjectManager -- UC_ShareDocument
+ProjectManager -- UC_ViewQuality
+ProjectManager -- UC_Activity
+ProjectManager -- UC_AuditLogs
+ProjectManager -- UC_Export
+ProjectManager -- UC_BatchExport
+ProjectManager -- UC_Search
+
+Administrator -- UC_Login
+Administrator -- UC_UpdateOrg
+Administrator -- UC_InviteMembers
+Administrator -- UC_ManageMembers
+Administrator -- UC_JoinLinks
+Administrator -- UC_AuditLogs
+Administrator -- UC_CreateProject
+Administrator -- UC_UpdateProject
+Administrator -- UC_DeleteProject
+Administrator -- UC_DuplicateProject
+Administrator -- UC_SourceExclusions
+Administrator -- UC_CreateDocument
+Administrator -- UC_UpdateDocument
+Administrator -- UC_DeleteDocument
+Administrator -- UC_ShareDocument
+Administrator -- UC_Templates
+Administrator -- UC_AICreds
+Administrator -- UC_APIKeys
+Administrator -- UC_BatchExport
+
+Viewer -- UC_Login
+Viewer -- UC_ViewProjects
+Viewer -- UC_ViewDocument
+Viewer -- UC_ViewAnalysis
+Viewer -- UC_ViewNotes
+Viewer -- UC_JoinRoom
+Viewer -- UC_ViewQuality
+Viewer -- UC_Search
+Viewer -- UC_ExportPreview
+
+UC_Register ..> UC_VerifyEmail : <<include>>
+UC_Login ..> UC_Refresh : <<extend>>
+UC_CreateProject ..> UC_UploadZip : <<extend>>
+UC_CreateProject ..> UC_GitUrl : <<extend>>
+UC_CreateProject ..> UC_GitOAuth : <<extend>>
+UC_UploadZip ..> UC_ViewAnalysis : <<include>>
+UC_GitUrl ..> UC_ViewAnalysis : <<include>>
+UC_GitOAuth ..> UC_ViewAnalysis : <<include>>
+UC_SetupWizard ..> UC_TemplateRecommendations : <<include>>
+UC_SetupWizard ..> UC_OutlineProposals : <<include>>
+UC_OutlineProposals ..> UC_ApproveOutline : <<extend>>
+UC_GenerationRun ..> UC_GenerateSection : <<include>>
+UC_GenerateSection ..> UC_Clarify : <<extend>>
+UC_RefineSection ..> UC_AcceptAI : <<extend>>
+UC_EditSection ..> UC_Snapshot : <<extend>>
+UC_JoinRoom ..> UC_Snapshot : <<extend>>
+UC_Export ..> UC_ExportPreview : <<extend>>
+
+note bottom of UC_JoinRoom
+Liveblocks room state, presence, cursors,
+CRDT sync, and inline threads are external.
+Pagemark authorizes rooms and persists
+durable Markdown snapshots only.
+end note
+@enduml

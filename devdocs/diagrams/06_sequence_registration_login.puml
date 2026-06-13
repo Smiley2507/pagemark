@@ -1,0 +1,54 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+actor "Browser" as Browser
+participant "Frontend\n(React SPA)" as Frontend
+participant "Backend API\n(FastAPI)" as Backend
+participant "Auth Service" as AuthService
+database "Database\n(PostgreSQL)" as DB
+participant "Email Service\n(SMTP)" as Email
+
+== Registration ==
+Browser -> Frontend : Submit registration form
+Frontend -> Backend : POST /auth/register
+Backend -> DB : Check email uniqueness
+DB --> Backend : Existing user or none
+Backend -> AuthService : hash_password(password)
+AuthService --> Backend : password_hash
+Backend -> DB : Create User(is_verified=false)
+Backend -> DB : Create UserSettings(verification_token)
+Backend -> DB : Create personal Organization
+Backend -> DB : Create OrganizationMember(role=ADMIN)
+Backend -> Email : send_verification_email(token)
+Email --> Backend : accepted
+Backend --> Frontend : 201 MeResponse(no session cookie)
+Frontend --> Browser : Show verify-email-pending state
+
+== Login ==
+Browser -> Frontend : Submit email and password
+Frontend -> Backend : POST /auth/login
+Backend -> DB : Load User by email
+DB --> Backend : User + password_hash + is_verified
+Backend -> AuthService : verify_password(password, password_hash)
+AuthService --> Backend : valid or invalid
+alt invalid credentials
+  Backend --> Frontend : 401 Unauthorized
+  Frontend --> Browser : Show login error
+else user not verified
+  Backend --> Frontend : 403 / verification error
+  Frontend --> Browser : Ask user to verify email
+else valid and verified
+  Backend -> DB : Increment login_count
+  Backend -> AuthService : create_access_token(user_id)
+  AuthService --> Backend : JWT access token
+  Backend -> AuthService : create_refresh_token(user_id)
+  AuthService --> Backend : JWT refresh token
+  Backend --> Frontend : MeResponse + httponly access/refresh cookies
+  Frontend --> Browser : Redirect to /home
+end
+@enduml

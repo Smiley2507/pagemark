@@ -1,0 +1,80 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+start
+:Register account;
+:Verify email;
+:Login;
+
+if (Use existing organization?) then (join existing)
+  :Accept organization invite or join link;
+else (create new)
+  :Create organization;
+endif
+
+:Create project;
+
+if (Source type?) then (ZIP upload)
+  :Upload ZIP source;
+  :Run code analysis;
+elseif (GitHub connect)
+  :Connect GitHub OAuth;
+  :Select repository and branch;
+  :Clone repository;
+  :Run code analysis;
+else (Scratch)
+  :Start without source;
+endif
+
+:Create document;
+
+if (Use template or custom outline?) then (template)
+  :Review template recommendations;
+  :Select template;
+else (custom outline)
+  :Create custom outline;
+endif
+
+:Create or adapt outline proposal;
+:Approve outline;
+
+if (Generate all sections or one by one?) then (complete document)
+  :Create complete document GenerationRun;
+  :AI generates sections;
+else (section on demand)
+  :Generate sections one by one;
+endif
+
+while (Generation tasks remain?) is (yes)
+  if (Clarification needed?) then (yes)
+    :User answers clarification;
+    :Resume generation;
+  else (no)
+    :Save generated section content;
+  endif
+endwhile (no)
+
+:Review sections in Three-Panel Editor;
+note right
+Multiple users may be present simultaneously in a section's Liveblocks room,
+with live presence, cursors, and synchronized editing.
+end note
+
+:Refine sections with AI chat;
+:Accept review for each section;
+
+while (All sections reviewed?) is (no)
+  :Continue editing and reviewing;
+  :Refine sections with AI chat;
+  :Accept review for each section;
+endwhile (yes)
+
+:Document marked APPROVED;
+:Export documentation as PDF, HTML, or Markdown;
+stop
+@enduml

@@ -1,0 +1,111 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+hide methods
+
+class User {
+  id: Integer <<PK>>
+  email: String
+  password_hash: String
+  name: String
+  avatar_url: String
+  is_verified: Boolean
+  login_count: Integer
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class UserRole {
+  id: Integer <<PK>>
+  user_id: Integer <<FK>>
+  role: Enum(RoleEnum)
+  created_at: DateTime
+}
+
+class UserSettings {
+  user_id: Integer <<PK, FK>>
+  notifications_json: Text
+  language: String
+  theme: String
+  reset_token: String
+  reset_token_expires: DateTime
+  verification_token: String
+  verification_token_expires: DateTime
+}
+
+class UserAiCredential {
+  id: Integer <<PK>>
+  user_id: Integer <<FK>>
+  provider: String
+  api_key_encrypted: String
+  model_id: String
+  is_active: Boolean
+  key_hint: String
+  validated_at: DateTime
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class OAuthToken {
+  id: Integer <<PK>>
+  user_id: Integer <<FK>>
+  provider: String
+  access_token_encrypted: String
+  token_scope: String
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class Organization {
+  id: Integer <<PK>>
+  name: String
+  slug: String
+  avatar_url: String
+  created_by: Integer <<FK>>
+  created_at: DateTime
+  personal: Boolean
+  quality_threshold: Integer
+  ai_provider: String
+  ai_key_encrypted: String
+}
+
+class OrganizationMember {
+  id: Integer <<PK>>
+  org_id: Integer <<FK>>
+  user_id: Integer <<FK>>
+  role: Enum(OrgMemberRole)
+  invited_by: Integer <<FK>>
+  joined_at: DateTime
+  status: Enum(OrgMemberStatus)
+  invite_token: String
+  invite_token_expires: DateTime
+}
+
+class OrganizationJoinLink {
+  id: Integer <<PK>>
+  org_id: Integer <<FK>>
+  code: String
+  role: Enum(OrgMemberRole)
+  max_uses: Integer
+  use_count: Integer
+  expires_at: DateTime
+  revoked_at: DateTime
+  created_by: Integer <<FK>>
+  created_at: DateTime
+}
+
+User "1" *-- "0..*" UserRole : roles
+User "1" *-- "0..1" UserSettings : settings
+User "1" -- "0..*" UserAiCredential : ai_credentials
+User "1" -- "0..*" OAuthToken : oauth_tokens
+User "1" -- "0..*" Organization : created_by
+User "1" -- "0..*" OrganizationMember : memberships
+User "1" -- "0..*" OrganizationMember : invited_by
+User "1" -- "0..*" OrganizationJoinLink : created_by
+Organization "1" *-- "0..*" OrganizationMember : members
+Organization "1" -- "0..*" OrganizationJoinLink : join_links
+@enduml

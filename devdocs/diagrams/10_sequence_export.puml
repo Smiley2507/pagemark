@@ -1,0 +1,52 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+actor User
+participant "Frontend\n(Export Modal)" as Frontend
+participant "Backend API" as Backend
+participant "Export Service" as Export
+participant WeasyPrint
+database Database
+
+== Preview ==
+User -> Frontend : Open Export Modal and select settings
+Frontend -> Backend : GET /projects/{project_id}/documents/{document_id}/export-preview
+Backend -> Database : Load document, project, sections
+Backend -> Export : export_html(sections, document, project, settings)
+Export -> Export : Render Markdown sections to HTML
+Export -> Export : Apply CSS export settings
+Export --> Backend : HTML string
+Backend --> Frontend : text/html
+Frontend --> User : Render HTML in iframe
+
+== PDF Export ==
+User -> Frontend : Click Export PDF
+Frontend -> Backend : GET /projects/{project_id}/documents/{document_id}/export?format=pdf
+Backend -> Database : Load document, project, sections
+Backend -> Export : export_pdf(sections, document, project, settings)
+Export -> Export : Render HTML
+Export -> WeasyPrint : HTML(string=html).write_pdf()
+WeasyPrint --> Export : PDF bytes
+Export --> Backend : PDF binary
+Backend --> Frontend : application/pdf attachment
+Frontend --> User : Trigger file download
+
+== Batch Export ==
+User -> Frontend : Select multiple projects and batch export
+Frontend -> Backend : POST /projects/batch-export
+Backend -> Database : Load selected projects and first documents
+loop each project/document
+  Backend -> Export : export_pdf(sections, document, project, settings)
+  Export -> WeasyPrint : write_pdf()
+  WeasyPrint --> Export : PDF bytes
+  Export --> Backend : PDF binary
+end
+Backend -> Backend : Package PDFs into ZIP
+Backend --> Frontend : application/zip attachment
+Frontend --> User : Trigger ZIP download
+@enduml

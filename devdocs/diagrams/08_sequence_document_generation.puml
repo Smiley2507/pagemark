@@ -1,0 +1,88 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+actor User
+participant "Frontend\n(Setup Wizard)" as Frontend
+participant "Backend API" as Backend
+participant "AI Doc Service" as AIDoc
+participant "Context Assembly Service" as Context
+participant "AI Provider\n(Anthropic/Google/OpenCode)" as Provider
+participant "Celery Worker" as Worker
+database Database
+
+== Step 1: Source and Document ==
+User -> Frontend : Start document setup
+Frontend -> Backend : POST /projects/{project_id}/documents
+Backend -> Database : Create Document(setup_stage)
+Database --> Backend : Document
+Backend --> Frontend : Document response
+
+== Step 2: Analysis Facts ==
+Frontend -> Backend : GET /projects/{project_id}/documents/{document_id}/setup
+Backend -> Database : Load Document + latest Analysis
+Database --> Backend : Setup state and analysis summary
+Backend --> Frontend : Setup state
+
+== Step 3: Template Recommendation ==
+Frontend -> Backend : POST /projects/{project_id}/documents/{document_id}/template-recommendations
+Backend -> Database : Load templates and analysis facts
+Backend -> AIDoc : Optional AI-personalized recommendation
+AIDoc -> Provider : complete_text()
+Provider --> AIDoc : Recommendation text
+Backend -> Database : Store TemplateRecommendation rows
+Backend --> Frontend : Ranked recommendations
+User -> Frontend : Select template or custom outline
+
+== Step 4: Outline Review ==
+Frontend -> Backend : POST /projects/{project_id}/documents/{document_id}/outline-proposals
+Backend -> AIDoc : Create outline proposal from template/custom input
+AIDoc -> Provider : Optional AI-adapted outline
+Provider --> AIDoc : Outline JSON
+Backend -> Database : Store OutlineProposal
+Backend --> Frontend : Draft outline proposal
+User -> Frontend : Approve outline
+Frontend -> Backend : POST /projects/{project_id}/documents/{document_id}/outline-proposals/{proposal_id}/approve
+Backend -> Database : Mark proposal APPROVED
+Backend -> Database : Materialize Section rows
+Backend --> Frontend : Approved outline and sections
+
+== Step 5: Generation Choice ==
+User -> Frontend : Choose generation mode
+Frontend -> Backend : POST /projects/{project_id}/documents/{document_id}/generation-runs
+Backend -> Database : Create GenerationRun
+Backend -> Database : Create GenerationSectionTask rows
+Backend -> Worker : Execute generation run
+Backend --> Frontend : GenerationRun response
+
+loop for each generation section task
+  Worker -> Database : Load task, section, document, project
+  Worker -> AIDoc : generate_section()
+  AIDoc -> Database : Load current Analysis and resources
+  AIDoc -> Context : assemble(resources, max_tokens=8000)
+  Context --> AIDoc : Context blocks
+  AIDoc -> AIDoc : Build section prompt
+  AIDoc -> Provider : complete_text(system_prompt, user_prompt)
+  Provider --> AIDoc : JSON response
+  alt clarification requested
+    AIDoc --> Worker : NeedsClarificationException
+    Worker -> Database : Create ClarificationRequest
+    Worker -> Database : Pause task / mark section needs_input
+  else content generated
+    AIDoc -> Database : Save Section.content_md
+    AIDoc -> Database : Create EvidenceReference rows
+    AIDoc -> Database : Create SectionVersion(author_type=AI)
+    AIDoc -> Database : Set content_lifecycle=GENERATED_DRAFT
+    Worker -> Database : Mark task READY
+  end
+end
+
+Worker -> Database : Mark GenerationRun COMPLETED
+Frontend -> Backend : GET /projects/{project_id}/documents/{document_id}/generation-runs/{run_id}
+Backend -> Database : Load run and tasks
+Backend --> Frontend : Generation progress/results
+@enduml

@@ -1,0 +1,80 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+actor User
+participant Frontend
+participant "Backend API" as Backend
+participant "Celery Worker" as Worker
+participant "Git Service /\nFile Extractor" as Source
+participant "Tree-sitter Parser" as Parser
+participant "AI Service" as AI
+database Database
+
+== ZIP Upload Flow ==
+User -> Frontend : Create project
+Frontend -> Backend : POST /projects
+Backend -> Database : Create Project
+Database --> Backend : Project
+Backend --> Frontend : Project response
+User -> Frontend : Upload ZIP
+Frontend -> Backend : POST /projects/{project_id}/upload
+Backend -> Database : Create Analysis(status=PENDING)
+Backend -> Worker : queue analyze_project_task
+Backend --> Frontend : Analysis queued
+Worker -> Source : Extract ZIP archive
+Source --> Worker : Extracted source root
+Worker -> Source : Walk file tree and apply exclusions
+Source --> Worker : RepoFile list
+Worker -> Worker : Detect languages
+Worker -> Parser : Parse primary-language files
+Parser --> Worker : Parse statistics
+Worker -> Worker : Detect endpoints by regex
+Worker -> Worker : Compute complexity
+Worker -> Database : Store Analysis artifacts
+opt active AI credential exists
+  Worker -> AI : Generate outline from analysis
+  AI --> Worker : Outline JSON
+  Worker -> Database : Store/apply outline proposal if eligible
+end
+Worker -> Database : Mark Analysis COMPLETED and current
+Frontend -> Backend : GET /projects/{project_id}/analysis/status
+Backend -> Database : Read latest Analysis
+Database --> Backend : Analysis status/results
+Backend --> Frontend : Analysis complete
+
+== GitHub Repository Flow ==
+User -> Frontend : Connect GitHub
+Frontend -> Backend : GET /auth/github/authorize
+Backend --> Frontend : Redirect to GitHub OAuth
+Frontend -> Backend : GET /auth/github/callback?code&state
+Backend -> Source : Exchange OAuth code
+Source --> Backend : Access token
+Backend -> Database : Store encrypted OAuthToken
+User -> Frontend : Select repository and branch
+Frontend -> Backend : POST /projects/{project_id}/git/connect-oauth
+Backend -> Database : Create Analysis(status=PENDING)
+Backend -> Worker : queue clone_and_analyze_task
+Backend --> Frontend : Analysis queued
+Worker -> Source : Build authenticated clone URL
+Worker -> Source : Shallow clone repo(depth=1)
+Source --> Worker : Cloned source root + HEAD commit
+Worker -> Source : Walk file tree and apply exclusions
+Source --> Worker : RepoFile list
+Worker -> Worker : Detect languages
+Worker -> Parser : Parse primary-language files
+Parser --> Worker : Parse statistics
+Worker -> Worker : Detect endpoints by regex
+Worker -> Worker : Compute complexity
+Worker -> Database : Store Analysis artifacts
+opt active AI credential exists
+  Worker -> AI : Generate outline from analysis
+  AI --> Worker : Outline JSON
+  Worker -> Database : Store/apply outline proposal if eligible
+end
+Worker -> Database : Mark Analysis COMPLETED and current
+@enduml

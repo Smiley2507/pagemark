@@ -1,0 +1,146 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+hide methods
+
+class Document {
+  id: Integer <<PK>>
+  project_id: Integer <<FK>>
+  template_id: Integer <<FK>>
+  title: String
+  status: Enum(DocumentStatus)
+  setup_stage: Enum(DocumentSetupStage)
+  purpose: Text
+  audience: Text
+  context: Text
+  custom_outline_metadata: JSON
+  tags: JSON
+  export_settings: JSON
+  freshness_state: String
+  sharing_settings: JSON
+  reviewer_id: Integer <<FK>>
+  approved_at: DateTime
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class Section {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  parent_id: Integer <<FK>>
+  order_index: Integer
+  heading: String
+  title: String
+  is_custom: Boolean
+  lifecycle_status: Enum(LifecycleStatus)
+  confidence_score: Integer
+  content_md: Text
+  content_lifecycle: Enum(SectionContentLifecycle)
+  status: Enum(SectionStatus)
+  needs_input: Boolean
+  is_generating: Boolean
+  has_failed: Boolean
+  is_potentially_stale: Boolean
+  workflow_metadata: JSON
+  reviewed_by: Integer <<FK>>
+  reviewed_at: DateTime
+  reviewed_against_analysis_id: Integer <<FK>>
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class SectionVersion {
+  id: Integer <<PK>>
+  section_id: Integer <<FK>>
+  content_md: Text
+  author_type: Enum(AuthorType)
+  summary: String
+  added: Integer
+  removed: Integer
+  modified: Integer
+  created_at: DateTime
+}
+
+class GenerationRun {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  mode: Enum(GenerationMode)
+  intended_provider: String
+  intended_model: String
+  status: Enum(GenerationRunStatus)
+  failover_state: Enum(FailoverState)
+  estimated_prompt_tokens: Integer
+  estimated_completion_tokens: Integer
+  estimated_cost: Float
+  actual_prompt_tokens: Integer
+  actual_completion_tokens: Integer
+  actual_cost: Float
+  error_message: Text
+  run_metadata: JSON
+  started_at: DateTime
+  completed_at: DateTime
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class GenerationSectionTask {
+  id: Integer <<PK>>
+  generation_run_id: Integer <<FK>>
+  section_id: Integer <<FK>>
+  status: Enum(GenerationTaskStatus)
+  dependency_section_ids: JSON
+  actual_provider: String
+  actual_model: String
+  prompt_tokens: Integer
+  completion_tokens: Integer
+  cost: Float
+  error_message: Text
+  task_metadata: JSON
+  started_at: DateTime
+  completed_at: DateTime
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class ClarificationRequest {
+  id: Integer <<PK>>
+  section_id: Integer <<FK>>
+  document_id: Integer <<FK>>
+  outline_proposal_id: Integer <<FK>>
+  question: Text
+  user_answer: Text
+  affected_sections_json: JSON
+  confidence_tradeoff: Text
+  status: Enum(ClarificationStatus)
+  created_at: DateTime
+  resolved_at: DateTime
+  skipped_at: DateTime
+}
+
+class EvidenceReference {
+  id: Integer <<PK>>
+  section_id: Integer <<FK>>
+  claim_anchor: String
+  analysis_id: Integer <<FK>>
+  artifact_type: String
+  path: String
+  symbol: String
+  line_range_hint: JSON
+  reference_metadata: JSON
+  created_at: DateTime
+}
+
+Document "1" *-- "0..*" Section : sections
+Section "0..1" -- "0..*" Section : children
+Section "1" *-- "0..*" SectionVersion : versions
+Document "1" *-- "0..*" GenerationRun : generation_runs
+GenerationRun "1" *-- "0..*" GenerationSectionTask : section_tasks
+Section "1" -- "0..*" GenerationSectionTask : task target
+Section "0..1" -- "0..*" ClarificationRequest : clarification_requests
+Document "0..1" -- "0..*" ClarificationRequest : clarification_requests
+Section "1" *-- "0..*" EvidenceReference : evidence_references
+@enduml

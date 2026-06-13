@@ -1,0 +1,128 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+hide methods
+
+class Project {
+  id: Integer <<PK>>
+  org_id: Integer <<FK>>
+  created_by: Integer <<FK>>
+  name: String
+  description: Text
+  status: Enum(ProjectStatus)
+  source_type: Enum(SourceType)
+  source_provider: String
+  source_owner: String
+  source_repository: String
+  selected_branch: String
+  default_branch: String
+  source_visibility: String
+  last_synced_commit: String
+  source_metadata: JSON
+  tags: ARRAY(String)
+  starred: Boolean
+  context_md: Text
+  export_settings: JSON
+  webhook_secret: String
+  webhook_id: Integer
+  deleted_at: DateTime
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class ProjectSourceExclusion {
+  id: Integer <<PK>>
+  project_id: Integer <<FK>>
+  pattern: String
+  reason: Text
+  enabled: Boolean
+  created_by: Integer <<FK>>
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class Analysis {
+  id: Integer <<PK>>
+  project_id: Integer <<FK>>
+  status: Enum(AnalysisStatus)
+  current_step: String
+  step_number: Integer
+  step_detail: String
+  total_steps: Integer
+  source_type: String
+  source_path: String
+  source_commit: String
+  is_current: Boolean
+  effective_exclusions_json: JSON
+  source_metadata: JSON
+  file_tree_json: JSON
+  languages_json: JSON
+  endpoints_json: JSON
+  complexity_json: JSON
+  analysis_data: JSON
+  file_contents_json: JSON
+  error_message: Text
+  started_at: DateTime
+  completed_at: DateTime
+  created_at: DateTime
+  updated_at: DateTime
+}
+
+class Template {
+  id: Integer <<PK>>
+  name: String
+  description: Text
+  category: String
+  purpose: Text
+  intended_audience: Text
+  expected_outcome: Text
+  compatible_repository_traits: JSON
+  estimated_generation_scope: JSON
+  outline_preview: JSON
+  sections_json: JSON
+  guidance: Text
+  system_prompt: Text
+  owner_id: Integer <<FK>>
+  is_builtin: Boolean
+  created_at: DateTime
+}
+
+class TemplateRecommendation {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  analysis_id: Integer <<FK>>
+  template_id: Integer <<FK>>
+  basis: Enum(TemplateRecommendationBasis)
+  score: Float
+  explanation: Text
+  supporting_facts_json: JSON
+  provider_usage_ref: JSON
+  created_at: DateTime
+}
+
+class OutlineProposal {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  analysis_id: Integer <<FK>>
+  basis: Enum(OutlineProposalBasis)
+  status: Enum(OutlineProposalStatus)
+  version: Integer
+  outline_json: JSON
+  explanation_json: JSON
+  approved_by: Integer <<FK>>
+  approved_at: DateTime
+  approval_metadata: JSON
+  superseded_at: DateTime
+  created_at: DateTime
+}
+
+Project "1" *-- "0..*" ProjectSourceExclusion : source_exclusions
+Project "1" *-- "0..*" Analysis : analyses
+Analysis "1" -- "0..*" TemplateRecommendation : recommendations
+Template "0..1" -- "0..*" TemplateRecommendation : template
+Analysis "0..1" -- "0..*" OutlineProposal : outline_proposals
+@enduml
