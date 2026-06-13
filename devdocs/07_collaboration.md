@@ -2,7 +2,15 @@
 
 ## Overview
 
-Pagemark's collaboration features enable multiple users to work on the same project's documentation through organization-based membership, shared document access, and collaboration notes. The collaboration model is built around organizations that own projects, with role-based permissions controlling what each member can do.
+Pagemark's collaboration features enable multiple users to work on the same project's documentation through organization membership, document-level sharing, section-scoped real-time editing, Liveblocks comment threads, and collaboration notes. The collaboration model is built around organizations that own projects, with document permissions controlling who can view, comment, or edit.
+
+Real-time editing is section-scoped. Each section opens its own Liveblocks room using the room id format:
+
+```
+project:{project_id}:document:{document_id}:section:{section_id}
+```
+
+Liveblocks handles presence, cursors, conflict-free editor synchronization, and comment threads. Pagemark remains the source of truth for authentication, authorization, and durable section content in PostgreSQL.
 
 ## Organization Model
 
@@ -44,6 +52,14 @@ Beyond organization membership, documents can be individually shared with users 
 | `COMMENT` | Can view and add collaboration notes |
 | `EDIT` | Can view, add notes, and edit sections |
 
+These Pagemark permissions are mapped to Liveblocks room permissions during authorization:
+
+| Pagemark Permission | Liveblocks Access |
+|---------------------|-------------------|
+| `VIEW` | `room:read`, `room:presence:write`, `comments:read` |
+| `COMMENT` | View access plus `comments:write` |
+| `EDIT` | Comment access plus `room:write`, unless the document is `APPROVED` |
+
 ### Share Management
 
 - Shares are created via `POST /projects/{project_id}/documents/{document_id}/shares`
@@ -63,6 +79,65 @@ Beyond organization membership, documents can be individually shared with users 
 | GET | `/projects/{project_id}/documents/{document_id}/shares` | List active shares |
 | POST | `/projects/{project_id}/documents/{document_id}/shares` | Create/update share |
 | DELETE | `/projects/{project_id}/documents/{document_id}/shares/{share_id}` | Revoke share |
+
+## Real-Time Section Editing
+
+The editor uses Liveblocks with Tiptap/Yjs for concurrent section editing. Every rendered section mounts a collaborative editor for its own room when collaboration is enabled. The frontend feature flag is:
+
+```
+VITE_COLLABORATION_ENABLED=false
+```
+
+When the flag is absent or not set to `false`, collaborative editing is enabled. In collaborative mode, the normal debounced REST autosave is disabled for the section editor. Instead, the Liveblocks-backed Tiptap instance emits document updates, converts the editor state to Markdown, and persists snapshots through the backend.
+
+### Collaboration Auth
+
+The frontend calls Liveblocks through a backend auth endpoint. The backend validates the current Pagemark session and document access before asking Liveblocks for an access token.
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| POST | `/projects/{project_id}/documents/{document_id}/sections/{section_id}/collaboration/auth` | Authorize the current user for a section Liveblocks room |
+
+Authorization flow:
+
+1. The frontend derives the room id from project, document, and section ids.
+2. LiveblocksProvider calls `collaborationApi.authorize(roomId)`.
+3. The backend verifies project membership, document access, and that the section belongs to the document.
+4. The backend resolves the user's effective document permission (`view`, `comment`, `edit`).
+5. The backend maps that permission into Liveblocks room permissions.
+6. The backend calls `LIVEBLOCKS_API_BASE_URL/v2/authorize-user` with `LIVEBLOCKS_SECRET_KEY`.
+7. Liveblocks returns the token payload to the frontend.
+
+### Snapshot Persistence
+
+Liveblocks synchronizes active editor state, but PostgreSQL stores the durable Markdown snapshot used by exports, AI generation, review workflows, and non-collaborative reads.
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| PATCH | `/projects/{project_id}/documents/{document_id}/sections/{section_id}/collaboration/snapshot` | Persist the current collaborative section content to `sections.content_md` |
+
+Snapshot rules:
+
+- Requires effective `EDIT` permission.
+- Rejects writes to `APPROVED` documents.
+- If content changed, updates `sections.content_md`, `sections.updated_at`, and `documents.updated_at`.
+- Clears reviewed state via `clear_review_state_for_content_edit()`, matching normal section edits.
+- Returns `saved=false` when the incoming Markdown equals the stored content.
+
+### Runtime Configuration
+
+Backend environment:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LIVEBLOCKS_SECRET_KEY` | `""` | Required for Liveblocks authorization. If empty, collaboration auth returns 503. |
+| `LIVEBLOCKS_API_BASE_URL` | `https://api.liveblocks.io` | Liveblocks REST API base URL. |
+
+Frontend environment:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_COLLABORATION_ENABLED` | enabled | Set to `false` to use the non-collaborative REST autosave path. |
 
 ## Collaboration Notes
 
@@ -87,6 +162,14 @@ The Notes Panel (`components/editor/NotesPanel.tsx`) is accessible from the left
 - Notes listed with user avatar, name, timestamp, content
 - Create new note via text input at the bottom
 - No reply threading or edit/delete functionality
+
+## Liveblocks Comment Threads
+
+The collaborative Tiptap editor also renders Liveblocks thread UI for section-scoped inline discussion. These threads are distinct from the legacy `collaboration_notes` table:
+
+- Liveblocks threads live in the Liveblocks room and support real-time discussion around collaborative editor state.
+- `collaboration_notes` remain backend-owned, append-only notes shown in the Notes Panel.
+- Export, AI generation, and review workflows use the persisted section Markdown snapshot, not the Liveblocks thread store.
 
 ## Section Review Workflow
 
@@ -144,9 +227,9 @@ Events feed into:
 
 ## Current Collaboration Limitations
 
-1. **No real-time collaboration**: There is no WebSocket support. Users must refresh to see others' changes.
-2. **No simultaneous editing**: Documents do not support collaborative real-time editing (no CRDT or OT).
-3. **No note reply/threading**: Notes are flat — no replies, no threading, no edit/delete.
+1. **Document-level presence is section-scoped**: Users collaborate inside individual section rooms. There is no aggregate document room that shows every active collaborator across the whole document.
+2. **Offline conflict recovery is delegated to Liveblocks/Yjs**: Pagemark persists Markdown snapshots but does not store its own CRDT history.
+3. **Legacy notes are flat**: Backend `collaboration_notes` have no replies, edit, or delete. Threaded discussion is available through Liveblocks threads in collaborative editor rooms.
 4. **No section assignment**: Sections cannot be explicitly assigned to team members. The `reviewer_id` field on documents exists but section-level `reviewed_by` is a post-facto record, not an assignment.
 5. **Role enforcement is incomplete**: `require_org_role()` exists but is not consistently applied across all endpoints. Most endpoints use the broader `verify_project_ownership` which only checks active membership.
 6. **No notifications for collaboration events**: While the `notifications_service.py` module exists and preferences are stored, actual push/email notifications for collaboration events (new notes, review requests, content updates) appear to be **not fully implemented** — the notification service primarily handles transactional emails (verification, password reset, invites).

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Pagemark frontend is a **React 19** single-page application built with **TypeScript 6** and **Vite 8**. It lives in the `frontend/` directory and communicates with the FastAPI backend via REST (JSON) and SSE (Server-Sent Events for streaming chat).
+The Pagemark frontend is a **React 19** single-page application built with **TypeScript 6** and **Vite 8**. It lives in the `frontend/` directory and communicates with the FastAPI backend via REST (JSON), SSE (Server-Sent Events for streaming chat), and Liveblocks for real-time collaborative section editing.
 
 ## Application Entry
 
@@ -12,6 +12,7 @@ Mounts the React application to `#root`. Imports Geist fonts, renders `<App />`.
 ### `src/App.tsx`
 Sets up the application shell:
 - `QueryClientProvider` (TanStack React Query)
+- `LiveblocksProvider` using `collaborationApi.authorize`
 - `BrowserRouter` (React Router v7)
 - `Toaster` (sonner toast notifications)
 - Route definitions with `ProtectedRoute` wrapper
@@ -70,6 +71,7 @@ Axios instance configured with:
 | Context Search | `api/contextSearch.ts` | AI panel context search |
 | Keys | `api/keys.ts` | API key management |
 | Notifications | `api/notifications.ts` | Notification preferences |
+| Collaboration | `api/collaboration.ts` | Liveblocks room id parsing, section room auth, collaborative snapshot persistence |
 
 ## State Management
 
@@ -197,6 +199,7 @@ The main document editing interface (972 lines). This is the most complex page. 
 - **Middle panel**: Section editor with write/preview/diff modes
 - **Right panel**: AI assistant chat panel
 - **Autosave**: Every section has 3-second debounced autosave
+- **Real-time collaboration**: Section-scoped Liveblocks/Tiptap rooms with collaborative snapshots
 - **Section management**: Expand/collapse, add section, reorder via drag-and-drop
 - **Generate/Refine**: AI generate content, refine with custom instructions
 - **Review workflow**: Accept section as reviewed, view diff
@@ -263,7 +266,8 @@ The main content area (970 lines). Renders:
 - AI button (opens right panel)
 - Quality button (opens quality modal)
 - Spelling button (grammar check)
-- Overflow menu: Export, Version History, Share, Focus Mode, Keyboard Shortcuts help
+- Direct actions for export, version history, share, focus mode, and keyboard shortcut help
+- User avatar menu with profile context, theme switcher (light/dark/system), collaboration status, settings, and logout
 - Panel toggle buttons (left panel, right panel)
 
 ### Right Panel: `components/editor/RightPanel.tsx`
@@ -315,6 +319,14 @@ Re-exports `TipTapEditor` as `MarkdownEditor`. Wraps Tiptap with Markdown suppor
 - Clear formatting
 - Undo/redo
 - Source code view toggle
+
+When collaboration is enabled, `TipTapEditor` wraps the editor in Liveblocks room context and uses the Liveblocks Tiptap/Yjs extension. The room id is derived from project, document, and section ids (`project:{project_id}:document:{document_id}:section:{section_id}`). In this mode:
+
+- The standard `useDocumentAutosave` REST debounce is disabled for the section.
+- The Liveblocks-backed editor emits updates and persists Markdown snapshots through `collaborationApi.snapshotSection()`.
+- Undo/redo from the normal Tiptap extension is disabled because collaborative history is managed by the collaboration extension.
+- Liveblocks thread UI is rendered for section-scoped collaborative discussion.
+- Setting `VITE_COLLABORATION_ENABLED=false` falls back to the non-collaborative autosave path.
 
 ### `DiffViewer.tsx` (275 lines)
 
@@ -495,14 +507,17 @@ All TypeScript interfaces are defined in `src/types/index.ts` and `src/types/doc
 | Export document | `export.exportDocument()` | `GET /projects/{id}/documents/{id}/export` |
 | Quality check | `quality.runQuality()` | `POST /projects/{id}/documents/{id}/quality/run` |
 | Search | `search.search()` | `GET /projects/search` |
+| Join collaborative section room | `collaborationApi.authorize()` | `POST /projects/{id}/documents/{id}/sections/{id}/collaboration/auth` |
+| Persist collaborative snapshot | `collaborationApi.snapshotSection()` | `PATCH /projects/{id}/documents/{id}/sections/{id}/collaboration/snapshot` |
 
 ## Real-Time / Streaming Behavior
 
 - **Chat streaming**: SSE-based streaming via fetch with `ReadableStream`. The frontend reads `data:` lines as they arrive and updates the chat UI progressively.
+- **Collaborative editing**: Liveblocks provides section-scoped real-time editor synchronization, presence, and thread UI for Tiptap/Yjs rooms.
+- **Collaborative persistence**: The frontend saves durable Markdown snapshots back to Pagemark through the collaboration snapshot endpoint.
 - **Analysis polling**: `useQuery` with `refetchInterval: 3000` polls analysis status every 3 seconds. The setup wizard displays progressive step updates.
 - **Generation run polling**: `useQuery` polls generation run status periodically until completion.
 - **Cross-tab logout sync**: Uses `BroadcastChannel` API to detect logout in one tab and sync state across all tabs.
-- **No WebSocket** connections are used.
 
 ## Markdown Rendering
 

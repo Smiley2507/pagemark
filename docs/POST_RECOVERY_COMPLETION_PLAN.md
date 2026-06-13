@@ -7,8 +7,10 @@ This plan completes the remaining recovery work first, then adds the multitenanc
 Product truth remains:
 
 - `CONTEXT.md`
+- `docs/CURRENT_SYSTEM_STATE.md`
 - `frontend/VISUAL_SPEC.md`
 - `docs/adr/0001-projects-contain-multiple-documents.md`
+- `docs/adr/0002-section-scoped-liveblocks-collaboration.md`
 
 Execution rules:
 
@@ -171,6 +173,8 @@ Tests:
 
 ## Phase 7: Document Sharing With Organization Members
 
+Status: implemented as the current baseline. Preserve and extend this behavior rather than re-planning it from scratch.
+
 Implement v1 sharing as organization-member sharing only.
 
 Key changes:
@@ -202,6 +206,24 @@ Tests:
 - Revoked access loses access.
 - Sharing one Document does not expose sibling Documents.
 - Frontend lint/build and backend authorization tests.
+
+## Phase 7B: Section-Scoped Realtime Collaboration
+
+Status: implemented as the current baseline.
+
+Key behavior:
+
+- Liveblocks rooms are scoped to one Section, not a whole Document.
+- FastAPI issues Liveblocks access after checking Project, Document, Section, and `DocumentShare` permissions.
+- Liveblocks/Yjs is the live editing state; `Section.content_md` is the backend Markdown snapshot used by AI, export, review, search, and freshness.
+- Comment threads are anchored to Section content through Liveblocks.
+- Approved Documents and non-edit users must not receive edit-capable collaboration access.
+
+Tests:
+
+- `tests/test_collaboration_api.py`
+- `tests/test_phase7_document_sharing.py`
+- `tests/test_nested_document_api.py`
 
 ## Phase 8: Audit Log And Activity Reconciliation
 

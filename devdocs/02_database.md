@@ -252,7 +252,7 @@ Individual sections within a document — the fundamental unit of content.
 | `is_custom` | `Boolean` | default false | Whether user created this manually |
 | `lifecycle_status` | `Enum(LifecycleStatus)` | NOT NULL, default ACTIVE | Soft-delete/archive status |
 | `confidence_score` | `Integer` | Nullable | AI confidence in generated content (0-100) |
-| `content_md` | `Text` | default "" | Markdown content |
+| `content_md` | `Text` | default "" | Durable Markdown content. In collaborative mode this is the latest backend snapshot of the Liveblocks/Tiptap editor state. |
 | `content_lifecycle` | `Enum(SectionContentLifecycle)` | NOT NULL, default EMPTY | Content state (empty/generated_draft/reviewed) |
 | `status` | `Enum(SectionStatus)` | NOT NULL, default PENDING | Workflow status |
 | `needs_input` | `Boolean` | NOT NULL, default false | Whether AI requires user clarification |
@@ -639,6 +639,8 @@ Targeted questions from the AI to the maintainer during outline/generation.
 
 User-authored notes on documents and sections for collaboration.
 
+These are backend-owned, append-only notes. They are separate from Liveblocks comment threads, which are stored in Liveblocks rooms and rendered inside the collaborative editor UI.
+
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | `Integer` | PK, Indexed | Auto-incrementing ID |
@@ -675,6 +677,18 @@ Document-level sharing permissions for users outside the project's organization.
 | `created_by` | `Integer` | NOT NULL, FK→users.id | Who created the share |
 | `created_at` | `DateTime` | default utcnow | Share creation timestamp |
 | `revoked_at` | `DateTime` | Nullable | When share was revoked |
+
+## Real-Time Collaboration Persistence
+
+Real-time editor state is not stored as a Pagemark database table. Liveblocks stores the active collaborative room state, presence, and thread data. Pagemark stores only durable section content snapshots in `sections.content_md`.
+
+Snapshot writes happen through:
+
+```
+PATCH /projects/{project_id}/documents/{document_id}/sections/{section_id}/collaboration/snapshot
+```
+
+The snapshot endpoint updates the section and document timestamps and clears section review state when content changes. This keeps exports, AI generation, version/review workflows, and non-collaborative reads aligned with the latest persisted Markdown.
 
 ## Entity-Relationship Diagram
 
@@ -719,6 +733,8 @@ Template ── Document
 
 4. **Version history as full snapshots**: Section versions store complete content, not diffs. This simplifies rollback and diff computation at the cost of storage — acceptable for documentation content which is typically small.
 
-5. **Activity event weight system**: Events have a `weight` field (e.g., 3.0 for review, 1.0 for generation, 0.3 for minor events) enabling a GitHub-style activity heatmap.
+5. **Live collaboration state outside PostgreSQL**: Pagemark delegates CRDT state, presence, and threaded collaborative comments to Liveblocks. PostgreSQL remains the durable application store for section Markdown snapshots, document permissions, review state, and exports.
 
-6. **Soft deletes**: Sections and projects use soft deletes (`deleted_at`, `lifecycle_status`) to prevent accidental data loss and enable undo.
+6. **Activity event weight system**: Events have a `weight` field (e.g., 3.0 for review, 1.0 for generation, 0.3 for minor events) enabling a GitHub-style activity heatmap.
+
+7. **Soft deletes**: Sections and projects use soft deletes (`deleted_at`, `lifecycle_status`) to prevent accidental data loss and enable undo.

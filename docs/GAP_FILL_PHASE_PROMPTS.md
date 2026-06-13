@@ -6,8 +6,10 @@ Before using any phase prompt, read `docs/CANONICAL_EXECUTION_PROMPT.md`.
 
 Canonical product sources:
 - `CONTEXT.md`
+- `docs/CURRENT_SYSTEM_STATE.md`
 - `frontend/VISUAL_SPEC.md`
 - `docs/adr/0001-projects-contain-multiple-documents.md`
+- `docs/adr/0002-section-scoped-liveblocks-collaboration.md`
 
 Execution plan:
 - `docs/REDESIGN_PHASE_GAPS.md`
@@ -18,10 +20,10 @@ Do not use any other markdown document as product truth. In particular, do not r
 
 ```text
 Read docs/CANONICAL_EXECUTION_PROMPT.md first.
-Then read only CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_PHASE_GAPS.md.
+Then read only CONTEXT.md, docs/CURRENT_SYSTEM_STATE.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, docs/adr/0002-section-scoped-liveblocks-collaboration.md, and docs/REDESIGN_PHASE_GAPS.md.
 
 Do not read or rely on older roadmap, architecture, phase, or landing-copy docs.
-Treat CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md as the only product truth.
+Treat CONTEXT.md, docs/CURRENT_SYSTEM_STATE.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/adr/0002-section-scoped-liveblocks-collaboration.md as the only product truth.
 Treat docs/REDESIGN_PHASE_GAPS.md as the execution plan only.
 
 Implement Phase 1 only: Backend Contract Cleanup.
@@ -65,10 +67,10 @@ Commit the changes when the phase is complete.
 
 ```text
 Read docs/CANONICAL_EXECUTION_PROMPT.md first.
-Then read only CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_PHASE_GAPS.md.
+Then read only CONTEXT.md, docs/CURRENT_SYSTEM_STATE.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, docs/adr/0002-section-scoped-liveblocks-collaboration.md, and docs/REDESIGN_PHASE_GAPS.md.
 
 Do not read or rely on older roadmap, architecture, phase, or landing-copy docs.
-Treat CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md as the only product truth.
+Treat CONTEXT.md, docs/CURRENT_SYSTEM_STATE.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/adr/0002-section-scoped-liveblocks-collaboration.md as the only product truth.
 Treat docs/REDESIGN_PHASE_GAPS.md as the execution plan only.
 
 Implement Phase 2 only: Authenticated Shell, Dashboard, And Project Workspace.
@@ -115,10 +117,10 @@ Commit the changes when the phase is complete.
 
 ```text
 Read docs/CANONICAL_EXECUTION_PROMPT.md first.
-Then read only CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_PHASE_GAPS.md.
+Then read only CONTEXT.md, docs/CURRENT_SYSTEM_STATE.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, docs/adr/0002-section-scoped-liveblocks-collaboration.md, and docs/REDESIGN_PHASE_GAPS.md.
 
 Do not read or rely on older roadmap, architecture, phase, or landing-copy docs.
-Treat CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md as the only product truth.
+Treat CONTEXT.md, docs/CURRENT_SYSTEM_STATE.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/adr/0002-section-scoped-liveblocks-collaboration.md as the only product truth.
 Treat docs/REDESIGN_PHASE_GAPS.md as the execution plan only.
 
 Implement Phase 3 only: Public Entry And First-Document Journey.
@@ -168,10 +170,10 @@ Commit the changes when the phase is complete.
 
 ```text
 Read docs/CANONICAL_EXECUTION_PROMPT.md first.
-Then read only CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_PHASE_GAPS.md.
+Then read only CONTEXT.md, docs/CURRENT_SYSTEM_STATE.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, docs/adr/0002-section-scoped-liveblocks-collaboration.md, and docs/REDESIGN_PHASE_GAPS.md.
 
 Do not read or rely on older roadmap, architecture, phase, or landing-copy docs.
-Treat CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md as the only product truth.
+Treat CONTEXT.md, docs/CURRENT_SYSTEM_STATE.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/adr/0002-section-scoped-liveblocks-collaboration.md as the only product truth.
 Treat docs/REDESIGN_PHASE_GAPS.md as the execution plan only.
 
 Implement Phase 4 only: Editor, Review States, Settings, And Utility Surfaces.
@@ -184,7 +186,7 @@ Scope:
 - Make Outline and AI assistance secondary, contextual tools.
 - Replace legacy review banners, status chips, panel treatments, and utility layouts with governed variants.
 - Align settings, templates, analysis, quality, export, and activity views with the same system.
-- Preserve the existing CodeMirror live-preview strengths while changing layout and chrome.
+- Preserve the existing TipTap/Markdown writing strengths while changing layout and chrome.
 
 Required behavior:
 - The Document is the dominant editor surface.
@@ -221,10 +223,10 @@ Commit the changes when the phase is complete.
 
 ```text
 Read docs/CANONICAL_EXECUTION_PROMPT.md first.
-Then read only CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/REDESIGN_PHASE_GAPS.md.
+Then read only CONTEXT.md, docs/CURRENT_SYSTEM_STATE.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, docs/adr/0002-section-scoped-liveblocks-collaboration.md, and docs/REDESIGN_PHASE_GAPS.md.
 
 Do not read or rely on older roadmap, architecture, phase, or landing-copy docs.
-Treat CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md as the only product truth.
+Treat CONTEXT.md, docs/CURRENT_SYSTEM_STATE.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/adr/0002-section-scoped-liveblocks-collaboration.md as the only product truth.
 Treat docs/REDESIGN_PHASE_GAPS.md as the execution plan only.
 
 Implement Phase 5 only: Enforcement And Regression Protection.
@@ -263,4 +265,3 @@ Run frontend lint/build and relevant backend tests.
 Report exactly what passed or failed.
 Commit the changes when the phase is complete.
 ```
-

@@ -62,20 +62,17 @@ The Document is the dominant workspace. Supporting tools should remain available
 - **AI ASSISTANCE (The Tool):** Contextual actions appear near the active Section or selected text. A collapsible assistant panel opens only for longer conversations.
 - **PROJECT CONTEXT:** Source changes, generation progress, and other meaningful events appear as non-blocking notices with explicit review actions.
 
-### Editor Core (Obsidian-Parity Live Preview)
+### Editor Core (TipTap + Markdown Snapshots)
 
-The core writing experience is powered by **CodeMirror 6**, completely overhauled to provide an Obsidian-like "source-as-truth" live preview experience. 
+The core writing experience is powered by **TipTap/ProseMirror**. The editor presents a clean document-like surface while Pagemark persists Markdown snapshots on each Section for backend workflows.
 
 Currently implemented features:
-1. **Interactive Checkboxes:** Markdown task lists (`- [ ]`) render as clickable HTML checkboxes directly in the editor.
-2. **Fenced Code Blocks:** 
-   - Rendered with syntax highlighting via `react-syntax-highlighter`.
-   - Feature an interactive "Copy" button that uses strict pointer events to avoid focus loss.
-   - **Active State Dimming:** When the cursor is inside a code block, the fence markers (`` ``` ``) are dimmed and the block receives a subtle background highlight (`cm-lp-active-fenced`) to provide clear spatial awareness.
-3. **Smart Tables:** Markdown tables are rendered visually. When the cursor enters a table, a **Table Assistant** (floating toolbar) appears, allowing non-destructive column/row additions and deletions.
-4. **Live Headings & Formatting:** Headings dynamically scale in size (H1-H6). Bold, italic, and inline code are styled appropriately while maintaining markdown characters.
-5. **Horizontal Rules:** `---` renders as a clean visual divider.
-6. **Smart Typing:** Integrated `closeBrackets` for seamless pair typing and `indentWithTab` for standard code indentation.
+1. **Continuous Section Surface:** The editor renders all active Sections in one full-screen Document workspace while preserving Section-level lifecycle, review, freshness, export, generation, and collaboration boundaries.
+2. **Rich Markdown Editing:** TipTap handles headings, formatting, links, quotes, images, tables, code blocks, wiki links, callouts, figures, and Mermaid diagrams while exporting Markdown through `editor.getMarkdown()`.
+3. **Tables:** Table editing uses TipTap table extensions and a compact contextual table toolbar.
+4. **Code Blocks:** Code blocks support syntax highlighting and a copy button without turning the editor surface into a dashboard.
+5. **AI Context Actions:** Selection and context menus can attach selected text to AI or request phrasing help.
+6. **Realtime Collaboration:** Liveblocks/Yjs powers section-scoped collaborative editing, presence/cursors, and anchored comment threads. PostgreSQL remains the durable Markdown snapshot store.
 
 ### Interactive Menus
 
@@ -164,10 +161,10 @@ The Template library is organized primarily by documentation purpose, with owner
 
 Template previews show purpose, intended audience, expected outcome, Outline preview, compatible repository traits, and estimated generation scope. They must support an informed choice without implying that a generic example is the maintainer's expected output.
 
-### Editor Enhancements (Obsidian-Parity)
-- **Callouts (Blockquotes):** Expand the syntax tree parsing to support Obsidian-style callouts (e.g., `> [!info]`) rendering with custom background colors and icons.
-- **Internal Wiki-links:** Implement parsing and autocompletion for `[[Page Name]]` syntax to link between different sections/projects.
-- **Media Drag-and-Drop:** Add support for dragging images into the editor and rendering them inline.
+### Editor Enhancements
+- **Collaboration Polish:** Add clearer collaborator presence summaries, resolved-thread access, and explicit read-only states for view/comment users.
+- **Wiki-link Completion:** Improve `[[Page Name]]` autocompletion across Sections/Documents.
+- **Media Management:** Extend drag-and-drop image support with richer resource browsing and replacement flows.
 
 ### Backend Integration & AI Features
 - **Realtime Agent Chat:** The chat in the Right Panel currently uses mocked timeouts. It needs to be connected to the FastAPI backend's streaming endpoint for real conversational AI.
@@ -183,8 +180,8 @@ Template previews show purpose, intended audience, expected outcome, Outline pre
 ## 4. Technical Constraints & Rules for Future Code
 
 1. **Erasable Syntax Only:** The project operates under strict `erasableSyntaxOnly` rules. Do NOT use TypeScript shorthand constructor properties in classes (e.g., `constructor(public doc: string)`). All properties must be explicitly declared and assigned.
-2. **Editor State Integrity:** When building new CodeMirror widgets, ALWAYS use `StateField` to manage multi-line decorations (like Code Blocks or Tables). Do NOT use `ViewPlugin` for injecting line replacements or block widgets, as this will cause `RangeError` crashes during document mutations.
-3. **Event Propagation:** Any interactive React components injected into the editor (like Copy buttons or Table tools) MUST handle `pointerdown` events and call `e.preventDefault()` / `e.stopPropagation()` to prevent CodeMirror from stealing focus or altering the cursor position unexpectedly.
+2. **Editor State Integrity:** Keep TipTap extensions, Liveblocks collaboration state, and Markdown snapshot persistence aligned. Do not reintroduce last-write-wins REST autosave as the source of truth for collaborative editing.
+3. **Event Propagation:** Interactive controls inside or near the editor, such as copy buttons, table tools, and menus, must avoid stealing focus or corrupting the current selection.
 4. **Tailwind Hygiene:** Avoid duplicate layout classes (e.g., applying both `bg-card` and `bg-card/80` on the same element).
 5. **Semantic Tokens:** Components must use semantic tokens that describe visual purpose, not raw palette values. Raw colors, arbitrary radii, and one-off shadows are design-system violations.
 6. **Governed Variants:** Shared UI components expose the approved visual variants for buttons, badges, notices, inputs, surfaces, and other recurring patterns. Feature code should compose those variants rather than restyle them.
@@ -193,4 +190,4 @@ Template previews show purpose, intended audience, expected outcome, Outline pre
 9. **Accessibility Baseline:** Product UI must meet WCAG 2.2 AA. Every workflow must support keyboard operation, visible focus, sufficient contrast, reduced motion, and status communication that does not rely on color alone.
 
 ---
-*Last updated: 2026-06-05*
+*Last updated: 2026-06-13*

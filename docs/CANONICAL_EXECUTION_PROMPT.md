@@ -3,9 +3,9 @@
 Use this prompt for implementation runs that need to stay aligned with the current product direction.
 
 ```text
-Read CONTEXT.md, frontend/VISUAL_SPEC.md, and docs/adr/0001-projects-contain-multiple-documents.md.
+Read CONTEXT.md, docs/CURRENT_SYSTEM_STATE.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, and docs/adr/0002-section-scoped-liveblocks-collaboration.md.
 
-Treat only those three files as normative sources of product truth.
+Treat only those files as normative sources of product truth.
 
 Do not use other markdown documents, roadmap files, or earlier implementation plans as decision sources unless this prompt explicitly names them for a narrow, mechanical task.
 If another document conflicts with the canonical sources, call out the conflict and follow the canonical sources.
@@ -15,10 +15,11 @@ Do not widen scope by pulling requirements from older plans, partial redesign no
 
 When planning or implementing, prefer:
 - the domain language in CONTEXT.md
+- the implemented system snapshot in docs/CURRENT_SYSTEM_STATE.md
 - the visual and interaction direction in frontend/VISUAL_SPEC.md
 - the multi-Document Project model in docs/adr/0001-projects-contain-multiple-documents.md
+- the section-scoped collaboration model in docs/adr/0002-section-scoped-liveblocks-collaboration.md
 
 If the task is ambiguous, resolve it from those sources first.
 If it still cannot be resolved, ask for clarification instead of borrowing from unrelated docs.
 ```
-

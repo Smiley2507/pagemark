@@ -1,5 +1,7 @@
 # Pagemark SaaS Usability Recovery Plan
 
+> Historical plan note: this document predates the current TipTap/Liveblocks editor implementation. For current product truth, read `CONTEXT.md`, `docs/CURRENT_SYSTEM_STATE.md`, `frontend/VISUAL_SPEC.md`, and the ADRs first.
+
 ## Summary
 
 Goal: turn the current visually polished but weakly usable app into an 8/10 professional SaaS documentation writing product.
@@ -37,7 +39,7 @@ Key changes:
 - Replace section-switching editor UX with a continuous document surface showing all active Sections in order.
 - Keep each persisted Section as an editable block with minimal chrome: editable heading, content editor, small status/review affordance, and contextual section menu.
 - Editor must be full-screen product workspace, not inside the main app shell.
-- Editor topbar includes editable Document title, compact save state, search/find, export button, review/status badge as read-only derived state, and a more menu for document settings/tools.
+- Editor topbar includes editable Document title, compact save state, Quality, Share, Export, review/status badge as read-only derived state, and a user avatar menu for account-local actions such as theme switching.
 - Left TOC shows minimal H1/H2/Section navigation, current location highlight, and bottom stats for word count, grammar/style issue count, and review progress.
 - Section actions include add Section above/below, delete with confirmation, drag or keyboard reorder, and optional duplicate only if cheap.
 - Keep AI and notes in a right-side resizable panel, collapsed by default.
@@ -52,7 +54,7 @@ Acceptance:
 Stabilize the actual writing experience.
 
 Key changes:
-- Audit and fix CodeMirror live preview for bold, italic, links, inline code, fenced code, headings, checkboxes, and horizontal rules.
+- Audit and fix TipTap/Markdown behavior for bold, italic, links, inline code, fenced code, headings, checkboxes, tables, and horizontal rules.
 - Rework tables using an Obsidian Advanced Tables-style interaction: insert table, add/remove row, add/remove column, and preserve valid markdown.
 - Revamp slash command menu as a compact, keyboard-first command list.
 - Slash commands include paragraph, headings, checklist, code block, table, quote/callout, and horizontal rule.

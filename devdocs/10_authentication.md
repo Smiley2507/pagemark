@@ -142,6 +142,36 @@ EDIT > COMMENT > VIEW
 - COMMENT: Can view + add notes
 - EDIT: Can view + add notes + modify content
 
+## Liveblocks Collaboration Authorization
+
+Real-time collaboration does not bypass Pagemark authorization. The frontend asks the backend to authorize each section room, and the backend exchanges the current Pagemark session for a Liveblocks token.
+
+**Endpoint**:
+
+```
+POST /projects/{project_id}/documents/{document_id}/sections/{section_id}/collaboration/auth
+```
+
+**Flow**:
+
+1. `get_current_user` validates the JWT access cookie.
+2. `verify_project_ownership` confirms active organization membership for the project.
+3. The documents router confirms the document belongs to the project and the section belongs to the document.
+4. The backend resolves the user's effective document permission from organization membership, creator status, or `DocumentShare`.
+5. The backend maps the permission to Liveblocks room capabilities:
+   - `VIEW`: read room, write presence, read comments
+   - `COMMENT`: view capabilities plus write comments
+   - `EDIT`: comment capabilities plus write room content, unless the document is `APPROVED`
+6. The backend calls Liveblocks `/v2/authorize-user` with `LIVEBLOCKS_SECRET_KEY` and returns the Liveblocks token response.
+
+Durable collaborative snapshots use:
+
+```
+PATCH /projects/{project_id}/documents/{document_id}/sections/{section_id}/collaboration/snapshot
+```
+
+The snapshot endpoint requires effective `EDIT` permission and rejects edits to `APPROVED` documents.
+
 ## Documentation Authorization
 
 ### Document Access Resolution

@@ -6,7 +6,7 @@ Use these prompts one phase at a time. Each phase must begin from the canonical 
 
 ```text
 Read docs/CANONICAL_EXECUTION_PROMPT.md first.
-Then read only CONTEXT.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, docs/SAAS_USABILITY_RECOVERY_PLAN.md, and this phase prompt.
+Then read only CONTEXT.md, docs/CURRENT_SYSTEM_STATE.md, frontend/VISUAL_SPEC.md, docs/adr/0001-projects-contain-multiple-documents.md, docs/adr/0002-section-scoped-liveblocks-collaboration.md, docs/SAAS_USABILITY_RECOVERY_PLAN.md, and this phase prompt.
 
 Do not read or rely on older roadmap, architecture, phase, or landing-copy docs.
 
@@ -108,7 +108,7 @@ Goal:
 Make the writing surface reliable enough for real documentation work.
 
 Required behavior:
-- CodeMirror live preview remains source-as-truth.
+- TipTap/Markdown editing remains the current writing surface.
 - Bold, italic, links, inline code, headings, fenced code, checkboxes, and horizontal rules render correctly without corrupting markdown.
 - Table editing supports insert table, add/remove row, add/remove column, and keeps valid markdown.
 - Table UX should follow an Obsidian Advanced Tables-style interaction model as closely as practical.
@@ -118,7 +118,7 @@ Required behavior:
 - Changed editor files must use semantic tokens and governed variants.
 
 Do not:
-- Replace CodeMirror with another editor.
+- Replace TipTap with another editor.
 - Add decorative editor UI.
 - Implement AI chat features.
 - Hardcode product UI colors or arbitrary visual values.

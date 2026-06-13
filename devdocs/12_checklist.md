@@ -1,4 +1,4 @@
-P# Comprehensive Feature Testing Checklist
+# Comprehensive Feature Testing Checklist
 
 This checklist is organized by feature area. Each item includes a description of what to test, the expected behavior, and any pre-conditions required. A person with no knowledge of the codebase can use this to verify that every major feature works as intended.
 
@@ -484,7 +484,22 @@ This checklist is organized by feature area. Each item includes a description of
 
 ## 14. Collaboration
 
-### 14.1 Notes
+### 14.1 Real-Time Section Editing
+- [ ] **Two users edit the same section**: Open the same document section in two browsers logged in as users with edit access. Type in one browser.
+  - **Expected**: The other browser sees the content update without refresh. Presence/collaboration UI appears for the active room.
+  - **Pre-conditions**: `LIVEBLOCKS_SECRET_KEY` is configured and `VITE_COLLABORATION_ENABLED` is not `false`.
+- [ ] **Collaborative snapshot persists**: Edit collaboratively, wait for the save indicator, refresh both browsers.
+  - **Expected**: The latest Markdown content is loaded from the backend after refresh.
+- [ ] **Read-only shared user cannot edit**: Share a document with VIEW permission. Open the section as that user.
+  - **Expected**: User can view the section and presence may connect, but content editing controls are read-only.
+- [ ] **Comment-only shared user can comment but not edit**: Share a document with COMMENT permission. Open the collaborative editor.
+  - **Expected**: User can participate in comments/threads but cannot change section content.
+- [ ] **Approved document blocks collaborative writes**: Mark a document APPROVED and attempt a collaborative edit as an editor.
+  - **Expected**: User does not receive room write permission and snapshot writes are rejected.
+- [ ] **Collaboration disabled fallback**: Set `VITE_COLLABORATION_ENABLED=false`, restart frontend, and edit a section.
+  - **Expected**: The editor uses normal debounced REST autosave and content persists without Liveblocks.
+
+### 14.2 Notes
 - [ ] **Create document note**: Open Notes panel. Type a note. Submit.
   - **Expected**: Note appears in the list with user name, avatar, timestamp.
 - [ ] **Section-scoped note**: While viewing a specific section, create a note.
@@ -492,7 +507,7 @@ This checklist is organized by feature area. Each item includes a description of
 - [ ] **View notes**: Switch between sections. Notes panel shows relevant notes.
   - **Expected**: Notes filter by section if scoped, or show all document notes.
 
-### 14.2 Document Sharing
+### 14.3 Document Sharing
 - [ ] **Share document**: Open a document. Click Share. Search for a user. Select permission (VIEW). Share.
   - **Expected**: Share created. User appears in share list.
   - **Pre-conditions**: Target user is registered.
@@ -502,6 +517,14 @@ This checklist is organized by feature area. Each item includes a description of
   - **Expected**: Share removed. User can no longer access document.
 - [ ] **Share with org member**: Share a document with an org member.
   - **Expected**: Works. (Org members already have access, so this is redundant but valid.)
+
+### 14.4 Editor Avatar Menu
+- [ ] **Open editor avatar menu**: In the document editor header, click the user avatar.
+  - **Expected**: Menu opens with user identity, theme options, collaboration status/settings entry, settings link, and logout.
+- [ ] **Switch theme from avatar menu**: Choose Light, Dark, then System.
+  - **Expected**: Theme changes immediately and persists through refresh.
+- [ ] **No inert overflow icon**: Inspect the editor header.
+  - **Expected**: The old unconnected more/ellipsis icon is not present.
 
 ---
 

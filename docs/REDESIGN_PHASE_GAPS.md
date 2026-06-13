@@ -4,8 +4,10 @@ This plan closes the product gaps introduced while the codebase was still being 
 
 Normative product sources:
 - `CONTEXT.md`
+- `docs/CURRENT_SYSTEM_STATE.md`
 - `frontend/VISUAL_SPEC.md`
 - `docs/adr/0001-projects-contain-multiple-documents.md`
+- `docs/adr/0002-section-scoped-liveblocks-collaboration.md`
 
 Non-normative guidance:
 - `docs/CANONICAL_EXECUTION_PROMPT.md` defines how agents must use the canonical sources.
@@ -128,7 +130,7 @@ Implementation requirements:
 - Generated prose must enter as Generated Draft and remain reviewable until explicit acceptance.
 - Manual edits must not automatically mark content reviewed.
 - Explicit acceptance must record review metadata and Analysis snapshot where evidence exists.
-- The editor should preserve the existing CodeMirror live-preview strengths while changing layout, hierarchy, and chrome.
+- The editor should preserve the existing TipTap/Markdown writing strengths while changing layout, hierarchy, and chrome.
 - AI assistance should appear near active Section or selected text, with longer conversation in a collapsible assistant panel.
 - Activity should show meaningful workflow events and exclude autosave/edit noise.
 - Settings, templates, quality, export, and analysis screens should use compact work-focused layouts, not standalone card-heavy designs.
@@ -171,4 +173,3 @@ Verification:
 - Frontend build passes.
 - Relevant backend tests pass.
 - The final implementation report lists exactly what passed or failed.
-

@@ -4,9 +4,9 @@
 
 Pagemark converts source code into structured technical documentation. Developers connect a repo (ZIP, Git URL, or GitHub OAuth), Pagemark analyzes it, then AI generates documentation prose that the developer reviews and approves section by section.
 
-**Stack**: Python FastAPI backend + React 19 / TypeScript / Vite 8 frontend + PostgreSQL 16 + Redis (Celery broker). AI providers are BYOK (Anthropic Claude, Google Gemini, OpenCode Go). Integrates with GitHub OAuth, LanguageTool, SMTP email.
+**Stack**: Python FastAPI backend + React 19 / TypeScript / Vite 8 frontend + PostgreSQL 16 + Redis (Celery broker). AI providers are BYOK (Anthropic Claude, Google Gemini, OpenCode Go). Integrates with GitHub OAuth, Liveblocks, LanguageTool, SMTP email.
 
-**Layers**: Frontend ↔ REST/SSE ↔ Backend ↔ PostgreSQL + Celery workers ↔ AI providers. JWT cookies for auth, `X-Organization-ID` header for multi-tenant org scoping.
+**Layers**: Frontend ↔ REST/SSE ↔ Backend ↔ PostgreSQL + Celery workers ↔ AI providers. Liveblocks provides real-time section editing after backend authorization. JWT cookies for auth, `X-Organization-ID` header for multi-tenant org scoping.
 
 ---
 
@@ -28,7 +28,7 @@ Pagemark converts source code into structured technical documentation. Developer
 
 **Generation**: `generation_runs`, `generation_section_tasks` (token/cost tracking, failover state)
 
-**Collaboration**: `collaboration_notes`, `document_shares` (VIEW/COMMENT/EDIT)
+**Collaboration**: `collaboration_notes`, `document_shares` (VIEW/COMMENT/EDIT). Liveblocks CRDT/presence/thread state lives outside PostgreSQL; Pagemark persists durable collaborative snapshots in `sections.content_md`.
 
 **Quality**: `quality_reports`, `quality_issues`, `broken_links`
 
@@ -103,7 +103,7 @@ Located in `analysis_service.py` (1285 lines), executed by Celery workers.
 
 **Three-panel editor**:
 - **Left panel**: Outline tree (collapsible, drag-reorder, status dots) or Notes panel
-- **Middle panel**: Sections with Tiptap markdown editor, write/preview/diff modes, autosave (3s debounce), status indicators, generate/refine/accept action buttons
+- **Middle panel**: Sections with Tiptap markdown editor, write/preview/diff modes, section-scoped Liveblocks collaboration, autosave/snapshot persistence, status indicators, generate/refine/accept action buttons
 - **Right panel**: AI chat (streaming via SSE), model selector, quick action chips (generate/refine/suggest-structure), clarification requests
 
 **Document setup wizard** (5 steps): SourceStep → AnalysisFactsStep → TemplateRecommendationStep → OutlineReviewStep → GenerationChoiceStep. State persisted via `document.setup_stage`. Progressively reveals as each step completes.
@@ -118,13 +118,15 @@ Located in `analysis_service.py` (1285 lines), executed by Celery workers.
 
 **Document sharing**: Share documents with VIEW/COMMENT/EDIT permissions to org members or external users. Revocable.
 
-**Notes**: Append-only per-document or per-section comments. No threading, no editing, no deleting.
+**Real-time editing**: Liveblocks + Tiptap/Yjs rooms are scoped to individual sections with room ids like `project:{project_id}:document:{document_id}:section:{section_id}`. Backend auth maps Pagemark permissions to Liveblocks room capabilities. Collaborative snapshots persist through the documents router.
+
+**Notes and threads**: Backend `collaboration_notes` are append-only per-document or per-section comments. Liveblocks threads provide real-time collaborative discussion inside section rooms.
 
 **Review workflow**: AI generates → section is `GENERATED_DRAFT` → user accepts → becomes `REVIEWED` with reviewer ID + analysis snapshot. Editing reviewed content clears review state.
 
 **Activity events**: All meaningful actions recorded with weights (review=3.0, generate=1.0, etc.) → timeline + GitHub-style heatmap.
 
-**Limitations**: No real-time (no WebSocket), no section assignment, role enforcement incomplete, notifications not fully implemented.
+**Limitations**: Collaboration presence is section-scoped rather than document-wide, no Pagemark-owned CRDT history, no section assignment, role enforcement incomplete, notifications not fully implemented.
 
 ---
 

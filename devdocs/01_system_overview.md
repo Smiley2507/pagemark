@@ -43,6 +43,7 @@ The system is split into three main tiers:
 │  Anthropic Claude + Google Gemini           │
 │  + OpenCode Go (BYOK AI Providers)          │
 │  GitHub OAuth + GitLab OAuth                │
+│  Liveblocks (real-time collaboration)       │
 │  LanguageTool (grammar)                     │
 │  SMTP (email)                               │
 └─────────────────────────────────────────────┘
@@ -58,6 +59,7 @@ The frontend is a single-page application built with React 19, TypeScript 6, and
 - **Axios** — HTTP client with 401 interceptor and token refresh queue
 - **TailwindCSS v3 + class-variance-authority** — Styling
 - **Tiptap v3** — Rich text / Markdown editor with extensions (tables, images, code blocks, link, color)
+- **Liveblocks + Yjs** — Section-scoped real-time collaborative editing, presence, and comment threads
 - **@xyflow/react** — React Flow for diagram rendering
 - **Recharts** — Charting (quality scores, activity heatmap)
 - **react-diff-viewer-continued** — Visual diff rendering
@@ -131,7 +133,9 @@ PostgreSQL is the primary data store, accessed via async SQLAlchemy. The schema 
 
 3. **LanguageTool** — Grammar checking via LanguageTool API (self-hosted or public).
 
-4. **SMTP Email** — Transactional emails (verification, password reset, notifications) via fastapi-mail.
+4. **Liveblocks** — Real-time section editing and collaborative thread UI. The backend authorizes Liveblocks rooms using the current Pagemark session and document permissions.
+
+5. **SMTP Email** — Transactional emails (verification, password reset, notifications) via fastapi-mail.
 
 ### Communication Between Layers
 
@@ -145,7 +149,9 @@ PostgreSQL is the primary data store, accessed via async SQLAlchemy. The schema 
 
 5. **Backend ↔ GitHub/GitLab**: OAuth 2.0 for authorization, REST API for data fetching, GitPython for repository cloning.
 
-6. **Backend ↔ Email**: SMTP via fastapi-mail library.
+6. **Backend ↔ Liveblocks**: The backend calls Liveblocks authorization APIs with `LIVEBLOCKS_SECRET_KEY` after resolving Pagemark document permissions.
+
+7. **Backend ↔ Email**: SMTP via fastapi-mail library.
 
 ### Key Workflows
 
@@ -159,6 +165,16 @@ PostgreSQL is the primary data store, accessed via async SQLAlchemy. The schema 
 7. User chooses a Generation mode (complete document or section-on-demand)
 8. AI generates section prose; user reviews and accepts each section
 9. User exports the document (Markdown, HTML, or PDF)
+
+#### Real-Time Collaboration Flow
+1. User opens a document section in the editor
+2. Frontend derives a Liveblocks room id from project, document, and section ids
+3. LiveblocksProvider calls the backend collaboration auth endpoint
+4. Backend validates the JWT session, project membership, document/share permission, and section ownership
+5. Backend maps the effective permission to Liveblocks room capabilities
+6. Users edit together through Liveblocks/Tiptap/Yjs
+7. The frontend persists durable Markdown snapshots to `sections.content_md` through the collaboration snapshot endpoint
+8. Snapshot writes clear reviewed state when content changes, matching normal edit behavior
 
 #### Source Change Detection
 1. User re-syncs the project source (Git sync or ZIP re-upload)

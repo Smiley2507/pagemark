@@ -33,7 +33,9 @@ This roadmap has been fully restructured to incorporate the strict Priority 1 (M
   - Tagging, Categorization, and Full-Text Search.
   - Approval Workflow (Draft → In Review → Approved).
   - Quality Thresholds (Set minimum scores to trigger warnings).
-  - Collaboration notes (Team notes on a document).
+  - Document-scoped sharing with organization members.
+  - Section-scoped real-time collaboration with Liveblocks.
+  - Collaboration notes/threads on Documents and Sections.
 
 ## Phase 5: Dashboards, Export & Notifications (Priority 2)
 **Objective:** The final academic modules and polish.
@@ -46,3 +48,12 @@ This roadmap has been fully restructured to incorporate the strict Priority 1 (M
 ## Phase 6: System Testing & Release Readiness
 **Objective:** Ensure the system passes all security and operational checks.
 - **Tasks:** IDOR testing, Docker bulletproofing, Evaluator README.
+
+## Current Completed Collaboration Baseline
+
+- Projects contain multiple Documents.
+- Document sharing supports organization-member `view`, `comment`, and `edit` permissions.
+- The editor is a full-screen continuous Section-backed workspace.
+- TipTap/ProseMirror is the editor engine, with Markdown snapshots persisted to PostgreSQL.
+- Liveblocks powers section-scoped collaborative sessions, Yjs state, presence/cursors, and anchored Section comment threads.
+- The editor header includes Quality, Share, Export, save state, and a user avatar theme menu.

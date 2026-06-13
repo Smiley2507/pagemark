@@ -1,22 +1,25 @@
-# Pagemark 📖
+# Pagemark
 
-Pagemark is an AI-assisted software documentation generation system. Developers upload source code, an AI analyzes it to generate structured technical documentation, and developers can refine it section by section through an interactive, conversational AI interface.
+Pagemark is an AI-assisted collaborative workspace for turning source code into structured technical documentation. Developers connect or upload source code, create purpose-specific Documents inside Projects, generate and refine Sections with BYOK AI providers, and collaborate in real time on Section content.
 
 ## Tech Stack
 
 ### Backend
-- **API Framework**: FastAPI (Python 3.11)
+- **API Framework**: FastAPI (Python 3.12+)
 - **ORM & Database**: SQLAlchemy 2.0 (async) + PostgreSQL
 - **Migrations**: Alembic
 - **Background Jobs**: Celery + Redis
 - **Code Analysis**: Tree-sitter
-- **AI Integration**: Anthropic Claude API (claude-sonnet)
+- **AI Integration**: BYOK provider credentials through the active provider abstraction
+- **Realtime Collaboration**: Liveblocks access-token auth issued by FastAPI
 
 ### Frontend
 - **Framework**: React + TypeScript + Vite
 - **Styling**: Tailwind CSS + shadcn UI
 - **State Management**: Zustand
 - **API Client**: Axios
+- **Editor**: TipTap/ProseMirror with Markdown persistence
+- **Realtime Collaboration**: Liveblocks + Yjs
 
 ---
 
@@ -62,7 +65,9 @@ This starts:
 | Redis      | `pagemark_redis` | `6379`    | No auth                            |
 | Celery     | `pagemark_worker`| —         | Runs codebase analysis tasks       |
 
-Ensure `backend/.env` exists (copy from `.env.example`). The worker uses it for `ENCRYPTION_KEY`, database, and Redis. **AI features use BYOK**: each user adds their own Anthropic or Google AI Studio key in **Dashboard → Settings → AI providers**.
+Ensure `backend/.env` exists (copy from `.env.example`). The worker uses it for `ENCRYPTION_KEY`, database, and Redis. **AI features use BYOK**: each user adds their own provider key in **Settings → AI Providers**.
+
+For real-time collaboration, set `LIVEBLOCKS_SECRET_KEY` in `backend/.env`. Without it, the app still builds, but collaboration auth returns `503 Liveblocks is not configured`.
 
 Wait for the containers to be healthy:
 
@@ -203,18 +208,32 @@ npm run preview  # Preview production build locally
 | `MAIL_FROM`                 | Sender email address                   | `noreply@pagemark.dev`           |
 | `MAIL_PORT`                 | SMTP port                              | `587`                            |
 | `MAIL_SERVER`               | SMTP server                            | `smtp.gmail.com`                 |
+| `LIVEBLOCKS_SECRET_KEY`     | Liveblocks secret key for room auth    | *(required for collaboration)*   |
+| `LIVEBLOCKS_API_BASE_URL`   | Liveblocks API base URL                | `https://api.liveblocks.io`      |
 
 ### Frontend (`frontend/.env`)
 
-| Variable       | Description            | Default                  |
-|----------------|------------------------|--------------------------|
-| `VITE_API_URL` | Backend API base URL   | `http://localhost:8000`  |
+| Variable                       | Description                         | Default                  |
+|--------------------------------|-------------------------------------|--------------------------|
+| `VITE_API_URL`                 | Backend API base URL                | `http://localhost:8000`  |
+| `VITE_COLLABORATION_ENABLED`   | Set to `false` to disable Liveblocks editor rooms | enabled |
 
 ---
 
 ## Key Features & Architecture Rules
 
-- **Outline Creation**: Creating a project automatically initializes a structured document with 6 default sections.
-- **Background Processes**: Code analysis and quality reporting run as asynchronous Celery tasks.
-- **Autosave vs Snapshotting**: Autosave updates active drafts, but standard snapshots are only captured upon manual save, status transitions, or AI accepts.
+- **Project/Document Model**: A Project is the source-connected workspace. It contains one or more purpose-specific Documents.
+- **Section Lifecycle**: Sections are the durable unit for content lifecycle, review, freshness, generation, evidence, and collaboration snapshots.
+- **Editor**: The canonical editor route is `/projects/{projectId}/documents/{documentId}`. It renders all active Sections in one continuous writing surface.
+- **Realtime Collaboration**: Liveblocks rooms are Section-scoped. Room ids follow `project:{project_id}:document:{document_id}:section:{section_id}`.
+- **Collaboration Persistence**: Liveblocks/Yjs is live editing state; PostgreSQL `Section.content_md` is the Markdown snapshot used by AI, export, review, freshness, and search.
+- **Document Sharing**: Organization members can receive Document-scoped `view`, `comment`, or `edit` access. Sharing one Document must not expose sibling Documents.
+- **Background Processes**: Code analysis, quality reporting, notifications, and generation work run asynchronously through Celery where appropriate.
 - **Secure Authentication**: JWT-based session security using secure, `httpOnly` cookies.
+
+## Developer Docs
+
+- `CONTEXT.md` — domain language and relationships.
+- `docs/CURRENT_SYSTEM_STATE.md` — current implementation snapshot for future work.
+- `frontend/VISUAL_SPEC.md` — design system and interaction direction.
+- `docs/adr/` — architectural decisions, including multi-Document Projects and section-scoped Liveblocks collaboration.

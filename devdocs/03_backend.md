@@ -29,6 +29,8 @@ All environment variables are loaded via pydantic-settings `BaseSettings`:
 | `REDIS_URL` | `str` | — | Redis connection for Celery |
 | `SECRET_KEY` | `str` | — | JWT signing key |
 | `ANTHROPIC_API_KEY` | `Optional[str]` | None | Legacy fallback (deprecated — BYOK is the standard path) |
+| `LIVEBLOCKS_SECRET_KEY` | `str` | `""` | Liveblocks secret used to authorize real-time collaboration sessions |
+| `LIVEBLOCKS_API_BASE_URL` | `str` | `https://api.liveblocks.io` | Liveblocks REST API base URL |
 | `FRONTEND_URL` | `str` | — | Frontend origin for CORS |
 | `UPLOAD_DIR` | `str` | `/tmp/opencode/uploads` | Directory for uploaded files |
 | `MAIL_USERNAME` | `str` | — | SMTP username |
@@ -189,6 +191,8 @@ Also provides `is_valid_model(provider, model_id)` to validate model identifiers
 | POST | `/projects/{project_id}/documents/{document_id}/sections` | `require_document_permission("edit")` | Create custom section |
 | PATCH | `/projects/{project_id}/documents/{document_id}/sections/{section_id}` | `verify_project_ownership` | Update section content/status |
 | PATCH | `/projects/{project_id}/documents/{document_id}/sections/{section_id}/autosave` | `verify_project_ownership` | Autosave section (3-second debounce on frontend) |
+| POST | `/projects/{project_id}/documents/{document_id}/sections/{section_id}/collaboration/auth` | `verify_project_ownership` + document permission resolution | Authorize current user for the section's Liveblocks room |
+| PATCH | `/projects/{project_id}/documents/{document_id}/sections/{section_id}/collaboration/snapshot` | `verify_project_ownership` + `EDIT` permission | Persist a Liveblocks collaborative editor snapshot to `sections.content_md` |
 | PUT | `/projects/{project_id}/documents/{document_id}/sections/{section_id}/title` | `verify_project_ownership` | Update section title |
 | PUT | `/projects/{project_id}/documents/{document_id}/sections/reorder` | `verify_project_ownership` | Reorder sections by ID array |
 | DELETE | `/projects/{project_id}/documents/{document_id}/sections/{section_id}` | `verify_project_ownership` | Soft-delete section |
@@ -307,6 +311,15 @@ Export supports ~40 query parameters for customization: `format`, `paper_size`, 
 |--------|-------|------|-------------|
 | GET | `/projects/{project_id}/documents/{document_id}/notes` | `verify_project_ownership` | List notes, optionally filtered by section_id |
 | POST | `/projects/{project_id}/documents/{document_id}/notes` | `verify_project_ownership` | Create collaboration note |
+
+### Liveblocks collaboration support in `documents.py`
+
+Real-time collaboration is implemented in the documents router rather than a separate router because rooms are section-scoped and must validate project, document, and section identity together.
+
+- Room id format: `project:{project_id}:document:{document_id}:section:{section_id}`
+- Auth endpoint: validates the current JWT cookie session, checks document access/share permission, maps Pagemark permissions to Liveblocks room permissions, then calls `POST {LIVEBLOCKS_API_BASE_URL}/v2/authorize-user`.
+- Snapshot endpoint: accepts Markdown from the collaborative editor, requires effective `EDIT` permission, blocks edits to `APPROVED` documents, persists `sections.content_md`, and clears reviewed state just like normal content edits.
+- If `LIVEBLOCKS_SECRET_KEY` is empty, collaboration auth returns 503 so deployments fail closed instead of issuing unauthenticated rooms.
 
 ### `grammar.py` — Tags: `grammar`
 
