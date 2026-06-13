@@ -1,0 +1,155 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+left to right direction
+
+entity "users" as users {
+  * id : Integer <<PK>>
+  --
+  email : String <<NN, UNIQUE>>
+  password_hash : String <<NN>>
+  name : String
+  avatar_url : String
+  is_verified : Boolean <<NN>>
+  login_count : Integer <<NN>>
+  created_at : DateTime
+  updated_at : DateTime
+}
+
+entity "organizations" as organizations {
+  * id : Integer <<PK>>
+  --
+  name : String <<NN>>
+  slug : String <<NN, UNIQUE>>
+  avatar_url : String
+  created_by : Integer <<FK, NN>>
+  created_at : DateTime
+  personal : Boolean <<NN>>
+  quality_threshold : Integer <<NN>>
+  ai_provider : String
+  ai_key_encrypted : String
+}
+
+entity "organization_members" as organization_members {
+  * id : Integer <<PK>>
+  --
+  org_id : Integer <<FK, NN>>
+  user_id : Integer <<FK, NN>>
+  role : Enum(OrgMemberRole) <<NN>>
+  invited_by : Integer <<FK>>
+  joined_at : DateTime
+  status : Enum(OrgMemberStatus) <<NN>>
+  invite_token : String
+  invite_token_expires : DateTime
+}
+
+entity "projects" as projects {
+  * id : Integer <<PK>>
+  --
+  org_id : Integer <<FK, NN>>
+  created_by : Integer <<FK, NN>>
+  name : String <<NN>>
+  status : Enum(ProjectStatus) <<NN>>
+  source_type : Enum(SourceType) <<NN>>
+  context_md : Text
+  created_at : DateTime
+}
+
+entity "documents" as documents {
+  * id : Integer <<PK>>
+  --
+  project_id : Integer <<FK, NN>>
+  template_id : Integer <<FK>>
+  title : String <<NN>>
+  status : Enum(DocumentStatus) <<NN>>
+  setup_stage : Enum(DocumentSetupStage) <<NN>>
+  reviewer_id : Integer <<FK>>
+  created_at : DateTime
+}
+
+entity "sections" as sections {
+  * id : Integer <<PK>>
+  --
+  document_id : Integer <<FK, NN>>
+  parent_id : Integer <<FK>>
+  heading : String <<NN>>
+  content_lifecycle : Enum(SectionContentLifecycle) <<NN>>
+  status : Enum(SectionStatus) <<NN>>
+  reviewed_by : Integer <<FK>>
+  created_at : DateTime
+}
+
+entity "section_versions" as section_versions {
+  * id : Integer <<PK>>
+  --
+  section_id : Integer <<FK, NN>>
+  content_md : Text <<NN>>
+  author_type : Enum(AuthorType) <<NN>>
+  summary : String
+  added : Integer <<NN>>
+  removed : Integer <<NN>>
+  modified : Integer <<NN>>
+  created_at : DateTime
+}
+
+entity "analyses" as analyses {
+  * id : Integer <<PK>>
+  --
+  project_id : Integer <<FK, NN>>
+  status : Enum(AnalysisStatus) <<NN>>
+  source_type : String <<NN>>
+  source_commit : String
+  is_current : Boolean <<NN>>
+  created_at : DateTime
+}
+
+entity "templates" as templates {
+  * id : Integer <<PK>>
+  --
+  name : String <<NN>>
+  category : String
+  purpose : Text
+  is_builtin : Boolean
+  owner_id : Integer <<FK>>
+  created_at : DateTime
+}
+
+entity "generation_runs" as generation_runs {
+  * id : Integer <<PK>>
+  --
+  document_id : Integer <<FK, NN>>
+  mode : Enum(GenerationMode) <<NN>>
+  status : Enum(GenerationRunStatus) <<NN>>
+  failover_state : Enum(FailoverState) <<NN>>
+  intended_provider : String
+  started_at : DateTime
+  completed_at : DateTime
+}
+
+users ||--o{ organizations : created_by
+users ||--o{ organization_members : user_id
+users ||--o{ organization_members : invited_by
+organizations ||--o{ organization_members : org_id
+organizations ||--o{ projects : org_id
+users ||--o{ projects : created_by
+projects ||--o{ analyses : project_id
+projects ||--o{ documents : project_id
+templates |o--o{ documents : template_id
+users |o--o{ documents : reviewer_id
+documents ||--o{ sections : document_id
+sections |o--o{ sections : parent_id
+users |o--o{ sections : reviewed_by
+analyses |o--o{ sections : reviewed_against_analysis_id
+sections ||--o{ section_versions : section_id
+users |o--o{ templates : owner_id
+documents ||--o{ generation_runs : document_id
+
+note bottom
+Core ERD subset only. Liveblocks room state, presence,
+CRDT sync, and inline threads are external to PostgreSQL.
+end note
+@enduml

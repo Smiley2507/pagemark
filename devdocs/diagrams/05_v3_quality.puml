@@ -1,0 +1,40 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+hide methods
+
+class QualityReport {
+  id: Integer <<PK>>
+  document_id: Integer <<FK>>
+  overall_score: Float
+  completeness: Float
+  readability: Float
+  accuracy: Float
+}
+
+class QualityIssue {
+  id: Integer <<PK>>
+  report_id: Integer <<FK>>
+  severity: Enum(IssueSeverity)
+  section_ref: String
+  message: Text
+}
+
+class BrokenLink {
+  id: Integer <<PK>>
+  report_id: Integer <<FK>>
+  url: String
+  status_code: Integer
+  section_ref: String
+}
+
+class Document
+
+Document "1" *-- "0..1" QualityReport : quality_report
+QualityReport "1" *-- "0..*" QualityIssue : issues
+QualityReport "1" *-- "0..*" BrokenLink : broken_links
+@enduml
