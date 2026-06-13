@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { LiveblocksProvider } from '@liveblocks/react/suspense';
 import { Toaster } from 'sonner';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { useAuthStore } from './store/authStore';
@@ -36,6 +37,7 @@ import { OrgInvitePage } from './pages/auth/OrgInvitePage';
 import { useOrgStore } from './store/orgStore';
 import { orgApi } from './api/org';
 import { MainLayout } from './components/layout/MainLayout';
+import { collaborationApi } from './api/collaboration';
 
 const RootRedirect = () => {
   const user = useAuthStore((state) => state.user);
@@ -158,10 +160,12 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Toaster position="top-right" />
-        <AppRoutes />
-      </BrowserRouter>
+      <LiveblocksProvider authEndpoint={collaborationApi.authorize}>
+        <BrowserRouter>
+          <Toaster position="top-right" />
+          <AppRoutes />
+        </BrowserRouter>
+      </LiveblocksProvider>
     </QueryClientProvider>
   );
 }

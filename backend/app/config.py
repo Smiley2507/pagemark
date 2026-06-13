@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     # Fernet key for encrypting OAuth tokens at rest
     ENCRYPTION_KEY: str = ""
 
+    # Liveblocks realtime collaboration
+    LIVEBLOCKS_SECRET_KEY: str = ""
+    LIVEBLOCKS_API_BASE_URL: str = "https://api.liveblocks.io"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

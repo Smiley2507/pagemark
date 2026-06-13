@@ -1,12 +1,16 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import type { Editor } from '@tiptap/core'
+import { ClientSideSuspense, RoomProvider, useSelf, useThreads } from '@liveblocks/react/suspense'
+import { AnchoredThreads, FloatingComposer, FloatingThreads, useLiveblocksExtension } from '@liveblocks/react-tiptap'
 import { Bold, Code, Italic, Link2, MessageSquarePlus, Quote, Sparkles } from 'lucide-react'
+import { marked } from 'marked'
 import { cn } from '@/lib/utils'
 import { useAiStore } from '@/store/aiStore'
 import { resourcesApi } from '@/api/resources'
+import { collaborationApi, sectionRoomId } from '@/api/collaboration'
 import { createExtensions } from './editorSetup'
 import { SlashCommandMenu } from './SlashCommandMenu'
 import { TableToolbar } from './TableToolbar'
@@ -27,21 +31,104 @@ interface TipTapEditorProps {
   className?: string
   sectionId?: number
   projectId?: number
+  documentId?: number
+  collaboration?: boolean
+  readOnly?: boolean
+  onSavingChange?: (saving: boolean) => void
+  onSaved?: (savedAt: Date) => void
   onPolish?: (text: string) => void
   grammarIssues?: GrammarIssue[]
   onFocusChange?: (editor: Editor | null) => void
 }
 
+interface TipTapEditorInnerProps extends TipTapEditorProps {
+  collaborationExtension?: any
+}
+
 export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
-  function TipTapEditor({ value, onChange, className, sectionId, projectId, onPolish, grammarIssues, onFocusChange }, ref) {
+  function TipTapEditor(props, ref) {
+    const shouldCollaborate = Boolean(
+      props.collaboration &&
+      props.projectId &&
+      props.documentId &&
+      props.sectionId &&
+      import.meta.env.VITE_COLLABORATION_ENABLED !== 'false'
+    )
+
+    if (!shouldCollaborate || !props.projectId || !props.documentId || !props.sectionId) {
+      return <TipTapEditorInner {...props} ref={ref} />
+    }
+
+    const roomId = sectionRoomId({
+      projectId: props.projectId,
+      documentId: props.documentId,
+      sectionId: props.sectionId,
+    })
+
+    return (
+      <RoomProvider id={roomId}>
+        <ClientSideSuspense fallback={<TipTapEditorInner {...props} readOnly ref={ref} />}>
+          <CollaborativeTipTapEditor {...props} ref={ref} />
+        </ClientSideSuspense>
+      </RoomProvider>
+    )
+  }
+)
+
+const CollaborativeTipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
+  function CollaborativeTipTapEditor(props, ref) {
+    const self = useSelf()
+    const permission = typeof self?.info?.permission === 'string' ? self.info.permission : 'view'
+    const initialContent = useMemo(() => {
+      if (!props.value) return undefined
+      return marked.parse(props.value, { async: false }) as string
+    }, [props.value])
+    const liveblocks = useLiveblocksExtension({
+      comments: true,
+      initialContent,
+    })
+
+    return (
+      <TipTapEditorInner
+        {...props}
+        ref={ref}
+        collaborationExtension={liveblocks}
+        readOnly={props.readOnly || permission !== 'edit'}
+      />
+    )
+  }
+)
+
+const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>(
+  function TipTapEditorInner({
+    value,
+    onChange,
+    className,
+    sectionId,
+    projectId,
+    documentId,
+    collaboration,
+    collaborationExtension,
+    readOnly,
+    onSavingChange,
+    onSaved,
+    onPolish,
+    grammarIssues,
+    onFocusChange,
+  }, ref) {
     const [contextMenuState, setContextMenuState] = useState<{ position: { top: number; left: number }; selectedText: string } | null>(null)
     const projectIdRef = useRef(projectId)
     useEffect(() => { projectIdRef.current = projectId })
+    const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const lastSnapshotRef = useRef(value)
+    const canEdit = !readOnly
+    const useCollaborationSnapshot = Boolean(collaboration && collaborationExtension && projectId && documentId && sectionId && canEdit)
 
     const editor = useEditor({
-      extensions: createExtensions("Type '/' for commands"),
+      extensions: createExtensions("Type '/' for commands", collaborationExtension),
       content: value,
       contentType: 'markdown',
+      editable: canEdit,
       onUpdate: ({ editor }) => {
         onChange(editor.getMarkdown())
       },
@@ -52,6 +139,11 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
       },
       immediatelyRender: false,
     })
+
+    useEffect(() => {
+      if (!editor) return
+      editor.setEditable(canEdit)
+    }, [canEdit, editor])
 
     useEffect(() => {
       if (!editor || !onFocusChange) return
@@ -74,17 +166,41 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
     }))
 
     useEffect(() => {
-      if (editor && value !== editor.getMarkdown()) {
+      if (editor && !collaborationExtension && value !== editor.getMarkdown()) {
         editor.commands.setContent(value, {
           emitUpdate: false,
           contentType: 'markdown',
           parseOptions: { preserveWhitespace: 'full' },
         })
       }
-    }, [editor, value])
+    }, [collaborationExtension, editor, value])
+
+    useEffect(() => {
+      if (!useCollaborationSnapshot || !projectId || !documentId || !sectionId) return
+      if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
+
+      snapshotTimerRef.current = setTimeout(async () => {
+        const markdown = editor?.getMarkdown()
+        if (markdown == null || markdown === lastSnapshotRef.current) return
+        onSavingChange?.(true)
+        try {
+          const res = await collaborationApi.snapshotSection(projectId, documentId, sectionId, markdown)
+          lastSnapshotRef.current = markdown
+          onSaved?.(new Date(res.updated_at))
+        } catch (error) {
+          console.error('Collaboration snapshot failed', error)
+        } finally {
+          onSavingChange?.(false)
+        }
+      }, 3000)
+
+      return () => {
+        if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
+      }
+    }, [documentId, editor, onSaved, onSavingChange, projectId, sectionId, useCollaborationSnapshot, value])
 
     const uploadAndInsertImage = useCallback(async (file: File) => {
-      if (!editor) return
+      if (!editor || !canEdit) return
       const pid = projectIdRef.current
       if (!pid) {
         const url = URL.createObjectURL(file)
@@ -100,7 +216,7 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
         const url = URL.createObjectURL(file)
         editor.chain().focus().setImage({ src: url, alt: file.name }).run()
       }
-    }, [editor])
+    }, [canEdit, editor])
 
     useEffect(() => {
       if (!editor) return
@@ -169,7 +285,7 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
         editorDOM.removeEventListener('dragover', handleDragOver)
         editorDOM.removeEventListener('contextmenu', handleContextMenu)
       }
-    }, [editor, uploadAndInsertImage])
+    }, [canEdit, editor, uploadAndInsertImage])
 
     /* ── Copy button on code blocks ────────────────────────────── */
     useEffect(() => {
@@ -212,7 +328,10 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
 
     return (
       <div className={cn('tiptap-editor relative min-h-36 w-full min-w-0 overflow-x-hidden', className)} data-section-id={sectionId}>
-        {editor && (
+        {collaborationExtension && editor && (
+          <LiveblocksThreads editor={editor} />
+        )}
+        {editor && canEdit && (
           <BubbleMenu
             editor={editor}
             className="flex"
@@ -222,7 +341,7 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
             <TableToolbar editor={editor} />
           </BubbleMenu>
         )}
-        {editor && (
+        {editor && canEdit && (
           <BubbleMenu
             editor={editor}
             className="flex"
@@ -246,7 +365,7 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
             />
           </BubbleMenu>
         )}
-        <SlashCommandMenu editor={editor} onInsertImage={uploadAndInsertImage} />
+        {canEdit && <SlashCommandMenu editor={editor} onInsertImage={uploadAndInsertImage} />}
         <EditorContent editor={editor} />
         {contextMenuState && editor && createPortal(
           <EditorContextMenu
@@ -270,6 +389,18 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
     )
   }
 )
+
+function LiveblocksThreads({ editor }: { editor: Editor | null }) {
+  const { threads } = useThreads({ query: { resolved: false } })
+
+  return (
+    <>
+      <AnchoredThreads editor={editor} threads={threads} className="lb-anchored-threads" />
+      <FloatingThreads editor={editor} threads={threads} className="lb-floating-threads" />
+      <FloatingComposer editor={editor} className="lb-floating-composer" />
+    </>
+  )
+}
 
 function copyIconSvg() {
   return '<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>'
@@ -386,7 +517,7 @@ function ToolbarButton({
   active?: boolean
   disabled?: boolean
   onClick: () => void
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <button

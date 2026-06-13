@@ -1,11 +1,13 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user, verify_project_ownership, require_document_permission, verify_document_access
 from app.models.activity import ActivityEvent
@@ -20,7 +22,9 @@ from app.models.document import (
     SectionStatus,
 )
 from app.models.clarification import ClarificationRequest
+from app.models.document_share import DocumentShare, DocumentSharePermission
 from app.models.generation import GenerationMode, GenerationRun, GenerationSectionTask
+from app.models.organization import OrganizationMember, OrgMemberRole, OrgMemberStatus
 from app.models.outline_proposal import OutlineProposal, OutlineProposalBasis
 from app.models.project import Project
 from app.models.template import Template
@@ -69,6 +73,112 @@ from app.services import template_recommendation_service
 from app.services import freshness_service, activity_service
 
 router = APIRouter(prefix="/projects", tags=["documents"])
+
+
+_PERMISSION_RANK = {"view": 0, "comment": 1, "edit": 2}
+
+
+def _section_room_id(project_id: int, document_id: int, section_id: int) -> str:
+    return f"project:{project_id}:document:{document_id}:section:{section_id}"
+
+
+async def _document_permission_for_user(
+    db: AsyncSession,
+    project: Project,
+    document_id: int,
+    user_id: int,
+) -> str:
+    member_res = await db.execute(
+        select(OrganizationMember).where(
+            OrganizationMember.org_id == project.org_id,
+            OrganizationMember.user_id == user_id,
+            OrganizationMember.status == OrgMemberStatus.ACTIVE,
+        )
+    )
+    member = member_res.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if member.role == OrgMemberRole.ADMIN or project.created_by == user_id:
+        return "edit"
+
+    share_res = await db.execute(
+        select(DocumentShare).where(
+            DocumentShare.document_id == document_id,
+            DocumentShare.user_id == user_id,
+            DocumentShare.revoked_at.is_(None),
+        )
+    )
+    share = share_res.scalar_one_or_none()
+    if not share:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    if share.permission == DocumentSharePermission.EDIT:
+        return "edit"
+    if share.permission == DocumentSharePermission.COMMENT:
+        return "comment"
+    return "view"
+
+
+def _liveblocks_permissions(permission: str, *, approved: bool) -> list[str]:
+    if permission == "edit" and not approved:
+        return [
+            "room:read",
+            "room:presence:write",
+            "room:write",
+            "comments:read",
+            "comments:write",
+        ]
+    if permission in {"edit", "comment"}:
+        return ["room:read", "room:presence:write", "comments:read", "comments:write"]
+    return ["room:read", "room:presence:write", "comments:read"]
+
+
+async def _authorize_liveblocks_session(
+    *,
+    room_id: str,
+    user: User,
+    permission: str,
+    project: Project,
+    approved: bool,
+) -> tuple[int, str]:
+    if not settings.LIVEBLOCKS_SECRET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Liveblocks is not configured",
+        )
+
+    body = {
+        "userId": str(user.id),
+        "permissions": {
+            room_id: _liveblocks_permissions(permission, approved=approved),
+        },
+        "userInfo": {
+            "name": user.name or user.email,
+            "email": user.email,
+            "avatar": user.avatar_url,
+            "permission": permission,
+        },
+        "organizationId": str(project.org_id),
+    }
+    url = f"{settings.LIVEBLOCKS_API_BASE_URL.rstrip('/')}/v2/authorize-user"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                url,
+                json=body,
+                headers={
+                    "Authorization": f"Bearer {settings.LIVEBLOCKS_SECRET_KEY}",
+                    "Content-Type": "application/json",
+                },
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Liveblocks authorization failed",
+        ) from exc
+
+    return response.status_code, response.text
 
 
 async def _get_document_for_project(
@@ -922,6 +1032,65 @@ async def autosave_document_section(
 ):
     document = await _get_document_for_project(db, project.id, document_id)
     section = _active_section_for_document(document, section_id)
+    if document.status == DocumentStatus.APPROVED:
+        raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
+
+    if body.content_md == (section.content_md or ""):
+        return SectionAutosaveResponse(saved=False, updated_at=section.updated_at)
+
+    section.content_md = body.content_md
+    section.updated_at = datetime.utcnow()
+    document.updated_at = section.updated_at
+    section_service.clear_review_state_for_content_edit(section, edited_at=section.updated_at)
+    await db.commit()
+    await db.refresh(section)
+
+    return SectionAutosaveResponse(saved=True, updated_at=section.updated_at)
+
+
+@router.post("/{project_id}/documents/{document_id}/sections/{section_id}/collaboration/auth")
+async def authorize_section_collaboration(
+    document_id: int,
+    section_id: int,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    _active_section_for_document(document, section_id)
+    permission = await _document_permission_for_user(db, project, document.id, current_user.id)
+    room_id = _section_room_id(project.id, document.id, section_id)
+    liveblocks_status, liveblocks_body = await _authorize_liveblocks_session(
+        room_id=room_id,
+        user=current_user,
+        permission=permission,
+        project=project,
+        approved=document.status == DocumentStatus.APPROVED,
+    )
+    return Response(
+        content=liveblocks_body,
+        status_code=liveblocks_status,
+        media_type="application/json",
+    )
+
+
+@router.patch(
+    "/{project_id}/documents/{document_id}/sections/{section_id}/collaboration/snapshot",
+    response_model=SectionAutosaveResponse,
+)
+async def snapshot_section_collaboration(
+    document_id: int,
+    section_id: int,
+    body: SectionAutosaveRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = await _get_document_for_project(db, project.id, document_id)
+    section = _active_section_for_document(document, section_id)
+    permission = await _document_permission_for_user(db, project, document.id, current_user.id)
+    if _PERMISSION_RANK[permission] < _PERMISSION_RANK["edit"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Edit permission required")
     if document.status == DocumentStatus.APPROVED:
         raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
 

@@ -80,6 +80,7 @@ export function useDocumentAutosave(
   documentId: number,
   sectionId: number | null,
   content: string,
+  enabled: boolean = true,
 ) {
   const queryClient = useQueryClient();
   const [isSaving, setIsSaving] = useState(false);
@@ -105,7 +106,7 @@ export function useDocumentAutosave(
   }, [documentId, projectId, queryClient]);
 
   useEffect(() => {
-    if (!sectionId || projectId <= 0 || documentId <= 0) return;
+    if (!enabled || !sectionId || projectId <= 0 || documentId <= 0) return;
 
     if (timerRef.current) clearTimeout(timerRef.current);
 
@@ -117,7 +118,7 @@ export function useDocumentAutosave(
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [projectId, documentId, sectionId, content, save]);
+  }, [projectId, documentId, sectionId, content, save, enabled]);
 
   useEffect(() => {
     lastPersistedRef.current = null;

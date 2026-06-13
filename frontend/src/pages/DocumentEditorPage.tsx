@@ -20,6 +20,9 @@ import {
   BookOpen,
   Check,
   Share2,
+  Sun,
+  Moon,
+  Laptop,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -42,12 +45,14 @@ import { StaleSectionBanner } from '@/components/ui/stale-section-banner';
 import { Notice } from '@/components/ui/notice';
 import { SectionStatusDot } from '@/components/ui/section-status-dot';
 import { SectionStatusBadge } from '@/components/ui/section-status-badge';
+import { UserBadge } from '@/components/ui/user-badge';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip } from '@/components/ui/tooltip';
 import { documentsApi, type Document } from '@/api/documents';
@@ -59,11 +64,20 @@ import { OutlinePanel } from '@/components/editor/OutlinePanel';
 import type { TocItem } from '@/components/editor/OutlinePanel';
 import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useAuthStore } from '@/store/authStore';
+import { useThemeStore } from '@/store/themeStore';
 import type { Section } from '@/types';
 
 type FlatSection = Section & { depth: number };
 
 type RightTab = 'ai' | 'notes';
+type ThemeChoice = 'light' | 'dark' | 'system';
+
+const themeOptions: Array<{ value: ThemeChoice; label: string; icon: typeof Sun }> = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'system', label: 'System', icon: Laptop },
+];
 
 function flattenSections(sections: Section[], depth = 0): FlatSection[] {
   return sections.flatMap((section) => [
@@ -162,6 +176,7 @@ function SectionBlock({
   onRejectStaleness,
   isStalenessProcessing,
   onFocusChange,
+  isDocumentApproved,
 }: {
   projectId: number;
   documentId: number;
@@ -183,14 +198,17 @@ function SectionBlock({
   onRejectStaleness?: (sectionId: number) => void;
   isStalenessProcessing?: boolean;
   onFocusChange?: (editor: Editor | null) => void;
+  isDocumentApproved?: boolean;
 }) {
   const [content, setContent] = useState(section.content_md);
   const [title, setTitle] = useState(section.title || section.heading || 'Untitled Section');
+  const collaborationEnabled = import.meta.env.VITE_COLLABORATION_ENABLED !== 'false';
   const { isSaving, lastSaved, markPersisted } = useDocumentAutosave(
     projectId,
     documentId,
     section.id,
     content,
+    !collaborationEnabled,
   );
 
   useEffect(() => {
@@ -318,6 +336,11 @@ function SectionBlock({
             onChange={handleContentChange}
             sectionId={section.id}
             projectId={projectId}
+            documentId={documentId}
+            collaboration={collaborationEnabled}
+            readOnly={isDocumentApproved}
+            onSavingChange={(saving) => onSavingChange(section.id, saving)}
+            onSaved={onSaved}
             onFocusChange={onFocusChange}
           />
         </div>
@@ -332,6 +355,8 @@ export function DocumentEditorPage() {
   const did = Number(documentId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const currentUser = useAuthStore((state) => state.user);
+  const { theme, setTheme } = useThemeStore();
   const recordRecentWork = useViewPreferenceStore((state) => state.recordRecentWork);
   const [titleDraft, setTitleDraft] = useState('');
   const [tocOpen, setTocOpen] = useState(true);
@@ -580,14 +605,24 @@ export function DocumentEditorPage() {
       toast.error('No active section selected');
       return;
     }
+    if (activeEditor) {
+      activeEditor.commands.setContent(content, { contentType: 'markdown' });
+      toast.success('AI content applied to section');
+      return;
+    }
     updateDocumentSection.mutate({ id: activeSectionId, data: { content_md: content } });
     toast.success('AI content applied to section');
-  }, [activeSectionId, updateDocumentSection]);
+  }, [activeEditor, activeSectionId, updateDocumentSection]);
 
   const handleReplaceContent = useCallback((content: string, sectionId: number) => {
+    if (activeEditor && activeSectionId === sectionId) {
+      activeEditor.commands.setContent(content, { contentType: 'markdown' });
+      toast.success('AI content replaced section');
+      return;
+    }
     updateDocumentSection.mutate({ id: sectionId, data: { content_md: content } });
     toast.success('AI content replaced section');
-  }, [updateDocumentSection]);
+  }, [activeEditor, activeSectionId, updateDocumentSection]);
 
   const handleInsertAtCursor = useCallback((content: string) => {
     if (!activeEditor) {
@@ -631,6 +666,7 @@ export function DocumentEditorPage() {
   const activeSection = activeSectionId
     ? sections.find((s) => s.id === activeSectionId) || sections[0] || null
     : sections[0] || null;
+  const userDisplayName = currentUser?.name || currentUser?.email || 'User';
 
   if (loading) {
     return (
@@ -734,9 +770,46 @@ export function DocumentEditorPage() {
             <span className="hidden text-xs sm:inline">Export</span>
           </Button>
 
-          <Button variant="ghost" size="icon" aria-label="Document tools">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-label="User menu"
+              >
+                <UserBadge
+                  name={userDisplayName}
+                  avatarUrl={currentUser?.avatar_url}
+                  size="sm"
+                />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel className="truncate">
+                {userDisplayName}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Theme</DropdownMenuLabel>
+              {themeOptions.map((option) => {
+                const Icon = option.icon;
+                return (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onClick={() => setTheme(option.value)}
+                    className="justify-between"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      <span>{option.label}</span>
+                    </span>
+                    {theme === option.value && (
+                      <Check className="h-3.5 w-3.5 text-status-success-foreground" />
+                    )}
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -819,6 +892,7 @@ export function DocumentEditorPage() {
                   onRejectStaleness={(sectionId) => rejectFreshness.mutate(sectionId)}
                   isStalenessProcessing={acceptFreshness.isPending || rejectFreshness.isPending}
                   onFocusChange={(editor) => setActiveEditor(editor)}
+                  isDocumentApproved={document?.status === 'approved'}
                 />
               ))}
               <div className="mx-auto max-w-4xl py-8">

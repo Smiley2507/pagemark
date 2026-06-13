@@ -68,6 +68,18 @@ _Avoid_: Citation (may imply an external publication), source note (unstructured
 A typed record of a meaningful workflow event in a Project, optionally linked to source sync, Analysis, Document, Section, Generation Run, or review state.
 _Avoid_: Audit log (administrative and exhaustive), edit history (too granular), notification (delivery mechanism).
 
+**Collaborative Session**:
+A real-time shared editing or discussion session for one Section. It is scoped to the Section so collaboration follows the same boundaries as content lifecycle, review, and freshness.
+_Avoid_: Document session (unless the whole Document is truly the collaboration unit), Project chat.
+
+**Section Comment Thread**:
+An anchored discussion attached to Section content, with replies and resolution state.
+_Avoid_: Project Activity, Collaboration Note (when the discussion is anchored to content), audit entry.
+
+**Collaboration Snapshot**:
+The persisted Markdown projection of a Collaborative Session used by Pagemark workflows outside real-time editing.
+_Avoid_: Canonical editor state, edit history, autosave event.
+
 **Template Recommendation**:
 A persisted recommendation for a Document setup flow, including its explicit basis, score, explanation, supporting Analysis facts, and whether provider usage occurred.
 _Avoid_: Template ranking (may imply every Template is shown), suggestion (too vague).
@@ -131,6 +143,8 @@ _Avoid_: Documentation owner (overemphasizes documentation operations), Technica
 - Collaboration notes belong to Documents or Sections by default; Project Activity remains workflow history rather than discussion.
 - Project Activity is built from persisted **Activity Events** and may include visual summaries such as a GitHub-style heatmap of meaningful workflow over time.
 - Activity heatmap intensity is based on weighted meaningful events so review, generation completion, source sync, stale updates, and Analysis completion count more than minor workflow events.
+- A **Collaborative Session** belongs to one Section by default; a **Collaboration Snapshot** keeps backend workflows aligned with the latest shared content.
+- A **Section Comment Thread** belongs to Section content and is separate from **Project Activity**.
 - Project tags and Document tags are separate because they organize different levels of work.
 - Search spans accessible Projects and Documents globally, with filters for Project, Document, tag, status, and freshness.
 - Source exclusion rules are stored on the Project for future Analysis, while each Analysis snapshot records the effective exclusions used for that ingest event.

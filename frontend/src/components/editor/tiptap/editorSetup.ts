@@ -15,12 +15,14 @@ import { Figure } from './extensions/Figure'
 import { MermaidDiagram } from './extensions/MermaidDiagram'
 const lowlight = createLowlight(common)
 
-export function createExtensions(placeholderText?: string) {
+export function createExtensions(placeholderText?: string, collaborationExtension?: any) {
   return [
+    collaborationExtension,
     StarterKit.configure({
       heading: { levels: [1, 2, 3, 4, 5, 6] },
       codeBlock: false,
       link: false,
+      undoRedo: collaborationExtension ? false : undefined,
     }),
     Markdown.configure({
       indentation: { style: 'space', size: 2 },
@@ -47,5 +49,5 @@ export function createExtensions(placeholderText?: string) {
       showOnlyWhenEditable: true,
       showOnlyCurrent: true,
     }),
-  ]
+  ].filter(Boolean)
 }

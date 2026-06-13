@@ -6,6 +6,8 @@ import '@fontsource/geist-sans/600.css'
 import '@fontsource/geist-sans/700.css'
 import '@fontsource/geist-mono/400.css'
 import '@fontsource/geist-mono/500.css'
+import '@liveblocks/react-ui/styles.css'
+import '@liveblocks/react-tiptap/styles.css'
 import './index.css'
 import App from './App.tsx'
 
