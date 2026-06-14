@@ -477,6 +477,7 @@ export interface AuditLog {
   created_at: string;
   user_name?: string;
   user_email?: string;
+  source?: "audit" | "activity";
 }
 
 export interface APIKey {

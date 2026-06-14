@@ -6,12 +6,19 @@ import type { ChatMessage } from '@/types';
 
 interface MessageBubbleProps {
   message: ChatMessage;
-  onApply?: (content: string) => void;
-  onReplace?: (content: string) => void;
-  onInsert?: (content: string) => void;
+  onPreviewRewrite?: (content: string) => void;
+  onPreviewReplaceSelection?: (content: string) => void;
+  onPreviewInsert?: (content: string) => void;
+  onPreviewAppend?: (content: string) => void;
 }
 
-function MessageBubble({ message, onApply, onReplace, onInsert }: MessageBubbleProps) {
+function MessageBubble({
+  message,
+  onPreviewRewrite,
+  onPreviewReplaceSelection,
+  onPreviewInsert,
+  onPreviewAppend,
+}: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const time = new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -47,28 +54,36 @@ function MessageBubble({ message, onApply, onReplace, onInsert }: MessageBubbleP
           </span>
           {!isUser && (
             <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-              {onApply && (
+              {onPreviewRewrite && (
                 <button
-                  onClick={() => onApply(message.content)}
+                  onClick={() => onPreviewRewrite(message.content)}
                   className="rounded px-1.5 py-0.5 text-[10px] font-medium text-interaction-hover transition-colors hover:bg-interaction-muted"
                 >
-                  Apply
+                  Rewrite
                 </button>
               )}
-              {onReplace && (
+              {onPreviewReplaceSelection && (
                 <button
-                  onClick={() => onReplace(message.content)}
+                  onClick={() => onPreviewReplaceSelection(message.content)}
                   className="rounded px-1.5 py-0.5 text-[10px] font-medium text-interaction-hover transition-colors hover:bg-interaction-muted"
                 >
-                  Replace
+                  Selection
                 </button>
               )}
-              {onInsert && (
+              {onPreviewInsert && (
                 <button
-                  onClick={() => onInsert(message.content)}
+                  onClick={() => onPreviewInsert(message.content)}
                   className="rounded px-1.5 py-0.5 text-[10px] font-medium text-interaction-hover transition-colors hover:bg-interaction-muted"
                 >
                   Insert
+                </button>
+              )}
+              {onPreviewAppend && (
+                <button
+                  onClick={() => onPreviewAppend(message.content)}
+                  className="rounded px-1.5 py-0.5 text-[10px] font-medium text-interaction-hover transition-colors hover:bg-interaction-muted"
+                >
+                  Append
                 </button>
               )}
               <button
@@ -97,18 +112,20 @@ interface AiPanelMessagesProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   streamingContent: string;
-  onApply?: (content: string) => void;
-  onReplace?: (content: string) => void;
-  onInsert?: (content: string) => void;
+  onPreviewRewrite?: (content: string) => void;
+  onPreviewReplaceSelection?: (content: string) => void;
+  onPreviewInsert?: (content: string) => void;
+  onPreviewAppend?: (content: string) => void;
 }
 
 export function AiPanelMessages({
   messages,
   isStreaming,
   streamingContent,
-  onApply,
-  onReplace,
-  onInsert,
+  onPreviewRewrite,
+  onPreviewReplaceSelection,
+  onPreviewInsert,
+  onPreviewAppend,
 }: AiPanelMessagesProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -122,9 +139,10 @@ export function AiPanelMessages({
         <MessageBubble
           key={msg.id}
           message={msg}
-          onApply={msg.role === 'ai' ? onApply : undefined}
-          onReplace={msg.role === 'ai' ? onReplace : undefined}
-          onInsert={msg.role === 'ai' ? onInsert : undefined}
+          onPreviewRewrite={msg.role === 'ai' ? onPreviewRewrite : undefined}
+          onPreviewReplaceSelection={msg.role === 'ai' ? onPreviewReplaceSelection : undefined}
+          onPreviewInsert={msg.role === 'ai' ? onPreviewInsert : undefined}
+          onPreviewAppend={msg.role === 'ai' ? onPreviewAppend : undefined}
         />
       ))}
       {isStreaming && (

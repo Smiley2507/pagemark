@@ -31,6 +31,7 @@ def build_chat_prompt(
     audience = project_context.get("audience", "developers")
     key_features = project_context.get("key_features", "")
     preferred_terms = project_context.get("preferred_terms", "")
+    custom_instructions = project_context.get("custom_instructions", "")
 
     languages = analysis_summary.get("languages", "")
     file_count = analysis_summary.get("file_count", 0)
@@ -61,6 +62,12 @@ def build_chat_prompt(
         system_lines.append(f"- **Key Features**: {key_features}")
     if preferred_terms:
         system_lines.append(f"- **Preferred Terminology**: {preferred_terms}")
+    if custom_instructions:
+        system_lines += [
+            "",
+            "## Project Brief",
+            custom_instructions,
+        ]
 
     if template_system_prompt:
         system_lines += [

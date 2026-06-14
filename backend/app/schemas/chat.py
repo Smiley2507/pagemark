@@ -48,5 +48,6 @@ class SendMessageRequest(BaseModel):
     model_name: Optional[str] = None
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
+    target_section_id: Optional[int] = None
     references: Optional[List[str]] = None
     resource_ids: Optional[List[int]] = None

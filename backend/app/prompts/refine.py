@@ -19,6 +19,7 @@ def build_refine_prompt(
     tone = project_context.get("tone", "professional")
     audience = project_context.get("audience", "developers")
     preferred_terms = project_context.get("preferred_terms", "")
+    custom_instructions = project_context.get("custom_instructions", "")
 
     lines = [
         f"You are refining a documentation section for a software project.",
@@ -30,6 +31,12 @@ def build_refine_prompt(
     ]
     if preferred_terms:
         lines.append(f"- **Preferred Terminology**: {preferred_terms}")
+    if custom_instructions:
+        lines += [
+            f"",
+            f"## Project Brief",
+            custom_instructions,
+        ]
 
     if template_system_prompt:
         lines += [

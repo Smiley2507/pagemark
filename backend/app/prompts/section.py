@@ -103,6 +103,9 @@ def build_section_prompt(
         "## Task",
         f"Write the **{section_heading}** section of the documentation for {name}.",
         f"Use a {tone} tone appropriate for {audience}.",
+        "Be specific to this project. Prefer concrete files, APIs, commands, components, and observed source facts over generic best practices.",
+        "If source evidence is thin, say what is known and ask for the missing detail instead of inventing behavior.",
+        "Use concise Markdown with useful headings, lists, code blocks, and examples only when they add real clarity.",
     ]
     if custom_instructions:
         lines.append(f"Additional instructions: {custom_instructions}")

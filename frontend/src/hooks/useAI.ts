@@ -7,8 +7,9 @@ export const useGenerateSection = (projectId: number) => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (sectionId: number) => aiApi.generateSection(sectionId),
-    onSuccess: (data, sectionId) => {
+    mutationFn: ({ sectionId, modelName }: { sectionId: number; modelName?: string | null }) =>
+      aiApi.generateSection(sectionId, modelName),
+    onSuccess: (_data, { sectionId }) => {
       // Invalidate relevant queries to fetch fresh data
       queryClient.invalidateQueries({ queryKey: ['section', sectionId] });
       queryClient.invalidateQueries({ queryKey: ['document', projectId] });
@@ -25,8 +26,8 @@ export const useGenerateSection = (projectId: number) => {
 
 export const useRefineSection = () => {
   return useMutation({
-    mutationFn: ({ sectionId, instruction }: { sectionId: number; instruction: string }) => 
-      aiApi.refineSection(sectionId, instruction),
+    mutationFn: ({ sectionId, instruction, modelName }: { sectionId: number; instruction: string; modelName?: string | null }) =>
+      aiApi.refineSection(sectionId, instruction, modelName),
     onError: (error) => {
       console.error('Failed to refine section:', error);
       toast.error('Failed to generate refinement');
@@ -87,8 +88,18 @@ export const useStreamMessage = (threadId: number | null) => {
   const abortControllerRef = useRef<AbortController | null>(null);
   const queryClient = useQueryClient();
 
-  const sendMessage = useCallback((message: string, resourceIds?: number[], references?: string[]) => {
-    if (!threadId) return;
+  const sendMessage = useCallback((
+    message: string,
+    resourceIds?: number[],
+    references?: string[],
+    modelName?: string | null,
+    targetSectionId?: number | null,
+    temperature?: number,
+    maxTokens?: number,
+    threadIdOverride?: number,
+  ) => {
+    const targetThreadId = threadIdOverride || threadId;
+    if (!targetThreadId) return;
 
     setIsStreaming(true);
     setStreamingContent('');
@@ -99,7 +110,7 @@ export const useStreamMessage = (threadId: number | null) => {
     }
 
     abortControllerRef.current = aiApi.streamMessage(
-      threadId,
+      targetThreadId,
       message,
       (chunk) => {
         setStreamingContent((prev) => prev + chunk);
@@ -107,7 +118,7 @@ export const useStreamMessage = (threadId: number | null) => {
       () => {
         setIsStreaming(false);
         abortControllerRef.current = null;
-        queryClient.invalidateQueries({ queryKey: ['chat-messages', threadId] });
+        queryClient.invalidateQueries({ queryKey: ['chat-messages', targetThreadId] });
       },
       (error) => {
         console.error('Streaming error:', error);
@@ -115,6 +126,10 @@ export const useStreamMessage = (threadId: number | null) => {
       },
       resourceIds,
       references,
+      modelName,
+      targetSectionId,
+      temperature,
+      maxTokens,
     );
   }, [threadId, queryClient]);
 

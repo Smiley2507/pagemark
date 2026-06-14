@@ -53,11 +53,16 @@ function allCategories(data: ActivityChartDay[]): string[] {
 export function ProjectActivityPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [selectedDays, setSelectedDays] = useState<number>(14);
+  const [selectedEventType, setSelectedEventType] = useState<string>('all');
 
   const { data: activityData, isLoading: activityLoading } = useQuery({
-    queryKey: ['activity', projectId],
-    queryFn: () => projectsApi.getActivity(Number(projectId)),
+    queryKey: ['activity', projectId, selectedEventType],
+    queryFn: () => projectsApi.getActivity(Number(projectId), {
+      limit: 80,
+      event_type: selectedEventType === 'all' ? undefined : selectedEventType,
+    }),
     enabled: !!projectId,
+    refetchInterval: 10000,
   });
 
   const { data: chartData = [], isLoading: chartLoading } = useQuery({
@@ -76,6 +81,7 @@ export function ProjectActivityPage() {
 
   const activities = activityData?.events || [];
   const categories = allCategories(chartData);
+  const eventTypes = Array.from(new Set(activities.map((activity) => activity.event_type))).sort();
   const totalEvents = activities.length;
   const totalActivity = chartData.reduce((sum, d) => sum + d.total, 0);
 
@@ -153,11 +159,29 @@ export function ProjectActivityPage() {
           description="Project events will appear here when work progresses."
         />
       ) : (
-        <div className="divide-y divide-separator">
-          {activities.map((activity) => (
-            <ActivityRow key={activity.id} activity={activity} />
-          ))}
-        </div>
+        <Surface variant="panel" padding="lg" className="space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h3 className="font-mono text-sm font-semibold uppercase tracking-wide text-text-primary">Live activity feed</h3>
+              <p className="mt-1 text-meta text-text-muted">Refreshes every 10 seconds.</p>
+            </div>
+            <select
+              value={selectedEventType}
+              onChange={(event) => setSelectedEventType(event.target.value)}
+              className="h-8 rounded-md border border-input bg-canvas px-2 font-mono text-xs text-text-primary"
+            >
+              <option value="all">all events</option>
+              {eventTypes.map((eventType) => (
+                <option key={eventType} value={eventType}>{eventType}</option>
+              ))}
+            </select>
+          </div>
+          <div className="overflow-hidden rounded-md border border-separator bg-[#0f1419] font-mono">
+            {activities.map((activity) => (
+              <ActivityRow key={activity.id} activity={activity} />
+            ))}
+          </div>
+        </Surface>
       )}
     </div>
   );
@@ -183,31 +207,32 @@ function ActivityRow({ activity }: { activity: ActivityEvent }) {
   const Icon = EVENT_ICONS[activity.event_type] || Activity;
 
   return (
-    <div className="flex items-start gap-3 py-3">
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" aria-hidden="true" />
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-          <p className="text-body text-text-primary">{activity.message}</p>
-          <Badge variant="neutral" showIcon={false}>
-            {formatEventType(activity.event_type)}
-          </Badge>
-        </div>
-        <p className="mt-1 text-meta text-text-muted">
-          {[activity.document_title, activity.section_heading].filter(Boolean).join(' · ') || 'Project'}
-          {' · '}
-          {formatTimelineDate(activity.created_at)}
+    <div className="flex items-start gap-3 border-b border-white/10 px-3 py-2 last:border-b-0">
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-300" aria-hidden="true" />
+      <div className="min-w-0 flex-1 text-xs leading-5">
+        <p className="truncate text-slate-100">
+          <span className="text-slate-500">[{formatTerminalDate(activity.created_at)}]</span>
+          {' '}
+          <span className="text-cyan-300">{formatEventType(activity.event_type)}</span>
+          {' '}
+          <span>{activity.message}</span>
+        </p>
+        <p className="truncate text-[11px] text-slate-500">
+          {[activity.project_name, activity.document_title, activity.section_heading].filter(Boolean).join(' / ') || 'Project'}
         </p>
       </div>
     </div>
   );
 }
 
-function formatTimelineDate(date: string) {
+function formatTerminalDate(date: string) {
   return new Date(date).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
   });
 }
 

@@ -32,8 +32,15 @@ export const orgApi = {
     quality_threshold?: number;
   }) => api.patch<Organization>(`/organizations/${orgId}`, data).then(res => res.data),
 
-  listAuditLogs: (orgId: number, page: number = 1, perPage: number = 50) =>
-    api.get<AuditLog[]>(`/organizations/${orgId}/audit-logs`, { params: { page, per_page: perPage } }).then(res => res.data),
+  listAuditLogs: (
+    orgId: number,
+    page: number = 1,
+    perPage: number = 50,
+    params?: { search?: string; action?: string; source?: string; sort?: string },
+  ) =>
+    api.get<AuditLog[]>(`/organizations/${orgId}/audit-logs`, {
+      params: { page, per_page: perPage, ...params },
+    }).then(res => res.data),
 
   createJoinLink: (orgId: number, data: { role?: OrgMemberRole; max_uses?: number; expires_in_days?: number }) =>
     api.post<OrgJoinLink>(`/organizations/${orgId}/join-links`, data).then(res => res.data),

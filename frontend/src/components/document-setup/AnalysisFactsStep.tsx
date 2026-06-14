@@ -119,9 +119,9 @@ export function AnalysisFactsStep({
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-8">
       <div className="max-w-3xl">
-        <h1 className="text-title text-text-primary">Repository Analysis</h1>
+        <h1 className="text-title text-text-primary">Analysis facts</h1>
         <p className="mt-3 text-body text-text-secondary">
-          Analyzing your code to understand its structure, languages, APIs, and dependencies.
+          Review what Pagemark found in your source.
         </p>
       </div>
 
@@ -198,11 +198,11 @@ export function AnalysisFactsStep({
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <Surface variant="muted" padding="lg">
-          <h2 className="text-body font-semibold text-text-primary">What analysis enables</h2>
+          <h2 className="text-body font-semibold text-text-primary">Used for</h2>
           <ul className="mt-3 space-y-2 text-meta text-text-secondary">
-            <li>Template recommendations based on your code structure.</li>
-            <li>Outline evidence referencing actual files and endpoints.</li>
-            <li>Freshness checks when source code changes.</li>
+            <li>Template recommendations.</li>
+            <li>Outline evidence.</li>
+            <li>Freshness checks.</li>
           </ul>
         </Surface>
         <Surface variant="muted" padding="lg">
@@ -226,12 +226,12 @@ export function AnalysisFactsStep({
         )}
         {(isComplete || isFailed) && (
           <Button onClick={onContinue}>
-            Continue to Template recommendations
+            Continue
           </Button>
         )}
         {isRunning && (
           <Button variant="outline" disabled>
-            Waiting for more Analysis facts
+            Waiting for facts
           </Button>
         )}
       </div>

@@ -33,8 +33,10 @@ from app.database import get_db
 from app.config import settings
 from app.dependencies import get_current_user
 from app.models.user import User, UserSettings
+from app.models.activity import ActivityEvent
 from app.models.organization import Organization, OrganizationMember, OrganizationJoinLink, OrgMemberRole, OrgMemberStatus
 from app.models.audit import AuditLog
+from app.models.project import Project
 from app.schemas.organization import (
     OrganizationCreate, OrganizationResponse,
     MemberResponse, InviteMemberRequest, UpdateMemberRoleRequest,
@@ -392,29 +394,101 @@ async def accept_invite(
 async def get_audit_logs(
     org_id: int,
     page: int = Query(1, ge=1),
-    per_page: int = Query(50, le=200),
+    per_page: int = Query(50, le=500),
+    search: Optional[str] = Query(None),
+    action: Optional[str] = Query(None),
+    source: str = Query("all", pattern="^(all|audit|activity)$"),
+    sort: str = Query("desc", pattern="^(asc|desc)$"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     await _get_membership(db, org_id, current_user.id, [OrgMemberRole.ADMIN, OrgMemberRole.PROJECT_MANAGER])
 
-    offset = (page - 1) * per_page
-    res = await db.execute(
-        select(AuditLog, User)
-        .join(User, User.id == AuditLog.user_id)
-        .where(AuditLog.org_id == org_id)
-        .order_by(AuditLog.created_at.desc())
-        .limit(per_page)
-        .offset(offset)
-    )
-    return [
-        AuditLogResponse(
-            id=log.id, user_id=log.user_id, org_id=log.org_id,
-            action=log.action, resource=log.resource, created_at=log.created_at,
-            user_name=user.name, user_email=user.email,
+    members_result = await db.execute(
+        select(OrganizationMember.user_id).where(
+            OrganizationMember.org_id == org_id,
+            OrganizationMember.status == OrgMemberStatus.ACTIVE,
         )
-        for log, user in res.all()
-    ]
+    )
+    member_ids = [row[0] for row in members_result.all()]
+
+    rows: list[AuditLogResponse] = []
+
+    if source in ("all", "audit"):
+        audit_query = (
+            select(AuditLog, User)
+            .join(User, User.id == AuditLog.user_id)
+            .where(
+                sqlalchemy.or_(
+                    AuditLog.org_id == org_id,
+                    sqlalchemy.and_(AuditLog.org_id.is_(None), AuditLog.user_id.in_(member_ids)),
+                )
+            )
+        )
+        if action:
+            audit_query = audit_query.where(AuditLog.action == action)
+        if search:
+            pattern = f"%{search}%"
+            audit_query = audit_query.where(
+                sqlalchemy.or_(
+                    AuditLog.action.ilike(pattern),
+                    AuditLog.resource.ilike(pattern),
+                    User.name.ilike(pattern),
+                    User.email.ilike(pattern),
+                )
+            )
+        audit_result = await db.execute(audit_query)
+        rows.extend(
+            AuditLogResponse(
+                id=log.id,
+                user_id=log.user_id,
+                org_id=log.org_id,
+                action=log.action,
+                resource=log.resource,
+                created_at=log.created_at,
+                user_name=user.name,
+                user_email=user.email,
+                source="audit",
+            )
+            for log, user in audit_result.all()
+        )
+
+    if source in ("all", "activity"):
+        activity_query = (
+            select(ActivityEvent, Project)
+            .join(Project, Project.id == ActivityEvent.project_id)
+            .where(Project.org_id == org_id, Project.deleted_at.is_(None))
+        )
+        if action:
+            activity_query = activity_query.where(ActivityEvent.event_type == action)
+        if search:
+            pattern = f"%{search}%"
+            activity_query = activity_query.where(
+                sqlalchemy.or_(
+                    ActivityEvent.event_type.ilike(pattern),
+                    Project.name.ilike(pattern),
+                    sqlalchemy.cast(ActivityEvent.payload, sqlalchemy.String).ilike(pattern),
+                )
+            )
+        activity_result = await db.execute(activity_query)
+        rows.extend(
+            AuditLogResponse(
+                id=event.id,
+                user_id=current_user.id,
+                org_id=org_id,
+                action=event.event_type,
+                resource=f"project:{project.id}:{project.name}",
+                created_at=event.created_at,
+                user_name=None,
+                user_email=None,
+                source="activity",
+            )
+            for event, project in activity_result.all()
+        )
+
+    rows.sort(key=lambda item: item.created_at, reverse=(sort == "desc"))
+    offset = (page - 1) * per_page
+    return rows[offset:offset + per_page]
 
 
 @router.put("/{org_id}/members/{user_id}", response_model=MemberResponse)

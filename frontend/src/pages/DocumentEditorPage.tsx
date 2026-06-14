@@ -57,6 +57,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip } from '@/components/ui/tooltip';
 import { documentsApi, type Document } from '@/api/documents';
+import { projectsApi } from '@/api/projects';
 import { useDocumentAutosave, useDocumentSections, useUpdateDocumentSection, useAcceptSectionReview } from '@/hooks/useSections';
 import { useQualityReport, useRunQuality } from '@/hooks/useQuality';
 import { getSectionState } from '@/lib/section-state';
@@ -387,6 +388,12 @@ export function DocumentEditorPage() {
     enabled: pid > 0 && did > 0,
   });
 
+  const { data: project } = useQuery({
+    queryKey: ['project', pid],
+    queryFn: () => projectsApi.getProject(pid),
+    enabled: pid > 0,
+  });
+
   const { data: sectionTree, isLoading: sectionsLoading } = useDocumentSections(pid, did);
   const sections = useMemo(() => flattenSections(sectionTree?.sections || []), [sectionTree?.sections]);
   const sectionsForStats = useMemo(() => (
@@ -624,16 +631,6 @@ export function DocumentEditorPage() {
     toast.success('AI content applied to section');
   }, [activeEditor, activeSectionId, updateDocumentSection]);
 
-  const handleReplaceContent = useCallback((content: string, sectionId: number) => {
-    if (activeEditor && activeSectionId === sectionId) {
-      activeEditor.commands.setContent(content, { contentType: 'markdown' });
-      toast.success('AI content replaced section');
-      return;
-    }
-    updateDocumentSection.mutate({ id: sectionId, data: { content_md: content } });
-    toast.success('AI content replaced section');
-  }, [activeEditor, activeSectionId, updateDocumentSection]);
-
   const handleInsertAtCursor = useCallback((content: string) => {
     if (!activeEditor) {
       toast.error('Focus a section before inserting AI content');
@@ -642,6 +639,40 @@ export function DocumentEditorPage() {
     activeEditor.chain().focus().insertContent(content, { contentType: 'markdown' }).run();
     toast.success('Inserted at cursor');
   }, [activeEditor]);
+
+  const handleReplaceSelection = useCallback((content: string) => {
+    if (!activeEditor) {
+      toast.error('Focus a section and select text before replacing it');
+      return;
+    }
+    const { selection } = activeEditor.state;
+    if (selection.empty) {
+      toast.error('Select text before replacing it');
+      return;
+    }
+    activeEditor.chain().focus().insertContent(content, { contentType: 'markdown' }).run();
+    toast.success('AI content replaced the selection');
+  }, [activeEditor]);
+
+  const handleAppendToSection = useCallback((content: string) => {
+    if (!activeSectionId) {
+      toast.error('No active section selected');
+      return;
+    }
+    if (activeEditor) {
+      activeEditor.chain().focus('end').insertContent(`\n\n${content}`, { contentType: 'markdown' }).run();
+      toast.success('AI content appended to section');
+      return;
+    }
+    const current = localContentBySectionId[activeSectionId]
+      ?? sections.find((section) => section.id === activeSectionId)?.content_md
+      ?? '';
+    updateDocumentSection.mutate({
+      id: activeSectionId,
+      data: { content_md: `${current.trimEnd()}\n\n${content}` },
+    });
+    toast.success('AI content appended to section');
+  }, [activeEditor, activeSectionId, localContentBySectionId, sections, updateDocumentSection]);
 
   useKeyboardShortcuts({
     shortcuts: [
@@ -973,8 +1004,11 @@ export function DocumentEditorPage() {
                     activeSectionStatus={activeSection?.status || 'pending'}
                     sections={sections.map((s) => ({ id: s.id, heading: s.title || s.heading }))}
                     onApplyContent={handleApplyContent}
-                    onReplaceContent={handleReplaceContent}
                     onInsertAtCursor={handleInsertAtCursor}
+                    onReplaceSelection={handleReplaceSelection}
+                    onAppendToSection={handleAppendToSection}
+                    projectName={project?.name || document?.title || 'Project'}
+                    projectContextMd={project?.context_md || undefined}
                     onOpenPalette={() => setPaletteOpen(true)}
                   />
                 ) : (

@@ -235,7 +235,7 @@ export function RightPanel({
     if (!activeSectionId) return;
     try {
       if (type === 'generate') {
-        await generateSection.mutateAsync(activeSectionId);
+        await generateSection.mutateAsync({ sectionId: activeSectionId });
         toast.success('Section generated');
       } else {
         const inst = type === 'expand'

@@ -174,9 +174,13 @@ async def generate_outline(
 
 # ── POST /sections/{id}/ai/generate ─────────────────────────────
 
+class GenerateSectionRequest(BaseModel):
+    model_name: str | None = None
+
 @router.post("/sections/{section_id}/ai/generate", response_model=SectionResponse)
 async def generate_section(
     section_id: int,
+    body: GenerateSectionRequest | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -197,6 +201,7 @@ async def generate_section(
         section_id=section_id,
         db=db,
         user_id=current_user.id,
+        model_name=body.model_name if body else None,
     )
 
     # Auto-save content
@@ -247,6 +252,7 @@ async def refine_section(
         instruction=body.instruction,
         db=db,
         user_id=current_user.id,
+        model_name=body.model_name,
     )
     return result
 
@@ -405,6 +411,7 @@ async def stream_chat_message(
             model_name=body.model_name,
             temperature=body.temperature,
             max_tokens=body.max_tokens,
+            target_section_id=body.target_section_id,
             references=body.references,
             resources=resolved_resources,
         )

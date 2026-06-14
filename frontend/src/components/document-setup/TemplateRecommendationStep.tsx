@@ -52,17 +52,15 @@ export function TemplateRecommendationStep({
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-8">
       <div className="max-w-3xl">
-        <h1 className="text-title text-text-primary">Choose the first Document structure</h1>
+        <h1 className="text-title text-text-primary">Choose structure</h1>
         <p className="mt-3 text-body text-text-secondary">
-          Choose a documentation structure based on your code analysis. Rule-based picks work
-          without an AI provider; AI-personalized ones tailor the outline to your project.
+          Pick a template or start from a custom outline.
         </p>
       </div>
 
       {!sourceConnected && (
         <Notice variant="warning" title="No source connected">
-          No analysis data is available. You can still pick a template or create a custom outline,
-          but recommendations won't be based on your code.
+          You can still pick a template or create a custom outline.
         </Notice>
       )}
 
@@ -72,9 +70,7 @@ export function TemplateRecommendationStep({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-body font-semibold text-text-primary">Rule-based recommendations</h2>
-                <p className="mt-1 text-meta text-text-secondary">
-                  Available without a provider credential.
-                </p>
+                <p className="mt-1 text-meta text-text-secondary">Fast defaults.</p>
               </div>
               <Badge variant="neutral">No provider usage</Badge>
             </div>
@@ -102,9 +98,7 @@ export function TemplateRecommendationStep({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-body font-semibold text-text-primary">AI-personalized recommendation</h2>
-                <p className="mt-1 text-meta text-text-secondary">
-                  Uses your AI provider to tailor the outline to your project.
-                </p>
+                <p className="mt-1 text-meta text-text-secondary">Tailored from analysis.</p>
               </div>
               <Badge variant="generation">Provider-consuming action</Badge>
             </div>
@@ -192,11 +186,11 @@ export function TemplateRecommendationStep({
         </div>
 
         <Surface variant="muted" padding="lg">
-          <h2 className="text-body font-semibold text-text-primary">How it works</h2>
+          <h2 className="text-body font-semibold text-text-primary">Options</h2>
           <ul className="mt-3 space-y-2 text-meta text-text-secondary">
-            <li>Rule-based picks work without an AI provider.</li>
-            <li>AI-personalized picks require a configured provider.</li>
-            <li>Custom outlines let you start from scratch.</li>
+            <li>Rule-based: no provider.</li>
+            <li>AI-personalized: uses tokens.</li>
+            <li>Custom: start from scratch.</li>
           </ul>
         </Surface>
       </div>

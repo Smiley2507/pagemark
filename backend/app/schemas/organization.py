@@ -118,3 +118,4 @@ class AuditLogResponse(BaseModel):
     created_at: datetime
     user_name: Optional[str] = None
     user_email: Optional[str] = None
+    source: str = "audit"

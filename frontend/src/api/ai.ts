@@ -39,14 +39,19 @@ export interface ChatThread {
 
 export const aiApi = {
   /** Generate content for a section → returns full saved Section */
-  async generateSection(sectionId: number): Promise<Section> {
-    const { data } = await apiClient.post(`/sections/${sectionId}/ai/generate`);
+  async generateSection(sectionId: number, modelName?: string | null): Promise<Section> {
+    const { data } = await apiClient.post(`/sections/${sectionId}/ai/generate`, {
+      model_name: modelName || undefined,
+    });
     return data;
   },
 
   /** Refine section content with an instruction → returns diff preview */
-  async refineSection(sectionId: number, instruction: string): Promise<RefineDiff> {
-    const { data } = await apiClient.post(`/sections/${sectionId}/ai/refine`, { instruction });
+  async refineSection(sectionId: number, instruction: string, modelName?: string | null): Promise<RefineDiff> {
+    const { data } = await apiClient.post(`/sections/${sectionId}/ai/refine`, {
+      instruction,
+      model_name: modelName || undefined,
+    });
     return data;
   },
 
@@ -109,6 +114,10 @@ export const aiApi = {
     onError?: (err: Error) => void,
     resourceIds?: number[],
     references?: string[],
+    modelName?: string | null,
+    targetSectionId?: number | null,
+    temperature?: number,
+    maxTokens?: number,
   ): AbortController {
     const controller = new AbortController();
 
@@ -122,6 +131,10 @@ export const aiApi = {
     if (references && references.length > 0) {
       body.references = references;
     }
+    if (modelName) body.model_name = modelName;
+    if (targetSectionId) body.target_section_id = targetSectionId;
+    if (typeof temperature === 'number') body.temperature = temperature;
+    if (typeof maxTokens === 'number') body.max_tokens = maxTokens;
 
     fetch(`${baseURL}/chat/threads/${threadId}/messages/stream`, {
       method: 'POST',

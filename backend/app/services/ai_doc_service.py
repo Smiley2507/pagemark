@@ -18,7 +18,7 @@ from app.models.template import Template
 from app.prompts.chat import build_chat_prompt
 from app.prompts.refine import build_refine_prompt
 from app.prompts.section import build_section_prompt
-from app.services import ai_credential_service
+from app.services import activity_service, ai_credential_service
 from app.services.ai_service import AiServiceError, complete_text
 from app.services.context_assembly import context_assembly_service
 from app.exceptions import NeedsClarificationException
@@ -126,7 +126,7 @@ class AIService:
                 if isinstance(overrides, dict):
                     ctx.update({k: v for k, v in overrides.items() if v})
             except (json.JSONDecodeError, TypeError):
-                pass
+                ctx["custom_instructions"] = project.context_md
         return ctx
 
     def _analysis_summary(self, analysis: Analysis | None) -> dict:
@@ -256,6 +256,7 @@ class AIService:
         db: AsyncSession,
         user_id: int,
         answer: str | None = None,
+        model_name: str | None = None,
     ) -> tuple[str, int]:
         """Generate content and confidence score for a section using the active provider.
 
@@ -297,6 +298,7 @@ class AIService:
             system="Return valid JSON for the requested documentation section.",
             user=prompt,
             max_tokens=MAX_TOKENS_SECTION,
+            model_name=model_name,
         )
 
         try:
@@ -318,6 +320,7 @@ class AIService:
         instruction: str,
         db: AsyncSession,
         user_id: int,
+        model_name: str | None = None,
     ) -> dict:
         """Refine section content per instruction.
 
@@ -359,6 +362,7 @@ class AIService:
             system="Refine the section content according to the user instruction.",
             user=prompt,
             max_tokens=MAX_TOKENS_REFINE,
+            model_name=model_name,
         )
 
         # Compute diff stats
@@ -422,6 +426,7 @@ class AIService:
         model_name: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        target_section_id: int | None = None,
         references: list[str] | None = None,
         resources: list[Resource] | None = None,
     ) -> AsyncGenerator[str, None]:
@@ -486,9 +491,15 @@ class AIService:
         analysis_summary = self._analysis_summary(analysis)
         template_prompt = await self._get_template_prompt(db, project_id=thread.project_id)
 
-        # Determine current section from thread title (best-effort)
         current_section_heading = thread.title
         current_section_content = ""
+        if target_section_id:
+            section = await self._fetch_section(db, target_section_id)
+            document = await self._fetch_document(db, section.document_id)
+            if document.project_id != thread.project_id:
+                raise HTTPException(status_code=404, detail="Section not found")
+            current_section_heading = section.title or section.heading
+            current_section_content = section.content_md or ""
 
         system_prompt, api_messages = build_chat_prompt(
             messages=history,
@@ -592,6 +603,18 @@ class AIService:
             )
             db.add(ai_msg)
             await db.commit()
+            await activity_service.record_event(
+                db,
+                thread.project_id,
+                "ai_chat_completed",
+                section_id=target_section_id,
+                message="AI response completed",
+                payload={
+                    "model": cred.model_id,
+                    "provider": cred.provider,
+                    "thread_id": thread_id,
+                },
+            )
 
         return _stream()
 
