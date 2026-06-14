@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Any, Optional, List
 from datetime import datetime
 from enum import Enum
 
@@ -78,6 +78,7 @@ class ProjectResponse(BaseModel):
     last_synced_commit: Optional[str] = None
     source_metadata: Optional[dict] = None
     source_exclusions: List[ProjectSourceExclusionResponse] = []
+    context_md: Optional[str] = None
     webhook_secret: Optional[str] = None
     webhook_id: Optional[int] = None
     export_settings: Optional[dict] = None
@@ -100,3 +101,41 @@ class ProjectResponse(BaseModel):
 class ProjectListResponse(BaseModel):
     projects: List[ProjectResponse]
     total: int
+
+
+class AiContextProjectSummary(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    source_type: SourceTypeEnum
+    source_provider: Optional[str] = None
+    source_repository: Optional[str] = None
+    selected_branch: Optional[str] = None
+    last_synced_commit: Optional[str] = None
+
+
+class AiContextAnalysisSummary(BaseModel):
+    id: Optional[int] = None
+    status: str
+    is_current: bool = False
+    completed_at: Optional[datetime] = None
+    source_commit: Optional[str] = None
+    total_files: int = 0
+    languages: List[str] = []
+    frameworks: List[str] = []
+    endpoint_count: int = 0
+    dependency_count: int = 0
+    largest_files: List[Any] = []
+
+
+class AiContextResponse(BaseModel):
+    project: AiContextProjectSummary
+    project_brief: Optional[str] = None
+    analysis_summary: AiContextAnalysisSummary
+    source_connection: dict[str, Any]
+    facts: dict[str, Any] = {}
+    unavailable_facts: List[Any] = []
+    partial_failures: List[Any] = []
+    effective_exclusions: List[Any] = []
+    context_files_preview: List[dict[str, Any]] = []
+    grounding_warnings: List[str] = []

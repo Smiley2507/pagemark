@@ -20,7 +20,7 @@ export interface ActivityEvent {
   payload: Record<string, unknown> | null;
   created_at: string;
 }
-import type { Project, Template } from '../types';
+import type { AiContextPackage, Project, Template } from '../types';
 
 export const projectsApi = {
   async getProjects(params?: {
@@ -36,6 +36,11 @@ export const projectsApi = {
 
   async getProject(id: number): Promise<Project> {
     const { data } = await apiClient.get(`/projects/${id}`);
+    return data;
+  },
+
+  async getAiContext(id: number): Promise<AiContextPackage> {
+    const { data } = await apiClient.get(`/projects/${id}/ai-context`);
     return data;
   },
 

@@ -167,6 +167,7 @@ export const useUpdateProjectContext = (projectId: number) => {
     mutationFn: (contextMd: string | null) => aiApi.updateContext(projectId, contextMd),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['ai-context', projectId] });
       toast.success('Project context updated');
     },
     onError: () => {

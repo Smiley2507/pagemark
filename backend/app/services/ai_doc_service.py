@@ -210,6 +210,27 @@ class AIService:
             "complexity_notes": summary.get("complexity_notes", ""),
         }
 
+    def _parse_ai_action(self, raw: str) -> dict | None:
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    def _clarification_question(self, data: dict, default: str) -> str:
+        return (
+            data.get("question")
+            or data.get("reason")
+            or data.get("message")
+            or default
+        )
+
+    def _format_context_action(self, data: dict) -> str:
+        action = data.get("action")
+        label = "Insufficient source context" if action == "insufficient_context" else "Clarification needed"
+        question = self._clarification_question(data, "Please provide more source-grounded detail.")
+        return f"**{label}**\n\n{question}"
+
     async def _get_template_prompt(
         self,
         db: AsyncSession,
@@ -303,10 +324,11 @@ class AIService:
 
         try:
             data = json.loads(content)
-            if data.get("action") == "ask_user":
+            if data.get("action") in {"ask_user", "insufficient_context"}:
                 raise NeedsClarificationException(
-                    question=data.get("question", "Please provide more details."),
+                    question=self._clarification_question(data, "Please provide more details."),
                     section_id=section_id,
+                    action=data.get("action", "ask_user"),
                 )
 
             return data.get("content", ""), data.get("confidence_score", 0)
@@ -364,6 +386,23 @@ class AIService:
             max_tokens=MAX_TOKENS_REFINE,
             model_name=model_name,
         )
+
+        parsed = self._parse_ai_action(refined)
+        if parsed and parsed.get("action") in {"ask_user", "insufficient_context"}:
+            return {
+                "original": original,
+                "refined": "",
+                "added": 0,
+                "removed": 0,
+                "diff_lines": [],
+                "action": parsed.get("action"),
+                "question": self._clarification_question(
+                    parsed,
+                    "Please provide more context before refining this section.",
+                ),
+            }
+        if parsed and "content" in parsed:
+            refined = str(parsed.get("content") or "")
 
         # Compute diff stats
         old_lines = original.splitlines()
@@ -591,6 +630,12 @@ class AIService:
                     )
                 except AiServiceError as exc:
                     raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+                parsed = self._parse_ai_action(ai_content)
+                if parsed and parsed.get("action") in {"ask_user", "insufficient_context"}:
+                    ai_content = self._format_context_action(parsed)
+                elif parsed and "content" in parsed:
+                    ai_content = str(parsed.get("content") or "")
 
                 full_response.append(ai_content)
                 yield ai_content

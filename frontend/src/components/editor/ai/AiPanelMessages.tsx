@@ -4,6 +4,21 @@ import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
 import type { ChatMessage } from '@/types';
 
+function parseContextAction(content: string): { action: string; text: string } | null {
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed?.action === 'ask_user') {
+      return { action: 'Clarification needed', text: parsed.question || 'More context is needed.' };
+    }
+    if (parsed?.action === 'insufficient_context') {
+      return { action: 'Insufficient source context', text: parsed.reason || 'Available context does not support this request.' };
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 interface MessageBubbleProps {
   message: ChatMessage;
   onPreviewRewrite?: (content: string) => void;
@@ -22,6 +37,7 @@ function MessageBubble({
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
   const time = new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const contextAction = !isUser ? parseContextAction(message.content) : null;
 
   return (
     <div className={cn('flex items-start gap-2', isUser ? 'justify-end' : 'group')}>
@@ -36,9 +52,16 @@ function MessageBubble({
             {message.content}
           </div>
         ) : (
-          <div className="prose prose-sm max-w-none dark:prose-invert">
-            <ReactMarkdown>{message.content}</ReactMarkdown>
-          </div>
+          contextAction ? (
+            <div className="rounded-lg border border-warning bg-warning/5 px-3 py-2">
+              <p className="text-sm font-medium text-text-primary">{contextAction.action}</p>
+              <p className="mt-1 text-sm text-text-secondary">{contextAction.text}</p>
+            </div>
+          ) : (
+            <div className="prose prose-sm max-w-none dark:prose-invert">
+              <ReactMarkdown>{message.content}</ReactMarkdown>
+            </div>
+          )
         )}
         <div className={cn(
           'mt-1 flex items-center gap-2',

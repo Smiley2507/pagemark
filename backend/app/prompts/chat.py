@@ -89,7 +89,12 @@ def build_chat_prompt(
         f"## Instructions",
         f"- Answer questions about the project and assist with documentation writing.",
         f"- Use a {tone} tone appropriate for {audience}.",
-        f"- When generating or editing content, return clean markdown.",
+        f"- Ground project-specific claims in the current section, project brief, template guidance, referenced sections, attachments, or Analysis facts.",
+        f"- Prefer concrete files, endpoints, classes, functions, commands, and known source facts when evidence exists.",
+        f"- Do not invent missing behavior, deployment details, API semantics, security guarantees, or business rules.",
+        f"- When generating or editing supported content, return clean markdown.",
+        f"- If a targeted answer from the user would unblock the request, return only this JSON: {{\"action\": \"ask_user\", \"question\": \"<one targeted question>\"}}.",
+        f"- If the requested prose is unsupported by available context and no focused clarification is apparent, return only this JSON: {{\"action\": \"insufficient_context\", \"reason\": \"<why source evidence is insufficient>\"}}.",
         f"- Be concise and helpful.",
     ]
 

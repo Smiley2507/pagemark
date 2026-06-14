@@ -18,6 +18,9 @@ from app.models.audit import AuditLog
 from app.models.document import Document, Section, SectionStatus
 from typing import List
 from app.schemas.project import (
+    AiContextAnalysisSummary,
+    AiContextProjectSummary,
+    AiContextResponse,
     ProjectCreateRequest,
     ProjectSourceExclusionRequest,
     ProjectSourceExclusionResponse,
@@ -43,6 +46,7 @@ from app.schemas.analysis import (
 from app.services.analysis_service import (
     apply_outline_to_document,
     create_analysis_snapshot,
+    get_effective_exclusions,
     get_outline_diff,
     get_latest_analysis,
 )
@@ -102,6 +106,7 @@ async def _project_to_response(
             ProjectSourceExclusionResponse.model_validate(rule)
             for rule in (source_exclusions or [])
         ],
+        context_md=project.context_md,
         starred=project.starred,
         tags=project.tags or [],
         export_settings=project.export_settings,
@@ -211,6 +216,150 @@ async def _get_project(project_id: int, current_user: User, db: AsyncSession) ->
         raise HTTPException(status_code=404, detail="Project not found")
 
     return project
+
+
+def _cap_text(value: object, limit: int = 1200) -> str:
+    text = value if isinstance(value, str) else json.dumps(value, default=str)
+    return text if len(text) <= limit else f"{text[:limit]}..."
+
+
+def _as_items(value: object) -> list:
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        for key in ("items", "files", "endpoints", "dependencies"):
+            nested = value.get(key)
+            if isinstance(nested, list):
+                return nested
+    return []
+
+
+def _language_names(languages_json: object) -> list[str]:
+    if isinstance(languages_json, dict):
+        primary = languages_json.get("primary")
+        if isinstance(primary, list):
+            return [str(item) for item in primary[:8]]
+        breakdown = languages_json.get("breakdown")
+        if isinstance(breakdown, list):
+            return [
+                str(item.get("language"))
+                for item in breakdown[:8]
+                if isinstance(item, dict) and item.get("language")
+            ]
+        return [str(key) for key in list(languages_json.keys())[:8]]
+    if isinstance(languages_json, list):
+        return [str(item) for item in languages_json[:8]]
+    return []
+
+
+def _count_files(file_tree_json: object, complexity_json: object) -> int:
+    if isinstance(complexity_json, dict) and isinstance(complexity_json.get("total_files"), int):
+        return int(complexity_json["total_files"])
+    if isinstance(file_tree_json, dict) and isinstance(file_tree_json.get("total_files"), int):
+        return int(file_tree_json["total_files"])
+    return len(_as_items(file_tree_json))
+
+
+def _build_context_files_preview(analysis: Analysis | None, limit: int = 8) -> list[dict]:
+    if not analysis:
+        return []
+    contents = analysis.file_contents_json
+    preview: list[dict] = []
+    if isinstance(contents, dict):
+        iterable = contents.items()
+    elif isinstance(contents, list):
+        iterable = [
+            (
+                item.get("path") or item.get("file_path") or f"file-{idx + 1}",
+                item.get("content") or item,
+            )
+            for idx, item in enumerate(contents)
+            if isinstance(item, dict)
+        ]
+    else:
+        iterable = []
+    for path, content in list(iterable)[:limit]:
+        preview.append({"path": str(path), "preview": _cap_text(content, 900)})
+    return preview
+
+
+def _build_ai_context_response(
+    project: Project,
+    analysis: Analysis | None,
+    effective_exclusions: list[dict],
+) -> AiContextResponse:
+    analysis_data = analysis.analysis_data if analysis and isinstance(analysis.analysis_data, dict) else {}
+    endpoints = _as_items(analysis.endpoints_json) if analysis else []
+    dependencies = _as_items(analysis_data.get("dependencies")) if analysis_data else []
+    complexity = analysis.complexity_json if analysis and isinstance(analysis.complexity_json, dict) else {}
+    frameworks = []
+    if analysis and isinstance(analysis.endpoints_json, dict):
+        frameworks = [str(item) for item in (analysis.endpoints_json.get("frameworks") or [])[:8]]
+
+    warnings: list[str] = []
+    if not analysis:
+        warnings.append("No Analysis snapshot is available. AI can only use the project brief and document context.")
+    elif analysis.status != AnalysisStatus.COMPLETED:
+        warnings.append(f"Latest Analysis is {analysis.status.value}; source facts may be incomplete.")
+    if not (project.context_md or "").strip():
+        warnings.append("Project brief/corrections are empty.")
+    if analysis_data.get("unavailable_facts"):
+        warnings.append("Some Analysis facts are unavailable.")
+    if analysis_data.get("partial_failures"):
+        warnings.append("Analysis completed with partial failures.")
+
+    status_value = analysis.status.value if analysis else "missing"
+    return AiContextResponse(
+        project=AiContextProjectSummary(
+            id=project.id,
+            name=project.name,
+            description=project.description,
+            source_type=project.source_type.value,
+            source_provider=project.source_provider,
+            source_repository=project.source_repository,
+            selected_branch=project.selected_branch,
+            last_synced_commit=project.last_synced_commit,
+        ),
+        project_brief=project.context_md,
+        analysis_summary=AiContextAnalysisSummary(
+            id=analysis.id if analysis else None,
+            status=status_value,
+            is_current=bool(analysis.is_current) if analysis else False,
+            completed_at=analysis.completed_at if analysis else None,
+            source_commit=analysis.source_commit if analysis else None,
+            total_files=_count_files(analysis.file_tree_json, complexity) if analysis else 0,
+            languages=_language_names(analysis.languages_json) if analysis else [],
+            frameworks=frameworks,
+            endpoint_count=len(endpoints),
+            dependency_count=len(dependencies),
+            largest_files=(complexity.get("largest_files") or [])[:8] if isinstance(complexity, dict) else [],
+        ),
+        source_connection={
+            "type": project.source_type.value,
+            "provider": project.source_provider,
+            "owner": project.source_owner,
+            "repository": project.source_repository,
+            "branch": project.selected_branch,
+            "metadata": project.source_metadata or {},
+        },
+        facts={
+            "file_tree": _cap_text(analysis.file_tree_json, 2500) if analysis else None,
+            "languages": analysis.languages_json if analysis else None,
+            "endpoints": endpoints[:20],
+            "dependencies": dependencies[:30],
+            "complexity": {
+                "total_lines": complexity.get("total_lines"),
+                "largest_files": (complexity.get("largest_files") or [])[:8],
+                "parse_stats": complexity.get("parse_stats"),
+            } if complexity else None,
+            "source_metadata": analysis.source_metadata if analysis else project.source_metadata,
+        },
+        unavailable_facts=analysis_data.get("unavailable_facts") or [],
+        partial_failures=analysis_data.get("partial_failures") or [],
+        effective_exclusions=analysis.effective_exclusions_json if analysis and analysis.effective_exclusions_json is not None else effective_exclusions,
+        context_files_preview=_build_context_files_preview(analysis),
+        grounding_warnings=warnings,
+    )
 
 
 # ── GET /projects/tags ────────────────────────────────────────────
@@ -909,6 +1058,18 @@ async def get_analysis_results(
     if not analysis:
         raise HTTPException(status_code=404, detail="No analysis found for this project")
     return analysis_to_full_response(analysis)
+
+
+@router.get("/{project_id}/ai-context", response_model=AiContextResponse)
+async def get_project_ai_context(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await _get_project(project_id, current_user, db)
+    analysis = await get_latest_analysis(project_id, db)
+    effective_exclusions = await get_effective_exclusions(project_id, db)
+    return _build_ai_context_response(project, analysis, effective_exclusions)
 
 
 @router.get("/{project_id}/analysis/outline-diff", response_model=OutlineDiffResponse)

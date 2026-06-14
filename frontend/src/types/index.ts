@@ -96,6 +96,45 @@ export interface AnalysisStatus {
   outline_applied?: boolean;
   outline_skipped?: boolean;
   outline_skip_reason?: string;
+  facts?: Record<string, { available: boolean; unavailable_reason?: string | null }>;
+  unavailable_facts?: unknown[];
+  partial_failures?: unknown[];
+  effective_exclusions?: unknown[];
+  source_metadata?: Record<string, unknown>;
+}
+
+export interface AiContextPackage {
+  project: {
+    id: number;
+    name: string;
+    description?: string | null;
+    source_type: "zip" | "git" | "scratch";
+    source_provider?: string | null;
+    source_repository?: string | null;
+    selected_branch?: string | null;
+    last_synced_commit?: string | null;
+  };
+  project_brief?: string | null;
+  analysis_summary: {
+    id?: number | null;
+    status: string;
+    is_current: boolean;
+    completed_at?: string | null;
+    source_commit?: string | null;
+    total_files: number;
+    languages: string[];
+    frameworks: string[];
+    endpoint_count: number;
+    dependency_count: number;
+    largest_files: unknown[];
+  };
+  source_connection: Record<string, unknown>;
+  facts: Record<string, unknown>;
+  unavailable_facts: unknown[];
+  partial_failures: unknown[];
+  effective_exclusions: unknown[];
+  context_files_preview: { path: string; preview: string }[];
+  grounding_warnings: string[];
 }
 
 export interface AiModelOption {

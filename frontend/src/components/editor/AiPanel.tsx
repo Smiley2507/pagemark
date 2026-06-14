@@ -86,6 +86,8 @@ export function AiPanel({
   const [proposal, setProposal] = useState<AiProposal | null>(null);
   const [diffPreview, setDiffPreview] = useState<{ original: string; refined: string } | null>(null);
   const [structureSuggestions, setStructureSuggestions] = useState<import('@/api/ai').StructuralSuggestion[] | null>(null);
+  const [contextAction, setContextAction] = useState<{ action: 'ask_user' | 'insufficient_context'; question: string } | null>(null);
+  const [contextActionAnswer, setContextActionAnswer] = useState('');
 
   const refineSection = useRefineSection();
   const suggestStructure = useSuggestStructure();
@@ -272,6 +274,14 @@ export function AiPanel({
           instruction: inst,
           modelName: selectedModel || activeCredential?.model_id || null,
         });
+        if (data.action) {
+          setContextAction({
+            action: data.action,
+            question: data.question || 'More project context is needed before AI can safely refine this section.',
+          });
+          setContextActionAnswer('');
+          return;
+        }
         setDiffPreview({ original: activeSectionContent, refined: data.refined });
       }
     } catch {
@@ -376,6 +386,47 @@ export function AiPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {contextAction && (
+          <div className="mx-3 mt-3 space-y-2 rounded-lg border border-warning bg-warning/5 p-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-text-primary">
+                  {contextAction.action === 'insufficient_context' ? 'Insufficient source context' : 'Clarification needed'}
+                </p>
+                <p className="text-sm text-text-secondary">{contextAction.question}</p>
+              </div>
+            </div>
+            <textarea
+              value={contextActionAnswer}
+              onChange={(e) => setContextActionAnswer(e.target.value)}
+              placeholder="Add the missing correction or project fact..."
+              className="w-full resize-none rounded border border-input bg-canvas px-2.5 py-1.5 text-sm placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-ring"
+              rows={3}
+            />
+            <Button
+              size="sm"
+              className="h-8 w-full text-xs"
+              onClick={() => {
+                const addition = contextActionAnswer.trim();
+                if (!addition) return;
+                const nextContext = [
+                  contextDraft.trim(),
+                  `## Correction from AI clarification\n\n${addition}`,
+                ].filter(Boolean).join('\n\n');
+                setContextDraft(nextContext);
+                updateProjectContext.mutate(nextContext);
+                setContextAction(null);
+                setContextActionAnswer('');
+              }}
+              disabled={updateProjectContext.isPending || !contextActionAnswer.trim()}
+            >
+              {updateProjectContext.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+              Save to Project Brief
+            </Button>
+          </div>
+        )}
+
         {clarification && (
           <div className="mx-3 mt-3 space-y-2 rounded-lg border border-warning bg-warning/5 p-3">
             <div className="flex items-start gap-2">
@@ -529,6 +580,7 @@ export function AiPanel({
       </div>
 
       <AiPanelContextBar
+        projectId={projectId}
         activeSectionHeading={activeSectionHeading}
         activeSectionStatus={activeSectionStatus}
       />

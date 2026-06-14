@@ -13,7 +13,7 @@ def build_refine_prompt(
     project_context keys: name, language, framework, tone, audience,
                           key_features, custom_instructions, preferred_terms
     template_system_prompt: optional writing instructions from the project's template.
-    Returns ONLY the improved content in markdown.
+    Returns JSON with either grounded content or a clarification/insufficient-context action.
     """
     name = project_context.get("name", "this project")
     tone = project_context.get("tone", "professional")
@@ -60,7 +60,14 @@ def build_refine_prompt(
         f"Apply the instruction above to improve the section content. "
         f"Maintain the {tone} tone appropriate for {audience}.",
         f"",
-        f"Return only the improved section content in markdown. No preamble.",
+        f"Only preserve or add claims that are supported by the current content, project brief, template instructions, or the user's refinement instruction.",
+        f"Do not invent missing source behavior, commands, APIs, or business rules.",
+        f"",
+        f"Choose exactly one JSON response shape:",
+        f'{{"content": "<the improved section content in markdown>"}}',
+        f'{{"action": "ask_user", "question": "<one targeted question asking for missing detail>"}}',
+        f'{{"action": "insufficient_context", "reason": "<why the requested refinement is unsupported>"}}',
+        f"Return only valid JSON. No preamble.",
     ]
 
     return "\n".join(lines)

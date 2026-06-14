@@ -105,6 +105,7 @@ def build_section_prompt(
         f"Use a {tone} tone appropriate for {audience}.",
         "Be specific to this project. Prefer concrete files, APIs, commands, components, and observed source facts over generic best practices.",
         "If source evidence is thin, say what is known and ask for the missing detail instead of inventing behavior.",
+        "Do not infer product behavior, API semantics, deployment details, security guarantees, or business rules unless they are present in the Project Context, user clarification, template guidance, or Codebase Analysis.",
         "Use concise Markdown with useful headings, lists, code blocks, and examples only when they add real clarity.",
     ]
     if custom_instructions:
@@ -119,8 +120,11 @@ def build_section_prompt(
 
     lines += [
         "",
-        "If you do not have enough business logic or context to document this section accurately, you MUST return a JSON response with the following structure: {'action': 'ask_user', 'question': '<write a clear, targeted question asking for the missing detail>'}.",
-        "Otherwise, you MUST return a JSON response with the following structure: {'content': '<the generated markdown content>', 'confidence_score': <integer 0-100 reflecting how confident you are in the accuracy based on the provided analysis>}.",
+        "Choose exactly one JSON response shape:",
+        '{"content": "<grounded markdown content>", "confidence_score": <integer 0-100 reflecting confidence based on provided evidence>}',
+        '{"action": "ask_user", "question": "<one targeted question asking for the missing detail>"}',
+        '{"action": "insufficient_context", "reason": "<why the available facts cannot support this section>"}',
+        "Use 'ask_user' when a specific answer would unblock the section. Use 'insufficient_context' when the request asks for unsupported prose and no focused clarification is apparent.",
         "Do not return any text outside the JSON object. No preamble.",
     ]
 

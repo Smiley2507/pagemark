@@ -20,6 +20,8 @@ export interface RefineDiff {
   added: number;
   removed: number;
   diff_lines: { type: 'added' | 'removed' | 'unchanged'; content: string; line_number: number }[];
+  action?: 'ask_user' | 'insufficient_context';
+  question?: string;
 }
 
 export interface OutlineSuggestion {

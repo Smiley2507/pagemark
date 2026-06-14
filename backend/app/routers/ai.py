@@ -14,6 +14,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.analysis import Analysis, AnalysisStatus
 from app.models.chat import ChatMessage, ChatThread, MessageRole
+from app.models.clarification import ClarificationRequest, ClarificationStatus
 from app.models.document import Document, SectionStatus
 from app.models.project import Project
 from app.models.resource import Resource
@@ -33,6 +34,7 @@ from app.services import ai_credential_service, section_service
 from app.services.ai_service import AiServiceError, complete_text
 from app.services.ai_doc_service import ai_service
 from app.services.version_service import create_version_snapshot
+from app.exceptions import NeedsClarificationException
 
 router = APIRouter(tags=["ai"])
 
@@ -196,13 +198,33 @@ async def generate_section(
 
     old_content = section.content_md or ""
 
-    generated, confidence = await ai_service.generate_section(
-        project_id=project_id,
-        section_id=section_id,
-        db=db,
-        user_id=current_user.id,
-        model_name=body.model_name if body else None,
-    )
+    try:
+        generated, confidence = await ai_service.generate_section(
+            project_id=project_id,
+            section_id=section_id,
+            db=db,
+            user_id=current_user.id,
+            model_name=body.model_name if body else None,
+        )
+    except NeedsClarificationException as exc:
+        section.status = SectionStatus.NEEDS_INPUT
+        section.updated_at = datetime.utcnow()
+        db.add(
+            ClarificationRequest(
+                section_id=section_id,
+                document_id=document.id,
+                question=exc.question,
+                confidence_tradeoff=(
+                    "AI requested clarification before generating source-grounded content."
+                    if exc.action == "ask_user"
+                    else "AI found insufficient source context and did not generate unsupported content."
+                ),
+                status=ClarificationStatus.PENDING,
+            )
+        )
+        await db.commit()
+        await db.refresh(section)
+        return section_service.section_to_response(section)
 
     # Auto-save content
     section.content_md = generated
