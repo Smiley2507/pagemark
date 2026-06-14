@@ -27,3 +27,17 @@ export function detectProvider(url: string): 'github' | 'bitbucket' | null {
 export function getOAuthAuthorizeUrl(provider: 'github'): string {
   return `${getApiBaseUrl()}/auth/${provider}/authorize`;
 }
+
+const OAUTH_RETURN_PATH_KEY = 'pagemark.oauthReturnPath';
+
+export function rememberOAuthReturnPath(path: string): void {
+  window.sessionStorage.setItem(OAUTH_RETURN_PATH_KEY, path);
+}
+
+export function consumeOAuthReturnPath(): string | null {
+  const path = window.sessionStorage.getItem(OAUTH_RETURN_PATH_KEY);
+  if (path) {
+    window.sessionStorage.removeItem(OAUTH_RETURN_PATH_KEY);
+  }
+  return path;
+}

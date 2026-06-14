@@ -1,7 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import axios from 'axios';
 import { analysisApi } from '../api/analysis';
 import { gitAuthApi } from '../api/gitAuth';
+
+function apiErrorMessage(error: unknown, fallback: string) {
+  if (axios.isAxiosError(error)) {
+    const detail = error.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+  }
+  return fallback;
+}
 
 export const useGitHubStatus = () =>
   useQuery({
@@ -60,7 +69,7 @@ export const useRegisterGitHubWebhook = () => {
       queryClient.invalidateQueries({ queryKey: ['project'] });
       toast.success('Webhook registered on GitHub');
     },
-    onError: () => toast.error('Failed to register webhook'),
+    onError: (error) => toast.error(apiErrorMessage(error, 'Failed to register webhook')),
   });
 };
 

@@ -58,6 +58,23 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 # ── Helpers ───────────────────────────────────────────────────────
 
 
+def _decrypt_github_token_or_400(token_obj: OAuthToken) -> str:
+    try:
+        token = crypto_service.decrypt_token(token_obj.access_token_encrypted)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="GitHub connection is invalid. Reconnect GitHub and try again.",
+        ) from exc
+
+    if not token:
+        raise HTTPException(
+            status_code=400,
+            detail="GitHub connection is invalid. Reconnect GitHub and try again.",
+        )
+    return token
+
+
 async def _project_to_response(
     project: Project,
     db: AsyncSession,
@@ -728,7 +745,7 @@ async def connect_oauth_git(
     token_obj = result.scalar_one_or_none()
     if not token_obj:
         raise HTTPException(status_code=400, detail="No GitHub connection found.")
-    decrypted_token = crypto_service.decrypt_token(token_obj.access_token_encrypted)
+    decrypted_token = _decrypt_github_token_or_400(token_obj)
 
     clone_url = github_service.build_authenticated_clone_url(decrypted_token, body.owner, body.repo)
     repo_url_display = f"https://github.com/{body.owner}/{body.repo}"
@@ -813,7 +830,7 @@ async def sync_git_repo(
         ))
         token_obj = token_res.scalar_one_or_none()
         if token_obj:
-            decrypted = crypto_service.decrypt_token(token_obj.access_token_encrypted)
+            decrypted = _decrypt_github_token_or_400(token_obj)
             try:
                 _, owner, repo = git_service.validate_git_url(repo_url)
                 if project.source_provider == 'github':
@@ -987,7 +1004,7 @@ async def register_github_webhook(
     if not token_obj:
         raise HTTPException(status_code=400, detail="No GitHub connection found")
 
-    decrypted = crypto_service.decrypt_token(token_obj.access_token_encrypted)
+    decrypted = _decrypt_github_token_or_400(token_obj)
     webhook_url = f"{settings.BACKEND_URL}/webhooks/github"
     result = await github_service.register_webhook(
         decrypted, body.owner, body.repo, webhook_url, project.webhook_secret
@@ -1018,7 +1035,7 @@ async def delete_github_webhook(
         )
         token_obj = token_res.scalar_one_or_none()
         if token_obj:
-            decrypted = crypto_service.decrypt_token(token_obj.access_token_encrypted)
+            decrypted = _decrypt_github_token_or_400(token_obj)
             await github_service.delete_webhook(
                 decrypted, project.source_owner, project.source_repository, project.webhook_id
             )

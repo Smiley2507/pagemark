@@ -23,7 +23,7 @@ The frontend is a React + TypeScript + Vite application for the Pagemark collabo
   - `project:{projectId}:document:{documentId}:section:{sectionId}`
 - Liveblocks/Yjs owns live collaborative state.
 - The frontend snapshots Markdown to the backend collaboration snapshot endpoint so AI, export, review, search, and freshness can continue to read `Section.content_md`.
-- Set `VITE_COLLABORATION_ENABLED=false` to disable the Liveblocks editor path during local troubleshooting.
+- Set `VITE_COLLABORATION_ENABLED=true` to enable the Liveblocks editor path after backend Liveblocks credentials are configured.
 
 ## Header And Panels
 

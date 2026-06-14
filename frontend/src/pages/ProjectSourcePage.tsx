@@ -1,18 +1,21 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { GitBranch, RefreshCw, SearchCode, ShieldCheck, Webhook, Copy, CheckCheck, Trash2, ExternalLink } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Surface } from '@/components/ui/surface';
 import { analysisApi } from '@/api/analysis';
 import { projectsApi } from '@/api/projects';
-import { useGenerateWebhookSecret, useRegisterGitHubWebhook, useDeleteWebhook } from '@/hooks/useGit';
-import { toast } from 'sonner';
+import { useGenerateWebhookSecret, useRegisterGitHubWebhook, useDeleteWebhook, useGitHubStatus } from '@/hooks/useGit';
+import { ProjectSourceConnector } from '@/components/source/ProjectSourceConnector';
 
 export function ProjectSourcePage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [copiedField, setCopiedField] = useState<'url' | 'secret' | null>(null);
 
   const { data: project } = useQuery({
@@ -23,13 +26,28 @@ export function ProjectSourcePage() {
 
   const { data: analysisStatus } = useQuery({
     queryKey: ['analysis-status', projectId],
-    queryFn: () => analysisApi.getAnalysisStatus(Number(projectId)),
+    queryFn: async () => {
+      try {
+        return await analysisApi.getAnalysisStatus(Number(projectId));
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
+          return null;
+        }
+        throw error;
+      }
+    },
     enabled: !!projectId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'pending' || status === 'running' ? 2500 : false;
+    },
+    retry: false,
   });
 
   const generateSecret = useGenerateWebhookSecret();
   const registerWebhook = useRegisterGitHubWebhook();
   const deleteWebhook = useDeleteWebhook();
+  const { data: githubStatus } = useGitHubStatus();
 
   const handleCopy = async (text: string, field: 'url' | 'secret') => {
     await navigator.clipboard.writeText(text);
@@ -54,26 +72,44 @@ export function ProjectSourcePage() {
     project.webhook_secret &&
     !project.webhook_id &&
     project.source_owner &&
-    project.source_repository
+    project.source_repository &&
+    githubStatus?.connected
   );
+  const isSetupFlow = searchParams.get('setup') === 'source';
+  const templateId = searchParams.get('templateId');
+  const documentSetupPath = templateId
+    ? `/document-setup?projectId=${project.id}&templateId=${templateId}`
+    : `/document-setup?projectId=${project.id}`;
 
   return (
     <div className="space-y-6">
+      {isSetupFlow && (
+        <Surface variant="panel" padding="lg" className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="space-y-1">
+            <h1 className="text-section font-semibold text-text-primary">Set up project source</h1>
+            <p className="text-body text-text-secondary">
+              Connect source now for Analysis-backed documentation, or continue without source and add it later.
+            </p>
+          </div>
+          <Button type="button" onClick={() => navigate(documentSetupPath)}>
+            Continue to document setup
+          </Button>
+        </Surface>
+      )}
+
+      <ProjectSourceConnector project={project} />
+
       <Surface variant="panel" padding="lg" className="space-y-4">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <GitBranch className="h-5 w-5 text-text-secondary" aria-hidden="true" />
-              <h2 className="text-section font-semibold text-text-primary">Source</h2>
+              <h2 className="text-section font-semibold text-text-primary">Current source</h2>
             </div>
             <p className="text-body text-text-secondary">
               Shared source connection and Analysis context support every Document in this Project.
             </p>
           </div>
-          <Button type="button" variant="outline" className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Sync source
-          </Button>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-2">
@@ -100,9 +136,11 @@ export function ProjectSourcePage() {
                   {analysisStatus.status === 'completed' ? 'Analysis complete' : `Analysis ${analysisStatus.status}`}
                 </Badge>
                 <p className="text-body text-text-secondary">
-                  {analysisStatus.completed_at
-                    ? `Updated ${new Date(analysisStatus.completed_at).toLocaleString()}`
-                    : 'Analysis is still in progress.'}
+                  {analysisStatus.status === 'failed'
+                    ? analysisStatus.error_message || analysisStatus.step_detail || 'Analysis failed.'
+                    : analysisStatus.completed_at
+                      ? `Updated ${new Date(analysisStatus.completed_at).toLocaleString()}`
+                      : analysisStatus.step_detail || analysisStatus.current_step || 'Analysis is still in progress.'}
                 </p>
               </div>
             ) : (
@@ -183,6 +221,11 @@ export function ProjectSourcePage() {
                   <ExternalLink className="h-4 w-4" />
                   Register on GitHub
                 </Button>
+              )}
+              {project.webhook_secret && !project.webhook_id && project.source_owner && project.source_repository && githubStatus?.connected === false && (
+                <p className="text-meta text-text-secondary">
+                  Reconnect GitHub before registering this webhook.
+                </p>
               )}
             </div>
           </div>

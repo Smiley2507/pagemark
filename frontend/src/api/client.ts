@@ -29,7 +29,11 @@ const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
   (config) => {
-    config.headers['Content-Type'] = 'application/json';
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    } else if (!config.headers['Content-Type']) {
+      config.headers['Content-Type'] = 'application/json';
+    }
     const activeOrgId = useOrgStore.getState().activeOrgId;
     if (activeOrgId) {
       config.headers['X-Organization-ID'] = activeOrgId.toString();

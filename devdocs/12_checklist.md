@@ -487,7 +487,7 @@ This checklist is organized by feature area. Each item includes a description of
 ### 14.1 Real-Time Section Editing
 - [ ] **Two users edit the same section**: Open the same document section in two browsers logged in as users with edit access. Type in one browser.
   - **Expected**: The other browser sees the content update without refresh. Presence/collaboration UI appears for the active room.
-  - **Pre-conditions**: `LIVEBLOCKS_SECRET_KEY` is configured and `VITE_COLLABORATION_ENABLED` is not `false`.
+  - **Pre-conditions**: `LIVEBLOCKS_SECRET_KEY` is configured and `VITE_COLLABORATION_ENABLED=true`.
 - [ ] **Collaborative snapshot persists**: Edit collaboratively, wait for the save indicator, refresh both browsers.
   - **Expected**: The latest Markdown content is loaded from the backend after refresh.
 - [ ] **Read-only shared user cannot edit**: Share a document with VIEW permission. Open the section as that user.
@@ -496,7 +496,7 @@ This checklist is organized by feature area. Each item includes a description of
   - **Expected**: User can participate in comments/threads but cannot change section content.
 - [ ] **Approved document blocks collaborative writes**: Mark a document APPROVED and attempt a collaborative edit as an editor.
   - **Expected**: User does not receive room write permission and snapshot writes are rejected.
-- [ ] **Collaboration disabled fallback**: Set `VITE_COLLABORATION_ENABLED=false`, restart frontend, and edit a section.
+- [ ] **Collaboration disabled fallback**: Leave `VITE_COLLABORATION_ENABLED` unset or set it to any value other than `true`, restart frontend, and edit a section.
   - **Expected**: The editor uses normal debounced REST autosave and content persists without Liveblocks.
 
 ### 14.2 Notes

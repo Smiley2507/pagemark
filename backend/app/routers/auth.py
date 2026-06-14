@@ -271,8 +271,27 @@ async def reset_password(body: ResetPasswordRequest, db: AsyncSession = Depends(
 
 # ── GitHub OAuth ───────────────────────────────────────────────
 
+def _missing_github_oauth_configuration() -> list[str]:
+    required = {
+        "GITHUB_CLIENT_ID": settings.GITHUB_CLIENT_ID,
+        "GITHUB_CLIENT_SECRET": settings.GITHUB_CLIENT_SECRET,
+        "GITHUB_REDIRECT_URI": settings.GITHUB_REDIRECT_URI,
+        "ENCRYPTION_KEY": settings.ENCRYPTION_KEY,
+    }
+    return [key for key, value in required.items() if not str(value or "").strip()]
+
+
 @router.get("/github/authorize")
 async def github_authorize(current_user: User = Depends(get_current_user)):
+    missing = _missing_github_oauth_configuration()
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "GitHub OAuth is not configured. Set "
+                f"{', '.join(missing)} before connecting GitHub accounts."
+            ),
+        )
     return RedirectResponse(github_service.get_authorize_url(auth_service.create_access_token(current_user.id)))
 
 
@@ -295,15 +314,24 @@ async def github_callback(code: str, state: str, db: AsyncSession = Depends(get_
 
 @router.get("/github/status", response_model=GitHubStatusResponse)
 async def github_status(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    missing = _missing_github_oauth_configuration()
+    if missing:
+        return {"connected": False, "configured": False, "missing_configuration": missing}
+
     res = await db.execute(select(OAuthToken).where(OAuthToken.user_id == current_user.id, OAuthToken.provider == "github"))
     tok = res.scalar_one_or_none()
     if not tok:
-        return {"connected": False}
+        return {"connected": False, "configured": True}
     try:
         profile = await github_service.fetch_user_profile(crypto_service.decrypt_token(tok.access_token_encrypted))
-        return {"connected": True, "username": profile.get("login"), "avatar": profile.get("avatar_url")}
+        return {
+            "connected": True,
+            "configured": True,
+            "username": profile.get("login"),
+            "avatar": profile.get("avatar_url"),
+        }
     except Exception:
-        return {"connected": False}
+        return {"connected": False, "configured": True}
 
 
 @router.delete("/github/disconnect", status_code=status.HTTP_204_NO_CONTENT)

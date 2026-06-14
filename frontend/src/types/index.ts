@@ -210,6 +210,8 @@ export interface OutlineDiff {
 
 export interface GitProviderStatus {
   connected: boolean;
+  configured?: boolean;
+  missing_configuration?: string[];
   username?: string;
   avatar?: string;
 }

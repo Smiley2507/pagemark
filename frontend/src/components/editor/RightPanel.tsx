@@ -7,7 +7,6 @@ import {
   Copy,
   Check,
   Settings,
-  ChevronDown,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { cn } from '@/lib/utils';
@@ -15,14 +14,15 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { analysisApi } from '@/api/analysis';
 import { useGenerateSection, useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread } from '@/hooks/useAI';
+import { useAiCredentials } from '@/hooks/useAiCredentials';
 import type { ChatMessage, Section } from '@/types';
 
-const AVAILABLE_MODELS = [
-  { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
-  { id: 'claude-3-5-sonnet-latest', label: 'Claude 3.5 Sonnet' },
-  { id: 'claude-3-opus-latest', label: 'Claude 3 Opus' },
-  { id: 'claude-3-haiku-latest', label: 'Claude 3 Haiku' },
-];
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic',
+  google: 'Google AI Studio',
+  openai: 'OpenAI',
+  'opencode-go': 'OpenCode Go',
+};
 
 interface RightPanelProps {
   projectId: number;
@@ -77,11 +77,9 @@ export function RightPanel({
   const [clarificationAnswer, setClarificationAnswer] = useState('');
   const [isClarifying, setIsClarifying] = useState(false);
 
-  // ── Model / settings state ──
-  const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id);
+  // ── Settings state ──
   const [temperature, setTemperature] = useState(0.7);
   const [maxTokens, setMaxTokens] = useState(2000);
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   // ── @mention state ──
@@ -98,6 +96,13 @@ export function RightPanel({
   const activeThreadId = threads && threads.length > 0 ? threads[0].id : null;
   const { data: messages = [] } = useMessages(activeThreadId);
   const { sendMessage: streamMessage, isStreaming, streamingContent } = useStreamMessage(activeThreadId);
+  const { data: credentialsData, isLoading: credentialsLoading } = useAiCredentials();
+  const activeCredential = credentialsData?.credentials.find((credential) => credential.is_active);
+  const currentModelLabel = credentialsLoading
+    ? 'Loading provider...'
+    : activeCredential
+      ? `${PROVIDER_LABELS[activeCredential.provider] || activeCredential.provider} / ${activeCredential.model_id}`
+      : 'No active AI provider';
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -122,18 +127,17 @@ export function RightPanel({
     }
   }, [inputValue]);
 
-  // Close model/settings/mention dropdowns on outside click
+  // Close settings/mention dropdowns on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (showModelDropdown || showSettings || showMentionDropdown) {
-        setShowModelDropdown(false);
+      if (showSettings || showMentionDropdown) {
         setShowSettings(false);
         setShowMentionDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [showModelDropdown, showSettings, showMentionDropdown]);
+  }, [showSettings, showMentionDropdown]);
 
   // ── Parse @mentions from input ──
   const parseMentions = useCallback((text: string): { cleanText: string; references: string[] } => {
@@ -151,8 +155,6 @@ export function RightPanel({
     setInputValue('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-    // Append model settings as a hidden marker in the message.
-    // The actual model/temperature/max_tokens are sent as query/body params.
     const messagePayload = references.length > 0
       ? `${cleanText}\n\n(referencing: ${references.join(', ')})`
       : cleanText;
@@ -249,8 +251,6 @@ export function RightPanel({
 
   const hasMessages = messages.length > 0 || isStreaming;
 
-  const currentModelLabel = AVAILABLE_MODELS.find((m) => m.id === selectedModel)?.label || selectedModel;
-
   return (
     <div className="flex h-full w-full flex-col overflow-hidden border-l border-border bg-background">
 
@@ -259,36 +259,20 @@ export function RightPanel({
         <Sparkles className="h-4 w-4 text-primary" />
         <span className="text-sm font-medium">AI Assistant</span>
 
-        {/* Model badge */}
         <div className="relative ml-auto flex items-center gap-1">
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowModelDropdown(!showModelDropdown); setShowSettings(false); }}
-            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted transition-colors"
+          <span
+            className={cn(
+              'max-w-[180px] truncate rounded-md px-1.5 py-0.5 text-[11px]',
+              activeCredential ? 'bg-muted text-muted-foreground' : 'bg-warning/10 text-warning',
+            )}
+            title={currentModelLabel}
           >
             {currentModelLabel}
-            <ChevronDown className="h-3 w-3" />
-          </button>
-
-          {showModelDropdown && (
-            <div className="absolute top-full right-0 mt-1 z-50 w-44 rounded-lg border border-border bg-card py-1 shadow-lg">
-              {AVAILABLE_MODELS.map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => { setSelectedModel(m.id); setShowModelDropdown(false); }}
-                  className={cn(
-                    'w-full px-3 py-1.5 text-left text-xs transition-colors',
-                    m.id === selectedModel ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent',
-                  )}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          )}
+          </span>
 
           {/* Settings gear */}
           <button
-            onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); setShowModelDropdown(false); }}
+            onClick={(e) => { e.stopPropagation(); setShowSettings(!showSettings); }}
             className="rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
           >
             <Settings className="h-3.5 w-3.5" />

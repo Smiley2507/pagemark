@@ -1,8 +1,10 @@
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 from app.models.document import Document, DocumentStatus, Section, SectionContentLifecycle, SectionStatus
+from app.models.version import AuthorType, SectionVersion
 
 
 @pytest.fixture
@@ -111,6 +113,67 @@ async def test_collaboration_snapshot_updates_content_and_clears_review_state(
     assert section.content_lifecycle == SectionContentLifecycle.EMPTY
     assert section.status == SectionStatus.PENDING
     assert section.reviewed_at is None
+
+    versions = (
+        await db.execute(
+            select(SectionVersion).where(SectionVersion.section_id == section.id)
+        )
+    ).scalars().all()
+    assert len(versions) == 1
+    assert versions[0].content_md == "Collaborative update"
+    assert versions[0].author_type == AuthorType.USER
+    assert versions[0].summary == "Collaborative snapshot"
+
+
+async def test_document_section_autosave_creates_version_snapshot(
+    client: AsyncClient,
+    db: AsyncSession,
+    collaboration_section,
+    test_project,
+):
+    document, section = collaboration_section
+
+    response = await client.patch(
+        f"/projects/{test_project.id}/documents/{document.id}/sections/{section.id}/autosave",
+        json={"content_md": "Autosaved update"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["saved"] is True
+
+    version = (
+        await db.execute(
+            select(SectionVersion).where(SectionVersion.section_id == section.id)
+        )
+    ).scalar_one()
+    assert version.content_md == "Autosaved update"
+    assert version.author_type == AuthorType.USER
+    assert version.summary == "Autosaved content"
+
+
+async def test_document_section_update_creates_version_snapshot(
+    client: AsyncClient,
+    db: AsyncSession,
+    collaboration_section,
+    test_project,
+):
+    document, section = collaboration_section
+
+    response = await client.patch(
+        f"/projects/{test_project.id}/documents/{document.id}/sections/{section.id}",
+        json={"content_md": "Manual update"},
+    )
+
+    assert response.status_code == 200
+
+    version = (
+        await db.execute(
+            select(SectionVersion).where(SectionVersion.section_id == section.id)
+        )
+    ).scalar_one()
+    assert version.content_md == "Manual update"
+    assert version.author_type == AuthorType.USER
+    assert version.summary == "Content updated"
 
 
 async def test_approved_document_rejects_collaboration_snapshot(

@@ -71,10 +71,10 @@ def test_cost_calculation():
     assert generation_service._cost("unknown", "unknown-model", 1000, 500) == 0.0
 
     # Google Gemini (cheaper)
-    gemini_cost = generation_service._cost("google", "gemini-2.0-flash", 1000, 500)
+    gemini_cost = generation_service._cost("google", "gemini-3.1-flash-lite", 1000, 500)
     assert gemini_cost < 0.01
-    # 1000 * 0.0001/1K = 0.0001, 500 * 0.0004/1K = 0.0002, total = 0.0003
-    assert abs(gemini_cost - 0.0003) < 0.0001
+    # 1000 * 0.00025/1K = 0.00025, 500 * 0.0015/1K = 0.00075, total = 0.001
+    assert abs(gemini_cost - 0.001) < 0.0001
 
     opencode_cost = generation_service._cost("opencode-go", "deepseek-v4-flash", 1000, 500)
     assert abs(opencode_cost - 0.00028) < 0.0001

@@ -326,7 +326,7 @@ When collaboration is enabled, `TipTapEditor` wraps the editor in Liveblocks roo
 - The Liveblocks-backed editor emits updates and persists Markdown snapshots through `collaborationApi.snapshotSection()`.
 - Undo/redo from the normal Tiptap extension is disabled because collaborative history is managed by the collaboration extension.
 - Liveblocks thread UI is rendered for section-scoped collaborative discussion.
-- Setting `VITE_COLLABORATION_ENABLED=false` falls back to the non-collaborative autosave path.
+- Setting `VITE_COLLABORATION_ENABLED=true` enables the Liveblocks path; otherwise the editor uses the non-collaborative autosave path.
 
 ### `DiffViewer.tsx` (275 lines)
 

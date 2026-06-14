@@ -22,8 +22,6 @@ export const NewProject: React.FC = () => {
     setSubmitting(true);
 
     try {
-      // Create Project with 'scratch' source type initially.
-      // Once created, we navigate to the setup page where they connect the actual source.
       const project = await projectsApi.createProject({
         name: name.trim(),
         description: description.trim() || undefined,
@@ -31,7 +29,7 @@ export const NewProject: React.FC = () => {
       });
 
       toast.success('Project created successfully');
-      navigate(`/document-setup?projectId=${project.id}`, { replace: true });
+      navigate(`/projects/${project.id}/source?setup=source`, { replace: true });
     } catch (err: unknown) {
       toast.error('Failed to create project');
     } finally {

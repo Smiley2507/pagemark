@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { analysisApi } from '@/api/analysis';
 import { useGenerateSection, useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread, useSuggestStructure } from '@/hooks/useAI';
+import { useAiCredentials } from '@/hooks/useAiCredentials';
 import { useAiStore } from '@/store/aiStore';
 import type { Section } from '@/types';
 import { DiffViewer } from './DiffViewer';
@@ -40,6 +41,13 @@ const quickChips = [
   { label: 'Structure', text: 'Suggest structural improvements (reorder, rename, add)' },
 ];
 
+const PROVIDER_LABELS: Record<string, string> = {
+  anthropic: 'Anthropic',
+  google: 'Google AI Studio',
+  openai: 'OpenAI',
+  'opencode-go': 'OpenCode Go',
+};
+
 export function AiPanel({
   projectId,
   documentId,
@@ -68,6 +76,13 @@ export function AiPanel({
   const generateSection = useGenerateSection(projectId);
   const refineSection = useRefineSection();
   const suggestStructure = useSuggestStructure();
+  const { data: credentialsData, isLoading: credentialsLoading } = useAiCredentials();
+  const activeCredential = credentialsData?.credentials.find((credential) => credential.is_active);
+  const activeModelLabel = credentialsLoading
+    ? 'Loading provider...'
+    : activeCredential
+      ? `${PROVIDER_LABELS[activeCredential.provider] || activeCredential.provider} / ${activeCredential.model_id}`
+      : 'No active AI provider';
 
   const { data: threads } = useThreads(projectId);
   const createThread = useCreateThread(projectId);
@@ -377,6 +392,8 @@ export function AiPanel({
           activeSectionId={activeSectionId}
           sections={sections}
           onAttachClick={() => setShowAttachments(!showAttachments)}
+          activeModelLabel={activeModelLabel}
+          hasActiveProvider={Boolean(activeCredential)}
         />
       </div>
     </div>

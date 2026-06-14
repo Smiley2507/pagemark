@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Activity, Bell, Bot, Building2, Key, Search, User, Users } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Activity, Bell, Bot, Building2, GitBranch, Key, Search, User, Users } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Surface } from '@/components/ui/surface';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ProfileSection } from '@/components/settings/ProfileSection';
 import { AiProvidersSection } from '@/components/settings/AiProvidersSection';
@@ -15,11 +16,13 @@ const SECTIONS = [
   { id: 'members', label: 'Members', icon: Users, keywords: ['team', 'roles', 'invites', 'workspace'] },
   { id: 'notifications', label: 'Notifications', icon: Bell, keywords: ['alert', 'preferences', 'events', 'bell'] },
   { id: 'ai-providers', label: 'AI Providers', icon: Bot, keywords: ['model', 'provider', 'byok', 'claude', 'opencode', 'google', 'openai', 'chatgpt'] },
+  { id: 'connected-accounts', label: 'Connected Accounts', icon: GitBranch, keywords: ['github', 'oauth', 'repository', 'source'] },
   { id: 'api-keys', label: 'API Keys', icon: Key, keywords: ['token', 'integration', 'automation'] },
   { id: 'activity', label: 'Activity Log', icon: Activity, keywords: ['audit', 'history', 'events', 'activity'] },
 ] as const;
 
 export function SettingsPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [filter, setFilter] = useState('');
   const activeTab = searchParams.get('tab') || 'profile';
@@ -98,6 +101,20 @@ export function SettingsPage() {
               {activeSection.id === 'members' && <OrgSettingsView />}
               {activeSection.id === 'notifications' && <NotificationPreferencesSection />}
               {activeSection.id === 'ai-providers' && <AiProvidersSection />}
+              {activeSection.id === 'connected-accounts' && (
+                <Surface variant="panel" padding="lg" className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <GitBranch className="h-4 w-4 text-text-secondary" aria-hidden="true" />
+                    <h3 className="text-body font-semibold text-text-primary">GitHub</h3>
+                  </div>
+                  <p className="text-body text-text-secondary">
+                    Connect GitHub to list repositories, analyze private repositories, and keep Project source setup fast.
+                  </p>
+                  <Button type="button" className="w-fit" onClick={() => navigate('/git-connect')}>
+                    Manage GitHub connection
+                  </Button>
+                </Surface>
+              )}
               {activeSection.id === 'api-keys' && <OrgApiKeysView />}
               {activeSection.id === 'activity' && <OrgAuditLogView />}
             </div>

@@ -87,7 +87,7 @@ export const useLogin = () => {
       }
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Login failed');
+      toast.error(error.response?.data?.detail || error.response?.data?.message || 'Login failed');
     },
   });
 };
@@ -97,18 +97,19 @@ export const useRegister = () => {
   return useMutation({
     mutationFn: authApi.register,
     onSuccess: (user) => {
-      useAuthStore.getState().setUser(user);
-      if (user.is_first_login) {
-        useAuthStore.getState().setShowWelcome(true);
-      }
       if (!user.is_verified) {
-        navigate('/verify-email-pending');
+        useAuthStore.getState().clearUser();
+        navigate('/verify-email-pending', { state: { email: user.email } });
       } else {
+        useAuthStore.getState().setUser(user);
+        if (user.is_first_login) {
+          useAuthStore.getState().setShowWelcome(true);
+        }
         navigate('/home');
       }
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || 'Registration failed');
+      toast.error(error.response?.data?.detail || error.response?.data?.message || 'Registration failed');
     },
   });
 };

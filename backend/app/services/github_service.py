@@ -1,6 +1,7 @@
 import httpx
 from typing import Optional, Dict, Any, List
 from fastapi import HTTPException
+from urllib.parse import urlencode
 from app.config import settings
 
 GITHUB_API_URL = "https://api.github.com"
@@ -8,20 +9,23 @@ GITHUB_API_URL = "https://api.github.com"
 
 def get_authorize_url(state: str) -> str:
     """Returns the GitHub OAuth authorization URL."""
-    client_id = settings.GITHUB_CLIENT_ID
-    redirect_uri = settings.GITHUB_REDIRECT_URI
-    scope = "repo read:user"
-    return f"https://github.com/login/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&scope={scope}&state={state}"
+    query = urlencode({
+        "client_id": settings.GITHUB_CLIENT_ID.strip(),
+        "redirect_uri": settings.GITHUB_REDIRECT_URI.strip(),
+        "scope": "repo read:user",
+        "state": state,
+    })
+    return f"https://github.com/login/oauth/authorize?{query}"
 
 
 async def exchange_code_for_token(code: str) -> str:
     """Exchanges an OAuth code for an access token."""
     url = "https://github.com/login/oauth/access_token"
     payload = {
-        "client_id": settings.GITHUB_CLIENT_ID,
-        "client_secret": settings.GITHUB_CLIENT_SECRET,
+        "client_id": settings.GITHUB_CLIENT_ID.strip(),
+        "client_secret": settings.GITHUB_CLIENT_SECRET.strip(),
         "code": code,
-        "redirect_uri": settings.GITHUB_REDIRECT_URI
+        "redirect_uri": settings.GITHUB_REDIRECT_URI.strip()
     }
     headers = {"Accept": "application/json"}
 

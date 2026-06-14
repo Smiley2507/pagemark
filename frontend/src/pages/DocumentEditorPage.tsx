@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import {
   ArrowDown,
   ArrowUp,
@@ -202,7 +203,7 @@ function SectionBlock({
 }) {
   const [content, setContent] = useState(section.content_md);
   const [title, setTitle] = useState(section.title || section.heading || 'Untitled Section');
-  const collaborationEnabled = import.meta.env.VITE_COLLABORATION_ENABLED !== 'false';
+  const collaborationEnabled = import.meta.env.VITE_COLLABORATION_ENABLED === 'true';
   const { isSaving, lastSaved, markPersisted } = useDocumentAutosave(
     projectId,
     documentId,
@@ -426,9 +427,18 @@ export function DocumentEditorPage() {
 
   const { data: freshnessData } = useQuery({
     queryKey: ['freshness', pid, did],
-    queryFn: () => documentsApi.getFreshness(pid, did),
+    queryFn: async () => {
+      try {
+        return await documentsApi.getFreshness(pid, did);
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
+          return null;
+        }
+        throw error;
+      }
+    },
     enabled: pid > 0 && did > 0,
-    refetchInterval: 30000,
+    refetchInterval: (query) => query.state.data ? 30000 : false,
   });
 
   const staleSectionIds = useMemo(() => {
@@ -664,8 +674,8 @@ export function DocumentEditorPage() {
   const loading = documentLoading || sectionsLoading;
   const showSourceNotice = freshnessData?.freshness === 'stale' && (freshnessData?.stale_count || 0) > 0;
   const activeSection = activeSectionId
-    ? sections.find((s) => s.id === activeSectionId) || sections[0] || null
-    : sections[0] || null;
+    ? sections.find((s) => s.id === activeSectionId) || null
+    : null;
   const userDisplayName = currentUser?.name || currentUser?.email || 'User';
 
   if (loading) {
@@ -891,7 +901,10 @@ export function DocumentEditorPage() {
                   onAcceptStaleness={(sectionId) => acceptFreshness.mutate(sectionId)}
                   onRejectStaleness={(sectionId) => rejectFreshness.mutate(sectionId)}
                   isStalenessProcessing={acceptFreshness.isPending || rejectFreshness.isPending}
-                  onFocusChange={(editor) => setActiveEditor(editor)}
+                  onFocusChange={(editor) => {
+                    setActiveEditor(editor);
+                    if (editor) setActiveSectionId(section.id);
+                  }}
                   isDocumentApproved={document?.status === 'approved'}
                 />
               ))}

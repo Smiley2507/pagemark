@@ -85,10 +85,10 @@ These Pagemark permissions are mapped to Liveblocks room permissions during auth
 The editor uses Liveblocks with Tiptap/Yjs for concurrent section editing. Every rendered section mounts a collaborative editor for its own room when collaboration is enabled. The frontend feature flag is:
 
 ```
-VITE_COLLABORATION_ENABLED=false
+VITE_COLLABORATION_ENABLED=true
 ```
 
-When the flag is absent or not set to `false`, collaborative editing is enabled. In collaborative mode, the normal debounced REST autosave is disabled for the section editor. Instead, the Liveblocks-backed Tiptap instance emits document updates, converts the editor state to Markdown, and persists snapshots through the backend.
+When the flag is set to `true`, collaborative editing is enabled. When it is absent or any other value, the editor uses the non-collaborative REST autosave path. In collaborative mode, the normal debounced REST autosave is disabled for the section editor. Instead, the Liveblocks-backed Tiptap instance emits document updates, converts the editor state to Markdown, and persists snapshots through the backend.
 
 ### Collaboration Auth
 
@@ -137,7 +137,7 @@ Frontend environment:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VITE_COLLABORATION_ENABLED` | enabled | Set to `false` to use the non-collaborative REST autosave path. |
+| `VITE_COLLABORATION_ENABLED` | disabled | Set to `true` to use Liveblocks collaborative editor rooms. |
 
 ## Collaboration Notes
 

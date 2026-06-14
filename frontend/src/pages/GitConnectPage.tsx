@@ -5,7 +5,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GitProviderIcon } from '@/components/git/GitProviderIcon';
 import { useGitHubStatus, useDisconnectGitHub } from '@/hooks/useGit';
-import { getOAuthAuthorizeUrl } from '@/lib/git';
+import { consumeOAuthReturnPath, getOAuthAuthorizeUrl } from '@/lib/git';
 
 export const GitConnectPage: React.FC = () => {
   const navigate = useNavigate();
@@ -17,11 +17,16 @@ export const GitConnectPage: React.FC = () => {
   useEffect(() => {
     if (searchParams.get('connected') === 'true') {
       toast.success('GitHub connected successfully');
+      const returnPath = consumeOAuthReturnPath();
+      if (returnPath) {
+        navigate(returnPath, { replace: true });
+        return;
+      }
       searchParams.delete('connected');
       searchParams.delete('provider');
       setSearchParams(searchParams, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+  }, [navigate, searchParams, setSearchParams]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -50,6 +55,13 @@ export const GitConnectPage: React.FC = () => {
             <div className="mt-6 flex items-center gap-2 text-meta text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Checking connection…
+            </div>
+          ) : githubStatus?.configured === false ? (
+            <div className="mt-6 rounded-lg border border-border bg-muted p-4">
+              <p className="font-semibold">GitHub OAuth is not configured</p>
+              <p className="mt-1 text-meta text-muted-foreground">
+                Set {(githubStatus.missing_configuration || []).join(', ') || 'the GitHub OAuth environment variables'} on the backend before connecting GitHub accounts.
+              </p>
             </div>
           ) : githubStatus?.connected && githubStatus?.username ? (
             <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

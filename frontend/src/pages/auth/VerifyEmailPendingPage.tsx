@@ -2,18 +2,15 @@ import { Mail } from 'lucide-react';
 import { AuthLayout } from '@/components/layout/AuthLayout';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/authStore';
-import { useLogout } from '@/hooks/useAuth';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 export const VerifyEmailPendingPage = () => {
   const user = useAuthStore((state) => state.user);
-  const { mutate: logout } = useLogout();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const email = user?.email || (location.state as { email?: string } | null)?.email;
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (user.is_verified) {
+  if (user?.is_verified) {
     return <Navigate to="/home" replace />;
   }
 
@@ -26,12 +23,12 @@ export const VerifyEmailPendingPage = () => {
         <div className="space-y-2">
           <h3 className="text-xl font-medium tracking-tight">Check your inbox</h3>
           <p className="text-muted-foreground text-sm">
-            We've sent a verification link to <span className="font-medium text-foreground">{user.email}</span>. 
+            We've sent a verification link{email ? <> to <span className="font-medium text-foreground">{email}</span></> : null}.
             Please click the link to activate your account.
           </p>
         </div>
         <div className="pt-4 w-full flex flex-col gap-2">
-          <Button variant="outline" className="w-full" onClick={() => logout()}>
+          <Button variant="outline" className="w-full" onClick={() => navigate('/login')}>
             Back to login
           </Button>
         </div>

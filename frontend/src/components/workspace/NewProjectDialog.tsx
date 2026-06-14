@@ -43,10 +43,9 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ open, onOpen
       setName('');
       setDescription('');
 
-      // Navigate to setup
       const dest = templateId 
-        ? `/document-setup?projectId=${project.id}&templateId=${templateId}`
-        : `/document-setup?projectId=${project.id}`;
+        ? `/projects/${project.id}/source?setup=source&templateId=${templateId}`
+        : `/projects/${project.id}/source?setup=source`;
       navigate(dest);
     } catch (err: unknown) {
       toast.error('Failed to create project');

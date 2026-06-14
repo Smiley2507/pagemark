@@ -18,7 +18,11 @@ class SectionVersion(Base):
     id = Column(Integer, primary_key=True, index=True)
     section_id = Column(Integer, ForeignKey("sections.id"), nullable=False)
     content_md = Column(Text, nullable=False)
-    author_type = Column(Enum(AuthorType), nullable=False, default=AuthorType.USER)
+    author_type = Column(
+        Enum(AuthorType, values_callable=lambda enum_cls: [item.value for item in enum_cls]),
+        nullable=False,
+        default=AuthorType.USER,
+    )
     summary = Column(String, nullable=True)
     added = Column(Integer, nullable=False, default=0)
     removed = Column(Integer, nullable=False, default=0)

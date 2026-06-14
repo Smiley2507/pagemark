@@ -21,7 +21,9 @@ import './tiptap-editor.css'
 
 export interface TipTapEditorHandle {
   focus: () => void
+  insertContent: (text: string) => void
   replaceSelection: (text: string) => void
+  setContent: (text: string) => void
   setGrammarIssues: (issues: GrammarIssue[]) => void
 }
 
@@ -52,7 +54,7 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
       props.projectId &&
       props.documentId &&
       props.sectionId &&
-      import.meta.env.VITE_COLLABORATION_ENABLED !== 'false'
+      import.meta.env.VITE_COLLABORATION_ENABLED === 'true'
     )
 
     if (!shouldCollaborate || !props.projectId || !props.documentId || !props.sectionId) {
@@ -157,8 +159,14 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
 
     useImperativeHandle(ref, () => ({
       focus: () => editor?.chain().focus().run(),
+      insertContent: (text: string) => {
+        editor?.chain().focus().insertContent(text, { contentType: 'markdown' }).run()
+      },
       replaceSelection: (text: string) => {
         editor?.chain().focus().deleteSelection().insertContent(text, { contentType: 'markdown' }).run()
+      },
+      setContent: (text: string) => {
+        editor?.commands.setContent(text, { contentType: 'markdown' })
       },
       setGrammarIssues: (_issues: GrammarIssue[]) => {
         // TODO: port grammar decoration to ProseMirror plugin
@@ -167,11 +175,15 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
 
     useEffect(() => {
       if (editor && !collaborationExtension && value !== editor.getMarkdown()) {
-        editor.commands.setContent(value, {
-          emitUpdate: false,
-          contentType: 'markdown',
-          parseOptions: { preserveWhitespace: 'full' },
-        })
+        try {
+          editor.commands.setContent(value || '', {
+            emitUpdate: false,
+            contentType: 'markdown',
+          })
+        } catch (error) {
+          console.error('Failed to load section Markdown into editor', error, { value })
+          editor.commands.clearContent(false)
+        }
       }
     }, [collaborationExtension, editor, value])
 

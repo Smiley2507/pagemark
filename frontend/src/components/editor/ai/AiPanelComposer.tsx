@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ArrowUp, Paperclip, ChevronDown, FlaskConical, PenLine, Expand, WandSparkles, MessageSquare, FileText, Book, FileCode, Layout } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAiStore, AVAILABLE_MODELS, MODE_LABELS, MODE_DESCRIPTIONS, type AiMode } from '@/store/aiStore';
+import { useAiStore, MODE_LABELS, MODE_DESCRIPTIONS, type AiMode } from '@/store/aiStore';
 import type { AiAttachment } from '@/store/aiStore';
 
 type ReferenceKind = 'section' | 'document' | 'source' | 'template';
@@ -38,6 +38,8 @@ interface AiPanelComposerProps {
   activeSectionId: number | null;
   sections: { id: number; heading: string }[];
   onAttachClick?: () => void;
+  activeModelLabel: string;
+  hasActiveProvider: boolean;
 }
 
 export function AiPanelComposer({
@@ -49,8 +51,10 @@ export function AiPanelComposer({
   activeSectionId,
   sections,
   onAttachClick,
+  activeModelLabel,
+  hasActiveProvider,
 }: AiPanelComposerProps) {
-  const { activeMode, activeModelId, setActiveMode, setActiveModelId, addAttachment } = useAiStore();
+  const { activeMode, setActiveMode, addAttachment } = useAiStore();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [showMentionDropdown, setShowMentionDropdown] = useState(false);
@@ -60,9 +64,7 @@ export function AiPanelComposer({
   const mentionDropdownRef = useRef<HTMLDivElement>(null);
 
   const [showModeMenu, setShowModeMenu] = useState(false);
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
   const modeRef = useRef<HTMLDivElement>(null);
-  const modelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (value && textareaRef.current) {
@@ -75,7 +77,6 @@ export function AiPanelComposer({
     const handleClick = (e: MouseEvent) => {
       const target = e.target as Node;
       if (modeRef.current && !modeRef.current.contains(target)) setShowModeMenu(false);
-      if (modelRef.current && !modelRef.current.contains(target)) setShowModelDropdown(false);
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
@@ -152,7 +153,6 @@ export function AiPanelComposer({
     ? [{ id: 'repo', label: 'Repository source' }]
     : [{ id: 'template', label: 'Document template' }];
 
-  const currentModel = AVAILABLE_MODELS.find((m) => m.id === activeModelId);
   const ModeIcon = MODE_ICONS[activeMode];
 
   return (
@@ -266,37 +266,17 @@ export function AiPanelComposer({
               )}
             </div>
 
-            <div ref={modelRef} className="relative">
-              <button
-                onClick={() => setShowModelDropdown(!showModelDropdown)}
-                className="flex items-center gap-0.5 rounded px-1 py-0.5 text-[11px] text-text-muted transition-colors hover:bg-panel-muted hover:text-text-primary"
-              >
-                {currentModel?.label || 'Model'}
-                <ChevronDown className="h-2.5 w-2.5" />
-              </button>
-              {showModelDropdown && (
-                <div className="absolute bottom-full left-0 z-50 mb-1 w-48 rounded-lg border border-separator bg-panel py-1 shadow-lg">
-                  {AVAILABLE_MODELS.map((m) => {
-                    const isActive = m.id === activeModelId;
-                    return (
-                      <button
-                        key={m.id}
-                        onClick={() => { setActiveModelId(m.id); setShowModelDropdown(false); }}
-                        className={cn(
-                          'flex w-full items-center justify-between px-3 py-1.5 text-left text-xs transition-colors',
-                          isActive
-                            ? 'bg-interaction-muted text-interaction-hover'
-                            : 'text-text-muted hover:bg-panel-muted hover:text-text-primary',
-                        )}
-                      >
-                        <span>{m.label}</span>
-                        <span className="text-[10px] text-text-muted">{m.provider}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+            <span
+              className={cn(
+                'max-w-36 truncate rounded px-1.5 py-0.5 text-[11px]',
+                hasActiveProvider
+                  ? 'bg-panel-muted text-text-secondary'
+                  : 'bg-warning/10 text-warning',
               )}
-            </div>
+              title={activeModelLabel}
+            >
+              {activeModelLabel}
+            </span>
           </div>
         </div>
 

@@ -216,7 +216,7 @@ npm run preview  # Preview production build locally
 | Variable                       | Description                         | Default                  |
 |--------------------------------|-------------------------------------|--------------------------|
 | `VITE_API_URL`                 | Backend API base URL                | `http://localhost:8000`  |
-| `VITE_COLLABORATION_ENABLED`   | Set to `false` to disable Liveblocks editor rooms | enabled |
+| `VITE_COLLABORATION_ENABLED`   | Set to `true` to enable Liveblocks editor rooms | disabled |
 
 ---
 

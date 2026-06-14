@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Any, Literal
 from datetime import datetime
 
@@ -96,6 +96,8 @@ class GitBranchResponse(BaseModel):
 
 class GitHubStatusResponse(BaseModel):
     connected: bool
+    configured: bool = True
+    missing_configuration: List[str] = Field(default_factory=list)
     username: Optional[str] = None
     avatar: Optional[str] = None
 

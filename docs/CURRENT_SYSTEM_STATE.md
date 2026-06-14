@@ -53,7 +53,7 @@ Backend:
 Frontend:
 
 - `VITE_API_URL`
-- `VITE_COLLABORATION_ENABLED=false` disables the Liveblocks editor path.
+- `VITE_COLLABORATION_ENABLED=true` enables the Liveblocks editor path.
 
 ## Checks For Later Work
 

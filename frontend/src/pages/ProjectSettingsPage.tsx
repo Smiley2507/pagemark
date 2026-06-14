@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { GitBranch, Hash, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { projectsApi } from '@/api/projects';
 
 export function ProjectSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tagDraft, setTagDraft] = useState('');
 
@@ -102,6 +103,14 @@ export function ProjectSettingsPage() {
             </span>
           </div>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-fit"
+          onClick={() => navigate(`/projects/${project.id}/source?setup=source`)}
+        >
+          Manage source
+        </Button>
       </Surface>
     </div>
   );

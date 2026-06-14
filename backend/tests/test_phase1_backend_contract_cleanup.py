@@ -350,7 +350,7 @@ async def test_ai_doc_service_uses_active_provider_adapter(monkeypatch):
         return ActiveCredential(
             id=1,
             provider="google",
-            model_id=model_name or "gemini-2.0-flash",
+            model_id=model_name or "gemini-3.1-flash-lite",
             api_key="test-google-key",
         )
 
@@ -378,7 +378,7 @@ async def test_ai_doc_service_uses_active_provider_adapter(monkeypatch):
         system="system prompt",
         user="user prompt",
         max_tokens=123,
-        model_name="gemini-1.5-flash",
+        model_name="gemini-3.1-flash-lite",
     )
 
     assert response == "provider response"
@@ -387,7 +387,7 @@ async def test_ai_doc_service_uses_active_provider_adapter(monkeypatch):
         "user": "user prompt",
         "provider": "google",
         "api_key": "test-google-key",
-        "model_id": "gemini-1.5-flash",
+        "model_id": "gemini-3.1-flash-lite",
         "max_tokens": 123,
     }
 
@@ -405,6 +405,17 @@ async def test_ai_provider_catalog_includes_opencode_go(client):
         "kimi-k2.6",
         "glm-5.1",
     }
+
+
+@pytest.mark.asyncio
+async def test_ai_provider_catalog_uses_current_google_default(client):
+    response = await client.get("/auth/me/ai-providers/catalog")
+
+    assert response.status_code == 200
+    providers = {provider["id"]: provider for provider in response.json()["providers"]}
+    google_models = providers["google"]["models"]
+    assert google_models[0]["id"] == "gemini-3.1-flash-lite"
+    assert "gemini-2.0-flash" not in {model["id"] for model in google_models}
 
 
 @pytest.mark.asyncio

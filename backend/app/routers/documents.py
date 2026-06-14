@@ -30,6 +30,7 @@ from app.models.project import Project
 from app.models.template import Template
 from app.models.template_recommendation import TemplateRecommendationBasis
 from app.models.user import User
+from app.models.version import AuthorType
 from app.schemas.document import (
     ClarificationRequestCreateRequest,
     ClarificationRequestResponse,
@@ -71,6 +72,7 @@ from app.services import ai_credential_service
 from app.services import generation_service
 from app.services import template_recommendation_service
 from app.services import freshness_service, activity_service
+from app.services.version_service import create_version_snapshot
 
 router = APIRouter(prefix="/projects", tags=["documents"])
 
@@ -1012,6 +1014,19 @@ async def update_document_section(
     if content_changed or status_changed:
         section.updated_at = datetime.utcnow()
         document.updated_at = datetime.utcnow()
+        summary_parts = []
+        if content_changed:
+            summary_parts.append("Content updated")
+        if status_changed:
+            summary_parts.append("Status updated")
+        await create_version_snapshot(
+            db,
+            section_id=section.id,
+            old_content=old_content,
+            new_content=section.content_md or "",
+            author_type=AuthorType.USER,
+            summary="; ".join(summary_parts) if summary_parts else None,
+        )
 
     await db.commit()
     await db.refresh(section)
@@ -1038,10 +1053,19 @@ async def autosave_document_section(
     if body.content_md == (section.content_md or ""):
         return SectionAutosaveResponse(saved=False, updated_at=section.updated_at)
 
+    old_content = section.content_md or ""
     section.content_md = body.content_md
     section.updated_at = datetime.utcnow()
     document.updated_at = section.updated_at
     section_service.clear_review_state_for_content_edit(section, edited_at=section.updated_at)
+    await create_version_snapshot(
+        db,
+        section_id=section.id,
+        old_content=old_content,
+        new_content=section.content_md or "",
+        author_type=AuthorType.USER,
+        summary="Autosaved content",
+    )
     await db.commit()
     await db.refresh(section)
 
@@ -1097,10 +1121,19 @@ async def snapshot_section_collaboration(
     if body.content_md == (section.content_md or ""):
         return SectionAutosaveResponse(saved=False, updated_at=section.updated_at)
 
+    old_content = section.content_md or ""
     section.content_md = body.content_md
     section.updated_at = datetime.utcnow()
     document.updated_at = section.updated_at
     section_service.clear_review_state_for_content_edit(section, edited_at=section.updated_at)
+    await create_version_snapshot(
+        db,
+        section_id=section.id,
+        old_content=old_content,
+        new_content=section.content_md or "",
+        author_type=AuthorType.USER,
+        summary="Collaborative snapshot",
+    )
     await db.commit()
     await db.refresh(section)
 

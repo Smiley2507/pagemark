@@ -35,7 +35,7 @@ pytestmark = pytest.mark.anyio
 
 PROVIDERS = [
     ("anthropic", "claude-sonnet-4-20250514"),
-    ("google", "gemini-2.0-flash"),
+    ("google", "gemini-3.1-flash-lite"),
     ("openai", "gpt-5"),
     ("opencode-go", "deepseek-v4-flash"),
 ]
@@ -64,7 +64,7 @@ class TestAiServiceProviderAdapter:
     def test_complete_text_routes_google(self, mock_fn):
         from app.services.ai_service import complete_text
         with patch("app.services.ai_service.validate_credential"):
-            result = complete_text("sys", "user", "google", "AIzatest1234", "gemini-2.0-flash")
+            result = complete_text("sys", "user", "google", "AIzatest1234", "gemini-3.1-flash-lite")
         assert result == "google ok"
         mock_fn.assert_called_once()
 
@@ -93,7 +93,7 @@ class TestAiServiceProviderAdapter:
     def test_complete_text_wraps_provider_errors(self, mock_fn):
         from app.services.ai_service import complete_text, AiServiceError
         with pytest.raises(AiServiceError, match="Could not complete google request"):
-            complete_text("sys", "user", "google", "AIza-test1234", "gemini-2.0-flash")
+            complete_text("sys", "user", "google", "AIza-test1234", "gemini-3.1-flash-lite")
         mock_fn.assert_called_once()
 
     def test_validate_credential_rejects_invalid_provider(self):
@@ -173,7 +173,7 @@ class TestCompleteWithActiveProvider:
         db = MagicMock(spec=AsyncSession)
 
         from app.services.ai_credential_service import ActiveCredential
-        fake_cred = ActiveCredential(id=1, provider="google", model_id="gemini-2.0-flash", api_key="key")
+        fake_cred = ActiveCredential(id=1, provider="google", model_id="gemini-3.1-flash-lite", api_key="key")
 
         with (
             patch.object(service, "_get_active_credential", new=AsyncMock(return_value=fake_cred)),
@@ -306,7 +306,7 @@ class TestStreamChatNonAnthropic:
     """For Google and OpenCode Go, stream_chat must emit via complete_text, not Anthropic SDK."""
 
     @pytest.mark.parametrize("provider,model", [
-        ("google", "gemini-2.0-flash"),
+        ("google", "gemini-3.1-flash-lite"),
         ("opencode-go", "deepseek-v4-flash"),
     ])
     async def test_stream_chat_non_anthropic_uses_complete_text(self, provider, model):

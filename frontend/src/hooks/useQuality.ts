@@ -12,6 +12,10 @@ function isMissingQualityReport(error: unknown): boolean {
   return typeof detail === 'string' && detail.includes('No quality report found');
 }
 
+function isNotFound(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 404;
+}
+
 export const useQualityReport = (projectId: number, documentId: number) =>
   useQuery({
     queryKey: ['quality', projectId, documentId],
@@ -19,7 +23,7 @@ export const useQualityReport = (projectId: number, documentId: number) =>
       try {
         return await qualityApi.getQuality(projectId, documentId);
       } catch (error) {
-        if (isMissingQualityReport(error)) {
+        if (isMissingQualityReport(error) || isNotFound(error)) {
           return null;
         }
         throw error;
@@ -68,6 +72,12 @@ export const useRunQuality = (projectId: number, documentId: number) => {
         }
       }, 5000);
     },
-    onError: () => toast.error('Failed to start quality analysis. Check your connection and try again.'),
+    onError: (error) => {
+      if (isNotFound(error)) {
+        toast.error('Quality analysis is unavailable for this document or project.');
+        return;
+      }
+      toast.error('Failed to start quality analysis. Check your connection and try again.');
+    },
   });
 };

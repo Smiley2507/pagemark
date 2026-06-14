@@ -3,10 +3,14 @@ import { Outlet, useSearchParams } from 'react-router-dom';
 import { SidebarNavigation } from './SidebarNavigation';
 import { AppHeader } from './AppHeader';
 import { NewProjectDialog } from '../workspace/NewProjectDialog';
+import { WelcomeModal } from '../ui/welcome-modal';
+import { useAuthStore } from '@/store/authStore';
 
 export const MainLayout: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const showNewProject = searchParams.get('new_project') === 'true';
+  const showWelcome = useAuthStore((state) => state.showWelcome);
+  const setShowWelcome = useAuthStore((state) => state.setShowWelcome);
 
   const handleOpenChange = (open: boolean) => {
     if (!open) {
@@ -27,6 +31,7 @@ export const MainLayout: React.FC = () => {
         </main>
       </div>
       <NewProjectDialog open={showNewProject} onOpenChange={handleOpenChange} />
+      <WelcomeModal open={showWelcome} onClose={() => setShowWelcome(false)} />
     </div>
   );
 };

@@ -47,8 +47,9 @@ MODEL_PRICING_PER_1K = {
         "claude-3-5-sonnet-20241022": {"prompt": 0.003, "completion": 0.015},
     },
     "google": {
-        "gemini-2.0-flash": {"prompt": 0.0001, "completion": 0.0004},
-        "gemini-1.5-flash": {"prompt": 0.000075, "completion": 0.0003},
+        "gemini-3.1-flash-lite": {"prompt": 0.00025, "completion": 0.0015},
+        "gemini-3.5-flash": {"prompt": 0.0015, "completion": 0.009},
+        "gemini-3.1-pro-preview": {"prompt": 0.002, "completion": 0.012},
     },
     "opencode-go": {
         "deepseek-v4-flash": {"prompt": 0.00014, "completion": 0.00028},

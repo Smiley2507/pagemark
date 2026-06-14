@@ -1,0 +1,40 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+left to right direction
+
+actor "Unregistered User" as UnregisteredUser
+actor "Registered User" as RegisteredUser
+
+rectangle "Pagemark: Authentication and Account Management" {
+  usecase "Register account" as UC_Register
+  usecase "Verify email address" as UC_VerifyEmail
+  usecase "Login" as UC_Login
+  usecase "Logout" as UC_Logout
+  usecase "Reset password" as UC_ResetPassword
+  usecase "Manage profile\n(name, avatar)" as UC_ManageProfile
+  usecase "Configure AI provider credentials\n(Anthropic, Google, OpenCode Go)" as UC_AiCredentials
+  usecase "Manage personal API keys" as UC_ApiKeys
+  usecase "Update notification preferences" as UC_NotificationPreferences
+  usecase "Update workspace preferences" as UC_WorkspacePreferences
+}
+
+UnregisteredUser -- UC_Register
+UnregisteredUser -- UC_VerifyEmail
+
+RegisteredUser -- UC_Login
+RegisteredUser -- UC_Logout
+RegisteredUser -- UC_ResetPassword
+RegisteredUser -- UC_ManageProfile
+RegisteredUser -- UC_AiCredentials
+RegisteredUser -- UC_ApiKeys
+RegisteredUser -- UC_NotificationPreferences
+RegisteredUser -- UC_WorkspacePreferences
+
+UC_Register ..> UC_VerifyEmail : <<include>>
+UC_Login ..> UC_ResetPassword : <<extend>>
+@enduml
