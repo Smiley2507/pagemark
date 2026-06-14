@@ -1,0 +1,47 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+actor User
+participant "Frontend\n(Setup Wizard)" as Frontend
+participant "Backend API" as Backend
+participant "AI Doc Service" as AIDoc
+participant "AI Provider" as Provider
+database Database
+
+User -> Frontend : Create document
+Frontend -> Backend : POST /documents
+Backend -> Database : Create Document
+Database --> Backend : Document
+Backend --> Frontend : Document response
+
+Frontend -> Backend : GET /documents/{id}/analysis-facts
+Backend -> Database : Load analysis facts
+Database --> Backend : Analysis summary
+Backend --> Frontend : Analysis facts
+
+Frontend -> Backend : GET /documents/{id}/template-recommendations
+Backend -> Database : Load templates and analysis facts
+Backend -> AIDoc : Score templates
+AIDoc -> Provider : complete_text()
+Provider --> AIDoc : Recommendation text
+Backend -> Database : Store TemplateRecommendation rows
+Backend --> Frontend : Ranked template recommendations
+User -> Frontend : Select template
+
+Frontend -> Backend : POST /documents/{id}/outlines
+Backend -> AIDoc : Generate outline proposal
+AIDoc -> Provider : complete_text()
+Provider --> AIDoc : Outline JSON
+Backend -> Database : Store OutlineProposal
+Backend --> Frontend : Draft outline proposal
+User -> Frontend : Review outline
+User -> Frontend : Approve outline
+Frontend -> Backend : POST /documents/{id}/outlines/{proposal_id}/approve
+Backend -> Database : Mark proposal APPROVED
+Backend --> Frontend : Wizard complete
+@enduml

@@ -1,0 +1,38 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+actor User
+participant Frontend
+participant "Backend API" as Backend
+participant "Celery Worker" as Worker
+participant "File Extractor" as Source
+participant "Tree-sitter Parser" as Parser
+database Database
+
+User -> Frontend : Upload ZIP
+Frontend -> Backend : POST /projects
+Backend -> Database : Create Project
+Database --> Backend : Project
+Backend --> Frontend : Project response
+Frontend -> Backend : POST /projects/{id}/analyses
+Backend -> Database : Create Analysis(status=PENDING)
+Backend -> Worker : queue analyze_project_task
+Backend --> Frontend : Analysis queued
+Worker -> Source : Extract ZIP archive
+Source --> Worker : Extracted source root
+Worker -> Source : Walk file tree and apply exclusions
+Source --> Worker : RepoFile list
+Worker -> Worker : Detect languages
+Worker -> Parser : Parse primary-language files
+Parser --> Worker : Parse statistics
+Worker -> Worker : Detect endpoints by regex
+Worker -> Database : Store Analysis record
+Backend -> Database : Read latest Analysis
+Database --> Backend : Analysis status/results
+Backend --> Frontend : Analysis complete
+@enduml

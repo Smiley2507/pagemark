@@ -1,0 +1,21 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+actor User
+participant "Frontend\n(Three-Panel Editor)" as Frontend
+participant "Backend API" as Backend
+database Database
+
+User -> Frontend : Click Accept Review
+Frontend -> Backend : POST /sections/{id}/review
+Backend -> Database : Validate permission
+Backend -> Database : Set content_lifecycle=REVIEWED
+Backend -> Database : Record reviewed_by, reviewed_at, reviewed_against_analysis_id
+Backend -> Database : Create SectionVersion
+Backend --> Frontend : Updated section
+@enduml

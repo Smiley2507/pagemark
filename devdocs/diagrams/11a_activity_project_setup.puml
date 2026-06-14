@@ -1,0 +1,42 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+start
+:Register;
+:Verify Email;
+:Login;
+
+if (Create new organization or join existing?) then (join existing)
+  :Join existing organization;
+else (create new)
+  :Create organization;
+endif
+
+:Create Project;
+
+if (Source type?) then (ZIP Upload path)
+  :Upload ZIP;
+elseif (GitHub Connect path)
+  :Connect GitHub;
+else (Scratch path)
+  :Start from scratch;
+endif
+
+:Run Code Analysis;
+:Create Document;
+
+if (Use recommended template or custom outline?) then (recommended template)
+  :Review Template Recommendation;
+  :Select template;
+else (custom outline)
+  :Create custom outline;
+endif
+
+:Approve Outline;
+stop
+@enduml

@@ -1,0 +1,53 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+actor "User A" as UserA
+actor "User B" as UserB
+participant Frontend
+participant "Backend API" as Backend
+participant Liveblocks
+database Database
+
+UserA -> Frontend : Open section
+Frontend -> Frontend : Derive room id\nproject:{project_id}:document:{document_id}:section:{section_id}
+Frontend -> Backend : POST .../collaboration/auth
+Backend -> Database : Verify membership
+Backend -> Database : Resolve permission
+Backend -> Liveblocks : authorize-user
+Liveblocks --> Backend : Token
+Backend --> Frontend : Liveblocks token
+Frontend -> Liveblocks : Connect to room
+
+UserB -> Frontend : Open same section
+Frontend -> Backend : POST .../collaboration/auth
+Backend -> Database : Verify membership
+Backend -> Database : Resolve permission
+Backend -> Liveblocks : authorize-user
+Liveblocks --> Backend : Token
+Backend --> Frontend : Liveblocks token
+Frontend -> Liveblocks : Join same room
+Liveblocks --> Frontend : Presence and cursor updates
+
+UserB -> Frontend : Edit content
+Frontend -> Liveblocks : Yjs CRDT update
+Liveblocks --> Frontend : Sync update to User A
+Frontend --> UserA : Editors converge
+
+... debounced collaborative snapshot ...
+Frontend -> Frontend : Convert state to Markdown
+Frontend -> Backend : PATCH .../collaboration/snapshot
+Backend -> Database : Validate permission and status
+Backend -> Database : Update sections.content_md
+Backend -> Database : Create SectionVersion
+
+note right of Database
+Associations to Document, Section, User, Project,
+Analysis, and GenerationRun are defined in their
+respective class diagrams.
+end note
+@enduml

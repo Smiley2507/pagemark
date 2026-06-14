@@ -1,0 +1,26 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+actor User
+participant "Frontend\n(Three-Panel Editor)" as Frontend
+participant "Backend API" as Backend
+participant "AI Doc Service" as AIDoc
+participant "AI Provider" as Provider
+
+User -> Frontend : Type message in chat panel
+Frontend -> Backend : POST /ai/chat (streaming)
+Backend -> AIDoc : Assemble project context
+AIDoc -> Provider : SSE streaming AI call
+Provider --> AIDoc : Streamed tokens
+AIDoc --> Backend : SSE data events
+Backend --> Frontend : text/event-stream
+Frontend --> User : Render streamed tokens in real time
+opt User applies suggestion
+  User -> Frontend : Apply suggestion to section editor
+end
+@enduml

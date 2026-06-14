@@ -1,0 +1,49 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+start
+
+if (Generate all sections or one by one?) then (all sections)
+  :AI Generates Sections;
+else (one by one)
+  :AI Generates Sections;
+endif
+
+if (Clarification needed?) then (yes)
+  :User answers clarification question;
+  :Resume generation;
+else (no)
+  :Continue;
+endif
+
+:Open Three-Panel Editor;
+note right
+Multiple users may be present simultaneously via Liveblocks.
+end note
+
+:Refine sections with AI chat;
+:Accept review for each section;
+
+while (All sections reviewed?) is (no)
+  :Continue editing;
+  :Refine sections with AI chat;
+  :Accept review for each section;
+endwhile (yes)
+
+:Document marked APPROVED;
+
+if (Format?) then (PDF)
+  :Export PDF;
+elseif (HTML)
+  :Export HTML;
+else (Markdown)
+  :Export Markdown;
+endif
+
+stop
+@enduml

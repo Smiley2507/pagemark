@@ -1,0 +1,45 @@
+@startuml
+skinparam backgroundColor white
+skinparam classBackgroundColor #F8F9FA
+skinparam classBorderColor #6C757D
+skinparam arrowColor #495057
+skinparam defaultFontName Arial
+skinparam defaultFontSize 11
+
+actor User
+participant Frontend
+participant "Backend API" as Backend
+participant "Celery Worker" as Worker
+participant "Context Assembly Service" as Context
+participant "AI Provider" as Provider
+database Database
+
+User -> Frontend : Trigger generation
+Frontend -> Backend : POST /documents/{id}/generate
+Backend -> Database : Create GenerationRun
+Backend -> Database : Create GenerationSectionTasks
+Backend -> Worker : Queue generation task
+Backend --> Frontend : GenerationRun response
+
+loop for each section task
+  Worker -> Database : Load task, section, document, project
+  Worker -> Worker : Assemble context within 8000 token budget
+  Worker -> Context : assemble(resources, max_tokens=8000)
+  Context --> Worker : Context blocks
+  Worker -> Worker : Build prompt
+  Worker -> Provider : complete_text(system_prompt, user_prompt)
+  Provider --> Worker : JSON response
+  alt clarification needed
+    Worker -> Database : Create ClarificationRequest
+    Worker -> Database : Pause section and wait for user response
+    User -> Frontend : Answer clarification
+    Frontend -> Backend : Resume generation
+    Backend -> Worker : Resume task
+  else content generated
+    Worker -> Database : Save section content
+    Worker -> Database : Create SectionVersion(author_type=AI)
+  end
+end
+
+Backend --> Frontend : Generation complete
+@enduml
