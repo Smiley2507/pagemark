@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any
 
@@ -31,6 +32,8 @@ from app.models.template_recommendation import (
     TemplateRecommendationBasis,
 )
 from app.services.ai_credential_service import get_active_credential
+from app.prompts.outline import OUTLINE_SYSTEM, build_outline_user_message
+from app.services.ai_service import AiServiceError, complete_text
 
 
 def _language_names(analysis: Analysis | None) -> list[str]:
@@ -71,6 +74,47 @@ def _file_count(analysis: Analysis | None) -> int:
         if isinstance(data.get("total_files"), int):
             return data["total_files"]
     return 0
+
+
+def _framework_names(analysis: Analysis | None) -> list[str]:
+    if analysis is None:
+        return []
+    frameworks: set[str] = set()
+    data = analysis.endpoints_json
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict) and item.get("framework"):
+                frameworks.add(str(item["framework"]))
+    elif isinstance(data, dict):
+        raw = data.get("frameworks")
+        if isinstance(raw, list):
+            frameworks.update(str(item) for item in raw)
+        endpoints = data.get("endpoints")
+        if isinstance(endpoints, list):
+            for item in endpoints:
+                if isinstance(item, dict) and item.get("framework"):
+                    frameworks.add(str(item["framework"]))
+    return sorted(frameworks)
+
+
+def _complexity_notes(analysis: Analysis | None) -> str:
+    if analysis is None or not analysis.complexity_json:
+        return ""
+    data = analysis.complexity_json
+    if isinstance(data, dict):
+        for key in ("summary", "notes", "complexity_summary"):
+            value = data.get(key)
+            if isinstance(value, str):
+                return value[:500]
+        largest = data.get("largest_files")
+        if isinstance(largest, list) and largest:
+            paths = [
+                str(item.get("path", item))
+                for item in largest[:5]
+                if isinstance(item, dict) or item
+            ]
+            return f"Largest files: {', '.join(paths)}"
+    return ""
 
 
 def _analysis_facts(analysis: Analysis | None) -> dict[str, Any]:
@@ -310,6 +354,98 @@ async def create_ai_personalized_recommendation(
     return await list_recommendations(db, document.id)
 
 
+def _parse_adapted_outline(raw: str) -> list[dict[str, Any]]:
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:].strip()
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail="AI returned invalid JSON for adapted outline") from exc
+    items = parsed.get("sections", parsed) if isinstance(parsed, dict) else parsed
+    if not isinstance(items, list):
+        raise HTTPException(status_code=502, detail="AI adapted outline must be a JSON array")
+    outline: list[dict[str, Any]] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            continue
+        heading = str(item.get("heading") or item.get("title") or "").strip()
+        if not heading:
+            continue
+        outline.append(
+            {
+                "heading": heading,
+                "description": item.get("description"),
+                "purpose": item.get("purpose"),
+                "guidance": item.get("guidance"),
+                "expected_sources": item.get("expected_sources"),
+                "order_index": int(item.get("order_index", index)),
+            }
+        )
+    if not outline:
+        raise HTTPException(status_code=502, detail="AI adapted outline contained no usable sections")
+    outline.sort(key=lambda item: item.get("order_index", 0))
+    return outline
+
+
+async def adapt_template_outline(
+    db: AsyncSession,
+    document: Document,
+    template: Template,
+    user_id: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    active = await get_active_credential(db, user_id)
+    if active is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Active provider credential required for AdaptTemplate.",
+        )
+    analysis = await get_current_analysis(db, document.project_id)
+    facts = _analysis_facts(analysis)
+    prompt = build_outline_user_message(
+        template_sections=_template_outline(template),
+        languages_summary=", ".join(facts["languages"]) or "unknown",
+        endpoint_count=facts["endpoint_count"],
+        frameworks=", ".join(_framework_names(analysis)) or "unknown",
+        file_count=facts["file_count"],
+        complexity_notes=_complexity_notes(analysis) or "none",
+    )
+    try:
+        raw = complete_text(
+            OUTLINE_SYSTEM,
+            prompt,
+            active.provider,
+            active.api_key,
+            active.model_id,
+            max_tokens=1800,
+        )
+    except AiServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    outline = _parse_adapted_outline(raw)
+    metadata = {
+        "basis": OutlineProposalBasis.ANALYSIS_ADAPTED.value,
+        "analysis_id": analysis.id if analysis else None,
+        "template_id": template.id,
+        "adapt_template": True,
+        "provider_usage_ref": {
+            "provider_credential_id": active.id,
+            "provider": active.provider,
+            "model": active.model_id,
+            "estimated_prompt_tokens": 1200,
+            "estimated_completion_tokens": 450,
+            "actual_prompt_tokens": None,
+            "actual_completion_tokens": None,
+            "phase": "adapt_template",
+            "recorded_at": datetime.utcnow().isoformat(),
+        },
+        "supporting_facts": facts,
+    }
+    return outline, metadata
+
+
 async def create_custom_outline_seeded_recommendation(
     db: AsyncSession,
     document: Document,
@@ -350,13 +486,25 @@ async def create_outline_proposal(
     outline: list[dict[str, Any]] | None,
     basis: OutlineProposalBasis,
     explanation: dict[str, Any] | None,
+    user_id: int | None = None,
 ) -> OutlineProposal:
     analysis = await get_current_analysis(db, document.project_id)
     if template_id is not None:
         template = await db.get(Template, template_id)
         if template is None:
             raise HTTPException(status_code=404, detail="Template not found")
-        outline_json = _template_outline(template)
+        if basis == OutlineProposalBasis.ANALYSIS_ADAPTED:
+            if user_id is None:
+                raise HTTPException(status_code=400, detail="User required for AdaptTemplate")
+            outline_json, adapted_explanation = await adapt_template_outline(
+                db,
+                document,
+                template,
+                user_id,
+            )
+            explanation = {**adapted_explanation, **(explanation or {})}
+        else:
+            outline_json = _template_outline(template)
         document.template_id = template.id
         if document.print_profile is None:
             document.print_profile = _template_print_profile(template)

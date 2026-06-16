@@ -298,7 +298,7 @@ async def test_template_recommendations_and_setup_resume(migrated_async_database
 
 
 @pytest.mark.anyio
-async def test_ai_provider_gate_custom_outline_and_outline_approval(migrated_async_database_url):
+async def test_ai_provider_gate_custom_outline_and_outline_approval(migrated_async_database_url, monkeypatch):
     from app.database import get_db
     from app.dependencies import get_current_user
     from app.main import app
@@ -307,6 +307,7 @@ async def test_ai_provider_gate_custom_outline_and_outline_approval(migrated_asy
     from app.models.outline_proposal import OutlineProposal
     from app.models.user import User
     from app.services import crypto_service
+    from app.services import template_recommendation_service
 
     engine = create_async_engine(migrated_async_database_url)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -351,6 +352,42 @@ async def test_ai_provider_gate_custom_outline_and_outline_approval(migrated_asy
             ]
             assert ai_recommendations
             assert ai_recommendations[0]["provider_usage_ref"]["provider"] == "anthropic"
+
+            provider_calls = {}
+
+            def fake_complete_text(system, user, provider, api_key, model_id, *, max_tokens):
+                provider_calls.update(
+                    {
+                        "system": system,
+                        "user": user,
+                        "provider": provider,
+                        "api_key": api_key,
+                        "model_id": model_id,
+                        "max_tokens": max_tokens,
+                    }
+                )
+                return '[{"heading":"Service Overview","description":"Adapted summary","order_index":0},{"heading":"Endpoint Inventory","description":"Adapted endpoints","order_index":1}]'
+
+            monkeypatch.setattr(template_recommendation_service, "complete_text", fake_complete_text)
+
+            adapted_response = await client.post(
+                f"/projects/{project_id}/documents/{document_id}/outline-proposals",
+                json={
+                    "template_id": _api_template_id,
+                    "basis": "analysis_adapted",
+                },
+            )
+            assert adapted_response.status_code == 201
+            adapted = adapted_response.json()
+            assert adapted["basis"] == "analysis_adapted"
+            assert [item["heading"] for item in adapted["outline"]] == [
+                "Service Overview",
+                "Endpoint Inventory",
+            ]
+            assert adapted["explanation"]["provider_usage_ref"]["provider"] == "anthropic"
+            assert provider_calls["provider"] == "anthropic"
+            assert provider_calls["api_key"] == "test-key"
+            assert "Endpoint count: 2" in provider_calls["user"]
 
             custom_outline = [
                 {"heading": "Operating Model", "description": "How the service runs"},

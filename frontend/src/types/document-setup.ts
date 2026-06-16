@@ -20,6 +20,11 @@ export type RecommendationBasis =
   | 'ai_personalized'
   | 'custom_outline_seeded';
 
+export type OutlineProposalBasis =
+  | 'template'
+  | 'custom_outline'
+  | 'analysis_adapted';
+
 export interface SetupSectionEvidence {
   type: string;
   path?: string;
@@ -142,7 +147,7 @@ export interface OutlineProposal {
   id: number;
   document_id: number;
   analysis_id?: number;
-  basis: RecommendationBasis;
+  basis: OutlineProposalBasis;
   status: 'draft' | 'approved' | 'superseded';
   outline?: SetupSectionSummary[];
   outline_json: SetupSectionSummary[];

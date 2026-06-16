@@ -705,6 +705,7 @@ async def create_outline_proposal(
         outline=body.outline,
         basis=OutlineProposalBasis(body.basis.value),
         explanation=body.explanation,
+        user_id=current_user.id,
     )
     return _outline_proposal_to_response(proposal)
 
