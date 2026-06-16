@@ -33,6 +33,8 @@ export interface Document {
   purpose?: string;
   audience?: string;
   context?: string;
+  print_profile?: Record<string, unknown>;
+  export_settings?: Record<string, unknown>;
   last_activity_at: string;
   created_at: string;
   updated_at: string;
@@ -81,6 +83,8 @@ export const documentsApi = {
       context?: string;
       setup_stage: string;
       tags?: string[];
+      print_profile?: Record<string, unknown>;
+      export_settings?: Record<string, unknown>;
     }
   ): Promise<Document> {
     const { data } = await apiClient.post(`/projects/${projectId}/documents`, payload);
@@ -109,6 +113,7 @@ export const documentsApi = {
       setup_stage?: string;
       tags?: string[];
       export_settings?: Record<string, unknown>;
+      print_profile?: Record<string, unknown>;
       custom_outline_metadata?: Record<string, unknown>;
     }
   ): Promise<Document> {
@@ -253,11 +258,12 @@ export const documentsApi = {
     projectId: number,
     documentId: number,
     mode: 'on-demand' | 'complete',
-    section_ids?: number[]
+    section_ids?: number[],
+    execute = true
   ): Promise<any> {
     const { data } = await apiClient.post(
       `/projects/${projectId}/documents/${documentId}/generation-runs`,
-      { mode, section_ids }
+      { mode, section_ids, execute }
     );
     return data;
   },

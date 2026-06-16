@@ -8,6 +8,7 @@ import pytest
 from app.exceptions import NeedsClarificationException
 from app.models.analysis import AnalysisStatus
 from app.models.project import SourceType
+from app.prompts.section import build_section_prompt
 from app.routers.projects import _build_ai_context_response
 from app.services.ai_doc_service import AIService
 
@@ -167,3 +168,29 @@ async def test_refine_section_returns_action_without_refined_content():
     assert result["action"] == "ask_user"
     assert result["refined"] == ""
     assert result["question"] == "Which auth flow should be documented?"
+
+
+def test_section_prompt_includes_source_files_and_prefers_draft_over_refusal():
+    prompt = build_section_prompt(
+        section_heading="Configuration",
+        project_context={
+            "name": "MedixPharma",
+            "language": "Python",
+            "framework": "FastAPI",
+            "source_files": ["pyproject.toml", "app/main.py", "README.md"],
+        },
+        analysis={
+            "classes": [],
+            "functions": [],
+            "endpoints": [],
+            "dependencies": [],
+            "source_files": ["pyproject.toml", "app/main.py", "README.md"],
+            "languages": "Python",
+            "file_count": 12,
+            "complexity_notes": "",
+        },
+    )
+
+    assert "pyproject.toml" in prompt
+    assert "insufficient_context" not in prompt
+    assert "best grounded draft" in prompt

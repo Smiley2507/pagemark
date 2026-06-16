@@ -32,6 +32,7 @@ def build_chat_prompt(
     key_features = project_context.get("key_features", "")
     preferred_terms = project_context.get("preferred_terms", "")
     custom_instructions = project_context.get("custom_instructions", "")
+    source_files = analysis_summary.get("source_files", [])
 
     languages = analysis_summary.get("languages", "")
     file_count = analysis_summary.get("file_count", 0)
@@ -62,6 +63,8 @@ def build_chat_prompt(
         system_lines.append(f"- **Key Features**: {key_features}")
     if preferred_terms:
         system_lines.append(f"- **Preferred Terminology**: {preferred_terms}")
+    if source_files:
+        system_lines.append(f"- **Source Files**: {', '.join(source_files[:20])}")
     if custom_instructions:
         system_lines += [
             "",
@@ -91,10 +94,10 @@ def build_chat_prompt(
         f"- Use a {tone} tone appropriate for {audience}.",
         f"- Ground project-specific claims in the current section, project brief, template guidance, referenced sections, attachments, or Analysis facts.",
         f"- Prefer concrete files, endpoints, classes, functions, commands, and known source facts when evidence exists.",
+        f"- If evidence is thin, answer with the best grounded draft you can and call out assumptions; only ask one targeted question if a single missing fact blocks the answer.",
         f"- Do not invent missing behavior, deployment details, API semantics, security guarantees, or business rules.",
         f"- When generating or editing supported content, return clean markdown.",
         f"- If a targeted answer from the user would unblock the request, return only this JSON: {{\"action\": \"ask_user\", \"question\": \"<one targeted question>\"}}.",
-        f"- If the requested prose is unsupported by available context and no focused clarification is apparent, return only this JSON: {{\"action\": \"insufficient_context\", \"reason\": \"<why source evidence is insufficient>\"}}.",
         f"- Be concise and helpful.",
     ]
 

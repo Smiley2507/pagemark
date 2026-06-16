@@ -215,6 +215,7 @@ def _build_css(s: dict) -> str:
 
     table_style = s.get("table_style", "striped")
     code_theme = s.get("code_theme", "dark")
+    h1_underline = s.get("h1_underline", False)
 
     watermark = s.get("watermark_text", "")
 
@@ -492,7 +493,7 @@ hr {{
 .toc h1 {{
   font-size:var(--h1-font-size);
   color:var(--h1-color);
-  border-bottom:2px solid var(--primary-color);
+  {"border-bottom:2px solid var(--primary-color);" if h1_underline else "border-bottom:0;"}
   padding-bottom:8px;
   margin:0 0 14px 0;
 }}
@@ -516,7 +517,7 @@ hr {{
 .doc-section h1 {{
   font-size:var(--h1-font-size);
   color:var(--h1-color);
-  border-bottom:2px solid var(--primary-color);
+  {"border-bottom:2px solid var(--primary-color);" if h1_underline else "border-bottom:0;"}
   padding-bottom:6px;
   margin:0 0 14px 0;
   page-break-after:avoid;

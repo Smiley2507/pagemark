@@ -24,6 +24,7 @@ class DocumentCreateRequest(BaseModel):
     setup_stage: DocumentSetupStageEnum = DocumentSetupStageEnum.PURPOSE
     tags: list[str] = Field(default_factory=list)
     export_settings: Optional[dict[str, Any]] = None
+    print_profile: Optional[dict[str, Any]] = None
 
 
 class DocumentUpdateRequest(BaseModel):
@@ -35,6 +36,7 @@ class DocumentUpdateRequest(BaseModel):
     setup_stage: Optional[DocumentSetupStageEnum] = None
     tags: Optional[list[str]] = None
     export_settings: Optional[dict[str, Any]] = None
+    print_profile: Optional[dict[str, Any]] = None
     custom_outline_metadata: Optional[dict[str, Any]] = None
 
 
@@ -60,6 +62,7 @@ class DocumentResponse(BaseModel):
     audience: Optional[str] = None
     context: Optional[str] = None
     export_settings: Optional[dict[str, Any]] = None
+    print_profile: Optional[dict[str, Any]] = None
     custom_outline_metadata: Optional[dict[str, Any]] = None
     last_activity_at: datetime
     reviewer_id: Optional[int] = None

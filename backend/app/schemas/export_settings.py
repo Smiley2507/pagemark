@@ -42,6 +42,7 @@ class ExportSettings(BaseModel):
     include_toc: bool = True
     include_cover_page: bool = True
     include_page_numbers: bool = True
+    h1_underline: bool = False
 
     paper_size: str = "a4"
     orientation: str = "portrait"
@@ -91,6 +92,16 @@ class ExportSettings(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def normalize(cls, data: dict) -> dict:
+        if data is None:
+            data = {}
+        data = dict(data)
+        if "include_page_numbers" not in data and "page_numbers" in data:
+            data["include_page_numbers"] = data.get("page_numbers")
+        if "logo_url" not in data and "logo_path" in data:
+            data["logo_url"] = data.get("logo_path")
+        if "paper_size" not in data and "page_size" in data:
+            data["paper_size"] = data.get("page_size")
+
         margins_val = data.get("margins", "normal")
         if isinstance(margins_val, str) and margins_val in MARGIN_PRESETS:
             preset = MARGIN_PRESETS[margins_val]

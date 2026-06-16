@@ -44,6 +44,15 @@ export const projectsApi = {
     return data;
   },
 
+  async generateAiOverview(id: number): Promise<{
+    overview_md: string;
+    questions: string[];
+    confidence_score: number;
+  }> {
+    const { data } = await apiClient.post(`/projects/${id}/ai-context/overview`);
+    return data;
+  },
+
   async createProject(projectData: {
     name: string;
     description?: string;

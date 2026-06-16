@@ -172,12 +172,13 @@ class AIService:
     def _analysis_detail(self, analysis: Analysis | None) -> dict:
         """Extract granular lists (classes, functions, endpoints, deps) for prompts."""
         if not analysis:
-            return {"classes": [], "functions": [], "endpoints": [], "dependencies": []}
+            return {"classes": [], "functions": [], "endpoints": [], "dependencies": [], "source_files": []}
 
         classes: list = []
         functions: list = []
         endpoints: list = []
         dependencies: list = []
+        source_files: list[str] = []
 
         if analysis.complexity_json:
             cx = analysis.complexity_json
@@ -193,6 +194,27 @@ class AIService:
                     for ep in ep_data[:30]
                 ]
 
+        if analysis.file_contents_json:
+            if isinstance(analysis.file_contents_json, dict):
+                source_files.extend([str(path) for path in analysis.file_contents_json.keys()][:30])
+
+        if analysis.file_tree_json and isinstance(analysis.file_tree_json, dict):
+            def _walk(node: dict, prefix: str = "") -> None:
+                name = str(node.get("name") or "")
+                node_type = node.get("type")
+                current = f"{prefix}/{name}".strip("/") if name and name != "/" else prefix
+                if node_type == "file" and current:
+                    source_files.append(current)
+                    return
+                children = node.get("children")
+                if isinstance(children, list):
+                    for child in children:
+                        if isinstance(child, dict):
+                            next_prefix = current if current else prefix
+                            _walk(child, next_prefix)
+
+            _walk(analysis.file_tree_json)
+
         if analysis.languages_json:
             lang_data = analysis.languages_json
             if isinstance(lang_data, dict):
@@ -205,6 +227,7 @@ class AIService:
             "functions": functions,
             "endpoints": endpoints,
             "dependencies": dependencies,
+            "source_files": list(dict.fromkeys(source_files))[:30],
             "languages": summary.get("languages", ""),
             "file_count": summary.get("file_count", 0),
             "complexity_notes": summary.get("complexity_notes", ""),
@@ -293,6 +316,7 @@ class AIService:
 
         project_ctx = self._project_context(project)
         analysis_detail = self._analysis_detail(analysis)
+        project_ctx["source_files"] = analysis_detail.get("source_files", [])
         template_prompt = await self._get_template_prompt(
             db,
             project_id=project_id,
@@ -359,6 +383,8 @@ class AIService:
         project = await self._fetch_project(db, document.project_id) if document else None
 
         project_ctx = self._project_context(project) if project else {}
+        analysis_detail = self._analysis_detail(await self._fetch_latest_analysis(db, document.project_id)) if project and document else {"source_files": []}
+        project_ctx["source_files"] = analysis_detail.get("source_files", [])
         template_prompt = (
             await self._get_template_prompt(
                 db,
@@ -528,6 +554,7 @@ class AIService:
 
         project_ctx = self._project_context(project)
         analysis_summary = self._analysis_summary(analysis)
+        analysis_summary["source_files"] = self._analysis_detail(analysis).get("source_files", [])
         template_prompt = await self._get_template_prompt(db, project_id=thread.project_id)
 
         current_section_heading = thread.title

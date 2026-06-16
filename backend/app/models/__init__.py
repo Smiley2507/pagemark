@@ -24,6 +24,13 @@ from app.models.generation import (
     GenerationSectionTask,
     GenerationTaskStatus,
 )
+from app.models.ai_work import (
+    AIProposedChange,
+    AIProposedChangeStatus,
+    AIProposedChangeType,
+    AIWorkRun,
+    AIWorkRunStatus,
+)
 from app.models.evidence import EvidenceReference
 from app.models.activity import ActivityEvent
 from app.models.workspace_preference import WorkspacePreference
@@ -73,6 +80,11 @@ __all__ = [
     "GenerationSectionTask",
     "GenerationTaskStatus",
     "FailoverState",
+    "AIWorkRun",
+    "AIWorkRunStatus",
+    "AIProposedChange",
+    "AIProposedChangeType",
+    "AIProposedChangeStatus",
     "EvidenceReference",
     "ActivityEvent",
     "WorkspacePreference",

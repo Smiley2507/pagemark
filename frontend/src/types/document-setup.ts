@@ -86,11 +86,16 @@ export interface SetupDocument {
     id: number;
     name: string;
     description?: string;
+    recommended_print_profile?: Record<string, unknown>;
+    structure_guidance?: Record<string, unknown>;
+    section_generation_guidance?: Record<string, unknown>;
   };
   template_id?: number;
   purpose?: string;
   audience?: string;
   context?: string;
+  print_profile?: Record<string, unknown>;
+  export_settings?: Record<string, unknown>;
   custom_outline_metadata?: Record<string, unknown>;
   last_activity_at: string;
   created_at: string;

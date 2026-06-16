@@ -55,6 +55,7 @@ class Document(Base):
     custom_outline_metadata = Column(JSON, nullable=True)
     tags = Column(JSON, nullable=True)
     export_settings = Column(JSON, nullable=True)
+    print_profile = Column(JSON, nullable=True)
     freshness_state = Column(String, nullable=True)
     sharing_settings = Column(JSON, nullable=True)
     reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -78,6 +79,11 @@ class Document(Base):
     )
     generation_runs = relationship(
         "GenerationRun",
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
+    ai_work_runs = relationship(
+        "AIWorkRun",
         back_populates="document",
         cascade="all, delete-orphan",
     )

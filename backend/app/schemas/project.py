@@ -139,3 +139,9 @@ class AiContextResponse(BaseModel):
     effective_exclusions: List[Any] = []
     context_files_preview: List[dict[str, Any]] = []
     grounding_warnings: List[str] = []
+
+
+class AiProjectOverviewResponse(BaseModel):
+    overview_md: str
+    questions: List[str] = []
+    confidence_score: int = 0

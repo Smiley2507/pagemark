@@ -32,7 +32,7 @@ export function GenerationChoiceStep({
   onConfigureProvider,
 }: GenerationChoiceStepProps) {
   const [selectedMode, setSelectedMode] = useState<ChoiceMode>(
-    hasActiveProvider ? 'on-demand' : 'manual',
+    hasActiveProvider ? 'complete' : 'manual',
   );
   const [showBreakdown, setShowBreakdown] = useState(true);
 
@@ -47,8 +47,7 @@ export function GenerationChoiceStep({
       <div className="max-w-3xl">
         <h1 className="text-title text-text-primary">Choose how to enter the Document</h1>
         <p className="mt-3 text-body text-text-secondary">
-          Choose how to fill in the document. You can write manually, generate sections on demand,
-          or generate the full document in the background.
+          Start with a useful draft, generate only the approved sections, or enter the editor without AI.
         </p>
       </div>
 
@@ -70,10 +69,10 @@ export function GenerationChoiceStep({
         />
         <ModeCard
           selected={selectedMode === 'on-demand'}
-          title="Generate Sections on demand"
+          title="Generate approved Sections"
           subtitle="Lower relative usage"
-          description="Recommended when a provider is configured. Generate only the Sections you want, when you want them."
-          badge={hasActiveProvider ? 'Recommended' : 'Provider required'}
+          description="Draft the approved Outline section-by-section now, while keeping each Section reviewable in the editor."
+          badge="Controlled draft"
           icon={Sparkles}
           onClick={() => setSelectedMode('on-demand')}
         />
@@ -81,8 +80,8 @@ export function GenerationChoiceStep({
           selected={selectedMode === 'complete'}
           title="Generate the complete Document"
           subtitle="Higher relative usage"
-          description="Start a background run for the whole approved Outline and enter the editor while Sections progress."
-          badge="Higher upfront usage"
+          description="Recommended when the overview and Outline look right. Draft the whole Document before opening the editor."
+          badge={hasActiveProvider ? 'Recommended' : 'Provider required'}
           icon={Zap}
           onClick={() => setSelectedMode('complete')}
         />

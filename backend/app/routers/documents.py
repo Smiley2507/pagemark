@@ -56,6 +56,14 @@ from app.schemas.document import (
     TemplateRecommendationRequest,
     TemplateRecommendationResponse,
 )
+from app.schemas.ai_work import (
+    AIProposedChangeListResponse,
+    AIProposedChangePreviewResponse,
+    AIProposedChangeResponse,
+    AIWorkRunCreateRequest,
+    AIWorkRunListResponse,
+    AIWorkRunResponse,
+)
 from app.schemas.section import (
     CustomSectionRequest,
     SectionAutosaveRequest,
@@ -68,6 +76,7 @@ from app.schemas.section import (
 )
 from app.schemas.template import TemplateResponse
 from app.services import section_service
+from app.services import ai_work_service
 from app.services import ai_credential_service
 from app.services import generation_service
 from app.services import template_recommendation_service
@@ -282,6 +291,13 @@ def _template_response(template: Template | None) -> TemplateResponse | None:
     return TemplateResponse.model_validate(template)
 
 
+def _template_print_profile(template: Template | None) -> dict | None:
+    if template is None:
+        return None
+    profile = template.recommended_print_profile
+    return dict(profile) if isinstance(profile, dict) else None
+
+
 def _recommendation_to_response(recommendation) -> TemplateRecommendationResponse:
     return TemplateRecommendationResponse(
         id=recommendation.id,
@@ -377,6 +393,14 @@ def _generation_run_to_response(run: GenerationRun) -> GenerationRunResponse:
     )
 
 
+def _ai_work_run_to_response(run) -> AIWorkRunResponse:
+    return AIWorkRunResponse.model_validate(ai_work_service.run_to_response(run))
+
+
+def _ai_change_to_response(change) -> AIProposedChangeResponse:
+    return AIProposedChangeResponse.model_validate(ai_work_service.change_to_response(change))
+
+
 def _document_to_response(document: Document) -> DocumentResponse:
     return DocumentResponse(
         id=document.id,
@@ -393,6 +417,7 @@ def _document_to_response(document: Document) -> DocumentResponse:
         audience=document.audience,
         context=document.context,
         export_settings=document.export_settings,
+        print_profile=document.print_profile,
         custom_outline_metadata=document.custom_outline_metadata,
         last_activity_at=_last_activity_at(document),
         reviewer_id=document.reviewer_id,
@@ -442,6 +467,8 @@ async def create_document(
         template = await db.get(Template, body.template_id)
         if template is None:
             raise HTTPException(status_code=404, detail="Template not found")
+    else:
+        template = None
 
     document = Document(
         project_id=project.id,
@@ -453,6 +480,7 @@ async def create_document(
         setup_stage=DocumentSetupStage(body.setup_stage.value),
         tags=body.tags,
         export_settings=body.export_settings,
+        print_profile=body.print_profile or _template_print_profile(template),
     )
     db.add(document)
     await db.commit()
@@ -492,6 +520,8 @@ async def update_document(
         if template is None:
             raise HTTPException(status_code=404, detail="Template not found")
         document.template_id = body.template_id
+        if document.print_profile is None:
+            document.print_profile = _template_print_profile(template)
     if body.title is not None:
         document.title = body.title
     if body.purpose is not None:
@@ -506,6 +536,8 @@ async def update_document(
         document.tags = body.tags
     if body.export_settings is not None:
         document.export_settings = body.export_settings
+    if body.print_profile is not None:
+        document.print_profile = body.print_profile
     if body.custom_outline_metadata is not None:
         document.custom_outline_metadata = body.custom_outline_metadata
 
@@ -799,6 +831,110 @@ async def skip_outline_clarification_request(
         raise HTTPException(status_code=404, detail="Clarification Request not found")
     request = await template_recommendation_service.skip_clarification_request(db, request)
     return _clarification_to_response(request)
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/ai/work-runs",
+    status_code=status.HTTP_201_CREATED,
+    response_model=AIWorkRunResponse,
+)
+async def create_ai_work_run(
+    body: AIWorkRunCreateRequest,
+    document: Document = Depends(require_document_permission("edit")),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    run = await ai_work_service.create_work_run(db, document, body, current_user.id)
+    return _ai_work_run_to_response(run)
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/ai/work-runs",
+    response_model=AIWorkRunListResponse,
+)
+async def list_ai_work_runs(
+    document: Document = Depends(verify_document_access),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    runs = await ai_work_service.list_work_runs(db, document.id)
+    return AIWorkRunListResponse(work_runs=[_ai_work_run_to_response(run) for run in runs])
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/ai/proposed-changes",
+    response_model=AIProposedChangeListResponse,
+)
+async def list_ai_proposed_changes(
+    document: Document = Depends(verify_document_access),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    changes = await ai_work_service.list_changes(db, document.id)
+    return AIProposedChangeListResponse(
+        proposed_changes=[_ai_change_to_response(change) for change in changes]
+    )
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/ai/proposed-changes/{change_id}/preview",
+    response_model=AIProposedChangePreviewResponse,
+)
+async def preview_ai_proposed_change(
+    change_id: int,
+    document: Document = Depends(verify_document_access),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    change = await ai_work_service.get_change(db, document.id, change_id)
+    return AIProposedChangePreviewResponse(
+        change=_ai_change_to_response(change),
+        preview=ai_work_service.preview_change(change),
+    )
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/ai/proposed-changes/{change_id}/accept",
+    response_model=AIProposedChangeResponse,
+)
+async def accept_ai_proposed_change(
+    change_id: int,
+    document: Document = Depends(require_document_permission("edit")),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    change = await ai_work_service.get_change(db, document.id, change_id)
+    accepted = await ai_work_service.accept_change(db, document, change, current_user.id)
+    return _ai_change_to_response(accepted)
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/ai/proposed-changes/{change_id}/reject",
+    response_model=AIProposedChangeResponse,
+)
+async def reject_ai_proposed_change(
+    change_id: int,
+    document: Document = Depends(require_document_permission("edit")),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    change = await ai_work_service.get_change(db, document.id, change_id)
+    rejected = await ai_work_service.reject_change(db, document, change, current_user.id)
+    return _ai_change_to_response(rejected)
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/ai/work-runs/{run_id}/undo",
+    response_model=AIWorkRunResponse,
+)
+async def undo_ai_work_run(
+    run_id: int,
+    document: Document = Depends(require_document_permission("edit")),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    run = await ai_work_service.undo_work_run(db, document, run_id)
+    return _ai_work_run_to_response(run)
 
 
 async def _load_document_response(

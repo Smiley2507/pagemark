@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.analysis import Analysis
+from app.exceptions import NeedsClarificationException
+from app.models.clarification import ClarificationRequest, ClarificationStatus
 from app.models.document import (
     Document,
     DocumentSetupStage,
@@ -391,6 +393,27 @@ async def _execute_task(
             provider=provider,
             model=model,
         )
+    except NeedsClarificationException as exc:
+        section.is_generating = False
+        section.status = SectionStatus.NEEDS_INPUT
+        task.status = GenerationTaskStatus.PAUSED
+        task.error_message = exc.question
+        task.updated_at = datetime.utcnow()
+        db.add(
+            ClarificationRequest(
+                section_id=section.id,
+                document_id=section.document_id,
+                question=exc.question,
+                confidence_tradeoff=(
+                    "AI requested clarification before generating source-grounded content."
+                    if exc.action == "ask_user"
+                    else "AI found insufficient source context and did not generate unsupported content."
+                ),
+                status=ClarificationStatus.PENDING,
+            )
+        )
+        await db.commit()
+        return
     except ProviderGenerationError as exc:
         section.is_generating = False
         if exc.category in FAILOVER_ERROR_CATEGORIES:
@@ -454,6 +477,7 @@ async def _generate_section_content(
         section.id,
         db,
         user_id,
+        model_name=model,
     )
     prompt_tokens = _token_estimate(section.heading + str(section.workflow_metadata or {})) + 500
     completion_tokens = _token_estimate(content)

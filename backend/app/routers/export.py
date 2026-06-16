@@ -62,7 +62,7 @@ async def _get_sections(document: Document, db: AsyncSession) -> list[Section]:
 
 ALL_OVERRIDE_KEYS = [
     "organization_name", "title", "subtitle",
-    "include_toc", "include_cover_page", "include_page_numbers",
+    "include_toc", "include_cover_page", "include_page_numbers", "page_numbers",
     "paper_size", "orientation", "margins",
     "margin_top", "margin_bottom", "margin_left", "margin_right",
     "primary_color", "h1_color", "h2_color", "text_color",
@@ -75,6 +75,7 @@ ALL_OVERRIDE_KEYS = [
     "logo_url", "logo_position", "logo_height",
     "table_style", "code_theme",
     "watermark_text",
+    "h1_underline",
 ]
 
 
@@ -90,13 +91,15 @@ def _gather_export_settings(
     # Document-level overrides
     if document.export_settings:
         settings.update(document.export_settings)
+    if document.print_profile:
+        settings.update(document.print_profile)
     # Query param overrides (highest priority)
     for key in ALL_OVERRIDE_KEYS:
         val = query_params.get(key)
         if val is not None and val != "":
             settings[key] = val
     # Apply boolean coercion for string query params
-    for bool_key in ("include_toc", "include_cover_page", "include_page_numbers"):
+    for bool_key in ("include_toc", "include_cover_page", "include_page_numbers", "page_numbers", "h1_underline"):
         if bool_key in settings and isinstance(settings[bool_key], str):
             settings[bool_key] = settings[bool_key].lower() in ("true", "1", "yes")
     return normalize_settings(settings)
@@ -150,6 +153,7 @@ async def export_document(
     table_style: Optional[str] = Query(None),
     code_theme: Optional[str] = Query(None),
     watermark_text: Optional[str] = Query(None),
+    h1_underline: Optional[str] = Query(None),
     debug: Optional[bool] = Query(False, description="Save generated HTML to disk for debugging"),
     # Dependencies
     project: Project = Depends(verify_project_ownership),
@@ -171,7 +175,7 @@ async def export_document(
         "footer_left", "footer_center", "footer_right",
         "page_number_position", "page_number_format",
         "logo_url", "logo_position", "logo_height",
-        "table_style", "code_theme", "watermark_text",
+        "table_style", "code_theme", "watermark_text", "h1_underline",
     )}
     settings = _gather_export_settings(document, query_params, project)
     doc_title = document.title or "Documentation"

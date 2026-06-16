@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Menu, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { analysisApi } from '@/api/analysis';
+import { aiApi } from '@/api/ai';
 import { aiCredentialsApi } from '@/api/aiCredentials';
 import { documentsApi } from '@/api/documents';
 import { projectsApi } from '@/api/projects';
@@ -107,8 +108,10 @@ export function DocumentSetupPage() {
 
   const [setupState, setSetupState] = useState<DocumentSetupState>(INITIAL_STATE);
   const [showRailDrawer, setShowRailDrawer] = useState(false);
-  const [providerContext, setProviderContext] = useState<'recommendation' | 'generation' | null>(null);
+  const [providerContext, setProviderContext] = useState<'recommendation' | 'overview' | 'generation' | null>(null);
   const [resumeLoaded, setResumeLoaded] = useState(false);
+  const [projectOverviewDraft, setProjectOverviewDraft] = useState('');
+  const [overviewQuestions, setOverviewQuestions] = useState<string[]>([]);
 
   const { data: credentialList } = useQuery({
     queryKey: ['ai-credentials'],
@@ -274,6 +277,8 @@ export function DocumentSetupPage() {
   }, [analysisStatusQuery.data]);
 
   const recommendations = setupSnapshotQuery.data?.recommendations ?? [];
+  const setupSections = setupSnapshotQuery.data?.sections ?? [];
+  const setupSectionIds = setupSections.map((section) => section.id);
   const outlineProposal =
     setupSnapshotQuery.data?.outline_proposals.find((item) => item.status === 'draft') ||
     setupSnapshotQuery.data?.outline_proposals[0] ||
@@ -281,11 +286,12 @@ export function DocumentSetupPage() {
   const clarificationRequests = setupSnapshotQuery.data?.clarification_requests ?? [];
 
   const onDemandEstimateQuery = useQuery({
-    queryKey: ['generation-estimate', setupState.projectId, setupState.documentId, 'on-demand'],
-    queryFn: () => documentsApi.estimateGeneration(setupState.projectId!, setupState.documentId!, 'on-demand'),
+    queryKey: ['generation-estimate', setupState.projectId, setupState.documentId, 'on-demand', setupSectionIds.join(',')],
+    queryFn: () => documentsApi.estimateGeneration(setupState.projectId!, setupState.documentId!, 'on-demand', setupSectionIds),
     enabled:
       !!setupState.projectId &&
       !!setupState.documentId &&
+      setupSectionIds.length > 0 &&
       setupState.stage === 'generation-mode' &&
       hasActiveProvider,
     retry: false,
@@ -316,6 +322,17 @@ export function DocumentSetupPage() {
     },
     onError: (error: Error) => {
       toast.error(error.message);
+    },
+  });
+
+  const generateOverviewMutation = useMutation({
+    mutationFn: () => projectsApi.generateAiOverview(setupState.projectId!),
+    onSuccess: (overview) => {
+      setProjectOverviewDraft(overview.overview_md);
+      setOverviewQuestions(overview.questions || []);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Unable to generate the Project overview.');
     },
   });
 
@@ -428,6 +445,30 @@ export function DocumentSetupPage() {
     });
     await setupSnapshotQuery.refetch();
     setSetupState((current) => ({ ...current, stage: 'template-selection' }));
+  };
+
+  const saveOverviewAndContinue = async () => {
+    if (!setupState.projectId || !setupState.documentId || !projectOverviewDraft.trim()) return;
+    try {
+      const contextMd = projectOverviewDraft.trim();
+      await aiApi.updateContext(setupState.projectId, contextMd);
+      await documentsApi.updateDocument(setupState.projectId, setupState.documentId, {
+        context: contextMd,
+        setup_stage: 'template_selection',
+      });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['project', String(setupState.projectId)] }),
+        queryClient.invalidateQueries({ queryKey: ['ai-context', setupState.projectId] }),
+        setupSnapshotQuery.refetch(),
+      ]);
+      setSetupState((current) => ({
+        ...current,
+        projectContext: contextMd,
+        stage: 'template-selection',
+      }));
+    } catch (error) {
+      toast.error('Unable to save the Project overview.');
+    }
   };
 
   const selectTemplate = async (
@@ -558,7 +599,13 @@ export function DocumentSetupPage() {
           setup_stage: 'editor_ready',
         });
       } else {
-        await documentsApi.createGenerationRun(setupState.projectId, setupState.documentId, mode);
+        await documentsApi.createGenerationRun(
+          setupState.projectId,
+          setupState.documentId,
+          mode,
+          mode === 'on-demand' ? setupSectionIds : undefined,
+          true,
+        );
         await documentsApi.updateDocument(setupState.projectId, setupState.documentId, {
           setup_stage: 'editor_ready',
         });
@@ -572,6 +619,8 @@ export function DocumentSetupPage() {
   const providerActionLabel =
     providerContext === 'recommendation'
       ? 'AI-personalized recommendations'
+      : providerContext === 'overview'
+        ? 'AI Project overview'
       : 'AI-powered generation';
 
   const loadingResume = !!resumeProjectId && !resumeLoaded;
@@ -605,6 +654,9 @@ export function DocumentSetupPage() {
                 onComplete={() => {
                   if (providerContext === 'recommendation') {
                     void requestAiRecommendationMutation.mutateAsync();
+                  } else if (providerContext === 'overview') {
+                    setProviderContext(null);
+                    void generateOverviewMutation.mutateAsync();
                   } else {
                     setProviderContext(null);
                   }
@@ -630,6 +682,20 @@ export function DocumentSetupPage() {
                 <AnalysisFactsStep
                   analysisStatus={analysisStatusQuery.data || null}
                   analysisResults={analysisResultsQuery.data}
+                  projectOverviewDraft={projectOverviewDraft}
+                  overviewQuestions={overviewQuestions}
+                  hasActiveProvider={hasActiveProvider}
+                  isGeneratingOverview={generateOverviewMutation.isPending}
+                  onOverviewChange={setProjectOverviewDraft}
+                  onGenerateOverview={() => {
+                    if (!hasActiveProvider) {
+                      setProviderContext('overview');
+                      return;
+                    }
+                    void generateOverviewMutation.mutateAsync();
+                  }}
+                  onSaveOverviewAndContinue={() => void saveOverviewAndContinue()}
+                  onConfigureProvider={() => setProviderContext('overview')}
                   onContinue={() => void continueFromAnalysis()}
                   onRetry={() => void analysisStatusQuery.refetch()}
                 />

@@ -80,6 +80,14 @@ class TestExportSettingsSchema:
         assert result["paper_size"] == "letter"
         assert result["body_font_size"] == "10pt"  # default
 
+    def test_normalize_legacy_page_numbers_alias(self):
+        result = normalize_settings({"page_numbers": False})
+        assert result["include_page_numbers"] is False
+
+    def test_h1_underline_disabled_by_default(self):
+        result = normalize_settings({})
+        assert result["h1_underline"] is False
+
 
 # ── Markdown Export ────────────────────────────────────────────
 
@@ -226,6 +234,13 @@ class TestHtmlExport:
         """The cover page should suppress headers/footers via @page :first."""
         result = export_html(sample_sections, "Proj", "Doc")
         assert "@page :first" in result
+
+    def test_no_h1_underline_unless_profile_selects_it(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc")
+        assert "border-bottom:0;" in result
+
+        underlined = export_html(sample_sections, "Proj", "Doc", {"h1_underline": True})
+        assert "border-bottom:2px solid var(--primary-color);" in underlined
 
 
 # ── PDF Export ────────────────────────────────────────────────

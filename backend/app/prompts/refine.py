@@ -20,6 +20,7 @@ def build_refine_prompt(
     audience = project_context.get("audience", "developers")
     preferred_terms = project_context.get("preferred_terms", "")
     custom_instructions = project_context.get("custom_instructions", "")
+    source_files = project_context.get("source_files", [])
 
     lines = [
         f"You are refining a documentation section for a software project.",
@@ -31,6 +32,8 @@ def build_refine_prompt(
     ]
     if preferred_terms:
         lines.append(f"- **Preferred Terminology**: {preferred_terms}")
+    if source_files:
+        lines.append(f"- **Source Files**: {', '.join(source_files[:20])}")
     if custom_instructions:
         lines += [
             f"",
@@ -60,13 +63,12 @@ def build_refine_prompt(
         f"Apply the instruction above to improve the section content. "
         f"Maintain the {tone} tone appropriate for {audience}.",
         f"",
-        f"Only preserve or add claims that are supported by the current content, project brief, template instructions, or the user's refinement instruction.",
+        f"Only preserve or add claims that are supported by the current content, project brief, template instructions, source files, or the user's refinement instruction.",
         f"Do not invent missing source behavior, commands, APIs, or business rules.",
         f"",
         f"Choose exactly one JSON response shape:",
         f'{{"content": "<the improved section content in markdown>"}}',
         f'{{"action": "ask_user", "question": "<one targeted question asking for missing detail>"}}',
-        f'{{"action": "insufficient_context", "reason": "<why the requested refinement is unsupported>"}}',
         f"Return only valid JSON. No preamble.",
     ]
 

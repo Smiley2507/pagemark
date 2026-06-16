@@ -265,3 +265,49 @@ BUILTIN_TEMPLATES = [
         ],
     },
 ]
+
+
+DEFAULT_TECHNICAL_REPORT_PROFILE = {
+    "name": "Technical report",
+    "paper_size": "letter",
+    "orientation": "portrait",
+    "margins": "normal",
+    "include_cover_page": True,
+    "include_toc": True,
+    "include_page_numbers": True,
+    "page_number_position": "bottom-center",
+    "page_number_format": "page-n-of-m",
+    "logo_position": "title-page",
+    "header_left": "",
+    "header_center": "",
+    "header_right": "",
+    "footer_left": "",
+    "footer_center": "",
+    "footer_right": "",
+    "h1_underline": False,
+    "body_font_size": "10pt",
+    "h1_font_size": "22pt",
+    "h2_font_size": "16pt",
+    "table_style": "striped",
+    "code_theme": "github",
+}
+
+
+for template in BUILTIN_TEMPLATES:
+    template.setdefault(
+        "structure_guidance",
+        {
+            "outline_role": "source-grounded technical report structure",
+            "review_required": True,
+            "adapt_template": "Use Analysis facts to rename, reorder, add, or drop sections before approval.",
+        },
+    )
+    template.setdefault(
+        "section_generation_guidance",
+        {
+            "evidence_required": True,
+            "draft_state": "generated_draft",
+            "maintainer_review_required": True,
+        },
+    )
+    template.setdefault("recommended_print_profile", DEFAULT_TECHNICAL_REPORT_PROFILE.copy())

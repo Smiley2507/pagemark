@@ -36,6 +36,9 @@ async def seed_builtin_templates() -> None:
                 tmpl.purpose = data["purpose"]
                 tmpl.intended_audience = data["intended_audience"]
                 tmpl.expected_outcome = data["expected_outcome"]
+                tmpl.structure_guidance = data.get("structure_guidance")
+                tmpl.section_generation_guidance = data.get("section_generation_guidance")
+                tmpl.recommended_print_profile = data.get("recommended_print_profile")
                 tmpl.compatible_repository_traits = data["compatible_repository_traits"]
                 tmpl.estimated_generation_scope = data["estimated_generation_scope"]
                 tmpl.outline_preview = data["sections_json"]
@@ -50,6 +53,9 @@ async def seed_builtin_templates() -> None:
                     purpose=data["purpose"],
                     intended_audience=data["intended_audience"],
                     expected_outcome=data["expected_outcome"],
+                    structure_guidance=data.get("structure_guidance"),
+                    section_generation_guidance=data.get("section_generation_guidance"),
+                    recommended_print_profile=data.get("recommended_print_profile"),
                     compatible_repository_traits=data["compatible_repository_traits"],
                     estimated_generation_scope=data["estimated_generation_scope"],
                     outline_preview=data["sections_json"],

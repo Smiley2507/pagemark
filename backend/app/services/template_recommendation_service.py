@@ -117,6 +117,11 @@ def _template_outline(template: Template) -> list[dict[str, Any]]:
     return outline
 
 
+def _template_print_profile(template: Template) -> dict[str, Any] | None:
+    profile = template.recommended_print_profile
+    return dict(profile) if isinstance(profile, dict) else None
+
+
 def _score_template(template: Template, document: Document, facts: dict[str, Any]) -> tuple[float, list[str]]:
     score = 0.25
     reasons: list[str] = []
@@ -353,6 +358,8 @@ async def create_outline_proposal(
             raise HTTPException(status_code=404, detail="Template not found")
         outline_json = _template_outline(template)
         document.template_id = template.id
+        if document.print_profile is None:
+            document.print_profile = _template_print_profile(template)
     elif outline is not None:
         outline_json = outline
         await create_custom_outline_seeded_recommendation(

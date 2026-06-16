@@ -33,6 +33,7 @@ def build_section_prompt(
     functions = analysis.get("functions", [])
     endpoints = analysis.get("endpoints", [])
     dependencies = analysis.get("dependencies", [])
+    source_files = analysis.get("source_files", [])
     languages = analysis.get("languages", "")
     file_count = analysis.get("file_count", 0)
     complexity_notes = analysis.get("complexity_notes", "")
@@ -73,6 +74,9 @@ def build_section_prompt(
     if dependencies:
         dep_list = ", ".join(dependencies[:20]) if isinstance(dependencies, list) else str(dependencies)
         lines.append(f"- **Dependencies**: {dep_list}")
+    if source_files:
+        file_list = ", ".join(source_files[:20]) if isinstance(source_files, list) else str(source_files)
+        lines.append(f"- **Source Files**: {file_list}")
     if complexity_notes:
         lines.append(f"- **Complexity Notes**: {complexity_notes}")
 
@@ -104,8 +108,8 @@ def build_section_prompt(
         f"Write the **{section_heading}** section of the documentation for {name}.",
         f"Use a {tone} tone appropriate for {audience}.",
         "Be specific to this project. Prefer concrete files, APIs, commands, components, and observed source facts over generic best practices.",
-        "If source evidence is thin, say what is known and ask for the missing detail instead of inventing behavior.",
-        "Do not infer product behavior, API semantics, deployment details, security guarantees, or business rules unless they are present in the Project Context, user clarification, template guidance, or Codebase Analysis.",
+        "If source evidence is thin, provide the best grounded draft you can and clearly mark the assumptions. Ask one targeted question only if a single missing fact blocks the section.",
+        "Do not invent product behavior, API semantics, deployment details, security guarantees, or business rules that are not supported by the Project Context, user clarification, template guidance, or Codebase Analysis.",
         "Use concise Markdown with useful headings, lists, code blocks, and examples only when they add real clarity.",
     ]
     if custom_instructions:
@@ -123,8 +127,7 @@ def build_section_prompt(
         "Choose exactly one JSON response shape:",
         '{"content": "<grounded markdown content>", "confidence_score": <integer 0-100 reflecting confidence based on provided evidence>}',
         '{"action": "ask_user", "question": "<one targeted question asking for the missing detail>"}',
-        '{"action": "insufficient_context", "reason": "<why the available facts cannot support this section>"}',
-        "Use 'ask_user' when a specific answer would unblock the section. Use 'insufficient_context' when the request asks for unsupported prose and no focused clarification is apparent.",
+        "Use 'ask_user' when a specific answer would unblock the section.",
         "Do not return any text outside the JSON object. No preamble.",
     ]
 

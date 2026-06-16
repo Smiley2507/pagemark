@@ -12,6 +12,9 @@ class TemplateCreateRequest(BaseModel):
     purpose: Optional[str] = None
     intended_audience: Optional[str] = None
     expected_outcome: Optional[str] = None
+    structure_guidance: Optional[dict[str, Any]] = None
+    section_generation_guidance: Optional[dict[str, Any]] = None
+    recommended_print_profile: Optional[dict[str, Any]] = None
     compatible_repository_traits: Optional[dict[str, Any]] = None
     estimated_generation_scope: Optional[dict[str, Any]] = None
     outline_preview: Optional[List[Any]] = None
@@ -27,6 +30,9 @@ class TemplateUpdateRequest(BaseModel):
     purpose: Optional[str] = None
     intended_audience: Optional[str] = None
     expected_outcome: Optional[str] = None
+    structure_guidance: Optional[dict[str, Any]] = None
+    section_generation_guidance: Optional[dict[str, Any]] = None
+    recommended_print_profile: Optional[dict[str, Any]] = None
     compatible_repository_traits: Optional[dict[str, Any]] = None
     estimated_generation_scope: Optional[dict[str, Any]] = None
     outline_preview: Optional[List[Any]] = None
@@ -45,6 +51,9 @@ class TemplateResponse(BaseModel):
     purpose: Optional[str]
     intended_audience: Optional[str]
     expected_outcome: Optional[str]
+    structure_guidance: Optional[dict[str, Any]]
+    section_generation_guidance: Optional[dict[str, Any]]
+    recommended_print_profile: Optional[dict[str, Any]]
     compatible_repository_traits: Optional[dict[str, Any]]
     estimated_generation_scope: Optional[dict[str, Any]]
     outline_preview: Optional[List[Any]]

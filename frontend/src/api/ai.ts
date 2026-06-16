@@ -37,6 +37,52 @@ export interface ChatThread {
   updated_at: string;
 }
 
+export type AIProposedChangeType =
+  | 'generate_section'
+  | 'rewrite_selection'
+  | 'rename_section'
+  | 'add_section'
+  | 'reorder_sections'
+  | 'apply_outline_diff';
+
+export interface AIProposedChange {
+  id: number;
+  work_run_id: number;
+  document_id: number;
+  section_id?: number | null;
+  change_type: AIProposedChangeType;
+  status: 'proposed' | 'accepted' | 'rejected' | 'undone';
+  title: string;
+  rationale?: string | null;
+  before?: Record<string, unknown> | null;
+  after: Record<string, unknown>;
+  preview_markdown?: string | null;
+  accepted_at?: string | null;
+  rejected_at?: string | null;
+  undone_at?: string | null;
+  created_at: string;
+}
+
+export interface AIWorkRun {
+  id: number;
+  document_id: number;
+  provider?: string | null;
+  model?: string | null;
+  prompt_context: Record<string, unknown>;
+  status: 'pending' | 'running' | 'proposed' | 'partially_accepted' | 'accepted' | 'rejected' | 'undone' | 'failed';
+  estimated_prompt_tokens?: number | null;
+  estimated_completion_tokens?: number | null;
+  estimated_cost?: number | null;
+  actual_prompt_tokens?: number | null;
+  actual_completion_tokens?: number | null;
+  actual_cost?: number | null;
+  undo_group?: Record<string, unknown> | null;
+  proposed_changes: AIProposedChange[];
+  created_at: string;
+  updated_at: string;
+  completed_at?: string | null;
+}
+
 // ── Section AI ────────────────────────────────────────────────────────────────
 
 export const aiApi = {
@@ -74,6 +120,72 @@ export const aiApi = {
   async suggestStructure(documentId: number): Promise<StructuralSuggestion[]> {
     const { data } = await apiClient.post(`/documents/${documentId}/ai/suggest-structure`);
     return data.suggestions ?? [];
+  },
+
+  async createWorkRun(
+    projectId: number,
+    documentId: number,
+    payload: {
+      provider?: string | null;
+      model?: string | null;
+      prompt_context?: Record<string, unknown>;
+      estimated_prompt_tokens?: number;
+      estimated_completion_tokens?: number;
+      estimated_cost?: number;
+      changes?: Array<{
+        change_type: AIProposedChangeType;
+        title: string;
+        section_id?: number | null;
+        rationale?: string | null;
+        before?: Record<string, unknown> | null;
+        after: Record<string, unknown>;
+        preview_markdown?: string | null;
+      }>;
+    },
+  ): Promise<AIWorkRun> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/ai/work-runs`,
+      payload,
+    );
+    return data;
+  },
+
+  async listProposedChanges(projectId: number, documentId: number): Promise<AIProposedChange[]> {
+    const { data } = await apiClient.get(
+      `/projects/${projectId}/documents/${documentId}/ai/proposed-changes`,
+    );
+    return data.proposed_changes ?? [];
+  },
+
+  async previewProposedChange(projectId: number, documentId: number, changeId: number): Promise<{
+    change: AIProposedChange;
+    preview: Record<string, unknown>;
+  }> {
+    const { data } = await apiClient.get(
+      `/projects/${projectId}/documents/${documentId}/ai/proposed-changes/${changeId}/preview`,
+    );
+    return data;
+  },
+
+  async acceptProposedChange(projectId: number, documentId: number, changeId: number): Promise<AIProposedChange> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/ai/proposed-changes/${changeId}/accept`,
+    );
+    return data;
+  },
+
+  async rejectProposedChange(projectId: number, documentId: number, changeId: number): Promise<AIProposedChange> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/ai/proposed-changes/${changeId}/reject`,
+    );
+    return data;
+  },
+
+  async undoWorkRun(projectId: number, documentId: number, runId: number): Promise<AIWorkRun> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/ai/work-runs/${runId}/undo`,
+    );
+    return data;
   },
 
   /** Generate a documentation outline for a project */

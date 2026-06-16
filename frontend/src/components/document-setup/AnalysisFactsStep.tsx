@@ -18,6 +18,14 @@ import type { AnalysisResults, AnalysisStatus } from '@/types';
 interface AnalysisFactsStepProps {
   analysisStatus: AnalysisStatus | null;
   analysisResults?: AnalysisResults | null;
+  projectOverviewDraft?: string;
+  overviewQuestions?: string[];
+  hasActiveProvider: boolean;
+  isGeneratingOverview?: boolean;
+  onOverviewChange?: (value: string) => void;
+  onGenerateOverview?: () => void;
+  onSaveOverviewAndContinue?: () => void;
+  onConfigureProvider?: () => void;
   onContinue: () => void;
   onRetry?: () => void;
 }
@@ -88,6 +96,14 @@ function countFiles(node?: { type: string; children?: unknown[] }): number {
 export function AnalysisFactsStep({
   analysisStatus,
   analysisResults,
+  projectOverviewDraft,
+  overviewQuestions = [],
+  hasActiveProvider,
+  isGeneratingOverview = false,
+  onOverviewChange,
+  onGenerateOverview,
+  onSaveOverviewAndContinue,
+  onConfigureProvider,
   onContinue,
   onRetry,
 }: AnalysisFactsStepProps) {
@@ -218,6 +234,60 @@ export function AnalysisFactsStep({
         </Surface>
       </div>
 
+      {isComplete && (
+        <Surface variant="panel" padding="lg" className="space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="text-body font-semibold text-text-primary">Project overview draft</h2>
+              <p className="mt-1 text-meta text-text-secondary">
+                Turn Analysis facts into a maintainer-approved brief before choosing templates and generating sections.
+              </p>
+            </div>
+            {!projectOverviewDraft && (
+              hasActiveProvider ? (
+                <Button onClick={onGenerateOverview} disabled={isGeneratingOverview}>
+                  {isGeneratingOverview ? 'Creating overview...' : 'Create AI overview'}
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={onConfigureProvider}>
+                  Configure provider
+                </Button>
+              )
+            )}
+          </div>
+
+          {projectOverviewDraft ? (
+            <div className="space-y-3">
+              <textarea
+                value={projectOverviewDraft}
+                onChange={(event) => onOverviewChange?.(event.target.value)}
+                rows={12}
+                className="w-full resize-y rounded-md border border-input bg-canvas px-3 py-2 font-mono text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              {overviewQuestions.length > 0 && (
+                <Notice variant="warning" title="Questions to confirm">
+                  <ul className="space-y-1">
+                    {overviewQuestions.map((question) => (
+                      <li key={question}>{question}</li>
+                    ))}
+                  </ul>
+                </Notice>
+              )}
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={onSaveOverviewAndContinue}>Save overview and continue</Button>
+                <Button variant="outline" onClick={onGenerateOverview} disabled={isGeneratingOverview || !hasActiveProvider}>
+                  Regenerate
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Notice variant="generation" title="Recommended next step">
+              Create and review a Project overview so templates, outlines, and generated drafts share the same corrected context.
+            </Notice>
+          )}
+        </Surface>
+      )}
+
       <div className="flex flex-wrap gap-3">
         {isFailed && onRetry && (
           <Button variant="outline" onClick={onRetry}>
@@ -225,8 +295,8 @@ export function AnalysisFactsStep({
           </Button>
         )}
         {(isComplete || isFailed) && (
-          <Button onClick={onContinue}>
-            Continue
+          <Button variant={isComplete && !projectOverviewDraft ? 'outline' : 'default'} onClick={onContinue}>
+            {isComplete && !projectOverviewDraft ? 'Continue without overview' : 'Continue'}
           </Button>
         )}
         {isRunning && (

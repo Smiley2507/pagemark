@@ -1,5 +1,6 @@
 import json
 import secrets
+import asyncio
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
@@ -19,6 +20,7 @@ from app.models.document import Document, Section, SectionStatus
 from typing import List
 from app.schemas.project import (
     AiContextAnalysisSummary,
+    AiProjectOverviewResponse,
     AiContextProjectSummary,
     AiContextResponse,
     ProjectCreateRequest,
@@ -51,7 +53,8 @@ from app.services.analysis_service import (
     get_latest_analysis,
 )
 from app.workers.analysis_worker import analyze_project_task, clone_and_analyze_task
-from app.services import git_service, github_service, crypto_service, activity_service
+from app.services import git_service, github_service, crypto_service, activity_service, ai_credential_service
+from app.services.ai_service import AiServiceError, complete_text
 from app.services.project_summary_service import summarize_project
 from app.models.oauth_token import OAuthToken
 from app.config import settings
@@ -1070,6 +1073,60 @@ async def get_project_ai_context(
     analysis = await get_latest_analysis(project_id, db)
     effective_exclusions = await get_effective_exclusions(project_id, db)
     return _build_ai_context_response(project, analysis, effective_exclusions)
+
+
+@router.post("/{project_id}/ai-context/overview", response_model=AiProjectOverviewResponse)
+async def generate_project_overview(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await _get_project(project_id, current_user, db)
+    analysis = await get_latest_analysis(project_id, db)
+    if not analysis or analysis.status != AnalysisStatus.COMPLETED:
+        raise HTTPException(status_code=400, detail="Completed Analysis is required before generating a Project overview.")
+
+    credential = await ai_credential_service.get_active_credential(db, current_user.id)
+    if credential is None:
+        raise HTTPException(status_code=400, detail="Active provider credential required for AI overview generation.")
+
+    effective_exclusions = await get_effective_exclusions(project_id, db)
+    context = _build_ai_context_response(project, analysis, effective_exclusions).model_dump(mode="json")
+    prompt = (
+        "Create a maintainer-reviewable Project Overview from the provided AI Context. "
+        "Ground every project-specific claim in the available facts. Do not invent behavior. "
+        "If important product intent is missing, list focused questions instead of filling gaps.\n\n"
+        "Return only JSON with this shape: "
+        "{\"overview_md\":\"<markdown overview>\",\"questions\":[\"<question>\"],\"confidence_score\":<0-100>}.\n\n"
+        f"AI Context:\n{json.dumps(context, indent=2)[:12000]}"
+    )
+    try:
+        raw = await asyncio.to_thread(
+            complete_text,
+            "Return only valid JSON for a grounded Project Overview.",
+            prompt,
+            credential.provider,
+            credential.api_key,
+            credential.model_id,
+            max_tokens=1800,
+        )
+    except AiServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise HTTPException(status_code=502, detail="AI returned invalid JSON for the Project overview.") from exc
+
+    overview = str(parsed.get("overview_md") or "").strip()
+    if not overview:
+        raise HTTPException(status_code=502, detail="AI did not return a Project overview.")
+    questions = parsed.get("questions") if isinstance(parsed.get("questions"), list) else []
+    return AiProjectOverviewResponse(
+        overview_md=overview,
+        questions=[str(item) for item in questions[:8]],
+        confidence_score=int(parsed.get("confidence_score") or 0),
+    )
 
 
 @router.get("/{project_id}/analysis/outline-diff", response_model=OutlineDiffResponse)
