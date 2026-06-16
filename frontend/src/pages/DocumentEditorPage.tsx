@@ -1056,7 +1056,7 @@ export function DocumentEditorPage() {
         projectName={document?.title || 'Document'}
         open={exportModalOpen}
         onClose={() => setExportModalOpen(false)}
-        initialSettings={undefined}
+        initialSettings={document?.print_profile || document?.export_settings}
       />
 
       <ShareDialog

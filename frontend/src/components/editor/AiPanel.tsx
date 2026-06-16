@@ -1,13 +1,27 @@
 import { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, Check, ChevronDown, Eye, Loader2, Save, X } from 'lucide-react';
+import { AlertCircle, Check, ChevronDown, Eye, Loader2, RotateCcw, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { analysisApi } from '@/api/analysis';
-import { useRefineSection, useMessages, useStreamMessage, useThreads, useCreateThread, useSuggestStructure, useUpdateProjectContext } from '@/hooks/useAI';
+import {
+  useAcceptAiProposedChange,
+  useAiProposedChanges,
+  useCreateAiWorkRun,
+  useRefineSection,
+  useMessages,
+  useRejectAiProposedChange,
+  useStreamMessage,
+  useThreads,
+  useCreateThread,
+  useSuggestStructure,
+  useUndoAiWorkRun,
+  useUpdateProjectContext,
+} from '@/hooks/useAI';
 import { useAiCredentials, useAiProviderModels } from '@/hooks/useAiCredentials';
 import { useAiStore } from '@/store/aiStore';
 import type { Section } from '@/types';
 import { DiffViewer } from './DiffViewer';
+import type { AIProposedChange } from '@/api/ai';
 
 import { AiPanelHeader } from './ai/AiPanelHeader';
 import { AiPanelEmptyState } from './ai/AiPanelEmptyState';
@@ -57,6 +71,78 @@ const PROVIDER_LABELS: Record<string, string> = {
   'opencode-go': 'OpenCode Go',
 };
 
+function ProposedChangeCard({
+  change,
+  onAccept,
+  onReject,
+  onUndo,
+  isAccepting,
+  isRejecting,
+  isUndoing,
+}: {
+  change: AIProposedChange;
+  onAccept: (changeId: number) => void;
+  onReject: (changeId: number) => void;
+  onUndo: (runId: number) => void;
+  isAccepting: boolean;
+  isRejecting: boolean;
+  isUndoing: boolean;
+}) {
+  const beforeText = typeof change.before?.content_md === 'string' ? change.before.content_md : '';
+  const afterText = typeof change.after?.content_md === 'string'
+    ? change.after.content_md
+    : typeof change.after?.content === 'string'
+      ? change.after.content
+      : change.preview_markdown || '';
+  const isTextChange = change.change_type === 'rewrite_selection' || change.change_type === 'generate_section';
+  const canUndo = change.status === 'accepted';
+
+  return (
+    <div className="rounded-lg border border-border bg-panel">
+      <div className="flex items-start justify-between gap-2 border-b border-border px-3 py-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold text-text-primary">{change.title}</p>
+          <p className="text-[10px] capitalize text-text-muted">{change.change_type.replaceAll('_', ' ')} · {change.status}</p>
+        </div>
+        <div className="flex shrink-0 gap-1">
+          {change.status === 'proposed' && (
+            <>
+              <Button size="sm" className="h-7 gap-1 text-xs" onClick={() => onAccept(change.id)} disabled={isAccepting}>
+                {isAccepting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                Accept
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => onReject(change.id)} disabled={isRejecting}>
+                <X className="h-3 w-3" />
+                Reject
+              </Button>
+            </>
+          )}
+          {canUndo && (
+            <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => onUndo(change.work_run_id)} disabled={isUndoing}>
+              {isUndoing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+              Undo
+            </Button>
+          )}
+        </div>
+      </div>
+      {change.rationale && <p className="px-3 pt-2 text-[11px] text-text-secondary">{change.rationale}</p>}
+      <div className="max-h-72 overflow-auto p-3">
+        {isTextChange ? (
+          <DiffViewer
+            oldText={beforeText}
+            newText={afterText}
+            viewMode="unified"
+          />
+        ) : (
+          <pre className="whitespace-pre-wrap rounded bg-canvas p-2 text-[11px] leading-relaxed text-text-secondary">
+            {JSON.stringify(change.after, null, 2)}
+          </pre>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function AiPanel({
   projectId,
   documentId,
@@ -84,13 +170,17 @@ export function AiPanel({
   const [showContextEditor, setShowContextEditor] = useState(false);
   const [contextDraft, setContextDraft] = useState(projectContextMd || '');
   const [proposal, setProposal] = useState<AiProposal | null>(null);
-  const [diffPreview, setDiffPreview] = useState<{ original: string; refined: string } | null>(null);
   const [structureSuggestions, setStructureSuggestions] = useState<import('@/api/ai').StructuralSuggestion[] | null>(null);
   const [contextAction, setContextAction] = useState<{ action: 'ask_user' | 'insufficient_context'; question: string } | null>(null);
   const [contextActionAnswer, setContextActionAnswer] = useState('');
 
   const refineSection = useRefineSection();
   const suggestStructure = useSuggestStructure();
+  const createAiWorkRun = useCreateAiWorkRun(projectId, documentId);
+  const acceptAiChange = useAcceptAiProposedChange(projectId, documentId);
+  const rejectAiChange = useRejectAiProposedChange(projectId, documentId);
+  const undoAiWorkRun = useUndoAiWorkRun(projectId, documentId);
+  const { data: proposedChanges = [] } = useAiProposedChanges(projectId, documentId);
   const updateProjectContext = useUpdateProjectContext(projectId);
   const { data: credentialsData, isLoading: credentialsLoading } = useAiCredentials();
   const activeCredential = credentialsData?.credentials.find((credential) => credential.is_active);
@@ -237,6 +327,43 @@ export function AiPanel({
     setStructureSuggestions((prev) => (prev ? prev.filter((_, i) => i !== index) : null));
   };
 
+  const queueSectionContentChange = async ({
+    title,
+    content,
+    rationale,
+  }: {
+    title: string;
+    content: string;
+    rationale?: string;
+  }) => {
+    if (!activeSectionId) {
+      toast.error('Select a section before preparing an AI edit');
+      return;
+    }
+    await createAiWorkRun.mutateAsync({
+      provider: activeCredential?.provider || 'chat',
+      model: selectedModel || activeCredential?.model_id || 'unspecified',
+      prompt_context: {
+        project_id: projectId,
+        document_id: documentId,
+        section_id: activeSectionId,
+        section_heading: activeSectionHeading,
+      },
+      changes: [
+        {
+          change_type: 'rewrite_selection',
+          title,
+          section_id: activeSectionId,
+          rationale,
+          before: { content_md: activeSectionContent },
+          after: { content_md: content },
+          preview_markdown: content,
+        },
+      ],
+    });
+    setProposal(null);
+  };
+
   const handleApplyAllSuggestions = async () => {
     if (!structureSuggestions || !documentId) return;
     const renameSuggestions = structureSuggestions.filter(
@@ -282,7 +409,11 @@ export function AiPanel({
           setContextActionAnswer('');
           return;
         }
-        setDiffPreview({ original: activeSectionContent, refined: data.refined });
+        await queueSectionContentChange({
+          title: type === 'expand' ? 'Expand section' : 'Refine section',
+          content: data.refined,
+          rationale: inst,
+        });
       }
     } catch {
       toast.error(`AI ${type} failed`);
@@ -299,11 +430,15 @@ export function AiPanel({
 
   const acceptProposal = () => {
     if (!proposal) return;
-    if (proposal.kind === 'rewrite') onApplyContent(proposal.content);
-    if (proposal.kind === 'replace_selection') onReplaceSelection(proposal.content);
-    if (proposal.kind === 'insert') onInsertAtCursor(proposal.content);
-    if (proposal.kind === 'append') onAppendToSection(proposal.content);
-    setProposal(null);
+    if (proposal.kind !== 'rewrite') {
+      toast.error('Only section rewrites can be queued for review right now');
+      return;
+    }
+    void queueSectionContentChange({
+      title: 'Chat proposed rewrite',
+      content: proposal.content,
+      rationale: 'Created from assistant chat output.',
+    });
   };
 
   const proposalLabel = proposal?.kind === 'rewrite'
@@ -386,6 +521,29 @@ export function AiPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto">
+        {proposedChanges.length > 0 && (
+          <div className="space-y-2 border-b border-separator px-3 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold text-text-primary">AI Proposed Changes</p>
+                <p className="text-[10px] text-text-muted">Preview, accept, reject, or undo explicit AI edits.</p>
+              </div>
+            </div>
+            {proposedChanges.slice(0, 5).map((change) => (
+              <ProposedChangeCard
+                key={change.id}
+                change={change}
+                onAccept={(changeId) => acceptAiChange.mutate(changeId)}
+                onReject={(changeId) => rejectAiChange.mutate(changeId)}
+                onUndo={(runId) => undoAiWorkRun.mutate(runId)}
+                isAccepting={acceptAiChange.isPending}
+                isRejecting={rejectAiChange.isPending}
+                isUndoing={undoAiWorkRun.isPending}
+              />
+            ))}
+          </div>
+        )}
+
         {contextAction && (
           <div className="mx-3 mt-3 space-y-2 rounded-lg border border-warning bg-warning/5 p-3">
             <div className="flex items-start gap-2">
@@ -511,46 +669,6 @@ export function AiPanel({
               onClose={() => setStructureSuggestions(null)}
               isApplying={suggestStructure.isPending}
             />
-          </div>
-        )}
-
-        {diffPreview && (
-          <div className="px-3 py-3">
-            <div className="rounded-lg border border-border bg-panel">
-              <div className="flex items-center justify-between border-b border-border px-4 py-2">
-                <h4 className="text-sm font-medium">Review Changes</h4>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="success"
-                    size="sm"
-                    onClick={() => {
-                      onApplyContent(diffPreview.refined);
-                      setDiffPreview(null);
-                    }}
-                    className="h-7 gap-1 text-xs"
-                  >
-                    <Check className="h-3 w-3" />
-                    Apply
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDiffPreview(null)}
-                    className="h-7 gap-1 text-xs"
-                  >
-                    <X className="h-3 w-3" />
-                    Discard
-                  </Button>
-                </div>
-              </div>
-              <div className="max-h-80 overflow-y-auto p-3">
-                <DiffViewer
-                  oldText={diffPreview.original}
-                  newText={diffPreview.refined}
-                  viewMode="side-by-side"
-                />
-              </div>
-            </div>
           </div>
         )}
 

@@ -557,6 +557,7 @@ export interface ExportSettings {
   footer_center?: string;
   footer_right?: string;
   page_numbers?: boolean;
+  h1_underline?: boolean;
   page_number_position?: 'left' | 'center' | 'right';
   page_number_format?: 'number' | 'page-n' | 'page-n-of-m';
   paper_size?: 'a4' | 'letter';

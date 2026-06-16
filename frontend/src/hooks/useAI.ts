@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { aiApi } from '@/api/ai';
 import { toast } from 'sonner';
 
+type CreateAiWorkRunPayload = Parameters<typeof aiApi.createWorkRun>[2];
+
 export const useGenerateSection = (projectId: number) => {
   const queryClient = useQueryClient();
   
@@ -156,6 +158,78 @@ export const useSuggestStructure = () => {
     onError: (error) => {
       console.error('Failed to suggest structure:', error);
       toast.error('Failed to generate structural suggestions');
+    },
+  });
+};
+
+export const useAiProposedChanges = (projectId: number, documentId: number) => {
+  return useQuery({
+    queryKey: ['ai-proposed-changes', projectId, documentId],
+    queryFn: () => aiApi.listProposedChanges(projectId, documentId),
+    enabled: projectId > 0 && documentId > 0,
+  });
+};
+
+export const useCreateAiWorkRun = (projectId: number, documentId: number) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: CreateAiWorkRunPayload) => aiApi.createWorkRun(projectId, documentId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-proposed-changes', projectId, documentId] });
+      toast.success('AI change queued for review');
+    },
+    onError: () => {
+      toast.error('Failed to queue AI change');
+    },
+  });
+};
+
+export const useAcceptAiProposedChange = (projectId: number, documentId: number) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (changeId: number) => aiApi.acceptProposedChange(projectId, documentId, changeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-proposed-changes', projectId, documentId] });
+      queryClient.invalidateQueries({ queryKey: ['document-sections', projectId, documentId] });
+      queryClient.invalidateQueries({ queryKey: ['document-meta', projectId, documentId] });
+      toast.success('AI change accepted');
+    },
+    onError: () => {
+      toast.error('Failed to accept AI change');
+    },
+  });
+};
+
+export const useRejectAiProposedChange = (projectId: number, documentId: number) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (changeId: number) => aiApi.rejectProposedChange(projectId, documentId, changeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-proposed-changes', projectId, documentId] });
+      toast.success('AI change rejected');
+    },
+    onError: () => {
+      toast.error('Failed to reject AI change');
+    },
+  });
+};
+
+export const useUndoAiWorkRun = (projectId: number, documentId: number) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (runId: number) => aiApi.undoWorkRun(projectId, documentId, runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ai-proposed-changes', projectId, documentId] });
+      queryClient.invalidateQueries({ queryKey: ['document-sections', projectId, documentId] });
+      queryClient.invalidateQueries({ queryKey: ['document-meta', projectId, documentId] });
+      toast.success('AI work run undone');
+    },
+    onError: () => {
+      toast.error('Failed to undo AI work run');
     },
   });
 };

@@ -172,6 +172,7 @@ export function ExportModal({
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewStatus, setPreviewStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialLoadDone = useRef(false);
@@ -189,9 +190,15 @@ export function ExportModal({
   const [headerLeft, setHeaderLeft] = useState(initialSettings?.header_left || '');
   const [headerCenter, setHeaderCenter] = useState(initialSettings?.header_center || '');
   const [headerRight, setHeaderRight] = useState(initialSettings?.header_right || '');
-  const [pageNumbers, setPageNumbers] = useState(initialSettings?.page_numbers ?? true);
+  const [footerLeft, setFooterLeft] = useState(initialSettings?.footer_left || '');
+  const [footerCenter, setFooterCenter] = useState(initialSettings?.footer_center || '');
+  const [footerRight, setFooterRight] = useState(initialSettings?.footer_right || '');
+  const [pageNumbers, setPageNumbers] = useState(initialSettings?.include_page_numbers ?? initialSettings?.page_numbers ?? true);
   const [pageNumberPosition, setPageNumberPosition] = useState(initialSettings?.page_number_position || 'center');
   const [pageNumberFormat, setPageNumberFormat] = useState(initialSettings?.page_number_format || 'page-n-of-m');
+  const [includeToc, setIncludeToc] = useState(initialSettings?.include_toc ?? true);
+  const [includeCoverPage, setIncludeCoverPage] = useState(initialSettings?.include_cover_page ?? true);
+  const [h1Underline, setH1Underline] = useState(initialSettings?.h1_underline ?? false);
   const [paperSize, setPaperSize] = useState(initialSettings?.paper_size || 'a4');
   const [orientation, setOrientation] = useState(initialSettings?.orientation || 'portrait');
   const [margins, setMargins] = useState(initialSettings?.margins || 'normal');
@@ -215,9 +222,15 @@ export function ExportModal({
     setHeaderLeft(initialSettings?.header_left || '');
     setHeaderCenter(initialSettings?.header_center || '');
     setHeaderRight(initialSettings?.header_right || '');
-    setPageNumbers(initialSettings?.page_numbers ?? true);
+    setFooterLeft(initialSettings?.footer_left || '');
+    setFooterCenter(initialSettings?.footer_center || '');
+    setFooterRight(initialSettings?.footer_right || '');
+    setPageNumbers(initialSettings?.include_page_numbers ?? initialSettings?.page_numbers ?? true);
     setPageNumberPosition(initialSettings?.page_number_position || 'center');
     setPageNumberFormat(initialSettings?.page_number_format || 'page-n-of-m');
+    setIncludeToc(initialSettings?.include_toc ?? true);
+    setIncludeCoverPage(initialSettings?.include_cover_page ?? true);
+    setH1Underline(initialSettings?.h1_underline ?? false);
     setPaperSize(initialSettings?.paper_size || 'a4');
     setOrientation(initialSettings?.orientation || 'portrait');
     setMargins(initialSettings?.margins || 'normal');
@@ -228,6 +241,9 @@ export function ExportModal({
   const buildParams = useCallback(() => {
     const params = new URLSearchParams({ format: selected });
     params.set('include_page_numbers', pageNumbers ? 'true' : 'false');
+    params.set('include_toc', includeToc ? 'true' : 'false');
+    params.set('include_cover_page', includeCoverPage ? 'true' : 'false');
+    params.set('h1_underline', h1Underline ? 'true' : 'false');
     params.set('primary_color', primaryColor);
     params.set('h1_color', h1Color);
     params.set('h2_color', h2Color);
@@ -248,6 +264,9 @@ export function ExportModal({
     if (headerLeft) params.set('header_left', headerLeft);
     if (headerCenter) params.set('header_center', headerCenter);
     if (headerRight) params.set('header_right', headerRight);
+    if (footerLeft) params.set('footer_left', footerLeft);
+    if (footerCenter) params.set('footer_center', footerCenter);
+    if (footerRight) params.set('footer_right', footerRight);
     return params;
   }, [
     bodyFontSize,
@@ -259,6 +278,12 @@ export function ExportModal({
     headerCenter,
     headerLeft,
     headerRight,
+    footerCenter,
+    footerLeft,
+    footerRight,
+    h1Underline,
+    includeCoverPage,
+    includeToc,
     logoHeight,
     logoPosition,
     logoUrl,
@@ -284,15 +309,33 @@ export function ExportModal({
     try {
       const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
       const params = buildParams();
-      params.set('format', 'html');
+      params.set('format', selected === 'pdf' ? 'pdf' : 'html');
       const res = await fetch(`${baseURL}${exportPath}?${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setPreviewHtml(await res.text());
+      if (selected === 'pdf') {
+        const blob = await res.blob();
+        const nextUrl = URL.createObjectURL(blob);
+        setPreviewUrl((current) => {
+          if (current) URL.revokeObjectURL(current);
+          return nextUrl;
+        });
+        setPreviewHtml(null);
+      } else {
+        setPreviewHtml(await res.text());
+        setPreviewUrl((current) => {
+          if (current) URL.revokeObjectURL(current);
+          return null;
+        });
+      }
       setPreviewStatus('done');
     } catch {
       setPreviewStatus('error');
     }
-  }, [buildParams, exportPath, isPreviewable]);
+  }, [buildParams, exportPath, isPreviewable, selected]);
+
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
 
   useEffect(() => {
     if (!open) return;
@@ -331,7 +374,13 @@ export function ExportModal({
     header_left: headerLeft || undefined,
     header_center: headerCenter || undefined,
     header_right: headerRight || undefined,
-    page_numbers: pageNumbers,
+    footer_left: footerLeft || undefined,
+    footer_center: footerCenter || undefined,
+    footer_right: footerRight || undefined,
+    include_page_numbers: pageNumbers,
+    include_toc: includeToc,
+    include_cover_page: includeCoverPage,
+    h1_underline: h1Underline,
     page_number_position: pageNumberPosition,
     page_number_format: pageNumberFormat,
     paper_size: paperSize,
@@ -344,11 +393,12 @@ export function ExportModal({
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
-      await projectsApi.updateProject(projectId, { export_settings: settingsPayload });
       if (documentId) {
-        await documentsApi.updateDocument(projectId, documentId, { export_settings: settingsPayload });
+        await documentsApi.updateDocument(projectId, documentId, { print_profile: settingsPayload });
+      } else {
+        await projectsApi.updateProject(projectId, { export_settings: settingsPayload });
       }
-      toast.success('Export defaults saved');
+      toast.success(documentId ? 'Document print profile saved' : 'Project export defaults saved');
     } catch {
       toast.error('Failed to save export defaults');
     } finally {
@@ -461,6 +511,28 @@ export function ExportModal({
                     onChange={(event) => setSubtitle(event.target.value)}
                   />
                 </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-border px-2 py-2">
+                    <Label htmlFor="include-cover">Cover</Label>
+                    <input
+                      id="include-cover"
+                      type="checkbox"
+                      checked={includeCoverPage}
+                      onChange={(event) => setIncludeCoverPage(event.target.checked)}
+                      className="h-4 w-4 accent-current"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-border px-2 py-2">
+                    <Label htmlFor="include-toc">TOC</Label>
+                    <input
+                      id="include-toc"
+                      type="checkbox"
+                      checked={includeToc}
+                      onChange={(event) => setIncludeToc(event.target.checked)}
+                      className="h-4 w-4 accent-current"
+                    />
+                  </div>
+                </div>
               </section>
 
               <section className="space-y-3">
@@ -507,6 +579,16 @@ export function ExportModal({
                     <Input value={h2FontSize} onChange={(event) => setH2FontSize(event.target.value)} />
                   </Field>
                 </div>
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border px-2 py-2">
+                  <Label htmlFor="h1-underline">H1 underline</Label>
+                  <input
+                    id="h1-underline"
+                    type="checkbox"
+                    checked={h1Underline}
+                    onChange={(event) => setH1Underline(event.target.checked)}
+                    className="h-4 w-4 accent-current"
+                  />
+                </div>
               </section>
 
               <section className="space-y-3">
@@ -551,6 +633,11 @@ export function ExportModal({
                   <Input aria-label="Center header" placeholder="Center" value={headerCenter} onChange={(event) => setHeaderCenter(event.target.value)} />
                   <Input aria-label="Right header" placeholder="Right" value={headerRight} onChange={(event) => setHeaderRight(event.target.value)} />
                 </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <Input aria-label="Left footer" placeholder="Footer left" value={footerLeft} onChange={(event) => setFooterLeft(event.target.value)} />
+                  <Input aria-label="Center footer" placeholder="Footer center" value={footerCenter} onChange={(event) => setFooterCenter(event.target.value)} />
+                  <Input aria-label="Right footer" placeholder="Footer right" value={footerRight} onChange={(event) => setFooterRight(event.target.value)} />
+                </div>
                 <div className="flex items-center justify-between gap-3">
                   <Label htmlFor="page-numbers">Page numbers</Label>
                   <input
@@ -571,6 +658,7 @@ export function ExportModal({
                     <NativeSelect value={pageNumberFormat} onChange={(value) => setPageNumberFormat(value as typeof pageNumberFormat)} ariaLabel="Page number format">
                       <option value="number">1</option>
                       <option value="page-n">Page 1</option>
+                      <option value="page-n-of-m">Page 1 of 3</option>
                     </NativeSelect>
                   </Field>
                 </div>
@@ -596,11 +684,12 @@ export function ExportModal({
                         <p className="text-body">Preview failed</p>
                         <Button variant="outline" size="sm" onClick={loadPreview}>Retry</Button>
                       </div>
-                    ) : previewHtml ? (
+                    ) : previewUrl || previewHtml ? (
                       <iframe
-                        srcDoc={previewHtml}
+                        src={previewUrl || undefined}
+                        srcDoc={previewUrl ? undefined : previewHtml || undefined}
                         className="h-full w-full border-0 bg-background"
-                        title="Export preview"
+                        title={selected === 'pdf' ? 'Paged PDF preview' : 'HTML export preview'}
                         sandbox="allow-same-origin"
                       />
                     ) : null}
