@@ -191,12 +191,19 @@ async def accept_change(
     change.accepted_by = user_id
     change.accepted_at = datetime.utcnow()
     run = await _load_run(db, document.id, change.work_run_id)
-    accepted = sum(1 for item in run.proposed_changes if item.status == AIProposedChangeStatus.ACCEPTED)
-    proposed = sum(1 for item in run.proposed_changes if item.status == AIProposedChangeStatus.PROPOSED)
+    accepted = sum(
+        1
+        for item in run.proposed_changes
+        if item.status == AIProposedChangeStatus.ACCEPTED or item.id == change.id
+    )
+    proposed = sum(
+        1
+        for item in run.proposed_changes
+        if item.status == AIProposedChangeStatus.PROPOSED and item.id != change.id
+    )
     run.status = AIWorkRunStatus.ACCEPTED if proposed == 0 else AIWorkRunStatus.PARTIALLY_ACCEPTED
-    undo_items = (run.undo_group or {}).get("changes", [])
-    undo_items.append({"change_id": change.id, "before": before})
-    run.undo_group = {"changes": undo_items}
+    undo_items = list((run.undo_group or {}).get("changes", []))
+    run.undo_group = {"changes": [*undo_items, {"change_id": change.id, "before": before}]}
     if accepted == len(run.proposed_changes):
         run.completed_at = datetime.utcnow()
     await db.commit()
