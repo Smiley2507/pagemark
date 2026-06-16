@@ -63,7 +63,7 @@ async def _get_sections(document: Document, db: AsyncSession) -> list[Section]:
 ALL_OVERRIDE_KEYS = [
     "organization_name", "title", "subtitle",
     "include_toc", "include_cover_page", "include_page_numbers", "page_numbers",
-    "paper_size", "orientation", "margins",
+    "paper_size", "page_size", "orientation", "margins",
     "margin_top", "margin_bottom", "margin_left", "margin_right",
     "primary_color", "h1_color", "h2_color", "text_color",
     "muted_color", "border_color", "table_header_bg",
@@ -117,6 +117,7 @@ async def export_document(
     include_toc: Optional[str] = Query(None),
     include_cover_page: Optional[str] = Query(None),
     include_page_numbers: Optional[str] = Query(None),
+    page_size: Optional[str] = Query(None),
     paper_size: Optional[str] = Query(None),
     orientation: Optional[str] = Query(None),
     margins: Optional[str] = Query(None),
@@ -165,7 +166,7 @@ async def export_document(
 
     query_params = {k: v for k, v in locals().items() if k in ALL_OVERRIDE_KEYS or k in (
         "organization_name", "title", "subtitle", "include_toc", "include_cover_page",
-        "include_page_numbers", "paper_size", "orientation", "margins",
+        "include_page_numbers", "page_size", "paper_size", "orientation", "margins",
         "margin_top", "margin_bottom", "margin_left", "margin_right",
         "primary_color", "h1_color", "h2_color", "text_color",
         "muted_color", "border_color", "table_header_bg",
@@ -240,6 +241,7 @@ async def export_project_document(
     include_toc: Optional[str] = Query(None),
     include_cover_page: Optional[str] = Query(None),
     include_page_numbers: Optional[str] = Query(None),
+    page_size: Optional[str] = Query(None),
     paper_size: Optional[str] = Query(None),
     orientation: Optional[str] = Query(None),
     margins: Optional[str] = Query(None),
@@ -276,6 +278,7 @@ async def export_project_document(
     table_style: Optional[str] = Query(None),
     code_theme: Optional[str] = Query(None),
     watermark_text: Optional[str] = Query(None),
+    h1_underline: Optional[str] = Query(None),
     # Dependencies
     project: Project = Depends(verify_project_ownership),
     db: AsyncSession = Depends(get_db),
@@ -336,6 +339,7 @@ async def export_preview_html(
     include_toc: Optional[str] = Query(None),
     include_cover_page: Optional[str] = Query(None),
     include_page_numbers: Optional[str] = Query(None),
+    page_size: Optional[str] = Query(None),
     paper_size: Optional[str] = Query(None),
     orientation: Optional[str] = Query(None),
     margins: Optional[str] = Query(None),
@@ -372,6 +376,7 @@ async def export_preview_html(
     table_style: Optional[str] = Query(None),
     code_theme: Optional[str] = Query(None),
     watermark_text: Optional[str] = Query(None),
+    h1_underline: Optional[str] = Query(None),
     # Dependencies
     project: Project = Depends(verify_project_ownership),
     db: AsyncSession = Depends(get_db),
@@ -383,7 +388,7 @@ async def export_preview_html(
 
     query_params = {k: v for k, v in locals().items() if k in ALL_OVERRIDE_KEYS or k in (
         "organization_name", "title", "subtitle", "include_toc", "include_cover_page",
-        "include_page_numbers", "paper_size", "orientation", "margins",
+        "include_page_numbers", "page_size", "paper_size", "orientation", "margins",
         "margin_top", "margin_bottom", "margin_left", "margin_right",
         "primary_color", "h1_color", "h2_color", "text_color",
         "muted_color", "border_color", "table_header_bg",
@@ -393,7 +398,7 @@ async def export_preview_html(
         "footer_left", "footer_center", "footer_right",
         "page_number_position", "page_number_format",
         "logo_url", "logo_position", "logo_height",
-        "table_style", "code_theme", "watermark_text",
+        "table_style", "code_theme", "watermark_text", "h1_underline",
     )}
     settings = _gather_export_settings(document, query_params, project)
     doc_title = document.title or "Documentation"
@@ -426,7 +431,7 @@ async def batch_export(
                     continue
 
                 sections = await _get_sections(doc, db)
-                settings = normalize_settings(doc.export_settings)
+                settings = _gather_export_settings(doc, {}, project)
                 pdf_bytes = export_pdf(sections, project.name, doc.title or "Documentation", settings)
                 safe_name = _safe_filename(project.name)
                 zf.writestr(f"{safe_name}.pdf", pdf_bytes)

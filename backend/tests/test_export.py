@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from weasyprint import HTML
 
+from app.routers.export import _gather_export_settings
 from app.schemas.export_settings import ExportSettings, PAGE_SIZES, MARGIN_PRESETS
 from app.services.export_service import (
     export_markdown,
@@ -87,6 +89,68 @@ class TestExportSettingsSchema:
     def test_h1_underline_disabled_by_default(self):
         result = normalize_settings({})
         assert result["h1_underline"] is False
+
+
+# ── Export route settings ──────────────────────────────────────
+
+class TestExportRouteSettings:
+    def test_document_print_profile_overrides_legacy_document_and_project_settings(self):
+        project = SimpleNamespace(export_settings={
+            "organization_name": "Project Default",
+            "footer_right": "Project Footer",
+            "include_page_numbers": False,
+        })
+        document = SimpleNamespace(
+            export_settings={
+                "footer_right": "Legacy Footer",
+                "primary_color": "#111111",
+            },
+            print_profile={
+                "footer_right": "Profile Footer",
+                "primary_color": "#2563eb",
+                "include_page_numbers": True,
+            },
+        )
+
+        result = _gather_export_settings(document, {}, project)
+
+        assert result["organization_name"] == "Project Default"
+        assert result["footer_right"] == "Profile Footer"
+        assert result["primary_color"] == "#2563eb"
+        assert result["include_page_numbers"] is True
+
+    def test_query_params_override_print_profile_and_accept_page_size_alias(self):
+        document = SimpleNamespace(
+            export_settings={},
+            print_profile={
+                "page_size": "a4",
+                "footer_right": "Profile Footer",
+                "h1_underline": False,
+            },
+        )
+
+        result = _gather_export_settings(
+            document,
+            {
+                "page_size": "letter",
+                "footer_right": "Query Footer",
+                "h1_underline": "true",
+            },
+        )
+
+        assert result["paper_size"] == "letter"
+        assert result["footer_right"] == "Query Footer"
+        assert result["h1_underline"] is True
+
+    def test_legacy_page_numbers_alias_still_coerces(self):
+        document = SimpleNamespace(export_settings={}, print_profile={})
+
+        result = _gather_export_settings(
+            document,
+            {"page_numbers": "false"},
+        )
+
+        assert result["include_page_numbers"] is False
 
 
 # ── Markdown Export ────────────────────────────────────────────
