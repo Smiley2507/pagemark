@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { Surface } from '@/components/ui/surface';
+import { initialGenerationMode, generationModeRequiresProvider } from '@/lib/document-setup-flow';
 import { cn } from '@/lib/utils';
 import type { GenerationEstimate } from '@/types/document-setup';
 
@@ -32,7 +33,7 @@ export function GenerationChoiceStep({
   onConfigureProvider,
 }: GenerationChoiceStepProps) {
   const [selectedMode, setSelectedMode] = useState<ChoiceMode>(
-    hasActiveProvider ? 'complete' : 'manual',
+    initialGenerationMode(hasActiveProvider),
   );
   const [showBreakdown, setShowBreakdown] = useState(true);
 
@@ -72,7 +73,7 @@ export function GenerationChoiceStep({
           title="Generate approved Sections"
           subtitle="Lower relative usage"
           description="Draft the approved Outline section-by-section now, while keeping each Section reviewable in the editor."
-          badge="Controlled draft"
+          badge={hasActiveProvider ? 'Recommended' : 'Provider required'}
           icon={Sparkles}
           onClick={() => setSelectedMode('on-demand')}
         />
@@ -80,8 +81,8 @@ export function GenerationChoiceStep({
           selected={selectedMode === 'complete'}
           title="Generate the complete Document"
           subtitle="Higher relative usage"
-          description="Recommended when the overview and Outline look right. Draft the whole Document before opening the editor."
-          badge={hasActiveProvider ? 'Recommended' : 'Provider required'}
+          description="Draft the whole Document before opening the editor when the overview and Outline are stable."
+          badge={hasActiveProvider ? undefined : 'Provider required'}
           icon={Zap}
           onClick={() => setSelectedMode('complete')}
         />
@@ -156,7 +157,7 @@ export function GenerationChoiceStep({
         </Surface>
       )}
 
-      {selectedMode !== 'manual' && !hasActiveProvider && (
+      {generationModeRequiresProvider(selectedMode) && !hasActiveProvider && (
         <div className="flex flex-wrap gap-3">
           <Button onClick={onConfigureProvider}>Configure provider for this AI action</Button>
           <Button variant="outline" onClick={() => setSelectedMode('manual')}>
@@ -167,7 +168,7 @@ export function GenerationChoiceStep({
 
       <div className="flex flex-wrap gap-3">
         <Button
-          disabled={selectedMode !== 'manual' && !hasActiveProvider}
+          disabled={generationModeRequiresProvider(selectedMode) && !hasActiveProvider}
           onClick={() => onChoose(selectedMode)}
         >
           {selectedMode === 'manual' ? 'Enter editor now' : 'Start generation and enter editor'}

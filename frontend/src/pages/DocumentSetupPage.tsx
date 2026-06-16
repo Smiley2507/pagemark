@@ -18,14 +18,16 @@ import { TemplateRecommendationStep } from '@/components/document-setup/Template
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { Surface } from '@/components/ui/surface';
-import type { AnalysisStatus } from '@/types';
+import {
+  deriveUiStage,
+  describeSource,
+  outlineBasisForRecommendation,
+  sourceTypeFromProject,
+} from '@/lib/document-setup-flow';
 import type {
   DocumentSetupState,
-  DocumentSetupStage,
   OutlineProposal,
-  PersistedDocumentSetupStage,
   SetupSectionSummary,
-  SourceConnectionType,
   TemplateRecommendation,
 } from '@/types/document-setup';
 
@@ -37,67 +39,6 @@ const INITIAL_STATE: DocumentSetupState = {
   providerConfigured: false,
   sourceLimitations: [],
 };
-
-function sourceTypeFromProject(sourceType?: string, gitRepoUrl?: string): SourceConnectionType | undefined {
-  if (sourceType === 'scratch') return 'none';
-  if (sourceType === 'zip') return 'zip';
-  if (gitRepoUrl?.includes('github.com')) return 'github-oauth';
-  if (gitRepoUrl) return 'git-url';
-  return undefined;
-}
-
-function describeSource(
-  sourceType?: SourceConnectionType,
-  repoFullName?: string,
-): { label?: string; limitations: string[] } {
-  if (sourceType === 'github-oauth') {
-    return {
-      label: repoFullName || 'GitHub repository',
-      limitations: [],
-    };
-  }
-  if (sourceType === 'git-url') {
-    return {
-      label: 'Repository URL fallback',
-      limitations: ['Automatic synchronization is weaker than the GitHub source path.'],
-    };
-  }
-  if (sourceType === 'zip') {
-    return {
-      label: 'ZIP snapshot',
-      limitations: ['Automatic synchronization and freshness updates are unavailable for ZIP Projects.'],
-    };
-  }
-  if (sourceType === 'none') {
-    return {
-      label: 'No source connected',
-      limitations: [
-        'Analysis-grounded recommendations and repository evidence remain disabled until source is connected.',
-      ],
-    };
-  }
-  return { limitations: [] };
-}
-
-function deriveUiStage(
-  persistedStage: PersistedDocumentSetupStage,
-  sourceType?: SourceConnectionType,
-  analysisStatus?: AnalysisStatus | null,
-): DocumentSetupStage {
-  if (persistedStage === 'template_selection') return 'template-selection';
-  if (persistedStage === 'outline_review') return 'outline-review';
-  if (persistedStage === 'generation_mode') return 'generation-mode';
-  if (persistedStage === 'editor_ready') return 'editor-ready';
-  if (sourceType && sourceType !== 'none') {
-    if (!analysisStatus || analysisStatus.status === 'pending' || analysisStatus.status === 'running') {
-      return 'analysis';
-    }
-    if (analysisStatus.status === 'completed' || analysisStatus.status === 'failed') {
-      return 'analysis';
-    }
-  }
-  return 'source';
-}
 
 export function DocumentSetupPage() {
   const navigate = useNavigate();
@@ -483,7 +424,7 @@ export function DocumentSetupPage() {
       });
       await documentsApi.createOutlineProposal(setupState.projectId, setupState.documentId, {
         template_id: templateId,
-        basis: recommendation?.basis === 'ai_personalized' ? 'analysis_adapted' : 'template',
+        basis: outlineBasisForRecommendation(recommendation),
         explanation: recommendation
           ? {
               recommendation_id: recommendation.id,
