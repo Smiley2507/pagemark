@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 
 from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import relationship
@@ -52,8 +53,8 @@ class AIWorkRun(Base):
     undo_group = Column(JSON, nullable=True)
     error_message = Column(Text, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
     completed_at = Column(DateTime, nullable=True)
 
     document = relationship("Document", back_populates="ai_work_runs")
@@ -88,7 +89,7 @@ class AIProposedChange(Base):
     rejected_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     rejected_at = Column(DateTime, nullable=True)
     undone_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     work_run = relationship("AIWorkRun", back_populates="proposed_changes")
     document = relationship("Document")

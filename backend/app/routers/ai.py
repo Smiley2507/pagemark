@@ -253,10 +253,6 @@ async def generate_section(
 class RefineRequest(SendMessageRequest):
     instruction: str
 
-    class Config:
-        # allow `instruction` as alias for `message`
-        pass
-
 
 @router.post("/sections/{section_id}/ai/refine")
 async def refine_section(

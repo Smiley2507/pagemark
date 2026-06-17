@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class AuthorTypeEnum(str, Enum):
@@ -11,6 +11,8 @@ class AuthorTypeEnum(str, Enum):
 
 
 class SectionVersionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     section_id: int
     author_type: AuthorTypeEnum
@@ -19,9 +21,6 @@ class SectionVersionResponse(BaseModel):
     removed: int
     modified: int
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class DiffLineType(str, Enum):

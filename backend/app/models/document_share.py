@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -19,7 +20,7 @@ class DocumentShare(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     permission = Column(Enum(DocumentSharePermission), nullable=False, default=DocumentSharePermission.VIEW)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     revoked_at = Column(DateTime, nullable=True)
 
     document = relationship("Document", foreign_keys=[document_id])

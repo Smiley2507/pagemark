@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.models.time import utcnow
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import relationship
@@ -22,7 +23,7 @@ class WorkspacePreference(Base):
     surface = Column(String, nullable=False)
     context_id = Column(String, nullable=True)
     preferences_json = Column(JSON, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     user = relationship("User")

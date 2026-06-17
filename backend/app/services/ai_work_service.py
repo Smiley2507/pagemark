@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException
@@ -25,6 +25,10 @@ from app.models.document import (
 from app.models.version import AuthorType
 from app.schemas.ai_work import AIProposedChangeCreate, AIWorkRunCreateRequest
 from app.services.version_service import create_version_snapshot
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def change_to_response(change: AIProposedChange) -> dict[str, Any]:
@@ -189,7 +193,7 @@ async def accept_change(
     change.before_json = before
     change.status = AIProposedChangeStatus.ACCEPTED
     change.accepted_by = user_id
-    change.accepted_at = datetime.utcnow()
+    change.accepted_at = _utcnow()
     run = await _load_run(db, document.id, change.work_run_id)
     accepted = sum(
         1
@@ -205,7 +209,7 @@ async def accept_change(
     undo_items = list((run.undo_group or {}).get("changes", []))
     run.undo_group = {"changes": [*undo_items, {"change_id": change.id, "before": before}]}
     if accepted == len(run.proposed_changes):
-        run.completed_at = datetime.utcnow()
+        run.completed_at = _utcnow()
     await db.commit()
     await db.refresh(change)
     return change
@@ -221,11 +225,11 @@ async def reject_change(
         raise HTTPException(status_code=409, detail="Only proposed AI changes can be rejected")
     change.status = AIProposedChangeStatus.REJECTED
     change.rejected_by = user_id
-    change.rejected_at = datetime.utcnow()
+    change.rejected_at = _utcnow()
     run = await _load_run(db, document.id, change.work_run_id)
     if all(item.status == AIProposedChangeStatus.REJECTED for item in run.proposed_changes):
         run.status = AIWorkRunStatus.REJECTED
-        run.completed_at = datetime.utcnow()
+        run.completed_at = _utcnow()
     await db.commit()
     await db.refresh(change)
     return change
@@ -247,9 +251,9 @@ async def undo_work_run(
     for change in accepted_changes:
         await _undo_change(db, change)
         change.status = AIProposedChangeStatus.UNDONE
-        change.undone_at = datetime.utcnow()
+        change.undone_at = _utcnow()
     run.status = AIWorkRunStatus.UNDONE
-    run.completed_at = datetime.utcnow()
+    run.completed_at = _utcnow()
     await db.commit()
     return await _load_run(db, document.id, run.id)
 
@@ -286,7 +290,7 @@ async def _apply_change(
         section.content_md = new_content
         section.content_lifecycle = SectionContentLifecycle.GENERATED_DRAFT
         section.status = SectionStatus.DRAFT
-        section.updated_at = datetime.utcnow()
+        section.updated_at = _utcnow()
         await create_version_snapshot(
             db,
             section_id=section.id,
@@ -303,7 +307,7 @@ async def _apply_change(
         heading = str(after.get("heading") or after.get("title") or section.heading)
         section.heading = heading
         section.title = heading
-        section.updated_at = datetime.utcnow()
+        section.updated_at = _utcnow()
         return before
 
     if change.change_type == AIProposedChangeType.ADD_SECTION:
@@ -345,7 +349,7 @@ async def _apply_change(
             section = sections.get(int(item["section_id"]))
             if section:
                 section.order_index = int(item["order_index"])
-                section.updated_at = datetime.utcnow()
+                section.updated_at = _utcnow()
         return before
 
     if change.change_type == AIProposedChangeType.APPLY_OUTLINE_DIFF:
@@ -423,13 +427,13 @@ async def _apply_outline_diff(
         heading = str(item.get("after_heading") or item.get("heading") or item.get("title") or section.heading)
         section.heading = heading
         section.title = heading
-        section.updated_at = datetime.utcnow()
+        section.updated_at = _utcnow()
 
     for section_id in after.get("removed_section_ids", []) or after.get("remove_section_ids", []):
         section = sections.get(int(section_id))
         if section:
             section.lifecycle_status = LifecycleStatus.ARCHIVED
-            section.updated_at = datetime.utcnow()
+            section.updated_at = _utcnow()
 
     for item in after.get("order", []):
         if not isinstance(item, dict) or item.get("section_id") is None:
@@ -437,7 +441,7 @@ async def _apply_outline_diff(
         section = sections.get(int(item["section_id"]))
         if section:
             section.order_index = int(item.get("order_index", section.order_index))
-            section.updated_at = datetime.utcnow()
+            section.updated_at = _utcnow()
 
     after_copy = dict(after)
     after_copy["created_section_ids"] = created_section_ids
@@ -454,7 +458,7 @@ async def _undo_change(db: AsyncSession, change: AIProposedChange) -> None:
             section = await db.get(Section, section_id)
             if section:
                 section.lifecycle_status = LifecycleStatus.ARCHIVED
-                section.updated_at = datetime.utcnow()
+                section.updated_at = _utcnow()
         return
 
     if change.change_type == AIProposedChangeType.REORDER_SECTIONS:
@@ -465,7 +469,7 @@ async def _undo_change(db: AsyncSession, change: AIProposedChange) -> None:
             section = sections.get(int(item["section_id"]))
             if section:
                 section.order_index = int(item["order_index"])
-                section.updated_at = datetime.utcnow()
+                section.updated_at = _utcnow()
         return
 
     if change.change_type == AIProposedChangeType.APPLY_OUTLINE_DIFF:
@@ -473,7 +477,7 @@ async def _undo_change(db: AsyncSession, change: AIProposedChange) -> None:
             section = await db.get(Section, section_id)
             if section:
                 section.lifecycle_status = LifecycleStatus.ARCHIVED
-                section.updated_at = datetime.utcnow()
+                section.updated_at = _utcnow()
         section_ids = [int(item["section_id"]) for item in before.get("sections", []) if "section_id" in item]
         if section_ids:
             result = await db.execute(select(Section).where(Section.id.in_(section_ids)))
@@ -486,7 +490,7 @@ async def _undo_change(db: AsyncSession, change: AIProposedChange) -> None:
                     section.order_index = int(item["order_index"])
                     section.parent_id = item.get("parent_id")
                     section.lifecycle_status = LifecycleStatus(item["lifecycle_status"])
-                    section.updated_at = datetime.utcnow()
+                    section.updated_at = _utcnow()
         return
 
     section = await db.get(Section, before.get("section_id"))
@@ -494,8 +498,8 @@ async def _undo_change(db: AsyncSession, change: AIProposedChange) -> None:
         return
     if "content_md" in before:
         section.content_md = before["content_md"]
-        section.updated_at = datetime.utcnow()
+        section.updated_at = _utcnow()
     if "heading" in before:
         section.heading = before["heading"]
         section.title = before.get("title") or before["heading"]
-        section.updated_at = datetime.utcnow()
+        section.updated_at = _utcnow()

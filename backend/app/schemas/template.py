@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Any
 from datetime import datetime
 
@@ -44,6 +44,8 @@ class TemplateUpdateRequest(BaseModel):
 # ── Response schemas ─────────────────────────────────────────────
 
 class TemplateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     description: Optional[str]
@@ -63,9 +65,6 @@ class TemplateResponse(BaseModel):
     owner_id: Optional[int]
     is_builtin: bool
     created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class TemplateListResponse(BaseModel):

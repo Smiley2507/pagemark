@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, ForeignKey, Enum, Text,
     ARRAY, JSON,
@@ -45,8 +46,8 @@ class Project(Base):
     webhook_secret = Column(String, nullable=True)
     webhook_id = Column(Integer, nullable=True)
     deleted_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     organization = relationship("Organization", foreign_keys=[org_id])
     creator = relationship("User", foreign_keys=[created_by], backref="created_projects")
@@ -68,8 +69,8 @@ class ProjectSourceExclusion(Base):
     reason = Column(Text, nullable=True)
     enabled = Column(Boolean, nullable=False, default=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     project = relationship("Project", back_populates="source_exclusions")
     creator = relationship("User", foreign_keys=[created_by])

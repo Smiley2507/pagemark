@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 
 from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Integer, JSON, Text
 from sqlalchemy.orm import relationship
@@ -25,7 +26,7 @@ class TemplateRecommendation(Base):
     explanation = Column(Text, nullable=True)
     supporting_facts_json = Column(JSON, nullable=True)
     provider_usage_ref = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     document = relationship("Document", back_populates="template_recommendations")
     analysis = relationship("Analysis", back_populates="template_recommendations")

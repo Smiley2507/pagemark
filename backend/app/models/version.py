@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -27,6 +28,6 @@ class SectionVersion(Base):
     added = Column(Integer, nullable=False, default=0)
     removed = Column(Integer, nullable=False, default=0)
     modified = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     section = relationship("Section", back_populates="versions")

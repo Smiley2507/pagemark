@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class MessageRoleEnum(str, Enum):
@@ -13,25 +13,23 @@ class MessageRoleEnum(str, Enum):
 
 
 class ChatMessageResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     thread_id: int
     role: MessageRoleEnum
     content: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 
 class ChatThreadResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     project_id: int
     title: str
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ChatThreadWithMessages(ChatThreadResponse):

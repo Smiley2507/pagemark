@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SectionStatusEnum(str, Enum):
@@ -13,6 +13,8 @@ class SectionStatusEnum(str, Enum):
 
 
 class SectionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     document_id: int
     parent_id: Optional[int] = None
@@ -34,9 +36,6 @@ class SectionResponse(BaseModel):
     reviewed_against_analysis_id: Optional[int] = None
     workflow_metadata: Optional[dict] = None
     children: List["SectionResponse"] = Field(default_factory=list)
-
-    class Config:
-        from_attributes = True
 
 
 class SectionUpdateRequest(BaseModel):

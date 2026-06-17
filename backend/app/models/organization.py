@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -27,7 +28,7 @@ class Organization(Base):
     slug = Column(String, unique=True, nullable=False, index=True)
     avatar_url = Column(String, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     personal = Column(Boolean, default=False, nullable=False)
     quality_threshold = Column(Integer, default=70, nullable=False)
     ai_provider = Column(String, nullable=True)
@@ -45,7 +46,7 @@ class OrganizationMember(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     role = Column(Enum(OrgMemberRole), nullable=False, default=OrgMemberRole.DEVELOPER)
     invited_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    joined_at = Column(DateTime, default=datetime.utcnow)
+    joined_at = Column(DateTime, default=utcnow)
     status = Column(Enum(OrgMemberStatus), nullable=False, default=OrgMemberStatus.ACTIVE)
     invite_token = Column(String, nullable=True, index=True)
     invite_token_expires = Column(DateTime, nullable=True)
@@ -67,7 +68,7 @@ class OrganizationJoinLink(Base):
     expires_at = Column(DateTime, nullable=True)
     revoked_at = Column(DateTime, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     organization = relationship("Organization", foreign_keys=[org_id])
     creator = relationship("User", foreign_keys=[created_by])

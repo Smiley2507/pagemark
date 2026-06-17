@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.models.time import utcnow
 from sqlalchemy import Column, Integer, Float, DateTime, ForeignKey, JSON
 from app.database import Base
 
@@ -12,4 +13,4 @@ class NLPReport(Base):
     entities = Column(JSON, default=list)
     style_analysis = Column(JSON, default=dict)
     suggestions = Column(JSON, default=list)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)

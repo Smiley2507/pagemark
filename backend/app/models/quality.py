@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Float, ForeignKey, Enum, UniqueConstraint,
 )
@@ -26,7 +27,7 @@ class QualityReport(Base):
     consistency = Column(Float, nullable=False, default=0.0)
     readability = Column(Float, nullable=False, default=0.0)
     accuracy = Column(Float, nullable=False, default=0.0)
-    generated_at = Column(DateTime, default=datetime.utcnow)
+    generated_at = Column(DateTime, default=utcnow)
 
     document = relationship("Document", back_populates="quality_reports")
     issues = relationship("QualityIssue", back_populates="report", cascade="all, delete-orphan")

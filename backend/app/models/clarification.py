@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum, JSON
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -21,7 +22,7 @@ class ClarificationRequest(Base):
     affected_sections_json = Column(JSON, nullable=True)
     confidence_tradeoff = Column(Text, nullable=True)
     status = Column(Enum(ClarificationStatus), nullable=False, default=ClarificationStatus.PENDING)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
     resolved_at = Column(DateTime, nullable=True)
     skipped_at = Column(DateTime, nullable=True)
 

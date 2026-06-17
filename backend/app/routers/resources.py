@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.database import get_db
 from app.dependencies import get_current_user, verify_project_ownership
@@ -33,6 +33,8 @@ ALLOWED_MIME_PREFIXES = {
 # ── Pydantic schemas ─────────────────────────────────────────────
 
 class ResourceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     project_id: int
     type: str
@@ -46,9 +48,6 @@ class ResourceResponse(BaseModel):
     created_by: int
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ResourceListResponse(BaseModel):

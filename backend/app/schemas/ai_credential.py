@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AiModelOption(BaseModel):
@@ -25,6 +25,8 @@ class AiProviderModelsResponse(BaseModel):
 
 
 class AiCredentialResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     provider: str
     model_id: str
@@ -32,9 +34,6 @@ class AiCredentialResponse(BaseModel):
     is_active: bool
     validated_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 
 class AiCredentialListResponse(BaseModel):

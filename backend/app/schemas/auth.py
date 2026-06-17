@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from typing import Optional
 from datetime import datetime
 
@@ -29,6 +29,8 @@ class UpdateMeRequest(BaseModel):
     password: Optional[str] = Field(None, min_length=8)
 
 class MeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: str
     name: Optional[str]
@@ -36,6 +38,3 @@ class MeResponse(BaseModel):
     is_verified: bool
     is_first_login: bool = False
     created_at: datetime
-
-    class Config:
-        from_attributes = True

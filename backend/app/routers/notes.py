@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.database import get_db
 from app.dependencies import get_current_user, verify_project_ownership
@@ -22,6 +22,8 @@ class NoteCreate(BaseModel):
 
 
 class NoteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     document_id: int
     section_id: Optional[int] = None
@@ -30,9 +32,6 @@ class NoteResponse(BaseModel):
     created_at: datetime
     user_name: Optional[str] = None
     user_avatar: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 async def _get_document_for_project(

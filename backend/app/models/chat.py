@@ -2,6 +2,7 @@
 
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -20,8 +21,8 @@ class ChatThread(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     title = Column(String, nullable=False, default="New Chat")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     project = relationship("Project", backref="chat_threads")
     messages = relationship(
@@ -39,7 +40,7 @@ class ChatMessage(Base):
     thread_id = Column(Integer, ForeignKey("chat_threads.id"), nullable=False)
     role = Column(Enum(MessageRole), nullable=False)
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     thread = relationship("ChatThread", back_populates="messages")
     resources = relationship("ChatMessageResource", back_populates="message", cascade="all, delete-orphan")

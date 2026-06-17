@@ -2,6 +2,7 @@
 
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, LargeBinary, String, Text
 from sqlalchemy.orm import relationship
@@ -40,8 +41,8 @@ class Resource(Base):
     symbol_name = Column(String, nullable=True)
 
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     project = relationship("Project", backref="resources")
     creator = relationship("User", backref="resources")

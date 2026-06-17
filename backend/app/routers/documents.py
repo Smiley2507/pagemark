@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -84,6 +84,10 @@ from app.services import freshness_service, activity_service
 from app.services.version_service import create_version_snapshot
 
 router = APIRouter(prefix="/projects", tags=["documents"])
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 _PERMISSION_RANK = {"view": 0, "comment": 1, "edit": 2}
@@ -541,7 +545,7 @@ async def update_document(
     if body.custom_outline_metadata is not None:
         document.custom_outline_metadata = body.custom_outline_metadata
 
-    document.updated_at = datetime.utcnow()
+    document.updated_at = _utcnow()
     await db.commit()
 
     project = await db.get(Project, document.project_id)
@@ -1110,7 +1114,7 @@ async def create_document_section(
         status=SectionStatus.PENDING,
     )
     db.add(section)
-    document.updated_at = datetime.utcnow()
+    document.updated_at = _utcnow()
     await db.commit()
     await db.refresh(section)
     return section_service.section_to_response(section)
@@ -1149,8 +1153,8 @@ async def update_document_section(
             section.status = new_status
 
     if content_changed or status_changed:
-        section.updated_at = datetime.utcnow()
-        document.updated_at = datetime.utcnow()
+        section.updated_at = _utcnow()
+        document.updated_at = _utcnow()
         summary_parts = []
         if content_changed:
             summary_parts.append("Content updated")
@@ -1192,7 +1196,7 @@ async def autosave_document_section(
 
     old_content = section.content_md or ""
     section.content_md = body.content_md
-    section.updated_at = datetime.utcnow()
+    section.updated_at = _utcnow()
     document.updated_at = section.updated_at
     section_service.clear_review_state_for_content_edit(section, edited_at=section.updated_at)
     await create_version_snapshot(
@@ -1260,7 +1264,7 @@ async def snapshot_section_collaboration(
 
     old_content = section.content_md or ""
     section.content_md = body.content_md
-    section.updated_at = datetime.utcnow()
+    section.updated_at = _utcnow()
     document.updated_at = section.updated_at
     section_service.clear_review_state_for_content_edit(section, edited_at=section.updated_at)
     await create_version_snapshot(
@@ -1296,7 +1300,7 @@ async def update_document_section_title(
 
     section.heading = body.title
     section.title = body.title
-    section.updated_at = datetime.utcnow()
+    section.updated_at = _utcnow()
     document.updated_at = section.updated_at
     await db.commit()
     await db.refresh(section)
@@ -1322,8 +1326,8 @@ async def reorder_document_sections(
 
     for index, section_id in enumerate(requested_ids):
         active_by_id[section_id].order_index = index
-        active_by_id[section_id].updated_at = datetime.utcnow()
-    document.updated_at = datetime.utcnow()
+        active_by_id[section_id].updated_at = _utcnow()
+    document.updated_at = _utcnow()
 
     await db.commit()
     return {"message": "Sections reordered successfully"}
@@ -1343,7 +1347,7 @@ async def delete_document_section(
         raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
 
     section.lifecycle_status = LifecycleStatus.DELETED
-    section.updated_at = datetime.utcnow()
+    section.updated_at = _utcnow()
     document.updated_at = section.updated_at
     await db.commit()
     return {"message": "Section deleted successfully"}

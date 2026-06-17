@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.models.time import utcnow
 from sqlalchemy import (
     Column,
     Integer,
@@ -26,7 +27,7 @@ class UserAiCredential(Base):
     is_active = Column(Boolean, nullable=False, default=False)
     key_hint = Column(String, nullable=False)  # last 4 chars
     validated_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     user = relationship("User", backref="ai_credentials")

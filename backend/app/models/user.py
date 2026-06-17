@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 from typing import Optional
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Text, Boolean
 from sqlalchemy.orm import relationship
@@ -19,8 +20,8 @@ class User(Base):
     avatar_url = Column(String, nullable=True)
     is_verified = Column(Boolean, default=False, nullable=False)
     login_count = Column(Integer, default=0, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     roles = relationship("UserRole", back_populates="user")
     settings = relationship("UserSettings", back_populates="user", uselist=False)
@@ -31,7 +32,7 @@ class UserRole(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     role = Column(Enum(RoleEnum), nullable=False, default=RoleEnum.USER)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     user = relationship("User", back_populates="roles")
 

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Any, Optional, List
 from datetime import datetime
 from enum import Enum
@@ -25,13 +25,12 @@ class ProjectSourceExclusionRequest(BaseModel):
 
 
 class ProjectSourceExclusionResponse(ProjectSourceExclusionRequest):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     project_id: int
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ProjectCreateRequest(BaseModel):
@@ -61,6 +60,8 @@ class ProjectUpdateRequest(BaseModel):
 # ── Response schemas ─────────────────────────────────────────────
 
 class ProjectResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     org_id: int
     created_by: int
@@ -93,9 +94,6 @@ class ProjectResponse(BaseModel):
     recent_activity_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class ProjectListResponse(BaseModel):

@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 
 from sqlalchemy import inspect
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, JSON, String
@@ -40,7 +41,7 @@ class OutlineProposal(Base):
     approved_at = Column(DateTime, nullable=True)
     approval_metadata = Column(JSON, nullable=True)
     superseded_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     document = relationship("Document", back_populates="outline_proposals")
     analysis = relationship("Analysis", back_populates="outline_proposals")

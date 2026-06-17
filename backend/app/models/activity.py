@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.models.time import utcnow
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import relationship
@@ -18,7 +19,7 @@ class ActivityEvent(Base):
     section_id = Column(Integer, ForeignKey("sections.id"), nullable=True)
     generation_run_id = Column(Integer, ForeignKey("generation_runs.id"), nullable=True)
     payload = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     project = relationship("Project")
     analysis = relationship("Analysis")

@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.models.time import utcnow
 from sqlalchemy import Column, Integer, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -12,7 +13,7 @@ class CollaborationNote(Base):
     section_id = Column(Integer, ForeignKey("sections.id"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     document = relationship("Document", backref="notes")
     section = relationship("Section", backref="notes")

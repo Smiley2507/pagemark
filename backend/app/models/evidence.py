@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.models.time import utcnow
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import relationship
@@ -18,7 +19,7 @@ class EvidenceReference(Base):
     symbol = Column(String, nullable=True)
     line_range_hint = Column(JSON, nullable=True)
     reference_metadata = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
 
     section = relationship("Section", back_populates="evidence_references")
     analysis = relationship("Analysis", back_populates="evidence_references")

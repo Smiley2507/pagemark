@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from app.models.time import utcnow
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, ForeignKey, Enum, Boolean, JSON,
 )
@@ -60,8 +61,8 @@ class Document(Base):
     sharing_settings = Column(JSON, nullable=True)
     reviewer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     approved_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     project = relationship("Project", back_populates="documents")
     template = relationship("Template", back_populates="documents")
@@ -121,8 +122,8 @@ class Section(Base):
     reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     reviewed_against_analysis_id = Column(Integer, ForeignKey("analyses.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     document = relationship("Document", back_populates="sections")
     parent = relationship("Section", remote_side=[id], backref="children")
