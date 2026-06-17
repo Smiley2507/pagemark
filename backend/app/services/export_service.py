@@ -336,15 +336,15 @@ def _build_css(s: dict) -> str:
   @bottom-left {{ {bottom_left} font-family:var(--font-family); font-size:8pt; color:{muted_c}; }}
   @bottom-center {{ {bottom_center} font-family:var(--font-family); font-size:8pt; color:{muted_c}; }}
   @bottom-right {{ {bottom_right} font-family:var(--font-family); font-size:8pt; color:{muted_c}; }}
+}}
 
-  @page :first {{
-    @top-left {{ content:none; }}
-    @top-center {{ content:none; }}
-    @top-right {{ content:none; }}
-    @bottom-left {{ content:none; }}
-    @bottom-center {{ content:none; }}
-    @bottom-right {{ content:none; }}
-  }}
+@page :first {{
+  @top-left {{ content:none; }}
+  @top-center {{ content:none; }}
+  @top-right {{ content:none; }}
+  @bottom-left {{ content:none; }}
+  @bottom-center {{ content:none; }}
+  @bottom-right {{ content:none; }}
 }}
 
 * {{ box-sizing:border-box; }}

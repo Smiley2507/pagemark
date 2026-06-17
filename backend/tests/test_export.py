@@ -298,6 +298,66 @@ class TestHtmlExport:
         """The cover page should suppress headers/footers via @page :first."""
         result = export_html(sample_sections, "Proj", "Doc")
         assert "@page :first" in result
+        assert result.index("@page {\n  size:") < result.index("@page :first")
+
+    def test_page_box_margins_and_header_footer_zones(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc", {
+            "paper_size": "letter",
+            "orientation": "landscape",
+            "margin_top": "18mm",
+            "margin_bottom": "16mm",
+            "margin_left": "14mm",
+            "margin_right": "12mm",
+            "header_left": "Draft",
+            "header_center": "Internal",
+            "header_right": "v1",
+            "footer_left": "Acme",
+            "footer_right": "Confidential",
+            "include_page_numbers": False,
+        })
+
+        assert "size: letter landscape;" in result
+        assert "margin-top: 18mm;" in result
+        assert "margin-bottom: 16mm;" in result
+        assert "margin-left: 14mm;" in result
+        assert "margin-right: 12mm;" in result
+        assert '@top-left { content: "Draft";' in result
+        assert '@top-center { content: "Internal";' in result
+        assert '@top-right { content: "v1";' in result
+        assert '@bottom-left { content: "Acme";' in result
+        assert '@bottom-right { content: "Confidential";' in result
+
+    def test_page_number_positions_are_rendered_in_margin_boxes(self, sample_sections):
+        center = export_html(sample_sections, "Proj", "Doc", {
+            "include_page_numbers": True,
+            "page_number_position": "center",
+            "page_number_format": "page-n-of-m",
+        })
+        assert '@bottom-center { content: "Page " counter(page) " of " counter(pages);' in center
+
+        right = export_html(sample_sections, "Proj", "Doc", {
+            "include_page_numbers": True,
+            "page_number_position": "bottom-right",
+            "page_number_format": "page-n",
+        })
+        assert '@bottom-right { content: "Page " counter(page);' in right
+
+    def test_header_and_footer_logo_placement_adds_preview_spacing(self, sample_sections):
+        header = export_html(sample_sections, "Proj", "Doc", {
+            "logo_url": "https://example.com/logo.png",
+            "logo_position": "header-right",
+            "margin_top": "21mm",
+        })
+        assert 'class="page-header-logo right"' in header
+        assert '<body style="padding-top:21mm">' in header
+
+        footer = export_html(sample_sections, "Proj", "Doc", {
+            "logo_url": "https://example.com/logo.png",
+            "logo_position": "footer-center",
+            "margin_bottom": "19mm",
+        })
+        assert 'class="page-footer-logo center"' in footer
+        assert '<body style="padding-bottom:19mm">' in footer
 
     def test_no_h1_underline_unless_profile_selects_it(self, sample_sections):
         result = export_html(sample_sections, "Proj", "Doc")
