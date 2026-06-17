@@ -3,6 +3,7 @@ import { AlertCircle, Check, ChevronDown, Eye, Loader2, RotateCcw, Save, X } fro
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { analysisApi } from '@/api/analysis';
+import { sectionsApi } from '@/api/sections';
 import {
   useAcceptAiProposedChange,
   useAiProposedChanges,
@@ -309,9 +310,7 @@ export function AiPanel({
     if (!documentId) return;
     try {
       if (suggestion.type === 'rename' && suggestion.section_id && suggestion.suggested_heading) {
-        await import('@/api/sections').then((m) =>
-          m.sectionsApi.updateSectionTitle(suggestion.section_id!, suggestion.suggested_heading!),
-        );
+        await sectionsApi.updateSectionTitle(suggestion.section_id, suggestion.suggested_heading);
         toast.success(`Renamed to "${suggestion.suggested_heading}"`);
       }
     } catch {
@@ -366,7 +365,6 @@ export function AiPanel({
       (s) => s.type === 'rename' && s.section_id && s.suggested_heading,
     );
     try {
-      const { sectionsApi } = await import('@/api/sections');
       for (const s of renameSuggestions) {
         await sectionsApi.updateSectionTitle(s.section_id!, s.suggested_heading!);
       }
