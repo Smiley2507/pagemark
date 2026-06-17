@@ -22,6 +22,7 @@ import { useAiStore } from '@/store/aiStore';
 import type { Section } from '@/types';
 import { DiffViewer } from './DiffViewer';
 import type { AIProposedChange } from '@/api/ai';
+import { proposedChangeDiffText, proposedChangePreviewText } from '@/lib/ai-proposed-change-preview';
 
 import { AiPanelHeader } from './ai/AiPanelHeader';
 import { AiPanelEmptyState } from './ai/AiPanelEmptyState';
@@ -88,13 +89,8 @@ function ProposedChangeCard({
   isRejecting: boolean;
   isUndoing: boolean;
 }) {
-  const beforeText = typeof change.before?.content_md === 'string' ? change.before.content_md : '';
-  const afterText = typeof change.after?.content_md === 'string'
-    ? change.after.content_md
-    : typeof change.after?.content === 'string'
-      ? change.after.content
-      : change.preview_markdown || '';
-  const isTextChange = change.change_type === 'rewrite_selection' || change.change_type === 'generate_section';
+  const { beforeText, afterText, isTextChange } = proposedChangeDiffText(change);
+  const previewText = proposedChangePreviewText(change);
   const canUndo = change.status === 'accepted';
 
   return (
@@ -135,7 +131,7 @@ function ProposedChangeCard({
           />
         ) : (
           <pre className="whitespace-pre-wrap rounded bg-canvas p-2 text-[11px] leading-relaxed text-text-secondary">
-            {JSON.stringify(change.after, null, 2)}
+            {previewText}
           </pre>
         )}
       </div>
