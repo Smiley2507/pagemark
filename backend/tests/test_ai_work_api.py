@@ -194,3 +194,93 @@ async def test_ai_proposed_change_reject_marks_run_rejected_and_blocks_late_acce
     )
     assert sections_response.status_code == 200
     assert sections_response.json()["sections"][0]["heading"] == "Overview"
+
+
+@pytest.mark.anyio
+async def test_apply_outline_diff_accepts_and_undoes_section_structure(
+    client,
+    test_project,
+    ai_work_document,
+):
+    document, overview = ai_work_document
+    endpoint_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/sections",
+        json={"title": "Endpoints"},
+    )
+    assert endpoint_response.status_code == 201
+    endpoint = endpoint_response.json()
+
+    create_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/work-runs",
+        json={
+            "provider": "rule-based",
+            "model": "none",
+            "prompt_context": {"source": "outline-diff-test"},
+            "changes": [
+                {
+                    "change_type": "apply_outline_diff",
+                    "title": "Apply proposed outline",
+                    "after": {
+                        "added_sections": [
+                            {
+                                "heading": "Troubleshooting",
+                                "order_index": 1,
+                                "content_md": "Known issues and recovery steps.",
+                            }
+                        ],
+                        "renamed_sections": [
+                            {
+                                "section_id": overview.id,
+                                "after_heading": "System Overview",
+                            }
+                        ],
+                        "removed_section_ids": [endpoint["id"]],
+                        "order": [
+                            {"section_id": overview.id, "order_index": 0}
+                        ],
+                    },
+                }
+            ],
+        },
+    )
+    assert create_response.status_code == 201
+    run = create_response.json()
+    change_id = run["proposed_changes"][0]["id"]
+
+    accept_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/proposed-changes/{change_id}/accept"
+    )
+    assert accept_response.status_code == 200
+    assert accept_response.json()["status"] == "accepted"
+
+    sections_response = await client.get(
+        f"/projects/{test_project.id}/documents/{document.id}/sections"
+    )
+    assert sections_response.status_code == 200
+    accepted_headings = [section["heading"] for section in sections_response.json()["sections"]]
+    assert accepted_headings == ["System Overview", "Troubleshooting"]
+    assert "Endpoints" not in accepted_headings
+
+    runs_response = await client.get(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/work-runs"
+    )
+    assert runs_response.status_code == 200
+    undo_group = runs_response.json()["work_runs"][0]["undo_group"]
+    assert undo_group["changes"][0]["before"]["created_section_ids"]
+    assert any(
+        item["section_id"] == endpoint["id"] and item["lifecycle_status"] == "active"
+        for item in undo_group["changes"][0]["before"]["sections"]
+    )
+
+    undo_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/work-runs/{run['id']}/undo"
+    )
+    assert undo_response.status_code == 200
+    assert undo_response.json()["status"] == "undone"
+
+    restored_response = await client.get(
+        f"/projects/{test_project.id}/documents/{document.id}/sections"
+    )
+    assert restored_response.status_code == 200
+    restored_headings = [section["heading"] for section in restored_response.json()["sections"]]
+    assert restored_headings == ["Overview", "Endpoints"]

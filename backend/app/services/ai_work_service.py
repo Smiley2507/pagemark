@@ -348,7 +348,102 @@ async def _apply_change(
                 section.updated_at = datetime.utcnow()
         return before
 
+    if change.change_type == AIProposedChangeType.APPLY_OUTLINE_DIFF:
+        return await _apply_outline_diff(db, document, change, after)
+
     raise HTTPException(status_code=400, detail=f"Unsupported AI change type: {change.change_type.value}")
+
+
+async def _apply_outline_diff(
+    db: AsyncSession,
+    document: Document,
+    change: AIProposedChange,
+    after: dict[str, Any],
+) -> dict[str, Any]:
+    section_ids = set()
+    for item in after.get("renamed_sections", []) or after.get("rename_sections", []):
+        if isinstance(item, dict) and item.get("section_id") is not None:
+            section_ids.add(int(item["section_id"]))
+    for section_id in after.get("removed_section_ids", []) or after.get("remove_section_ids", []):
+        section_ids.add(int(section_id))
+    for item in after.get("order", []):
+        if isinstance(item, dict) and item.get("section_id") is not None:
+            section_ids.add(int(item["section_id"]))
+
+    sections: dict[int, Section] = {}
+    if section_ids:
+        result = await db.execute(
+            select(Section).where(Section.document_id == document.id, Section.id.in_(section_ids))
+        )
+        sections = {section.id: section for section in result.scalars().all()}
+
+    before = {
+        "sections": [
+            {
+                "section_id": section.id,
+                "heading": section.heading,
+                "title": section.title,
+                "order_index": section.order_index,
+                "parent_id": section.parent_id,
+                "lifecycle_status": section.lifecycle_status.value,
+            }
+            for section in sections.values()
+        ],
+        "created_section_ids": [],
+    }
+
+    created_section_ids: list[int] = []
+    for item in after.get("added_sections", []) or after.get("add_sections", []):
+        if not isinstance(item, dict):
+            continue
+        heading = str(item.get("heading") or item.get("title") or "Untitled Section")
+        content = str(item.get("content_md") or item.get("content") or "")
+        section = Section(
+            document_id=document.id,
+            parent_id=item.get("parent_id"),
+            order_index=int(item.get("order_index", len(sections) + len(created_section_ids))),
+            heading=heading,
+            title=heading,
+            content_md=content,
+            content_lifecycle=SectionContentLifecycle.GENERATED_DRAFT if content else SectionContentLifecycle.EMPTY,
+            status=SectionStatus.DRAFT if content else SectionStatus.PENDING,
+            lifecycle_status=LifecycleStatus.ACTIVE,
+            workflow_metadata={"ai_work_run_id": change.work_run_id, "ai_change_id": change.id},
+        )
+        db.add(section)
+        await db.flush()
+        created_section_ids.append(section.id)
+
+    for item in after.get("renamed_sections", []) or after.get("rename_sections", []):
+        if not isinstance(item, dict) or item.get("section_id") is None:
+            continue
+        section = sections.get(int(item["section_id"]))
+        if not section:
+            continue
+        heading = str(item.get("after_heading") or item.get("heading") or item.get("title") or section.heading)
+        section.heading = heading
+        section.title = heading
+        section.updated_at = datetime.utcnow()
+
+    for section_id in after.get("removed_section_ids", []) or after.get("remove_section_ids", []):
+        section = sections.get(int(section_id))
+        if section:
+            section.lifecycle_status = LifecycleStatus.ARCHIVED
+            section.updated_at = datetime.utcnow()
+
+    for item in after.get("order", []):
+        if not isinstance(item, dict) or item.get("section_id") is None:
+            continue
+        section = sections.get(int(item["section_id"]))
+        if section:
+            section.order_index = int(item.get("order_index", section.order_index))
+            section.updated_at = datetime.utcnow()
+
+    after_copy = dict(after)
+    after_copy["created_section_ids"] = created_section_ids
+    change.after_json = after_copy
+    before["created_section_ids"] = created_section_ids
+    return before
 
 
 async def _undo_change(db: AsyncSession, change: AIProposedChange) -> None:
@@ -371,6 +466,27 @@ async def _undo_change(db: AsyncSession, change: AIProposedChange) -> None:
             if section:
                 section.order_index = int(item["order_index"])
                 section.updated_at = datetime.utcnow()
+        return
+
+    if change.change_type == AIProposedChangeType.APPLY_OUTLINE_DIFF:
+        for section_id in (change.after_json or {}).get("created_section_ids", []):
+            section = await db.get(Section, section_id)
+            if section:
+                section.lifecycle_status = LifecycleStatus.ARCHIVED
+                section.updated_at = datetime.utcnow()
+        section_ids = [int(item["section_id"]) for item in before.get("sections", []) if "section_id" in item]
+        if section_ids:
+            result = await db.execute(select(Section).where(Section.id.in_(section_ids)))
+            sections = {section.id: section for section in result.scalars().all()}
+            for item in before.get("sections", []):
+                section = sections.get(int(item["section_id"]))
+                if section:
+                    section.heading = item["heading"]
+                    section.title = item.get("title") or item["heading"]
+                    section.order_index = int(item["order_index"])
+                    section.parent_id = item.get("parent_id")
+                    section.lifecycle_status = LifecycleStatus(item["lifecycle_status"])
+                    section.updated_at = datetime.utcnow()
         return
 
     section = await db.get(Section, before.get("section_id"))
