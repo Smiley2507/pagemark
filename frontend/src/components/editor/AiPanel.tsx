@@ -3,7 +3,6 @@ import { AlertCircle, Check, ChevronDown, Eye, Loader2, RotateCcw, Save, X } fro
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { analysisApi } from '@/api/analysis';
-import { sectionsApi } from '@/api/sections';
 import {
   useAcceptAiProposedChange,
   useAiProposedChanges,
@@ -22,7 +21,7 @@ import { useAiCredentials, useAiProviderModels } from '@/hooks/useAiCredentials'
 import { useAiStore } from '@/store/aiStore';
 import type { Section } from '@/types';
 import { DiffViewer } from './DiffViewer';
-import type { AIProposedChange } from '@/api/ai';
+import type { AIProposedChange, StructuralSuggestion } from '@/api/ai';
 import { proposedChangeDiffText, proposedChangePreviewText } from '@/lib/ai-proposed-change-preview';
 
 import { AiPanelHeader } from './ai/AiPanelHeader';
@@ -167,7 +166,7 @@ export function AiPanel({
   const [showContextEditor, setShowContextEditor] = useState(false);
   const [contextDraft, setContextDraft] = useState(projectContextMd || '');
   const [proposal, setProposal] = useState<AiProposal | null>(null);
-  const [structureSuggestions, setStructureSuggestions] = useState<import('@/api/ai').StructuralSuggestion[] | null>(null);
+  const [structureSuggestions, setStructureSuggestions] = useState<StructuralSuggestion[] | null>(null);
   const [contextAction, setContextAction] = useState<{ action: 'ask_user' | 'insufficient_context'; question: string } | null>(null);
   const [contextActionAnswer, setContextActionAnswer] = useState('');
 
@@ -306,15 +305,60 @@ export function AiPanel({
     }
   };
 
-  const handleAcceptSuggestion = async (suggestion: import('@/api/ai').StructuralSuggestion) => {
+  const structuralChangePayload = (suggestion: StructuralSuggestion) => {
+    if (suggestion.type === 'rename' && suggestion.section_id && suggestion.suggested_heading) {
+      return {
+        change_type: 'rename_section' as const,
+        title: `Rename section to "${suggestion.suggested_heading}"`,
+        section_id: suggestion.section_id,
+        rationale: suggestion.reasoning,
+        before: { heading: suggestion.heading },
+        after: { heading: suggestion.suggested_heading },
+        preview_markdown: `# ${suggestion.suggested_heading}`,
+      };
+    }
+    if (suggestion.type === 'add' && suggestion.suggested_heading) {
+      return {
+        change_type: 'add_section' as const,
+        title: `Add section "${suggestion.suggested_heading}"`,
+        section_id: null,
+        rationale: suggestion.reasoning,
+        before: null,
+        after: {
+          heading: suggestion.suggested_heading,
+          parent_heading: suggestion.suggested_parent_heading,
+          order_index: suggestion.suggested_order ?? sections.length,
+        },
+        preview_markdown: suggestion.reasoning,
+      };
+    }
+    return null;
+  };
+
+  const queueStructuralChanges = async (suggestions: StructuralSuggestion[]) => {
+    const changes = suggestions.map(structuralChangePayload).filter((change) => change !== null);
+    if (changes.length === 0) {
+      toast.error('This structural suggestion is not supported for review yet');
+      return;
+    }
+    await createAiWorkRun.mutateAsync({
+      provider: activeCredential?.provider || 'structure',
+      model: selectedModel || activeCredential?.model_id || 'unspecified',
+      prompt_context: {
+        project_id: projectId,
+        document_id: documentId,
+        source: 'structure_suggestions',
+      },
+      changes,
+    });
+  };
+
+  const handleAcceptSuggestion = async (suggestion: StructuralSuggestion) => {
     if (!documentId) return;
     try {
-      if (suggestion.type === 'rename' && suggestion.section_id && suggestion.suggested_heading) {
-        await sectionsApi.updateSectionTitle(suggestion.section_id, suggestion.suggested_heading);
-        toast.success(`Renamed to "${suggestion.suggested_heading}"`);
-      }
+      await queueStructuralChanges([suggestion]);
     } catch {
-      toast.error('Failed to apply suggestion');
+      toast.error('Failed to queue structural suggestion');
     }
   };
 
@@ -361,17 +405,11 @@ export function AiPanel({
 
   const handleApplyAllSuggestions = async () => {
     if (!structureSuggestions || !documentId) return;
-    const renameSuggestions = structureSuggestions.filter(
-      (s) => s.type === 'rename' && s.section_id && s.suggested_heading,
-    );
     try {
-      for (const s of renameSuggestions) {
-        await sectionsApi.updateSectionTitle(s.section_id!, s.suggested_heading!);
-      }
-      toast.success(`Applied ${renameSuggestions.length} change(s)`);
+      await queueStructuralChanges(structureSuggestions);
       setStructureSuggestions(null);
     } catch {
-      toast.error('Failed to apply all changes');
+      toast.error('Failed to queue structural suggestions');
     }
   };
 
@@ -424,15 +462,32 @@ export function AiPanel({
 
   const acceptProposal = () => {
     if (!proposal) return;
-    if (proposal.kind !== 'rewrite') {
-      toast.error('Only section rewrites can be queued for review right now');
+    if (proposal.kind === 'rewrite') {
+      void queueSectionContentChange({
+        title: 'Chat proposed rewrite',
+        content: proposal.content,
+        rationale: 'Created from assistant chat output.',
+      });
       return;
     }
-    void queueSectionContentChange({
-      title: 'Chat proposed rewrite',
-      content: proposal.content,
-      rationale: 'Created from assistant chat output.',
-    });
+    if (proposal.kind === 'append') {
+      const separator = activeSectionContent.trim() ? '\n\n' : '';
+      void queueSectionContentChange({
+        title: 'Chat proposed append',
+        content: `${activeSectionContent}${separator}${proposal.content}`,
+        rationale: 'Created from assistant chat output.',
+      });
+      return;
+    }
+    if (proposal.kind === 'replace_selection') {
+      onReplaceSelection(proposal.content);
+      setProposal(null);
+      toast.success('Inserted AI content into the selected text');
+      return;
+    }
+    onInsertAtCursor(proposal.content);
+    setProposal(null);
+    toast.success('Inserted AI content at cursor');
   };
 
   const proposalLabel = proposal?.kind === 'rewrite'

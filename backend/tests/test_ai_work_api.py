@@ -197,6 +197,60 @@ async def test_ai_proposed_change_reject_marks_run_rejected_and_blocks_late_acce
 
 
 @pytest.mark.anyio
+async def test_add_section_change_accept_creates_draft_section_with_content(
+    client,
+    test_project,
+    ai_work_document,
+):
+    document, _section = ai_work_document
+
+    create_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/work-runs",
+        json={
+            "provider": "rule-based",
+            "model": "none",
+            "prompt_context": {"source": "add-section-test"},
+            "changes": [
+                {
+                    "change_type": "add_section",
+                    "title": "Add troubleshooting section",
+                    "after": {
+                        "heading": "Troubleshooting",
+                        "order_index": 1,
+                        "content_md": "Known issues and recovery steps.",
+                    },
+                    "preview_markdown": "Known issues and recovery steps.",
+                }
+            ],
+        },
+    )
+    assert create_response.status_code == 201
+    run = create_response.json()
+    change_id = run["proposed_changes"][0]["id"]
+
+    accept_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/proposed-changes/{change_id}/accept"
+    )
+    assert accept_response.status_code == 200
+    accepted = accept_response.json()
+    assert accepted["status"] == "accepted"
+    assert accepted["after"]["created_section_id"] is not None
+
+    sections_response = await client.get(
+        f"/projects/{test_project.id}/documents/{document.id}/sections"
+    )
+    assert sections_response.status_code == 200
+    created = [
+        section
+        for section in sections_response.json()["sections"]
+        if section["heading"] == "Troubleshooting"
+    ][0]
+    assert created["content_md"] == "Known issues and recovery steps."
+    assert created["content_lifecycle"] == "generated_draft"
+    assert created["status"] == "draft"
+
+
+@pytest.mark.anyio
 async def test_apply_outline_diff_accepts_and_undoes_section_structure(
     client,
     test_project,
