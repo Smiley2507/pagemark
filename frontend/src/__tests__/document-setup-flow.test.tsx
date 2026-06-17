@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { GenerationChoiceStep } from '@/components/document-setup/GenerationChoiceStep';
+import { OutlineReviewStep } from '@/components/document-setup/OutlineReviewStep';
+import { TemplateRecommendationStep } from '@/components/document-setup/TemplateRecommendationStep';
 import {
   deriveUiStage,
   describeSource,
@@ -9,6 +13,7 @@ import {
   sourceTypeFromProject,
 } from '@/lib/document-setup-flow';
 import type { AnalysisStatus } from '@/types';
+import type { OutlineProposal, TemplateRecommendation } from '@/types/document-setup';
 
 describe('document setup lifecycle helpers', () => {
   it('maps Project source data into setup source types', () => {
@@ -77,12 +82,184 @@ describe('document setup lifecycle helpers', () => {
 
 describe('generation choice defaults', () => {
   it('defaults to on-demand generation when a provider exists', () => {
+    const onChoose = vi.fn();
+
+    render(<GenerationChoiceStep hasActiveProvider onChoose={onChoose} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /start generation and enter editor/i }));
+
     expect(initialGenerationMode(true)).toBe('on-demand');
     expect(generationModeRequiresProvider('on-demand')).toBe(true);
+    expect(onChoose).toHaveBeenCalledWith('on-demand');
+    expect(screen.getByRole('button', { name: /generate approved sections/i })).toHaveClass('border-interaction');
+    expect(within(screen.getByRole('button', { name: /generate approved sections/i })).getByText('Recommended')).toBeInTheDocument();
   });
 
   it('defaults to manual editor entry when no provider exists', () => {
+    const onChoose = vi.fn();
+
+    render(<GenerationChoiceStep hasActiveProvider={false} onChoose={onChoose} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /enter editor now/i }));
+
     expect(initialGenerationMode(false)).toBe('manual');
     expect(generationModeRequiresProvider('manual')).toBe(false);
+    expect(onChoose).toHaveBeenCalledWith('manual');
+    expect(screen.getByRole('button', { name: /enter editor without generation/i })).toHaveClass('border-interaction');
+  });
+});
+
+describe('template recommendation setup UI', () => {
+  const ruleRecommendation: TemplateRecommendation = {
+    id: 1,
+    document_id: 7,
+    template_id: 11,
+    basis: 'rule_based',
+    score: 0.82,
+    explanation: 'Matches repository endpoints.',
+    template: {
+      id: 11,
+      name: 'API Reference',
+      description: 'Document API endpoints.',
+      category: 'Technical',
+      sections_preview: [{ heading: 'Overview' }, { heading: 'Endpoints' }],
+    },
+  };
+
+  const aiRecommendation: TemplateRecommendation = {
+    ...ruleRecommendation,
+    id: 2,
+    template_id: 12,
+    basis: 'ai_personalized',
+    explanation: 'Adapted from analysis facts.',
+    template: {
+      id: 12,
+      name: 'Maintainer Guide',
+      description: 'Document operational workflows.',
+      category: 'Technical',
+      sections_preview: [{ heading: 'Operations' }],
+    },
+  };
+
+  it('keeps source-less setup on rule-based paths and blocks AI-personalized recommendations', () => {
+    render(
+      <TemplateRecommendationStep
+        recommendations={[ruleRecommendation]}
+        hasActiveProvider
+        sourceType="none"
+        onSelectTemplate={vi.fn()}
+        onCreateCustom={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('No source connected')).toBeInTheDocument();
+    expect(screen.getByText('Source connection required')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /generate ai-personalized recommendation/i })).not.toBeInTheDocument();
+  });
+
+  it('shows provider setup when source exists but no provider is configured', () => {
+    const onConfigureProvider = vi.fn();
+
+    render(
+      <TemplateRecommendationStep
+        recommendations={[ruleRecommendation]}
+        hasActiveProvider={false}
+        sourceType="github-oauth"
+        onSelectTemplate={vi.fn()}
+        onCreateCustom={vi.fn()}
+        onConfigureProvider={onConfigureProvider}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /configure provider for ai recommendation/i }));
+
+    expect(screen.getByText('Provider usage required')).toBeInTheDocument();
+    expect(onConfigureProvider).toHaveBeenCalledOnce();
+  });
+
+  it('selects AI-personalized recommendations through the template callback', () => {
+    const onSelectTemplate = vi.fn();
+
+    render(
+      <TemplateRecommendationStep
+        recommendations={[ruleRecommendation, aiRecommendation]}
+        hasActiveProvider
+        sourceType="github-oauth"
+        onSelectTemplate={onSelectTemplate}
+        onCreateCustom={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /maintainer guide/i }));
+
+    expect(onSelectTemplate).toHaveBeenCalledWith(12, aiRecommendation);
+  });
+});
+
+describe('outline review setup UI', () => {
+  function proposal(): OutlineProposal {
+    return {
+      id: 21,
+      document_id: 7,
+      basis: 'template',
+      status: 'draft',
+      outline_json: [
+        {
+          heading: 'Overview',
+          description: 'Original overview guidance',
+          purpose: 'Orient the reader',
+          order_index: 0,
+        },
+        {
+          heading: 'Endpoints',
+          description: 'Endpoint guidance',
+          purpose: 'List API behavior',
+          order_index: 1,
+        },
+      ],
+    };
+  }
+
+  it('approves edited outline sections with reindexed order', () => {
+    const onApprove = vi.fn();
+
+    render(
+      <OutlineReviewStep
+        proposal={proposal()}
+        onApprove={onApprove}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /overview/i }));
+    fireEvent.change(screen.getByLabelText('Heading'), {
+      target: { value: 'System Overview' },
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: /move section down/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /approve outline/i }));
+
+    expect(onApprove).toHaveBeenCalledWith([
+      expect.objectContaining({ heading: 'Endpoints', order_index: 0 }),
+      expect.objectContaining({ heading: 'System Overview', order_index: 1 }),
+    ]);
+  });
+
+  it('adds and removes sections before approval', () => {
+    const onApprove = vi.fn();
+
+    render(
+      <OutlineReviewStep
+        proposal={proposal()}
+        onApprove={onApprove}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^add section$/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /remove section/i })[1]);
+    fireEvent.click(screen.getByRole('button', { name: /approve outline/i }));
+
+    expect(onApprove).toHaveBeenCalledWith([
+      expect.objectContaining({ heading: 'Overview', order_index: 0 }),
+      expect.objectContaining({ heading: 'New Section', order_index: 1 }),
+    ]);
   });
 });
