@@ -2,6 +2,12 @@
 
 This checklist is organized by feature area. Each item includes a description of what to test, the expected behavior, and any pre-conditions required. A person with no knowledge of the codebase can use this to verify that every major feature works as intended.
 
+Before running manual or full-stack checks after pulling migration-bearing commits, apply database migrations from the backend directory:
+
+```bash
+alembic upgrade head
+```
+
 ---
 
 ## 1. User Registration and Authentication

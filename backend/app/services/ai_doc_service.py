@@ -738,7 +738,8 @@ class AIService:
         Returns a list of suggestion dicts with keys:
           type (reorder|rename|add|remove|merge),
           section_id, heading, suggested_heading, suggested_order,
-          suggested_parent_heading, target_section_id, reasoning.
+          suggested_parent_heading, suggested_content_md, target_section_id,
+          reasoning.
         """
         document = await self._fetch_document(db, document_id)
         project = await self._fetch_project(db, document.project_id)
@@ -805,6 +806,7 @@ class AIService:
             f'- "suggested_heading": str (new heading for rename, or heading for add)\n'
             f'- "suggested_order": int (new position index, for reorder)\n'
             f'- "suggested_parent_heading": str or null (for add, which section to add under)\n'
+            f'- "suggested_content_md": str or null (for add, a concise initial markdown draft grounded in analysis facts)\n'
             f'- "reasoning": str (why this change is suggested)\n\n'
             f"If the structure is already optimal, return an empty suggestions array.\n\n"
             f"Return ONLY valid JSON. No preamble."

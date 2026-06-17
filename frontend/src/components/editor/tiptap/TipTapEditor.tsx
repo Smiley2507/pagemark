@@ -57,15 +57,58 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
       import.meta.env.VITE_COLLABORATION_ENABLED === 'true'
     )
 
-    if (!shouldCollaborate || !props.projectId || !props.documentId || !props.sectionId) {
-      return <TipTapEditorInner {...props} ref={ref} />
-    }
-
-    const roomId = sectionRoomId({
+    const roomId = shouldCollaborate && props.projectId && props.documentId && props.sectionId ? sectionRoomId({
       projectId: props.projectId,
       documentId: props.documentId,
       sectionId: props.sectionId,
+    }) : null
+    const [preflight, setPreflight] = useState<{ status: 'idle' | 'checking' | 'ready' | 'failed'; error?: string }>({
+      status: shouldCollaborate ? 'checking' : 'idle',
     })
+
+    useEffect(() => {
+      let cancelled = false
+      if (!shouldCollaborate || !roomId) {
+        setPreflight({ status: 'idle' })
+        return
+      }
+
+      setPreflight({ status: 'checking' })
+      collaborationApi.authorize(roomId)
+        .then(() => {
+          if (!cancelled) setPreflight({ status: 'ready' })
+        })
+        .catch((error) => {
+          if (!cancelled) {
+            setPreflight({
+              status: 'failed',
+              error: error instanceof Error ? error.message : 'Collaboration auth failed',
+            })
+          }
+        })
+
+      return () => {
+        cancelled = true
+      }
+    }, [roomId, shouldCollaborate])
+
+    if (!shouldCollaborate || !roomId) {
+      return <TipTapEditorInner {...props} ref={ref} />
+    }
+
+    if (preflight.status === 'checking') {
+      return <CollaborationStatusCard title="Connecting collaboration" message="Checking editor room access..." />
+    }
+
+    if (preflight.status === 'failed') {
+      return (
+        <CollaborationStatusCard
+          title="Collaboration unavailable"
+          message={preflight.error || 'The collaborative editor could not authorize this section.'}
+          tone="danger"
+        />
+      )
+    }
 
     return (
       <RoomProvider id={roomId}>
@@ -76,6 +119,28 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
     )
   }
 )
+
+function CollaborationStatusCard({
+  title,
+  message,
+  tone = 'neutral',
+}: {
+  title: string
+  message: string
+  tone?: 'neutral' | 'danger'
+}) {
+  return (
+    <div className={cn(
+      'rounded-md border px-3 py-3 text-sm',
+      tone === 'danger'
+        ? 'border-status-danger-foreground/30 bg-status-danger text-status-danger-foreground'
+        : 'border-separator bg-panel text-text-secondary',
+    )}>
+      <p className="font-medium text-text-primary">{title}</p>
+      <p className="mt-1 whitespace-pre-wrap text-xs">{message}</p>
+    </div>
+  )
+}
 
 const CollaborativeTipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
   function CollaborativeTipTapEditor(props, ref) {
@@ -153,7 +218,6 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
       editor.on('focus', handleFocus)
       return () => {
         editor.off('focus', handleFocus)
-        onFocusChange(null)
       }
     }, [editor, onFocusChange])
 

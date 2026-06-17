@@ -92,6 +92,33 @@ async def test_collaboration_auth_marks_approved_document_as_read_only(
     assert captured["approved"] is True
 
 
+async def test_collaboration_auth_surfaces_liveblocks_error_body(
+    client: AsyncClient,
+    collaboration_section,
+    test_project,
+    monkeypatch,
+    caplog,
+):
+    document, section = collaboration_section
+
+    async def fake_authorize_liveblocks_session(**_kwargs):
+        return 422, '{"error":"bad Liveblocks payload"}'
+
+    monkeypatch.setattr(
+        "app.routers.documents._authorize_liveblocks_session",
+        fake_authorize_liveblocks_session,
+    )
+
+    with caplog.at_level("ERROR", logger="app.routers.documents"):
+        response = await client.post(
+            f"/projects/{test_project.id}/documents/{document.id}/sections/{section.id}/collaboration/auth"
+        )
+
+    assert response.status_code == 422
+    assert response.json() == {"error": "bad Liveblocks payload"}
+    assert "bad Liveblocks payload" in caplog.text
+
+
 async def test_collaboration_snapshot_updates_content_and_clears_review_state(
     client: AsyncClient,
     db: AsyncSession,

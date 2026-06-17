@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 
 import httpx
@@ -82,6 +83,8 @@ from app.services import generation_service
 from app.services import template_recommendation_service
 from app.services import freshness_service, activity_service
 from app.services.version_service import create_version_snapshot
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["documents"])
 
@@ -1232,6 +1235,13 @@ async def authorize_section_collaboration(
         project=project,
         approved=document.status == DocumentStatus.APPROVED,
     )
+    if liveblocks_status >= 400:
+        logger.error(
+            "Liveblocks authorization failed for room %s with status %s: %s",
+            room_id,
+            liveblocks_status,
+            liveblocks_body,
+        )
     return Response(
         content=liveblocks_body,
         status_code=liveblocks_status,

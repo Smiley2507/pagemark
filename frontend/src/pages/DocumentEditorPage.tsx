@@ -199,7 +199,7 @@ function SectionBlock({
   onAcceptStaleness?: (sectionId: number) => void;
   onRejectStaleness?: (sectionId: number) => void;
   isStalenessProcessing?: boolean;
-  onFocusChange?: (editor: Editor | null) => void;
+  onFocusChange?: (sectionId: number, editor: Editor | null) => void;
   isDocumentApproved?: boolean;
 }) {
   const [content, setContent] = useState(section.content_md);
@@ -232,6 +232,10 @@ function SectionBlock({
     onLocalContentChange(section.id, nextContent);
   };
 
+  const handleEditorFocusChange = useCallback((editor: Editor | null) => {
+    onFocusChange?.(section.id, editor);
+  }, [onFocusChange, section.id]);
+
   const commitTitle = () => {
     const nextTitle = title.trim() || 'Untitled Section';
     setTitle(nextTitle);
@@ -249,6 +253,7 @@ function SectionBlock({
     <section
       id={`section-${section.id}`}
       data-editor-section="true"
+      data-testid={`editor-section-${section.id}`}
       className="group min-w-0 scroll-mt-24 overflow-x-hidden py-7"
     >
       <div className="relative mx-auto max-w-4xl min-w-0 px-2 py-1 transition-colors duration-150 sm:px-4">
@@ -343,7 +348,7 @@ function SectionBlock({
             readOnly={isDocumentApproved}
             onSavingChange={(saving) => onSavingChange(section.id, saving)}
             onSaved={onSaved}
-            onFocusChange={onFocusChange}
+            onFocusChange={handleEditorFocusChange}
           />
         </div>
       </div>
@@ -373,6 +378,7 @@ export function DocumentEditorPage() {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
+  const [activeEditorSectionId, setActiveEditorSectionId] = useState<number | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
   const [versionHistorySectionId, setVersionHistorySectionId] = useState<number | null>(null);
   const [focusMode, setFocusMode] = useState(false);
@@ -622,45 +628,49 @@ export function DocumentEditorPage() {
       toast.error('No active section selected');
       return;
     }
-    if (activeEditor) {
-      activeEditor.commands.setContent(content, { contentType: 'markdown' });
+    const targetEditor = activeEditorSectionId === activeSectionId ? activeEditor : null;
+    if (targetEditor) {
+      targetEditor.commands.setContent(content, { contentType: 'markdown' });
       toast.success('AI content applied to section');
       return;
     }
     updateDocumentSection.mutate({ id: activeSectionId, data: { content_md: content } });
     toast.success('AI content applied to section');
-  }, [activeEditor, activeSectionId, updateDocumentSection]);
+  }, [activeEditor, activeEditorSectionId, activeSectionId, updateDocumentSection]);
 
   const handleInsertAtCursor = useCallback((content: string) => {
-    if (!activeEditor) {
+    const targetEditor = activeEditorSectionId === activeSectionId ? activeEditor : null;
+    if (!targetEditor) {
       toast.error('Focus a section before inserting AI content');
       return;
     }
-    activeEditor.chain().focus().insertContent(content, { contentType: 'markdown' }).run();
+    targetEditor.chain().focus().insertContent(content, { contentType: 'markdown' }).run();
     toast.success('Inserted at cursor');
-  }, [activeEditor]);
+  }, [activeEditor, activeEditorSectionId, activeSectionId]);
 
   const handleReplaceSelection = useCallback((content: string) => {
-    if (!activeEditor) {
+    const targetEditor = activeEditorSectionId === activeSectionId ? activeEditor : null;
+    if (!targetEditor) {
       toast.error('Focus a section and select text before replacing it');
       return;
     }
-    const { selection } = activeEditor.state;
+    const { selection } = targetEditor.state;
     if (selection.empty) {
       toast.error('Select text before replacing it');
       return;
     }
-    activeEditor.chain().focus().insertContent(content, { contentType: 'markdown' }).run();
+    targetEditor.chain().focus().deleteSelection().insertContent(content, { contentType: 'markdown' }).run();
     toast.success('AI content replaced the selection');
-  }, [activeEditor]);
+  }, [activeEditor, activeEditorSectionId, activeSectionId]);
 
   const handleAppendToSection = useCallback((content: string) => {
     if (!activeSectionId) {
       toast.error('No active section selected');
       return;
     }
-    if (activeEditor) {
-      activeEditor.chain().focus('end').insertContent(`\n\n${content}`, { contentType: 'markdown' }).run();
+    const targetEditor = activeEditorSectionId === activeSectionId ? activeEditor : null;
+    if (targetEditor) {
+      targetEditor.chain().focus('end').insertContent(`\n\n${content}`, { contentType: 'markdown' }).run();
       toast.success('AI content appended to section');
       return;
     }
@@ -672,7 +682,14 @@ export function DocumentEditorPage() {
       data: { content_md: `${current.trimEnd()}\n\n${content}` },
     });
     toast.success('AI content appended to section');
-  }, [activeEditor, activeSectionId, localContentBySectionId, sections, updateDocumentSection]);
+  }, [activeEditor, activeEditorSectionId, activeSectionId, localContentBySectionId, sections, updateDocumentSection]);
+
+  const handleSectionFocusChange = useCallback((sectionId: number, editor: Editor | null) => {
+    if (!editor) return;
+    setActiveEditor(editor);
+    setActiveEditorSectionId(sectionId);
+    setActiveSectionId(sectionId);
+  }, []);
 
   useKeyboardShortcuts({
     shortcuts: [
@@ -932,10 +949,7 @@ export function DocumentEditorPage() {
                   onAcceptStaleness={(sectionId) => acceptFreshness.mutate(sectionId)}
                   onRejectStaleness={(sectionId) => rejectFreshness.mutate(sectionId)}
                   isStalenessProcessing={acceptFreshness.isPending || rejectFreshness.isPending}
-                  onFocusChange={(editor) => {
-                    setActiveEditor(editor);
-                    if (editor) setActiveSectionId(section.id);
-                  }}
+                  onFocusChange={handleSectionFocusChange}
                   isDocumentApproved={document?.status === 'approved'}
                 />
               ))}
@@ -952,7 +966,7 @@ export function DocumentEditorPage() {
         <div className={cn(
           'flex shrink-0 border-l border-separator bg-panel transition-all duration-200',
           rightPanelOpen ? 'w-96' : 'w-10',
-        )}>
+        )} data-testid="editor-right-panel">
           {rightPanelOpen ? (
             <div className="flex min-h-0 w-full min-w-0 flex-col">
               <div className="flex h-10 shrink-0 items-center border-b border-separator">

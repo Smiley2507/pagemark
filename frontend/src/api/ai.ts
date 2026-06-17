@@ -11,6 +11,7 @@ export interface StructuralSuggestion {
   suggested_heading: string | null;
   suggested_order: number | null;
   suggested_parent_heading: string | null;
+  suggested_content_md?: string | null;
   reasoning: string;
 }
 

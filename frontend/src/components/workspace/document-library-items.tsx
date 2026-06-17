@@ -35,7 +35,10 @@ export function DocumentSummaryRow({
   onShare?: () => void;
 }) {
   return (
-    <div className="grid gap-3 rounded-md border border-border bg-panel px-3 py-3 transition-colors hover:bg-canvas lg:grid-cols-[minmax(0,1fr)_180px_132px_auto] lg:items-center">
+    <div
+      className="grid gap-3 rounded-md border border-border bg-panel px-3 py-3 transition-colors hover:bg-canvas lg:grid-cols-[minmax(0,1fr)_180px_132px_auto] lg:items-center"
+      data-testid={`document-row-${document.id}`}
+    >
       <button
         type="button"
         onClick={onOpen}

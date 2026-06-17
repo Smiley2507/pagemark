@@ -67,8 +67,11 @@ export function AiPanelContextBar({
     (aiContext?.analysis_summary.endpoint_count || 0) > 0 ||
     (aiContext?.analysis_summary.dependency_count || 0) > 0,
   );
+  const languageFacts = aiContext?.analysis_summary.languages?.slice(0, 2).join(', ');
+  const frameworkFacts = aiContext?.analysis_summary.frameworks?.slice(0, 2).join(', ');
+  const warnings = aiContext?.grounding_warnings?.slice(0, 2) ?? [];
   const hasTemplate = attachments.some((a) => a.type === 'template');
-  const hasContext = activeSectionHeading || attachments.length > 0 || hasProjectBrief || hasAnalysis || hasSourceFacts;
+  const hasContext = activeSectionHeading || attachments.length > 0 || hasProjectBrief || hasAnalysis || hasSourceFacts || warnings.length > 0;
 
   return (
     <div className="shrink-0 border-b border-separator bg-canvas/80 px-3 py-2">
@@ -102,7 +105,7 @@ export function AiPanelContextBar({
             <span className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary">
               <Circle className="h-1.5 w-1.5 fill-cyan-400 text-cyan-400" />
               <FileCode className="h-3 w-3 shrink-0" />
-              <span>Latest Analysis</span>
+              <span>{aiContext?.analysis_summary.is_current ? 'Using latest analysis' : 'Analysis may be stale'}</span>
             </span>
           )}
 
@@ -113,6 +116,21 @@ export function AiPanelContextBar({
               <span>{aiContext?.analysis_summary.total_files || 0} files</span>
             </span>
           )}
+
+          {(languageFacts || frameworkFacts) && (
+            <span className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary">
+              <Circle className="h-1.5 w-1.5 fill-violet-400 text-violet-400" />
+              <FileCode className="h-3 w-3 shrink-0" />
+              <span className="max-w-[120px] truncate">{[languageFacts, frameworkFacts].filter(Boolean).join(' / ')}</span>
+            </span>
+          )}
+
+          {warnings.map((warning, index) => (
+            <span key={`${warning}-${index}`} className="inline-flex items-center gap-1 rounded bg-status-warning px-1.5 py-0.5 text-[10px] text-status-warning-foreground">
+              <Circle className="h-1.5 w-1.5 fill-current" />
+              <span className="max-w-[120px] truncate">{warning}</span>
+            </span>
+          ))}
 
           {hasTemplate && (
             <span className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary">

@@ -13,6 +13,7 @@ class StructuralSuggestion(BaseModel):
     suggested_heading: str | None = None
     suggested_order: int | None = None
     suggested_parent_heading: str | None = None
+    suggested_content_md: str | None = None
     reasoning: str
 
 

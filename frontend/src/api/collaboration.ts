@@ -1,4 +1,5 @@
 import apiClient from './client';
+import axios from 'axios';
 
 export interface CollaborationRoomParts {
   projectId: number;
@@ -28,10 +29,24 @@ export const collaborationApi = {
   async authorize(roomId?: string): Promise<{ token: string }> {
     if (!roomId) throw new Error('Missing collaboration room id');
     const { projectId, documentId, sectionId } = parseSectionRoomId(roomId);
-    const { data } = await apiClient.post(
-      `/projects/${projectId}/documents/${documentId}/sections/${sectionId}/collaboration/auth`
-    );
-    return data;
+    try {
+      const { data } = await apiClient.post(
+        `/projects/${projectId}/documents/${documentId}/sections/${sectionId}/collaboration/auth`
+      );
+      return data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const detail = typeof error.response?.data === 'string'
+          ? error.response.data
+          : JSON.stringify(error.response?.data ?? {});
+        throw new Error(
+          detail && detail !== '{}'
+            ? `Collaboration auth failed (${error.response?.status ?? 'network'}): ${detail}`
+            : `Collaboration auth failed (${error.response?.status ?? 'network'})`
+        );
+      }
+      throw error;
+    }
   },
 
   async snapshotSection(

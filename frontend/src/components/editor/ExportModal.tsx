@@ -452,7 +452,10 @@ export function ExportModal({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
-      <DialogContent className="flex h-full max-h-screen max-w-6xl grid-cols-none flex-col gap-0 overflow-hidden p-0">
+      <DialogContent
+        className="flex h-full max-h-screen max-w-6xl grid-cols-none flex-col gap-0 overflow-hidden p-0"
+        data-testid="export-modal"
+      >
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-separator bg-panel px-5">
           <DialogHeader className="space-y-0">
             <DialogTitle className="flex items-center gap-2 text-section">
@@ -476,7 +479,10 @@ export function ExportModal({
         </header>
 
         <div className="grid min-h-0 flex-1 grid-cols-12 bg-workspace">
-          <aside className="col-span-4 min-h-0 overflow-y-auto border-r border-separator bg-panel p-4 xl:col-span-3">
+          <aside
+            className="col-span-4 min-h-0 overflow-y-auto border-r border-separator bg-panel p-4 xl:col-span-3"
+            data-testid="export-controls"
+          >
             <div className="space-y-5">
               <section className="space-y-3">
                 <div className="flex items-center gap-2 text-meta font-medium uppercase text-text-muted">
@@ -666,7 +672,7 @@ export function ExportModal({
             </div>
           </aside>
 
-          <main className="col-span-8 min-h-0 overflow-hidden xl:col-span-9">
+          <main className="col-span-8 min-h-0 overflow-hidden xl:col-span-9" data-testid="export-preview">
             <div className="flex h-full flex-col">
               <div className="flex h-10 shrink-0 items-center justify-between border-b border-separator bg-panel px-4 text-meta text-text-secondary">
                 <span>{projectName}</span>
