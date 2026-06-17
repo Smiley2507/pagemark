@@ -6,38 +6,45 @@ import { Toaster } from 'sonner';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { useAuthStore } from './store/authStore';
 
-import { LandingPage } from './pages/LandingPage';
-import { LoginPage } from './pages/auth/LoginPage';
-import { RegisterPage } from './pages/auth/RegisterPage';
-import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
-import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
-import { Analysis } from './pages/Analysis';
-import { GitConnectPage } from './pages/GitConnectPage';
 import { useMe } from './hooks/useAuth';
-import { TemplatesView } from './components/dashboard';
-import { SettingsPage } from './pages/SettingsPage';
-import { NLPDashboard } from './pages/NLPDashboard';
-import { ExportPage } from './pages/ExportPage';
-import { DocumentSetupPage } from './pages/DocumentSetupPage';
-import { HomePage } from './pages/HomePage';
-import { ProjectsPage } from './pages/ProjectsPage';
-import { ProjectWorkspacePage } from './pages/ProjectWorkspacePage';
-import { DocumentLibraryPage } from './pages/DocumentLibraryPage';
-import { ProjectSourcePage } from './pages/ProjectSourcePage';
-import { ProjectActivityPage } from './pages/ProjectActivityPage';
-import { DocumentEditorPage } from './pages/DocumentEditorPage';
-import { ProjectSettingsPage } from './pages/ProjectSettingsPage';
-import { MembersPage } from './pages/MembersPage';
 
 const queryClient = new QueryClient();
 
-import { VerifyEmailPendingPage } from './pages/auth/VerifyEmailPendingPage';
-import { VerifyEmailPage } from './pages/auth/VerifyEmailPage';
-import { OrgInvitePage } from './pages/auth/OrgInvitePage';
 import { useOrgStore } from './store/orgStore';
 import { orgApi } from './api/org';
 import { MainLayout } from './components/layout/MainLayout';
 import { collaborationApi } from './api/collaboration';
+
+const LandingPage = React.lazy(() => import('./pages/LandingPage').then((m) => ({ default: m.LandingPage })));
+const LoginPage = React.lazy(() => import('./pages/auth/LoginPage').then((m) => ({ default: m.LoginPage })));
+const RegisterPage = React.lazy(() => import('./pages/auth/RegisterPage').then((m) => ({ default: m.RegisterPage })));
+const ForgotPasswordPage = React.lazy(() => import('./pages/auth/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = React.lazy(() => import('./pages/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
+const VerifyEmailPendingPage = React.lazy(() => import('./pages/auth/VerifyEmailPendingPage').then((m) => ({ default: m.VerifyEmailPendingPage })));
+const VerifyEmailPage = React.lazy(() => import('./pages/auth/VerifyEmailPage').then((m) => ({ default: m.VerifyEmailPage })));
+const OrgInvitePage = React.lazy(() => import('./pages/auth/OrgInvitePage').then((m) => ({ default: m.OrgInvitePage })));
+const Analysis = React.lazy(() => import('./pages/Analysis').then((m) => ({ default: m.Analysis })));
+const GitConnectPage = React.lazy(() => import('./pages/GitConnectPage').then((m) => ({ default: m.GitConnectPage })));
+const TemplatesView = React.lazy(() => import('./components/dashboard').then((m) => ({ default: m.TemplatesView })));
+const SettingsPage = React.lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const NLPDashboard = React.lazy(() => import('./pages/NLPDashboard').then((m) => ({ default: m.NLPDashboard })));
+const ExportPage = React.lazy(() => import('./pages/ExportPage').then((m) => ({ default: m.ExportPage })));
+const DocumentSetupPage = React.lazy(() => import('./pages/DocumentSetupPage').then((m) => ({ default: m.DocumentSetupPage })));
+const HomePage = React.lazy(() => import('./pages/HomePage').then((m) => ({ default: m.HomePage })));
+const ProjectsPage = React.lazy(() => import('./pages/ProjectsPage').then((m) => ({ default: m.ProjectsPage })));
+const ProjectWorkspacePage = React.lazy(() => import('./pages/ProjectWorkspacePage').then((m) => ({ default: m.ProjectWorkspacePage })));
+const DocumentLibraryPage = React.lazy(() => import('./pages/DocumentLibraryPage').then((m) => ({ default: m.DocumentLibraryPage })));
+const ProjectSourcePage = React.lazy(() => import('./pages/ProjectSourcePage').then((m) => ({ default: m.ProjectSourcePage })));
+const ProjectActivityPage = React.lazy(() => import('./pages/ProjectActivityPage').then((m) => ({ default: m.ProjectActivityPage })));
+const DocumentEditorPage = React.lazy(() => import('./pages/DocumentEditorPage').then((m) => ({ default: m.DocumentEditorPage })));
+const ProjectSettingsPage = React.lazy(() => import('./pages/ProjectSettingsPage').then((m) => ({ default: m.ProjectSettingsPage })));
+const MembersPage = React.lazy(() => import('./pages/MembersPage').then((m) => ({ default: m.MembersPage })));
+
+const PageFallback = () => (
+  <div className="flex min-h-screen w-full items-center justify-center bg-background">
+    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+  </div>
+);
 
 const RootRedirect = () => {
   const user = useAuthStore((state) => state.user);
@@ -87,57 +94,59 @@ const AppRoutes = () => {
   }
 
   return (
-    <Routes>
-      {/* Public Routes */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/verify-email" element={<VerifyEmailPage />} />
-      <Route path="/verify-email-pending" element={<VerifyEmailPendingPage />} />
+    <React.Suspense fallback={<PageFallback />}>
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/verify-email-pending" element={<VerifyEmailPendingPage />} />
 
-      {/* Protected Routes */}
-      <Route element={<ProtectedRoute />}>
-        {/* Full-screen routes (no sidebar/header) */}
-        <Route path="/editor/:id" element={<EditorLegacyRedirect />} />
-        <Route path="/export/:projectId" element={<ExportPage />} />
-        <Route path="/document-setup" element={<DocumentSetupPage />} />
-        <Route path="/projects/:projectId/documents/:documentId" element={<DocumentEditorPage />} />
+        {/* Protected Routes */}
+        <Route element={<ProtectedRoute />}>
+          {/* Full-screen routes (no sidebar/header) */}
+          <Route path="/editor/:id" element={<EditorLegacyRedirect />} />
+          <Route path="/export/:projectId" element={<ExportPage />} />
+          <Route path="/document-setup" element={<DocumentSetupPage />} />
+          <Route path="/projects/:projectId/documents/:documentId" element={<DocumentEditorPage />} />
 
-        {/* Main application routes */}
-        <Route element={<MainLayout />}>
-          <Route path="/home" element={<HomePage />} />
-          <Route path="/projects" element={<ProjectsPage />} />
-          <Route path="/templates" element={<TemplatesView />} />
-          <Route path="/members" element={<MembersPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/new-project" element={<Navigate to="/home?new_project=true" replace />} />
-          <Route path="/analysis/:id" element={<Analysis />} />
-          <Route path="/nlp/:projectId" element={<NLPDashboard />} />
-          <Route path="/git-connect" element={<GitConnectPage />} />
-          <Route path="/dashboard" element={<Navigate to="/home" replace />} />
-          <Route path="/dashboard/templates" element={<Navigate to="/templates" replace />} />
-          <Route path="/dashboard/settings" element={<Navigate to="/settings" replace />} />
-          
-          {/* Project Workspace */}
-          <Route path="/projects/:projectId" element={<ProjectWorkspacePage />}>
-            <Route index element={<DocumentLibraryPage />} />
-            <Route path="source" element={<ProjectSourcePage />} />
-            <Route path="activity" element={<ProjectActivityPage />} />
-            <Route path="settings" element={<ProjectSettingsPage />} />
+          {/* Main application routes */}
+          <Route element={<MainLayout />}>
+            <Route path="/home" element={<HomePage />} />
+            <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/templates" element={<TemplatesView />} />
+            <Route path="/members" element={<MembersPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/new-project" element={<Navigate to="/home?new_project=true" replace />} />
+            <Route path="/analysis/:id" element={<Analysis />} />
+            <Route path="/nlp/:projectId" element={<NLPDashboard />} />
+            <Route path="/git-connect" element={<GitConnectPage />} />
+            <Route path="/dashboard" element={<Navigate to="/home" replace />} />
+            <Route path="/dashboard/templates" element={<Navigate to="/templates" replace />} />
+            <Route path="/dashboard/settings" element={<Navigate to="/settings" replace />} />
+
+            {/* Project Workspace */}
+            <Route path="/projects/:projectId" element={<ProjectWorkspacePage />}>
+              <Route index element={<DocumentLibraryPage />} />
+              <Route path="source" element={<ProjectSourcePage />} />
+              <Route path="activity" element={<ProjectActivityPage />} />
+              <Route path="settings" element={<ProjectSettingsPage />} />
+            </Route>
           </Route>
         </Route>
-      </Route>
 
-      {/* Invite: accept org invitation */}
-      <Route path="/org/invite/:token" element={<OrgInvitePage />} />
+        {/* Invite: accept org invitation */}
+        <Route path="/org/invite/:token" element={<OrgInvitePage />} />
 
-      {/* Root: redirect based on auth state */}
-      <Route path="/" element={<RootRedirect />} />
+        {/* Root: redirect based on auth state */}
+        <Route path="/" element={<RootRedirect />} />
 
-      {/* Catch-all: redirect unknown paths to root */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* Catch-all: redirect unknown paths to root */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </React.Suspense>
   );
 };
 
