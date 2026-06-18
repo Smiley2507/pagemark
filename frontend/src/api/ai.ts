@@ -116,6 +116,12 @@ export interface AIChatActionRequest {
 export interface AIChatActionResponse {
   message: string;
   action: string;
+  action_payload?: {
+    title?: string;
+    section_id?: number;
+    content_md?: string;
+    rationale?: string | null;
+  } | null;
   work_run?: AIWorkRun | null;
 }
 

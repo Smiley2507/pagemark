@@ -914,6 +914,8 @@ def _editor_action_system_prompt(project: Project, document: Document, sections:
         "Allowed JSON shapes:",
         '{"action":"answer","message":"concise answer"}',
         '{"action":"ask_user","message":"one targeted clarification"}',
+        '{"action":"insert_at_cursor","section_id":123,"title":"Insert paragraph","content_md":"markdown to insert","rationale":"why"}',
+        '{"action":"replace_selection","section_id":123,"title":"Replace selection","content_md":"replacement markdown","rationale":"why"}',
         '{"action":"rewrite_section","section_id":123,"title":"Rewrite section","content_md":"full replacement markdown","rationale":"why"}',
         '{"action":"append_to_section","section_id":123,"title":"Append to section","content_md":"markdown to append","rationale":"why"}',
         '{"action":"rename_section","section_id":123,"title":"Rename section","heading":"New heading","rationale":"why"}',
@@ -1072,6 +1074,24 @@ async def create_ai_chat_action(
     message = str(data.get("message") or data.get("rationale") or "")
     if action in {"answer", "ask_user", "insufficient_context"}:
         return AIChatActionResponse(message=message, action=action, work_run=None)
+    if action in {"insert_at_cursor", "replace_selection"}:
+        section_id = data.get("section_id") or (target_section.id if target_section else None)
+        content = str(data.get("content_md") or data.get("content") or "")
+        if not section_id:
+            raise HTTPException(status_code=400, detail="AI editor action requires a section_id")
+        if not content.strip():
+            raise HTTPException(status_code=400, detail="AI editor action requires content_md")
+        return AIChatActionResponse(
+            message=message or data.get("rationale") or str(data.get("title") or "AI prepared an editor action."),
+            action=action,
+            action_payload={
+                "title": str(data.get("title") or action.replace("_", " ").title()),
+                "section_id": int(section_id),
+                "content_md": content,
+                "rationale": data.get("rationale"),
+            },
+            work_run=None,
+        )
 
     change = _change_from_editor_action(data, document, target_section)
     if change is None:

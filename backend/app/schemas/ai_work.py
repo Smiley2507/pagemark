@@ -141,4 +141,5 @@ class AIChatActionRequest(BaseModel):
 class AIChatActionResponse(BaseModel):
     message: str
     action: str
+    action_payload: Optional[dict[str, Any]] = None
     work_run: Optional[AIWorkRunResponse] = None

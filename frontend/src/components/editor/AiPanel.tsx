@@ -60,6 +60,16 @@ interface AiProposal {
   content: string;
 }
 
+interface LocalEditorAction {
+  id: string;
+  action: 'insert_at_cursor' | 'replace_selection';
+  title: string;
+  sectionId: number;
+  content: string;
+  rationale?: string | null;
+  status: 'proposed' | 'accepted' | 'rejected';
+}
+
 const quickChips = [
   { label: 'Generate', text: 'Generate content for this section from the code analysis' },
   { label: 'Refine', text: 'Refine this section for clarity and completeness' },
@@ -178,6 +188,7 @@ export function AiPanel({
   const [contextActionAnswer, setContextActionAnswer] = useState('');
   const [showPendingChanges, setShowPendingChanges] = useState(false);
   const [latestActionMessage, setLatestActionMessage] = useState<string | null>(null);
+  const [localEditorActions, setLocalEditorActions] = useState<LocalEditorAction[]>([]);
 
   const refineSection = useRefineSection();
   const suggestStructure = useSuggestStructure();
@@ -297,6 +308,30 @@ export function AiPanel({
       if (response.work_run) {
         setLatestActionMessage(response.message || 'AI prepared an editor action for review.');
         setShowPendingChanges(true);
+        return;
+      }
+      const actionPayload = response.action_payload;
+      if (
+        (response.action === 'insert_at_cursor' || response.action === 'replace_selection')
+        && actionPayload?.content_md
+        && typeof actionPayload.section_id === 'number'
+      ) {
+        const actionKind: LocalEditorAction['action'] = response.action;
+        const sectionId = actionPayload.section_id;
+        const content = actionPayload.content_md;
+        setLocalEditorActions((current) => [
+          {
+            id: `local-${Date.now()}`,
+            action: actionKind,
+            title: actionPayload.title || actionKind.replaceAll('_', ' '),
+            sectionId,
+            content,
+            rationale: actionPayload.rationale,
+            status: 'proposed',
+          },
+          ...current,
+        ]);
+        setLatestActionMessage(response.message || 'AI prepared an editor action for review.');
         return;
       }
       if (response.action === 'ask_user' || response.action === 'insufficient_context') {
@@ -559,6 +594,27 @@ export function AiPanel({
     toast.success('Inserted AI content at cursor');
   };
 
+  const acceptLocalEditorAction = (action: LocalEditorAction) => {
+    if (action.sectionId !== activeSectionId) {
+      toast.error('Focus the target section before applying this AI action');
+      return;
+    }
+    if (action.action === 'replace_selection') {
+      onReplaceSelection(action.content);
+    } else {
+      onInsertAtCursor(action.content);
+    }
+    setLocalEditorActions((current) =>
+      current.map((item) => item.id === action.id ? { ...item, status: 'accepted' } : item),
+    );
+  };
+
+  const rejectLocalEditorAction = (actionId: string) => {
+    setLocalEditorActions((current) =>
+      current.map((item) => item.id === actionId ? { ...item, status: 'rejected' } : item),
+    );
+  };
+
   const proposalLabel = proposal?.kind === 'rewrite'
     ? 'Rewrite active section'
     : proposal?.kind === 'replace_selection'
@@ -567,7 +623,7 @@ export function AiPanel({
         ? 'Insert at cursor'
         : 'Append to active section';
 
-  const hasMessages = messages.length > 0 || isStreaming || Boolean(latestActionMessage);
+  const hasMessages = messages.length > 0 || isStreaming || Boolean(latestActionMessage) || localEditorActions.length > 0;
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
@@ -751,6 +807,45 @@ export function AiPanel({
               >
                 <X className="h-3 w-3" />
               </button>
+            </div>
+          </div>
+        )}
+
+        {localEditorActions.length > 0 && (
+          <div className="px-3 py-3">
+            <div className="space-y-2">
+              {localEditorActions.slice(0, 5).map((action) => (
+                <div
+                  key={action.id}
+                  className="rounded-lg border border-interaction/40 bg-interaction-muted/20"
+                  data-testid={`ai-local-action-${action.action}`}
+                >
+                  <div className="flex items-start justify-between gap-2 border-b border-interaction/20 px-3 py-2">
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-semibold text-text-primary">{action.title}</h4>
+                      <p className="text-[10px] capitalize text-text-muted">
+                        {action.action.replaceAll('_', ' ')} · {action.status}
+                      </p>
+                    </div>
+                    {action.status === 'proposed' && (
+                      <div className="flex shrink-0 gap-1">
+                        <Button size="sm" className="h-7 gap-1 text-xs" onClick={() => acceptLocalEditorAction(action)}>
+                          <Check className="h-3 w-3" />
+                          Accept
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => rejectLocalEditorAction(action.id)}>
+                          <X className="h-3 w-3" />
+                          Reject
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  {action.rationale && <p className="px-3 pt-2 text-[11px] text-text-secondary">{action.rationale}</p>}
+                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap px-3 py-2 text-[11px] leading-relaxed text-text-secondary">
+                    {action.content}
+                  </pre>
+                </div>
+              ))}
             </div>
           </div>
         )}

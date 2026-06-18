@@ -18,6 +18,8 @@ def test_editor_action_prompt_forbids_copy_paste_guidance():
     assert "Pagemark's in-editor documentation assistant" in prompt
     assert "Never tell the user to copy and paste into README.md" in prompt
     assert '{"action":"add_section"' in prompt
+    assert '{"action":"insert_at_cursor"' in prompt
+    assert '{"action":"replace_selection"' in prompt
     assert "42: Overview" in prompt
 
 

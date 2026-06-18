@@ -431,3 +431,51 @@ async def test_editor_chat_action_returns_clarification_without_work_run(
     assert payload["action"] == "ask_user"
     assert payload["message"] == "Which deployment target should this guide cover?"
     assert payload["work_run"] is None
+
+
+@pytest.mark.anyio
+async def test_editor_chat_action_returns_replace_selection_payload(
+    client,
+    monkeypatch,
+    test_project,
+    ai_work_document,
+):
+    document, section = ai_work_document
+
+    async def fake_active_credential(_db, _user_id):
+        return StubCredential()
+
+    def fake_complete_text(system, user, provider, api_key, model_id, *, max_tokens):
+        assert "Selected text:" in user
+        return (
+            '{"action":"replace_selection","title":"Replace selected text",'
+            f'"section_id":{section.id},"content_md":"New selected text.",'
+            '"rationale":"The selected text can be clearer."}'
+        )
+
+    monkeypatch.setattr(
+        "app.routers.documents.ai_credential_service.get_active_credential",
+        fake_active_credential,
+    )
+    monkeypatch.setattr("app.routers.documents.complete_text", fake_complete_text)
+
+    response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/chat-actions",
+        json={
+            "message": "Replace the selection",
+            "target_section_id": section.id,
+            "selection": {
+                "section_id": section.id,
+                "from": 1,
+                "to": 4,
+                "text": "Old",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["action"] == "replace_selection"
+    assert payload["work_run"] is None
+    assert payload["action_payload"]["section_id"] == section.id
+    assert payload["action_payload"]["content_md"] == "New selected text."
