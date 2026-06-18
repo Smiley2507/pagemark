@@ -11,7 +11,7 @@ interface MockChange {
   work_run_id: number;
   document_id: number;
   section_id: number | null;
-  change_type: 'rewrite_selection' | 'add_section';
+  change_type: 'rewrite_selection' | 'add_section' | 'rename_section';
   status: ChangeStatus;
   title: string;
   rationale?: string;
@@ -242,7 +242,7 @@ async function handleApi(route: Route, url: URL, state: MockState) {
         work_run: null,
       });
     }
-    if (message.includes('replace')) {
+    if (message.includes('polish') || message.includes('replace')) {
       return json(route, {
         message: 'Prepared a replacement for the selected text.',
         action: 'replace_selection',
@@ -350,16 +350,29 @@ async function handleApi(route: Route, url: URL, state: MockState) {
     diff_lines: [],
   });
   if (method === 'POST' && path === '/documents/10/ai/suggest-structure') return json(route, {
-    suggestions: [{
-      type: 'add',
-      section_id: null,
-      target_section_id: null,
-      heading: null,
-      suggested_heading: 'Operational Playbook',
-      suggested_order: 2,
-      suggested_parent_heading: null,
-      reasoning: 'Operations deserve their own section.',
-    }],
+    suggestions: [
+      {
+        type: 'rename',
+        section_id: 302,
+        target_section_id: null,
+        heading: 'Architecture',
+        suggested_heading: 'System Architecture',
+        suggested_order: null,
+        suggested_parent_heading: null,
+        reasoning: 'The section covers system boundaries, so the heading should be more explicit.',
+      },
+      {
+        type: 'add',
+        section_id: null,
+        target_section_id: null,
+        heading: null,
+        suggested_heading: 'Operational Playbook',
+        suggested_order: 2,
+        suggested_parent_heading: null,
+        suggested_content_md: 'Operational playbook body from source analysis.',
+        reasoning: 'Operations deserve their own section.',
+      },
+    ],
   });
 
   if (method === 'GET' && path === '/projects/10/documents/10/export') {
@@ -406,7 +419,13 @@ function applyChange(state: MockState, change: MockChange) {
   }
   if (change.change_type === 'add_section') {
     const heading = String(change.after.heading || 'Added Section');
-    state.sections.push(sectionRecord(950 + state.sections.length, heading, ''));
+    state.sections.push(sectionRecord(950 + state.sections.length, heading, String(change.after.content_md || '')));
+  }
+  if (change.change_type === 'rename_section' && change.section_id) {
+    const heading = String(change.after.heading || change.after.title || 'Renamed Section');
+    state.sections = state.sections.map((section) => section.id === change.section_id
+      ? { ...section, heading, title: heading, updated_at: now }
+      : section);
   }
 }
 

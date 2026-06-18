@@ -105,3 +105,44 @@ test('selection polish command auto-submits and preserves the selected range', a
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Replacement lifecycle text from AI.');
 });
+
+test('right-click polish command auto-submits a replace-selection action card', async ({ page }) => {
+  await openEditor(page);
+  const paragraph = page.getByTestId('editor-section-301').locator('.tiptap p').first();
+  await paragraph.selectText();
+  const box = await paragraph.boundingBox();
+  if (!box) throw new Error('Expected overview paragraph to be visible');
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { button: 'right' });
+  await expect(page.getByText('Polish phrasing')).toBeVisible();
+  await page.getByText('Polish phrasing').click();
+
+  const card = page.getByTestId('ai-local-action-replace_selection');
+  await expect(card).toContainText('Replace selected lifecycle text');
+  await card.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByTestId('editor-section-301')).toContainText('Replacement lifecycle text from AI.');
+});
+
+test('structural suggestions queue rename and add-with-content cards with undo', async ({ page }) => {
+  await openEditor(page);
+  await page.getByTestId('editor-section-301').locator('.tiptap').click();
+  await page.getByRole('button', { name: 'Open AI assistant' }).click();
+  await page.getByRole('button', { name: 'Structure' }).click();
+  await expect(page.getByText('Suggested changes')).toBeVisible();
+  await page.getByRole('button', { name: 'Apply all' }).click();
+
+  await page.getByRole('button', { name: /Pending changes/ }).click();
+  const renameCard = page.getByTestId('ai-proposed-change-600');
+  const addCard = page.getByTestId('ai-proposed-change-601');
+  await expect(renameCard).toContainText('Rename section to "System Architecture"');
+  await expect(addCard).toContainText('Add section "Operational Playbook"');
+
+  await renameCard.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByLabel('Heading for System Architecture')).toHaveValue('System Architecture');
+  await addCard.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByLabel('Heading for Operational Playbook')).toHaveValue('Operational Playbook');
+  await expect(page.getByTestId('editor-section-952')).toContainText('Operational playbook body from source analysis.');
+
+  await renameCard.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByLabel('Heading for Architecture')).toHaveValue('Architecture');
+  await expect(page.getByTestId('editor-section-952')).toHaveCount(0);
+});
