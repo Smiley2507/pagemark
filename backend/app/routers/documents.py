@@ -159,6 +159,32 @@ def _liveblocks_permissions(permission: str, *, approved: bool) -> list[str]:
     return ["room:read", "room:presence:write", "comments:read"]
 
 
+def _liveblocks_auth_body(
+    *,
+    room_id: str,
+    user_id: int | str,
+    user_name: str,
+    user_email: str,
+    user_avatar_url: str | None,
+    permission: str,
+    org_id: int | str,
+    approved: bool,
+) -> dict:
+    return {
+        "userId": str(user_id),
+        "permissions": {
+            room_id: _liveblocks_permissions(permission, approved=approved),
+        },
+        "userInfo": {
+            "name": user_name,
+            "email": user_email,
+            "avatar": user_avatar_url,
+            "permission": permission,
+        },
+        "organizationId": str(org_id),
+    }
+
+
 async def _authorize_liveblocks_session(
     *,
     room_id: str,
@@ -173,19 +199,16 @@ async def _authorize_liveblocks_session(
             detail="Liveblocks is not configured",
         )
 
-    body = {
-        "userId": str(user.id),
-        "permissions": {
-            room_id: _liveblocks_permissions(permission, approved=approved),
-        },
-        "userInfo": {
-            "name": user.name or user.email,
-            "email": user.email,
-            "avatar": user.avatar_url,
-            "permission": permission,
-        },
-        "organizationId": str(project.org_id),
-    }
+    body = _liveblocks_auth_body(
+        room_id=room_id,
+        user_id=user.id,
+        user_name=user.name or user.email,
+        user_email=user.email,
+        user_avatar_url=user.avatar_url,
+        permission=permission,
+        org_id=project.org_id,
+        approved=approved,
+    )
     url = f"{settings.LIVEBLOCKS_API_BASE_URL.rstrip('/')}/v2/authorize-user"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:

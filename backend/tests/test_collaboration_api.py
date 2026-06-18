@@ -5,7 +5,7 @@ from sqlalchemy.future import select
 
 from app.models.document import Document, DocumentStatus, Section, SectionContentLifecycle, SectionStatus
 from app.models.version import AuthorType, SectionVersion
-from app.routers.documents import _liveblocks_permissions
+from app.routers.documents import _liveblocks_auth_body, _liveblocks_permissions
 
 
 def feature_name(scope: str) -> str:
@@ -84,6 +84,36 @@ def test_liveblocks_edit_permissions_use_single_room_access_level():
     assert "comments:write" in permissions
     assert "comments:read" not in permissions
     assert_at_most_one_scope_per_feature(permissions)
+
+
+def test_liveblocks_auth_body_matches_authorize_user_contract():
+    room_id = "project:1:document:2:section:3"
+
+    body = _liveblocks_auth_body(
+        room_id=room_id,
+        user_id=7,
+        user_name="Demo User",
+        user_email="demo@example.com",
+        user_avatar_url=None,
+        permission="edit",
+        org_id=11,
+        approved=False,
+    )
+
+    assert body == {
+        "userId": "7",
+        "permissions": {
+            room_id: ["room:presence:write", "room:write", "comments:write"],
+        },
+        "userInfo": {
+            "name": "Demo User",
+            "email": "demo@example.com",
+            "avatar": None,
+            "permission": "edit",
+        },
+        "organizationId": "11",
+    }
+    assert_at_most_one_scope_per_feature(body["permissions"][room_id])
 
 
 def test_liveblocks_read_only_permissions_use_single_room_access_level():
