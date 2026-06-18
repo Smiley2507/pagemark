@@ -80,3 +80,28 @@ test('chat replace renders an inline action card and uses preserved editor selec
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Replacement lifecycle text from AI.');
 });
+
+test('slash insert command auto-submits and creates an inline action card', async ({ page }) => {
+  await openEditor(page);
+  await page.getByTestId('editor-section-301').locator('.tiptap p').first().click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('/insert');
+  await page.getByRole('button', { name: /Insert with AI/ }).click();
+
+  const card = page.getByTestId('ai-local-action-insert_at_cursor');
+  await expect(card).toContainText('Insert lifecycle note');
+  await card.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByTestId('editor-section-301')).toContainText('Inserted lifecycle note from AI.');
+});
+
+test('selection polish command auto-submits and preserves the selected range', async ({ page }) => {
+  await openEditor(page);
+  await page.getByTestId('editor-section-301').locator('.tiptap p').first().selectText();
+  await page.getByRole('button', { name: 'Polish selection' }).click();
+
+  const card = page.getByTestId('ai-local-action-replace_selection');
+  await expect(card).toContainText('Replace selected lifecycle text');
+  await card.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByTestId('editor-section-301')).toContainText('Replacement lifecycle text from AI.');
+});

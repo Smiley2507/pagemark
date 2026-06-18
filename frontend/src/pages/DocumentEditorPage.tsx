@@ -74,6 +74,7 @@ type FlatSection = Section & { depth: number };
 
 type RightTab = 'ai' | 'notes';
 type ThemeChoice = 'light' | 'dark' | 'system';
+type AiCommandOptions = { autoSubmit?: boolean };
 
 const themeOptions: Array<{ value: ThemeChoice; label: string; icon: typeof Sun }> = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -205,7 +206,7 @@ function SectionBlock({
   onFocusChange?: (sectionId: number, editor: Editor | null) => void;
   onEditorReady?: (sectionId: number, editor: Editor | null) => void;
   onSelectionChange?: (sectionId: number, selection: MarkdownSelectionSnapshot | null) => void;
-  onAiCommand?: (sectionId: number, prompt: string) => void;
+  onAiCommand?: (sectionId: number, prompt: string, options?: AiCommandOptions) => void;
   isDocumentApproved?: boolean;
 }) {
   const [content, setContent] = useState(section.content_md);
@@ -357,8 +358,12 @@ function SectionBlock({
             onFocusChange={handleEditorFocusChange}
             onEditorReady={(editor) => onEditorReady?.(section.id, editor)}
             onSelectionChange={(selection) => onSelectionChange?.(section.id, selection)}
-            onAiCommand={(prompt) => onAiCommand?.(section.id, prompt)}
-            onPolish={(text) => onAiCommand?.(section.id, `Polish this selected text and prepare a replacement:\n\n${text}`)}
+            onAiCommand={(prompt, options) => onAiCommand?.(section.id, prompt, options)}
+            onPolish={(text) => onAiCommand?.(
+              section.id,
+              `Replace the selected text with a polished version while preserving meaning. Return a replace_selection editor action.\n\nSelected text:\n${text}`,
+              { autoSubmit: true },
+            )}
           />
         </div>
       </div>
@@ -390,7 +395,7 @@ export function DocumentEditorPage() {
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [activeEditorSectionId, setActiveEditorSectionId] = useState<number | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
-  const [aiDraftPrompt, setAiDraftPrompt] = useState('');
+  const [aiDraftCommand, setAiDraftCommand] = useState<{ id: number; prompt: string; autoSubmit: boolean } | null>(null);
   const [editorSelection, setEditorSelection] = useState<{
     sectionId: number;
     from: number;
@@ -405,6 +410,7 @@ export function DocumentEditorPage() {
   const tocKeyboard = useTocKeyboardNavigation();
   const scrollRootRef = useRef<HTMLDivElement>(null);
   const editorBySectionIdRef = useRef(new Map<number, Editor>());
+  const aiDraftCommandIdRef = useRef(0);
 
   const { data: document, isLoading: documentLoading } = useQuery({
     queryKey: ['document-meta', pid, did],
@@ -722,11 +728,16 @@ export function DocumentEditorPage() {
     });
   }, []);
 
-  const handleAiCommand = useCallback((sectionId: number, prompt: string) => {
+  const handleAiCommand = useCallback((sectionId: number, prompt: string, options?: AiCommandOptions) => {
     setActiveSectionId(sectionId);
     setRightPanelOpen(true);
     setRightTab('ai');
-    setAiDraftPrompt(prompt);
+    aiDraftCommandIdRef.current += 1;
+    setAiDraftCommand({
+      id: aiDraftCommandIdRef.current,
+      prompt,
+      autoSubmit: Boolean(options?.autoSubmit),
+    });
   }, []);
 
   useKeyboardShortcuts({
@@ -1063,8 +1074,10 @@ export function DocumentEditorPage() {
                     onReplaceSelection={handleReplaceSelection}
                     projectName={project?.name || document?.title || 'Project'}
                     projectContextMd={project?.context_md || undefined}
-                    draftPrompt={aiDraftPrompt}
-                    onDraftPromptConsumed={() => setAiDraftPrompt('')}
+                    draftPrompt={aiDraftCommand?.prompt}
+                    draftPromptId={aiDraftCommand?.id}
+                    draftPromptAutoSubmit={Boolean(aiDraftCommand?.autoSubmit)}
+                    onDraftPromptConsumed={() => setAiDraftCommand(null)}
                     onOpenPalette={() => setPaletteOpen(true)}
                   />
                 ) : (

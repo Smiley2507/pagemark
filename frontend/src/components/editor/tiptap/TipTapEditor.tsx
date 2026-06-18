@@ -35,6 +35,10 @@ export interface TipTapSelectionSnapshot {
   text: string
 }
 
+interface AiCommandOptions {
+  autoSubmit?: boolean
+}
+
 interface TipTapEditorProps {
   value: string
   onChange: (value: string) => void
@@ -47,7 +51,7 @@ interface TipTapEditorProps {
   onSavingChange?: (saving: boolean) => void
   onSaved?: (savedAt: Date) => void
   onPolish?: (text: string) => void
-  onAiCommand?: (prompt: string) => void
+  onAiCommand?: (prompt: string, options?: AiCommandOptions) => void
   grammarIssues?: GrammarIssue[]
   onFocusChange?: (editor: Editor | null) => void
   onEditorReady?: (editor: Editor | null) => void
@@ -498,7 +502,10 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
                 reference: text,
               })
             }}
-            onExplain={(text) => onAiCommand?.(`Explain this selected text in the context of this section:\n\n${text}`)}
+            onExplain={(text) => onAiCommand?.(
+              `Explain this selected text in the Pagemark AI panel using this section and latest project analysis as context:\n\n${text}`,
+              { autoSubmit: true },
+            )}
             onPolish={(text) => onPolish?.(text)}
             onClose={() => { setContextMenuState(null); editor?.chain().focus().run() }}
           />,

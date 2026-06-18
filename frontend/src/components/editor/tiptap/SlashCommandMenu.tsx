@@ -10,18 +10,62 @@ interface CommandItem {
   execute: (editor: Editor) => boolean
 }
 
+interface AiCommandOptions {
+  autoSubmit?: boolean
+}
+
 function createCommandGroups(
   onInsertImage?: (file: File) => void | Promise<void>,
-  onAiCommand?: (prompt: string) => void,
+  onAiCommand?: (prompt: string, options?: AiCommandOptions) => void,
 ): { label: string; items: CommandItem[] }[] {
   return [
   ...(onAiCommand ? [{
     label: 'AI',
     items: [
-      { id: 'ai-ask', label: 'Ask AI', description: 'Ask about this section', keywords: ['ask', 'mark', 'chat'], execute: (e: Editor) => { onAiCommand('Help me improve this section.'); e.chain().focus().run(); return true } },
-      { id: 'ai-insert', label: 'Insert with AI', description: 'Generate content here', keywords: ['generate', 'insert', 'draft'], execute: (e: Editor) => { onAiCommand('Insert a useful paragraph at the cursor for this section.'); e.chain().focus().run(); return true } },
-      { id: 'ai-rewrite', label: 'Rewrite Section', description: 'Queue a rewrite card', keywords: ['rewrite', 'refine'], execute: (e: Editor) => { onAiCommand('Rewrite this section for clarity and completeness.'); e.chain().focus().run(); return true } },
-      { id: 'ai-explain', label: 'Explain Selection', description: 'Explain selected text', keywords: ['explain', 'selection'], execute: (e: Editor) => { onAiCommand('Explain the selected text in the context of this documentation.'); e.chain().focus().run(); return true } },
+      {
+        id: 'ai-ask',
+        label: 'Ask AI',
+        description: 'Ask about this section',
+        keywords: ['ask', 'mark', 'chat'],
+        execute: (e: Editor) => {
+          onAiCommand('Answer this question in the Pagemark editor using the active section and latest project analysis as context.', { autoSubmit: true })
+          e.chain().focus().run()
+          return true
+        },
+      },
+      {
+        id: 'ai-insert',
+        label: 'Insert with AI',
+        description: 'Generate content here',
+        keywords: ['generate', 'insert', 'draft'],
+        execute: (e: Editor) => {
+          onAiCommand('Insert a concise, relevant markdown paragraph at the current cursor in this active section. Return an insert_at_cursor editor action.', { autoSubmit: true })
+          e.chain().focus().run()
+          return true
+        },
+      },
+      {
+        id: 'ai-rewrite',
+        label: 'Rewrite Section',
+        description: 'Queue a rewrite card',
+        keywords: ['rewrite', 'refine'],
+        execute: (e: Editor) => {
+          onAiCommand('Rewrite the active section for clarity and completeness. Return a reviewable rewrite_section editor action.', { autoSubmit: true })
+          e.chain().focus().run()
+          return true
+        },
+      },
+      {
+        id: 'ai-explain',
+        label: 'Explain Section',
+        description: 'Explain this section',
+        keywords: ['explain', 'section'],
+        execute: (e: Editor) => {
+          onAiCommand('Explain the active section in the Pagemark AI panel using editor context and latest project analysis.', { autoSubmit: true })
+          e.chain().focus().run()
+          return true
+        },
+      },
     ],
   }] : []),
   {
@@ -90,7 +134,7 @@ export function SlashCommandMenu({
 }: {
   editor: Editor | null
   onInsertImage?: (file: File) => void | Promise<void>
-  onAiCommand?: (prompt: string) => void
+  onAiCommand?: (prompt: string, options?: AiCommandOptions) => void
 }) {
   const [state, setState] = useState<SlashState>({
     open: false,

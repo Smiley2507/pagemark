@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AlertCircle, Check, ChevronDown, Eye, Loader2, RotateCcw, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -51,6 +51,8 @@ interface AiPanelProps {
   projectName: string;
   projectContextMd?: string | null;
   draftPrompt?: string;
+  draftPromptId?: number;
+  draftPromptAutoSubmit?: boolean;
   onDraftPromptConsumed?: () => void;
   onOpenPalette?: () => void;
 }
@@ -163,6 +165,8 @@ export function AiPanel({
   projectName,
   projectContextMd,
   draftPrompt,
+  draftPromptId,
+  draftPromptAutoSubmit,
   onDraftPromptConsumed,
   onOpenPalette,
 }: AiPanelProps) {
@@ -182,6 +186,7 @@ export function AiPanel({
   const [showPendingChanges, setShowPendingChanges] = useState(false);
   const [latestActionMessage, setLatestActionMessage] = useState<string | null>(null);
   const [localEditorActions, setLocalEditorActions] = useState<LocalEditorAction[]>([]);
+  const consumedDraftPromptIdRef = useRef<number | null>(null);
 
   const refineSection = useRefineSection();
   const suggestStructure = useSuggestStructure();
@@ -213,12 +218,6 @@ export function AiPanel({
   }, [projectContextMd]);
 
   useEffect(() => {
-    if (!draftPrompt) return;
-    setInputValue(draftPrompt);
-    onDraftPromptConsumed?.();
-  }, [draftPrompt, onDraftPromptConsumed]);
-
-  useEffect(() => {
     if (activeCredential?.model_id) {
       setSelectedModel(activeCredential.model_id);
     }
@@ -246,7 +245,7 @@ export function AiPanel({
     return { cleanText: clean, references: refs };
   }, [sections]);
 
-  const sendPrompt = async (prompt: string) => {
+  const sendPrompt = useCallback(async (prompt: string) => {
     if (!prompt.trim()) return;
     const { cleanText, references } = parseMentions(prompt.trim());
     setInputValue('');
@@ -373,7 +372,32 @@ export function AiPanel({
         maxTokens,
       );
     }
-  };
+  }, [
+    activeCredential?.model_id,
+    activeSectionHeading,
+    activeSectionId,
+    activeSelection,
+    activeThreadId,
+    createAiChatAction,
+    createThread,
+    parseMentions,
+    selectedModel,
+    streamMessage,
+  ]);
+
+  useEffect(() => {
+    if (!draftPrompt) return;
+    if (draftPromptId != null) {
+      if (consumedDraftPromptIdRef.current === draftPromptId) return;
+      consumedDraftPromptIdRef.current = draftPromptId;
+    }
+    if (draftPromptAutoSubmit) {
+      void sendPrompt(draftPrompt);
+    } else {
+      setInputValue(draftPrompt);
+    }
+    onDraftPromptConsumed?.();
+  }, [draftPrompt, draftPromptAutoSubmit, draftPromptId, onDraftPromptConsumed, sendPrompt]);
 
   const handleSendMessage = async () => {
     await sendPrompt(inputValue);
