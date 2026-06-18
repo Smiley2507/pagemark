@@ -307,7 +307,7 @@ export function ExportModal({
     if (!isPreviewable) return;
     setPreviewStatus('loading');
     try {
-      const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+      const baseURL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
       const params = buildParams();
       params.set('format', selected === 'pdf' ? 'pdf' : 'html');
       const res = await fetch(`${baseURL}${exportPath}?${params}`, { credentials: 'include' });
@@ -410,7 +410,7 @@ export function ExportModal({
     setLoading(true);
     setDone(false);
     try {
-      const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+      const baseURL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
       const res = await fetch(`${baseURL}${exportPath}?${buildParams()}`, { credentials: 'include' });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: 'Export failed' }));

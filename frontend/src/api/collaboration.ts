@@ -42,7 +42,8 @@ export const collaborationApi = {
         throw new Error(
           detail && detail !== '{}'
             ? `Collaboration auth failed (${error.response?.status ?? 'network'}): ${detail}`
-            : `Collaboration auth failed (${error.response?.status ?? 'network'})`
+            : `Collaboration auth failed (${error.response?.status ?? 'network'})`,
+          { cause: error },
         );
       }
       throw error;

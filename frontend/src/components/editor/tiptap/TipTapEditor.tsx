@@ -23,8 +23,16 @@ export interface TipTapEditorHandle {
   focus: () => void
   insertContent: (text: string) => void
   replaceSelection: (text: string) => void
+  insertAt: (pos: number, text: string) => void
+  replaceRange: (range: { from: number; to: number }, text: string) => void
   setContent: (text: string) => void
   setGrammarIssues: (issues: GrammarIssue[]) => void
+}
+
+export interface TipTapSelectionSnapshot {
+  from: number
+  to: number
+  text: string
 }
 
 interface TipTapEditorProps {
@@ -39,8 +47,10 @@ interface TipTapEditorProps {
   onSavingChange?: (saving: boolean) => void
   onSaved?: (savedAt: Date) => void
   onPolish?: (text: string) => void
+  onAiCommand?: (prompt: string) => void
   grammarIssues?: GrammarIssue[]
   onFocusChange?: (editor: Editor | null) => void
+  onSelectionChange?: (selection: TipTapSelectionSnapshot | null) => void
 }
 
 interface TipTapEditorInnerProps extends TipTapEditorProps {
@@ -180,8 +190,10 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
     onSavingChange,
     onSaved,
     onPolish,
+    onAiCommand,
     grammarIssues,
     onFocusChange,
+    onSelectionChange,
   }, ref) {
     const [contextMenuState, setContextMenuState] = useState<{ position: { top: number; left: number }; selectedText: string } | null>(null)
     const projectIdRef = useRef(projectId)
@@ -198,6 +210,18 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
       editable: canEdit,
       onUpdate: ({ editor }) => {
         onChange(editor.getMarkdown())
+      },
+      onSelectionUpdate: ({ editor }) => {
+        const { from, to } = editor.state.selection
+        if (from === to) {
+          onSelectionChange?.(null)
+          return
+        }
+        onSelectionChange?.({
+          from,
+          to,
+          text: editor.state.doc.textBetween(from, to),
+        })
       },
       editorProps: {
         attributes: {
@@ -228,6 +252,12 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
       },
       replaceSelection: (text: string) => {
         editor?.chain().focus().deleteSelection().insertContent(text, { contentType: 'markdown' }).run()
+      },
+      insertAt: (pos: number, text: string) => {
+        editor?.chain().focus().insertContentAt(pos, text, { parseOptions: { preserveWhitespace: 'full' } }).run()
+      },
+      replaceRange: (range: { from: number; to: number }, text: string) => {
+        editor?.chain().focus().insertContentAt(range, text, { parseOptions: { preserveWhitespace: 'full' } }).run()
       },
       setContent: (text: string) => {
         editor?.commands.setContent(text, { contentType: 'markdown' })
@@ -285,7 +315,7 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
       }
       try {
         const resource = await resourcesApi.upload(pid, file)
-        const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+        const baseURL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'
         const imgUrl = `${baseURL}/projects/${pid}/resources/${resource.id}/data`
         editor.chain().focus().setImage({ src: imgUrl, alt: resource.original_name ?? file.name }).run()
       } catch {
@@ -342,10 +372,13 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
           if (!pos) return
           const word = getWordRangeAt(editor, pos.pos)
           if (!word) return
+          editor.commands.setTextSelection({ from: word.from, to: word.to })
+          onSelectionChange?.({ from: word.from, to: word.to, text: word.text })
           setContextMenuState({ position: { top: e.clientY, left: e.clientX }, selectedText: word.text })
           return
         }
         const text = editor.state.doc.textBetween(from, to)
+        onSelectionChange?.({ from, to, text })
         setContextMenuState({ position: { top: e.clientY, left: e.clientX }, selectedText: text })
       }
 
@@ -441,7 +474,7 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
             />
           </BubbleMenu>
         )}
-        {canEdit && <SlashCommandMenu editor={editor} onInsertImage={uploadAndInsertImage} />}
+        {canEdit && <SlashCommandMenu editor={editor} onInsertImage={uploadAndInsertImage} onAiCommand={onAiCommand} />}
         <EditorContent editor={editor} />
         {contextMenuState && editor && createPortal(
           <EditorContextMenu
@@ -457,6 +490,8 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
                 reference: text,
               })
             }}
+            onExplain={(text) => onAiCommand?.(`Explain this selected text in the context of this section:\n\n${text}`)}
+            onPolish={(text) => onPolish?.(text)}
             onClose={() => { setContextMenuState(null); editor?.chain().focus().run() }}
           />,
           document.body,

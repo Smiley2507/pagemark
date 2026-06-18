@@ -4,6 +4,7 @@ import { aiApi } from '@/api/ai';
 import { toast } from 'sonner';
 
 type CreateAiWorkRunPayload = Parameters<typeof aiApi.createWorkRun>[2];
+type CreateAiChatActionPayload = Parameters<typeof aiApi.createChatAction>[2];
 
 export const useGenerateSection = (projectId: number) => {
   const queryClient = useQueryClient();
@@ -181,6 +182,25 @@ export const useCreateAiWorkRun = (projectId: number, documentId: number) => {
     },
     onError: () => {
       toast.error('Failed to queue AI change');
+    },
+  });
+};
+
+export const useCreateAiChatAction = (projectId: number, documentId: number) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: CreateAiChatActionPayload) => aiApi.createChatAction(projectId, documentId, payload),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['ai-proposed-changes', projectId, documentId] });
+      queryClient.invalidateQueries({ queryKey: ['document-sections', projectId, documentId] });
+      if (data.work_run) {
+        toast.success('AI action queued for review');
+      }
+    },
+    onError: (error) => {
+      console.error('Failed to create AI editor action:', error);
+      toast.error('AI editor action failed');
     },
   });
 };

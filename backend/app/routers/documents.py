@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import UTC, datetime
 
@@ -12,6 +13,7 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user, verify_project_ownership, require_document_permission, verify_document_access
 from app.models.activity import ActivityEvent
+from app.models.analysis import Analysis
 from app.models.audit import AuditLog
 from app.models.document import (
     Document,
@@ -58,9 +60,13 @@ from app.schemas.document import (
     TemplateRecommendationResponse,
 )
 from app.schemas.ai_work import (
+    AIChatActionRequest,
+    AIChatActionResponse,
+    AIProposedChangeCreate,
     AIProposedChangeListResponse,
     AIProposedChangePreviewResponse,
     AIProposedChangeResponse,
+    AIProposedChangeTypeEnum,
     AIWorkRunCreateRequest,
     AIWorkRunListResponse,
     AIWorkRunResponse,
@@ -79,6 +85,8 @@ from app.schemas.template import TemplateResponse
 from app.services import section_service
 from app.services import ai_work_service
 from app.services import ai_credential_service
+from app.services.ai_doc_service import ai_service
+from app.services.ai_service import AiServiceError, complete_text
 from app.services import generation_service
 from app.services import template_recommendation_service
 from app.services import freshness_service, activity_service
@@ -141,14 +149,12 @@ async def _document_permission_for_user(
 def _liveblocks_permissions(permission: str, *, approved: bool) -> list[str]:
     if permission == "edit" and not approved:
         return [
-            "room:read",
             "room:presence:write",
             "room:write",
-            "comments:read",
             "comments:write",
         ]
     if permission in {"edit", "comment"}:
-        return ["room:read", "room:presence:write", "comments:read", "comments:write"]
+        return ["room:read", "room:presence:write", "comments:write"]
     return ["room:read", "room:presence:write", "comments:read"]
 
 
@@ -839,6 +845,262 @@ async def skip_outline_clarification_request(
         raise HTTPException(status_code=404, detail="Clarification Request not found")
     request = await template_recommendation_service.skip_clarification_request(db, request)
     return _clarification_to_response(request)
+
+
+def _extract_json_object(raw: str) -> dict:
+    text = raw.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail="AI returned invalid editor action JSON") from exc
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=502, detail="AI editor action must be a JSON object")
+    return data
+
+
+async def _latest_analysis_for_project(db: AsyncSession, project_id: int):
+    result = await db.execute(
+        select(Analysis)
+        .where(Analysis.project_id == project_id)
+        .order_by(Analysis.created_at.desc(), Analysis.id.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _project_for_editor_action(db: AsyncSession, project_id: int) -> Project:
+    result = await db.execute(
+        select(Project).where(Project.id == project_id, Project.deleted_at.is_(None))
+    )
+    project = result.scalar_one_or_none()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+async def _section_for_editor_action(db: AsyncSession, document_id: int, section_id: int | None) -> Section | None:
+    if section_id is None:
+        return None
+    result = await db.execute(
+        select(Section).where(
+            Section.id == section_id,
+            Section.document_id == document_id,
+            Section.lifecycle_status == LifecycleStatus.ACTIVE,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+def _editor_action_system_prompt(project: Project, document: Document, sections: list[Section], analysis_detail: dict) -> str:
+    section_list = "\n".join(
+        f"- {section.id}: {section.heading} ({len(section.content_md or '')} chars)"
+        for section in sorted(sections, key=lambda item: (item.order_index, item.id))
+    )
+    source_files = ", ".join(analysis_detail.get("source_files", [])[:20])
+    return "\n".join([
+        "You are Pagemark's in-editor documentation assistant.",
+        "The user is editing a structured document inside Pagemark, not asking for instructions about external files.",
+        "When the user asks to insert, replace, append, rewrite, rename, or create documentation content, return a typed editor action.",
+        "Never tell the user to copy and paste into README.md, docs files, or another editor when an editor action can be proposed.",
+        "Return only one JSON object and no markdown fence.",
+        "",
+        "Allowed JSON shapes:",
+        '{"action":"answer","message":"concise answer"}',
+        '{"action":"ask_user","message":"one targeted clarification"}',
+        '{"action":"rewrite_section","section_id":123,"title":"Rewrite section","content_md":"full replacement markdown","rationale":"why"}',
+        '{"action":"append_to_section","section_id":123,"title":"Append to section","content_md":"markdown to append","rationale":"why"}',
+        '{"action":"rename_section","section_id":123,"title":"Rename section","heading":"New heading","rationale":"why"}',
+        '{"action":"add_section","title":"Add section","heading":"New heading","content_md":"markdown content","order_index":4,"parent_id":null,"rationale":"why"}',
+        "",
+        f"Project: {project.name}",
+        f"Document id: {document.id}",
+        f"Detected languages: {analysis_detail.get('languages', '')}",
+        f"File count: {analysis_detail.get('file_count', 0)}",
+        f"Source files: {source_files}",
+        "",
+        "Sections:",
+        section_list or "- No sections",
+    ])
+
+
+def _editor_action_user_prompt(body: AIChatActionRequest, target_section: Section | None, references: list[Section]) -> str:
+    parts = [
+        f"Mode: {body.mode}",
+        f"User request: {body.message}",
+    ]
+    if target_section is not None:
+        parts += [
+            "",
+            f"Active section id: {target_section.id}",
+            f"Active section heading: {target_section.heading}",
+            "Active section markdown:",
+            target_section.content_md or "",
+        ]
+    if body.selection is not None:
+        parts += [
+            "",
+            f"Selection section id: {body.selection.section_id}",
+            f"Selection range: {body.selection.from_pos}..{body.selection.to_pos}",
+            "Selected text:",
+            body.selection.text,
+        ]
+    if references:
+        parts.append("\nReferenced sections:")
+        for section in references:
+            parts.append(f"## {section.heading}\n{section.content_md or ''}")
+    return "\n".join(parts)
+
+
+def _change_from_editor_action(data: dict, document: Document, target_section: Section | None) -> AIProposedChangeCreate | None:
+    action = str(data.get("action") or "").strip()
+    title = str(data.get("title") or action.replace("_", " ").title() or "AI editor action")
+    rationale = data.get("rationale")
+    if action in {"rewrite_section", "append_to_section"}:
+        section_id = int(data.get("section_id") or (target_section.id if target_section else 0))
+        section = next((item for item in document.sections if item.id == section_id), None)
+        if section is None:
+            raise HTTPException(status_code=400, detail="AI action targeted an unknown section")
+        content = str(data.get("content_md") or data.get("content") or "")
+        if action == "append_to_section":
+            content = f"{(section.content_md or '').rstrip()}\n\n{content.strip()}".strip()
+        return AIProposedChangeCreate(
+            change_type=AIProposedChangeTypeEnum.REWRITE_SELECTION,
+            title=title,
+            section_id=section.id,
+            rationale=rationale,
+            before={"content_md": section.content_md or ""},
+            after={"content_md": content},
+            preview_markdown=content,
+        )
+    if action == "rename_section":
+        section_id = int(data.get("section_id") or (target_section.id if target_section else 0))
+        section = next((item for item in document.sections if item.id == section_id), None)
+        if section is None:
+            raise HTTPException(status_code=400, detail="AI action targeted an unknown section")
+        heading = str(data.get("heading") or data.get("new_heading") or "").strip()
+        if not heading:
+            raise HTTPException(status_code=400, detail="AI rename action did not include a heading")
+        return AIProposedChangeCreate(
+            change_type=AIProposedChangeTypeEnum.RENAME_SECTION,
+            title=title,
+            section_id=section.id,
+            rationale=rationale,
+            before={"heading": section.heading, "title": section.title},
+            after={"heading": heading},
+            preview_markdown=f"# {heading}",
+        )
+    if action in {"add_section", "add_section_with_content"}:
+        heading = str(data.get("heading") or data.get("new_heading") or data.get("title") or "").strip()
+        if not heading:
+            raise HTTPException(status_code=400, detail="AI add-section action did not include a heading")
+        content = str(data.get("content_md") or data.get("content") or "")
+        return AIProposedChangeCreate(
+            change_type=AIProposedChangeTypeEnum.ADD_SECTION,
+            title=title,
+            section_id=None,
+            rationale=rationale,
+            before=None,
+            after={
+                "heading": heading,
+                "content_md": content,
+                "order_index": int(data.get("order_index") or len(document.sections or [])),
+                "parent_id": data.get("parent_id"),
+            },
+            preview_markdown=content or f"# {heading}",
+        )
+    return None
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/ai/chat-actions",
+    response_model=AIChatActionResponse,
+)
+async def create_ai_chat_action(
+    body: AIChatActionRequest,
+    document: Document = Depends(require_document_permission("edit")),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await _project_for_editor_action(db, document.project_id)
+    credential = await ai_credential_service.get_active_credential(db, current_user.id)
+    if credential is None:
+        raise HTTPException(status_code=400, detail="No active AI credential. Add an AI provider in Settings.")
+
+    await db.refresh(document, attribute_names=["sections"])
+    target_section = await _section_for_editor_action(db, document.id, body.target_section_id)
+    if target_section is None and body.selection is not None:
+        target_section = await _section_for_editor_action(db, document.id, body.selection.section_id)
+
+    referenced_sections: list[Section] = []
+    section_ref_ids = [ref.id for ref in body.references if ref.type == "section" and ref.id is not None]
+    if section_ref_ids:
+        result = await db.execute(
+            select(Section).where(
+                Section.document_id == document.id,
+                Section.id.in_(section_ref_ids),
+                Section.lifecycle_status == LifecycleStatus.ACTIVE,
+            )
+        )
+        referenced_sections = list(result.scalars().all())
+
+    analysis = await _latest_analysis_for_project(db, document.project_id)
+    analysis_detail = ai_service._analysis_detail(analysis)
+    system_prompt = _editor_action_system_prompt(project, document, list(document.sections or []), analysis_detail)
+    user_prompt = _editor_action_user_prompt(body, target_section, referenced_sections)
+
+    try:
+        raw = complete_text(
+            system_prompt,
+            user_prompt,
+            credential.provider,
+            credential.api_key,
+            body.model_name or credential.model_id,
+            max_tokens=2400,
+        )
+    except AiServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    data = _extract_json_object(raw)
+    action = str(data.get("action") or "answer")
+    message = str(data.get("message") or data.get("rationale") or "")
+    if action in {"answer", "ask_user", "insufficient_context"}:
+        return AIChatActionResponse(message=message, action=action, work_run=None)
+
+    change = _change_from_editor_action(data, document, target_section)
+    if change is None:
+        return AIChatActionResponse(message=message or raw, action="answer", work_run=None)
+
+    work_run = await ai_work_service.create_work_run(
+        db,
+        document,
+        AIWorkRunCreateRequest(
+            provider=credential.provider,
+            model=body.model_name or credential.model_id,
+            prompt_context={
+                "source": "editor_chat_action",
+                "message": body.message,
+                "mode": body.mode,
+                "target_section_id": body.target_section_id,
+                "selection": body.selection.model_dump(by_alias=True) if body.selection else None,
+                "references": [ref.model_dump() for ref in body.references],
+                "analysis_id": getattr(analysis, "id", None),
+            },
+            changes=[change],
+        ),
+        current_user.id,
+    )
+    return AIChatActionResponse(
+        message=message or change.rationale or change.title,
+        action=action,
+        work_run=_ai_work_run_to_response(work_run),
+    )
 
 
 @router.post(

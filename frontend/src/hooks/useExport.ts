@@ -12,7 +12,7 @@ export function useExportDocument() {
   ) => {
     setLoading(true);
     try {
-      const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+      const baseURL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
       const params = new URLSearchParams({ format });
       if (overrides) {
         Object.entries(overrides).forEach(([key, val]) => {

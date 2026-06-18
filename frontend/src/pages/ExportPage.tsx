@@ -82,7 +82,7 @@ export function ExportPage() {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const prevSk = useRef('');
 
-  const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+  const baseURL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
   const defaultHeadingColor = resolveHexColorVar('--text-primary', 'black');
   const defaultAccentColor = resolveHexColorVar('--interaction', 'navy');
 

@@ -14,7 +14,7 @@ export function parseOwnerRepo(fullName: string): { owner: string; repo: string 
 }
 
 export function getApiBaseUrl(): string {
-  return import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  return import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
 }
 
 export function detectProvider(url: string): 'github' | 'bitbucket' | null {

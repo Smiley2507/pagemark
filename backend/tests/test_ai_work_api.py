@@ -1,4 +1,6 @@
 import pytest
+from dataclasses import dataclass
+
 from app.models.document import (
     Document,
     DocumentSetupStage,
@@ -7,6 +9,14 @@ from app.models.document import (
     SectionContentLifecycle,
     SectionStatus,
 )
+
+
+@dataclass
+class StubCredential:
+    id: int = 1
+    provider: str = "openai"
+    model_id: str = "gpt-4o-mini"
+    api_key: str = "test-api-key"
 
 
 @pytest.fixture
@@ -338,3 +348,86 @@ async def test_apply_outline_diff_accepts_and_undoes_section_structure(
     assert restored_response.status_code == 200
     restored_headings = [section["heading"] for section in restored_response.json()["sections"]]
     assert restored_headings == ["Overview", "Endpoints"]
+
+
+@pytest.mark.anyio
+async def test_editor_chat_action_queues_add_section_with_content(
+    client,
+    monkeypatch,
+    test_project,
+    ai_work_document,
+):
+    document, section = ai_work_document
+
+    async def fake_active_credential(_db, _user_id):
+        return StubCredential()
+
+    def fake_complete_text(system, user, provider, api_key, model_id, *, max_tokens):
+        assert "Pagemark's in-editor documentation assistant" in system
+        assert "Never tell the user to copy and paste into README.md" in system
+        assert f"Active section id: {section.id}" in user
+        return (
+            '{"action":"add_section","title":"Add installation section",'
+            '"heading":"Installation","content_md":"Install with `npm install`.",'
+            '"order_index":1,"rationale":"The document needs setup instructions."}'
+        )
+
+    monkeypatch.setattr(
+        "app.routers.documents.ai_credential_service.get_active_credential",
+        fake_active_credential,
+    )
+    monkeypatch.setattr("app.routers.documents.complete_text", fake_complete_text)
+
+    response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/chat-actions",
+        json={
+            "message": "Add an installation section from the latest analysis",
+            "mode": "generate",
+            "target_section_id": section.id,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["action"] == "add_section"
+    assert payload["work_run"]["status"] == "proposed"
+    change = payload["work_run"]["proposed_changes"][0]
+    assert change["change_type"] == "add_section"
+    assert change["after"]["heading"] == "Installation"
+    assert change["after"]["content_md"] == "Install with `npm install`."
+
+
+@pytest.mark.anyio
+async def test_editor_chat_action_returns_clarification_without_work_run(
+    client,
+    monkeypatch,
+    test_project,
+    ai_work_document,
+):
+    document, section = ai_work_document
+
+    async def fake_active_credential(_db, _user_id):
+        return StubCredential()
+
+    def fake_complete_text(system, user, provider, api_key, model_id, *, max_tokens):
+        return '{"action":"ask_user","message":"Which deployment target should this guide cover?"}'
+
+    monkeypatch.setattr(
+        "app.routers.documents.ai_credential_service.get_active_credential",
+        fake_active_credential,
+    )
+    monkeypatch.setattr("app.routers.documents.complete_text", fake_complete_text)
+
+    response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/chat-actions",
+        json={
+            "message": "Insert deployment instructions",
+            "target_section_id": section.id,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["action"] == "ask_user"
+    assert payload["message"] == "Which deployment target should this guide cover?"
+    assert payload["work_run"] is None

@@ -28,7 +28,7 @@ import {
 import { toast } from 'sonner';
 
 import type { Editor } from '@tiptap/core'
-import { MarkdownEditor } from '@/components/editor/MarkdownEditor';
+import { MarkdownEditor, type MarkdownSelectionSnapshot } from '@/components/editor/MarkdownEditor';
 import { AiPanel } from '@/components/editor/AiPanel';
 import { ResourcePalette } from '@/components/editor/ResourcePalette';
 import { NotesPanel } from '@/components/editor/NotesPanel';
@@ -178,6 +178,8 @@ function SectionBlock({
   onRejectStaleness,
   isStalenessProcessing,
   onFocusChange,
+  onSelectionChange,
+  onAiCommand,
   isDocumentApproved,
 }: {
   projectId: number;
@@ -200,6 +202,8 @@ function SectionBlock({
   onRejectStaleness?: (sectionId: number) => void;
   isStalenessProcessing?: boolean;
   onFocusChange?: (sectionId: number, editor: Editor | null) => void;
+  onSelectionChange?: (sectionId: number, selection: MarkdownSelectionSnapshot | null) => void;
+  onAiCommand?: (sectionId: number, prompt: string) => void;
   isDocumentApproved?: boolean;
 }) {
   const [content, setContent] = useState(section.content_md);
@@ -349,6 +353,9 @@ function SectionBlock({
             onSavingChange={(saving) => onSavingChange(section.id, saving)}
             onSaved={onSaved}
             onFocusChange={handleEditorFocusChange}
+            onSelectionChange={(selection) => onSelectionChange?.(section.id, selection)}
+            onAiCommand={(prompt) => onAiCommand?.(section.id, prompt)}
+            onPolish={(text) => onAiCommand?.(section.id, `Polish this selected text and prepare a replacement:\n\n${text}`)}
           />
         </div>
       </div>
@@ -380,6 +387,13 @@ export function DocumentEditorPage() {
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [activeEditorSectionId, setActiveEditorSectionId] = useState<number | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
+  const [aiDraftPrompt, setAiDraftPrompt] = useState('');
+  const [editorSelection, setEditorSelection] = useState<{
+    sectionId: number;
+    from: number;
+    to: number;
+    text: string;
+  } | null>(null);
   const [versionHistorySectionId, setVersionHistorySectionId] = useState<number | null>(null);
   const [focusMode, setFocusMode] = useState(false);
   const [focusBarVisible, setFocusBarVisible] = useState(false);
@@ -654,14 +668,26 @@ export function DocumentEditorPage() {
       toast.error('Focus a section and select text before replacing it');
       return;
     }
+    const savedSelection = editorSelection && editorSelection.sectionId === activeSectionId
+      ? editorSelection
+      : null;
     const { selection } = targetEditor.state;
+    if (savedSelection) {
+      targetEditor.chain().focus().insertContentAt(
+        { from: savedSelection.from, to: savedSelection.to },
+        content,
+        { parseOptions: { preserveWhitespace: 'full' } },
+      ).run();
+      toast.success('AI content replaced the selection');
+      return;
+    }
     if (selection.empty) {
       toast.error('Select text before replacing it');
       return;
     }
     targetEditor.chain().focus().deleteSelection().insertContent(content, { contentType: 'markdown' }).run();
     toast.success('AI content replaced the selection');
-  }, [activeEditor, activeEditorSectionId, activeSectionId]);
+  }, [activeEditor, activeEditorSectionId, activeSectionId, editorSelection]);
 
   const handleAppendToSection = useCallback((content: string) => {
     if (!activeSectionId) {
@@ -689,6 +715,27 @@ export function DocumentEditorPage() {
     setActiveEditor(editor);
     setActiveEditorSectionId(sectionId);
     setActiveSectionId(sectionId);
+  }, []);
+
+  const handleSectionSelectionChange = useCallback((sectionId: number, selection: MarkdownSelectionSnapshot | null) => {
+    if (!selection) {
+      setEditorSelection((current) => current?.sectionId === sectionId ? null : current);
+      return;
+    }
+    setActiveSectionId(sectionId);
+    setEditorSelection({
+      sectionId,
+      from: selection.from,
+      to: selection.to,
+      text: selection.text,
+    });
+  }, []);
+
+  const handleAiCommand = useCallback((sectionId: number, prompt: string) => {
+    setActiveSectionId(sectionId);
+    setRightPanelOpen(true);
+    setRightTab('ai');
+    setAiDraftPrompt(prompt);
   }, []);
 
   useKeyboardShortcuts({
@@ -950,6 +997,8 @@ export function DocumentEditorPage() {
                   onRejectStaleness={(sectionId) => rejectFreshness.mutate(sectionId)}
                   isStalenessProcessing={acceptFreshness.isPending || rejectFreshness.isPending}
                   onFocusChange={handleSectionFocusChange}
+                  onSelectionChange={handleSectionSelectionChange}
+                  onAiCommand={handleAiCommand}
                   isDocumentApproved={document?.status === 'approved'}
                 />
               ))}
@@ -1016,6 +1065,7 @@ export function DocumentEditorPage() {
                     activeSectionHeading={activeSection?.title || activeSection?.heading || null}
                     activeSectionContent={activeSection ? (localContentBySectionId[activeSection.id] ?? activeSection.content_md ?? '') : ''}
                     activeSectionStatus={activeSection?.status || 'pending'}
+                    activeSelection={editorSelection}
                     sections={sections.map((s) => ({ id: s.id, heading: s.title || s.heading }))}
                     onApplyContent={handleApplyContent}
                     onInsertAtCursor={handleInsertAtCursor}
@@ -1023,6 +1073,8 @@ export function DocumentEditorPage() {
                     onAppendToSection={handleAppendToSection}
                     projectName={project?.name || document?.title || 'Project'}
                     projectContextMd={project?.context_md || undefined}
+                    draftPrompt={aiDraftPrompt}
+                    onDraftPromptConsumed={() => setAiDraftPrompt('')}
                     onOpenPalette={() => setPaletteOpen(true)}
                   />
                 ) : (

@@ -107,3 +107,38 @@ class AIProposedChangeListResponse(BaseModel):
 class AIProposedChangePreviewResponse(BaseModel):
     change: AIProposedChangeResponse
     preview: dict[str, Any]
+
+
+class AIEditorReference(BaseModel):
+    type: str
+    id: Optional[int] = None
+    label: Optional[str] = None
+
+
+class AIEditorSelection(BaseModel):
+    section_id: int
+    from_pos: Optional[int] = Field(default=None, alias="from")
+    to_pos: Optional[int] = Field(default=None, alias="to")
+    text: str = ""
+
+
+class AIEditorCursor(BaseModel):
+    section_id: int
+    pos: Optional[int] = None
+
+
+class AIChatActionRequest(BaseModel):
+    message: str = Field(..., min_length=1)
+    mode: str = "auto"
+    model_name: Optional[str] = None
+    target_section_id: Optional[int] = None
+    selection: Optional[AIEditorSelection] = None
+    cursor: Optional[AIEditorCursor] = None
+    references: list[AIEditorReference] = Field(default_factory=list)
+    resource_ids: list[int] = Field(default_factory=list)
+
+
+class AIChatActionResponse(BaseModel):
+    message: str
+    action: str
+    work_run: Optional[AIWorkRunResponse] = None

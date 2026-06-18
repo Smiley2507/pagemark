@@ -5,6 +5,18 @@ from sqlalchemy.future import select
 
 from app.models.document import Document, DocumentStatus, Section, SectionContentLifecycle, SectionStatus
 from app.models.version import AuthorType, SectionVersion
+from app.routers.documents import _liveblocks_permissions
+
+
+def feature_name(scope: str) -> str:
+    if scope.startswith("room:presence:"):
+        return "presence"
+    return scope.split(":", 1)[0]
+
+
+def assert_at_most_one_scope_per_feature(permissions: list[str]) -> None:
+    features = [feature_name(scope) for scope in permissions]
+    assert len(features) == len(set(features))
 
 
 @pytest.fixture
@@ -61,6 +73,42 @@ async def test_collaboration_auth_uses_section_room_and_edit_permission(
     assert captured["room_id"] == f"project:{test_project.id}:document:{document.id}:section:{section.id}"
     assert captured["permission"] == "edit"
     assert captured["approved"] is False
+
+
+def test_liveblocks_edit_permissions_use_single_room_access_level():
+    permissions = _liveblocks_permissions("edit", approved=False)
+
+    assert "room:write" in permissions
+    assert "room:read" not in permissions
+    assert "room:presence:write" in permissions
+    assert "comments:write" in permissions
+    assert "comments:read" not in permissions
+    assert_at_most_one_scope_per_feature(permissions)
+
+
+def test_liveblocks_read_only_permissions_use_single_room_access_level():
+    approved_edit_permissions = _liveblocks_permissions("edit", approved=True)
+    view_permissions = _liveblocks_permissions("view", approved=False)
+
+    assert approved_edit_permissions == [
+        "room:read",
+        "room:presence:write",
+        "comments:write",
+    ]
+    assert view_permissions == [
+        "room:read",
+        "room:presence:write",
+        "comments:read",
+    ]
+    assert_at_most_one_scope_per_feature(approved_edit_permissions)
+    assert_at_most_one_scope_per_feature(view_permissions)
+
+
+def test_liveblocks_comment_permissions_use_single_comments_scope():
+    permissions = _liveblocks_permissions("comment", approved=False)
+
+    assert permissions == ["room:read", "room:presence:write", "comments:write"]
+    assert_at_most_one_scope_per_feature(permissions)
 
 
 async def test_collaboration_auth_marks_approved_document_as_read_only(

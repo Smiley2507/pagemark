@@ -110,8 +110,8 @@ cd backend && source venv/bin/activate
 PYTHONPATH=. celery -A app.workers.celery_app worker --loglevel=info
 ```
 
-The backend API will be available at **http://localhost:8000**.  
-Health check: `curl http://localhost:8000/health`
+The backend API will be available at **http://127.0.0.1:8000**.
+Health check: `curl http://127.0.0.1:8000/health`
 
 ### 3. Set Up the Frontend
 
@@ -215,7 +215,7 @@ npm run preview  # Preview production build locally
 
 | Variable                       | Description                         | Default                  |
 |--------------------------------|-------------------------------------|--------------------------|
-| `VITE_API_URL`                 | Backend API base URL                | `http://localhost:8000`  |
+| `VITE_API_URL`                 | Backend API base URL                | `http://127.0.0.1:8000`  |
 | `VITE_COLLABORATION_ENABLED`   | Set to `true` to enable Liveblocks editor rooms | disabled |
 
 ---

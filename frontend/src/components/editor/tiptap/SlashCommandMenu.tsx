@@ -10,8 +10,20 @@ interface CommandItem {
   execute: (editor: Editor) => boolean
 }
 
-function createCommandGroups(onInsertImage?: (file: File) => void | Promise<void>): { label: string; items: CommandItem[] }[] {
+function createCommandGroups(
+  onInsertImage?: (file: File) => void | Promise<void>,
+  onAiCommand?: (prompt: string) => void,
+): { label: string; items: CommandItem[] }[] {
   return [
+  ...(onAiCommand ? [{
+    label: 'AI',
+    items: [
+      { id: 'ai-ask', label: 'Ask AI', description: 'Ask about this section', keywords: ['ask', 'mark', 'chat'], execute: (e: Editor) => { onAiCommand('Help me improve this section.'); e.chain().focus().run(); return true } },
+      { id: 'ai-insert', label: 'Insert with AI', description: 'Generate content here', keywords: ['generate', 'insert', 'draft'], execute: (e: Editor) => { onAiCommand('Insert a useful paragraph at the cursor for this section.'); e.chain().focus().run(); return true } },
+      { id: 'ai-rewrite', label: 'Rewrite Section', description: 'Queue a rewrite card', keywords: ['rewrite', 'refine'], execute: (e: Editor) => { onAiCommand('Rewrite this section for clarity and completeness.'); e.chain().focus().run(); return true } },
+      { id: 'ai-explain', label: 'Explain Selection', description: 'Explain selected text', keywords: ['explain', 'selection'], execute: (e: Editor) => { onAiCommand('Explain the selected text in the context of this documentation.'); e.chain().focus().run(); return true } },
+    ],
+  }] : []),
   {
     label: 'Text',
     items: [
@@ -36,7 +48,7 @@ function createCommandGroups(onInsertImage?: (file: File) => void | Promise<void
       { id: 'ordered-list', label: 'Numbered List', description: 'Ordered list', keywords: ['ol', 'numbered'], execute: (e) => e.chain().focus().toggleOrderedList().run() },
       { id: 'blockquote', label: 'Blockquote', description: 'Quote block', keywords: ['quote', '>'], execute: (e) => e.chain().focus().toggleBlockquote().run() },
       { id: 'code-block', label: 'Code Block', description: 'Code with syntax highlighting', keywords: ['pre', '```'], execute: (e) => e.chain().focus().toggleCodeBlock().run() },
-      { id: 'callout', label: 'Callout', description: 'Info/note callout', keywords: ['note', 'info', 'warning'], execute: (e) => e.chain().focus().setCallout({ type: 'note' }).run() },
+      { id: 'callout', label: 'Callout', description: 'Info/note callout', keywords: ['note', 'info', 'warning'], execute: (e) => e.chain().focus().setCallout({ type: 'info' }).run() },
       { id: 'divider', label: 'Divider', description: 'Horizontal rule', keywords: ['hr', '---'], execute: (e) => e.chain().focus().setHorizontalRule().run() },
     ],
   },
@@ -74,9 +86,11 @@ interface SlashState {
 export function SlashCommandMenu({
   editor,
   onInsertImage,
+  onAiCommand,
 }: {
   editor: Editor | null
   onInsertImage?: (file: File) => void | Promise<void>
+  onAiCommand?: (prompt: string) => void
 }) {
   const [state, setState] = useState<SlashState>({
     open: false,
@@ -92,7 +106,7 @@ export function SlashCommandMenu({
     openRef.current = state.open
   }, [state.open])
 
-  const commandGroups = createCommandGroups(onInsertImage)
+  const commandGroups = createCommandGroups(onInsertImage, onAiCommand)
   const allItems = commandGroups.flatMap(g => g.items)
 
   const filtered = state.query
@@ -178,12 +192,14 @@ export function SlashCommandMenu({
       if (e.key === 'ArrowDown') {
         e.preventDefault()
         e.stopPropagation()
+        if (filtered.length === 0) return
         setState(s => ({ ...s, selectedIndex: (s.selectedIndex + 1) % filtered.length }))
         return
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault()
         e.stopPropagation()
+        if (filtered.length === 0) return
         setState(s => ({ ...s, selectedIndex: (s.selectedIndex - 1 + filtered.length) % filtered.length }))
         return
       }

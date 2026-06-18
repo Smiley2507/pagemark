@@ -84,6 +84,41 @@ export interface AIWorkRun {
   completed_at?: string | null;
 }
 
+export interface AIEditorReference {
+  type: 'section' | 'document' | 'source' | 'template' | 'transient';
+  id?: number | null;
+  label?: string | null;
+}
+
+export interface AIEditorSelection {
+  section_id: number;
+  from?: number | null;
+  to?: number | null;
+  text: string;
+}
+
+export interface AIEditorCursor {
+  section_id: number;
+  pos?: number | null;
+}
+
+export interface AIChatActionRequest {
+  message: string;
+  mode?: 'chat' | 'generate' | 'refine' | 'expand' | 'auto';
+  model_name?: string | null;
+  target_section_id?: number | null;
+  selection?: AIEditorSelection | null;
+  cursor?: AIEditorCursor | null;
+  references?: AIEditorReference[];
+  resource_ids?: number[];
+}
+
+export interface AIChatActionResponse {
+  message: string;
+  action: string;
+  work_run?: AIWorkRun | null;
+}
+
 // ── Section AI ────────────────────────────────────────────────────────────────
 
 export const aiApi = {
@@ -189,6 +224,18 @@ export const aiApi = {
     return data;
   },
 
+  async createChatAction(
+    projectId: number,
+    documentId: number,
+    payload: AIChatActionRequest,
+  ): Promise<AIChatActionResponse> {
+    const { data } = await apiClient.post(
+      `/projects/${projectId}/documents/${documentId}/ai/chat-actions`,
+      payload,
+    );
+    return data;
+  },
+
   /** Generate a documentation outline for a project */
   async generateOutline(projectId: number): Promise<OutlineSuggestion[]> {
     const { data } = await apiClient.post(`/projects/${projectId}/ai/generate-outline`);
@@ -237,7 +284,7 @@ export const aiApi = {
     const controller = new AbortController();
 
     const baseURL =
-      import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+      import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
 
     const body: Record<string, unknown> = { message };
     if (resourceIds && resourceIds.length > 0) {

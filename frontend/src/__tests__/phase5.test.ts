@@ -493,8 +493,8 @@ describe('Export from editor matches current active Sections', () => {
   });
 
   it('export fetches with credentials include', () => {
-    const baseURL = 'http://localhost:8000';
+    const baseURL = 'http://127.0.0.1:8000';
     const url = new URL('/projects/1/documents/1/export?format=markdown', baseURL);
-    expect(url.toString()).toBe('http://localhost:8000/projects/1/documents/1/export?format=markdown');
+    expect(url.toString()).toBe('http://127.0.0.1:8000/projects/1/documents/1/export?format=markdown');
   });
 });
