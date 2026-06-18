@@ -226,6 +226,72 @@ async function handleApi(route: Route, url: URL, state: MockState) {
   if (method === 'POST' && path.match(/^\/projects\/10\/documents\/10\/sections\/\d+\/collaboration\/auth$/)) return json(route, { token: 'mock-liveblocks-token' });
   if (method === 'PATCH' && path.match(/^\/projects\/10\/documents\/10\/sections\/\d+\/collaboration\/snapshot$/)) return json(route, { saved: true, updated_at: now });
   if (method === 'GET' && path === '/projects/10/documents/10/ai/proposed-changes') return json(route, { proposed_changes: state.changes });
+  if (method === 'POST' && path === '/projects/10/documents/10/ai/chat-actions') {
+    const body = postBody(request);
+    const message = String(body.message || '').toLowerCase();
+    if (message.includes('insert')) {
+      return json(route, {
+        message: 'Prepared an insertion for the active section.',
+        action: 'insert_at_cursor',
+        action_payload: {
+          title: 'Insert lifecycle note',
+          section_id: 301,
+          content_md: 'Inserted lifecycle note from AI.',
+          rationale: 'Adds a concise lifecycle detail.',
+        },
+        work_run: null,
+      });
+    }
+    if (message.includes('replace')) {
+      return json(route, {
+        message: 'Prepared a replacement for the selected text.',
+        action: 'replace_selection',
+        action_payload: {
+          title: 'Replace selected lifecycle text',
+          section_id: 301,
+          content_md: 'Replacement lifecycle text from AI.',
+          rationale: 'Clarifies the selected text.',
+        },
+        work_run: null,
+      });
+    }
+    if (message.includes('add') || message.includes('create')) {
+      const runId = state.nextRunId++;
+      const change = {
+        id: state.nextChangeId++,
+        work_run_id: runId,
+        document_id: 10,
+        section_id: null,
+        change_type: 'add_section' as const,
+        status: 'proposed' as const,
+        title: 'Add AI-created section',
+        rationale: 'The assistant found a missing workflow section.',
+        before: null,
+        after: {
+          heading: 'AI Created Section',
+          order_index: state.sections.length,
+          content_md: 'AI-created section body.',
+        },
+        preview_markdown: 'AI-created section body.',
+        created_at: now,
+      };
+      state.changes = [change, ...state.changes];
+      return json(route, {
+        message: 'Queued a new section for review.',
+        action: 'add_section',
+        work_run: {
+          id: runId,
+          document_id: 10,
+          status: 'proposed',
+          prompt_context: body,
+          proposed_changes: [change],
+          created_at: now,
+          updated_at: now,
+        },
+      });
+    }
+    return json(route, { message: 'Mock answer from editor action endpoint.', action: 'answer', work_run: null });
+  }
   if (method === 'POST' && path === '/projects/10/documents/10/ai/work-runs') {
     const body = postBody(request);
     const runId = state.nextRunId++;

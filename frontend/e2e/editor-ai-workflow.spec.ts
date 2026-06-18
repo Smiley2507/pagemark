@@ -8,14 +8,17 @@ async function openEditor(page: import('@playwright/test').Page) {
   await expect(page.getByTestId('editor-section-301')).toContainText('Existing architecture summary');
 }
 
-function chatMessage(page: import('@playwright/test').Page) {
-  return page.locator('.prose').getByText('AI generated paragraph for lifecycle checks.', { exact: true }).last();
+async function sendAiPrompt(page: import('@playwright/test').Page, prompt: string) {
+  const input = page.locator('[data-ai-input="true"]');
+  await input.fill(prompt);
+  await input.press('Enter');
 }
 
 test('accepting proposed rewrite and add-section changes refreshes editor sections', async ({ page }) => {
   await openEditor(page);
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
-  await expect(page.getByText('AI Proposed Changes')).toBeVisible();
+  await expect(page.getByText('Pending changes')).toBeVisible();
+  await page.getByRole('button', { name: /Pending changes/ }).click();
 
   await page.getByTestId('ai-proposed-change-501').getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Rewritten architecture summary');
@@ -27,6 +30,7 @@ test('accepting proposed rewrite and add-section changes refreshes editor sectio
 test('reject and undo update panel state without keeping content mutations', async ({ page }) => {
   await openEditor(page);
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
+  await page.getByRole('button', { name: /Pending changes/ }).click();
 
   await page.getByTestId('ai-proposed-change-502').getByRole('button', { name: 'Reject' }).click();
   await expect(page.getByText('add section · rejected')).toBeVisible();
@@ -40,34 +44,39 @@ test('reject and undo update panel state without keeping content mutations', asy
   await expect(page.getByTestId('editor-section-301')).toContainText('Existing architecture summary');
 });
 
-test('chat actions queue reviewable rewrite and append changes', async ({ page }) => {
+test('chat action creates a reviewable add-section card', async ({ page }) => {
   await openEditor(page);
   await page.getByTestId('editor-section-301').locator('.tiptap').click();
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
 
-  const aiMessage = chatMessage(page);
-  await aiMessage.hover();
-  await page.getByRole('button', { name: 'Rewrite' }).click();
-  await expect(page.getByText('Rewrite active section')).toBeVisible();
-  await page.getByTestId('ai-chat-proposal').getByRole('button', { name: 'Accept' }).click();
-  await expect(page.getByText('Chat proposed rewrite')).toBeVisible();
-
-  await chatMessage(page).hover();
-  await page.getByRole('button', { name: 'Append' }).click();
-  await expect(page.getByText('Append to active section')).toBeVisible();
-  await page.getByTestId('ai-chat-proposal').getByRole('button', { name: 'Accept' }).click();
-  await expect(page.getByText('Chat proposed append')).toBeVisible();
+  await sendAiPrompt(page, 'Add a section from the latest analysis');
+  await expect(page.getByText('Queued a new section for review.')).toBeVisible();
+  const card = page.getByTestId('ai-proposed-change-600');
+  await expect(card).toContainText('Add AI-created section');
+  await card.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByLabel('Heading for AI Created Section')).toHaveValue('AI Created Section');
 });
 
-test('chat insert mutates active editor content explicitly', async ({ page }) => {
+test('chat insert renders an inline action card and mutates active editor on accept', async ({ page }) => {
   await openEditor(page);
-  await page.getByRole('button', { name: 'Open AI assistant' }).click();
   await page.getByTestId('editor-section-301').locator('.tiptap p').first().click();
+  await page.getByRole('button', { name: 'Open AI assistant' }).click();
 
-  const aiMessage = chatMessage(page);
-  await aiMessage.hover();
-  await page.getByRole('button', { name: 'Insert' }).click();
-  await expect(page.getByText('Insert at cursor')).toBeVisible();
-  await page.getByTestId('ai-chat-proposal').getByRole('button', { name: 'Accept' }).click();
-  await expect(page.getByTestId('editor-section-301')).toContainText('AI generated paragraph for lifecycle checks.');
+  await sendAiPrompt(page, 'Insert a lifecycle note at the cursor');
+  const card = page.getByTestId('ai-local-action-insert_at_cursor');
+  await expect(card).toContainText('Insert lifecycle note');
+  await card.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByTestId('editor-section-301')).toContainText('Inserted lifecycle note from AI.');
+});
+
+test('chat replace renders an inline action card and uses preserved editor selection', async ({ page }) => {
+  await openEditor(page);
+  await page.getByTestId('editor-section-301').locator('.tiptap p').first().selectText();
+  await page.getByRole('button', { name: 'Open AI assistant' }).click();
+
+  await sendAiPrompt(page, 'Replace the selected overview text');
+  const card = page.getByTestId('ai-local-action-replace_selection');
+  await expect(card).toContainText('Replace selected lifecycle text');
+  await card.getByRole('button', { name: 'Accept' }).click();
+  await expect(page.getByTestId('editor-section-301')).toContainText('Replacement lifecycle text from AI.');
 });

@@ -50,6 +50,7 @@ interface TipTapEditorProps {
   onAiCommand?: (prompt: string) => void
   grammarIssues?: GrammarIssue[]
   onFocusChange?: (editor: Editor | null) => void
+  onEditorReady?: (editor: Editor | null) => void
   onSelectionChange?: (selection: TipTapSelectionSnapshot | null) => void
 }
 
@@ -193,6 +194,7 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
     onAiCommand,
     grammarIssues,
     onFocusChange,
+    onEditorReady,
     onSelectionChange,
   }, ref) {
     const [contextMenuState, setContextMenuState] = useState<{ position: { top: number; left: number }; selectedText: string } | null>(null)
@@ -230,6 +232,12 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
       },
       immediatelyRender: false,
     })
+
+    useEffect(() => {
+      if (!editor) return
+      onEditorReady?.(editor)
+      return () => onEditorReady?.(null)
+    }, [editor, onEditorReady])
 
     useEffect(() => {
       if (!editor) return

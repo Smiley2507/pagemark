@@ -42,8 +42,12 @@ interface AiPanelProps {
   activeSectionStatus: Section['status'];
   activeSelection?: { sectionId: number; from: number; to: number; text: string } | null;
   sections: { id: number; heading: string }[];
-  onInsertAtCursor: (content: string) => void;
-  onReplaceSelection: (content: string) => void;
+  onInsertAtCursor: (content: string, sectionId?: number) => void;
+  onReplaceSelection: (
+    content: string,
+    sectionId?: number,
+    selection?: { from: number; to: number; text: string },
+  ) => void;
   projectName: string;
   projectContextMd?: string | null;
   draftPrompt?: string;
@@ -58,6 +62,7 @@ interface LocalEditorAction {
   sectionId: number;
   content: string;
   rationale?: string | null;
+  selection?: { from: number; to: number; text: string };
   status: 'proposed' | 'accepted' | 'rejected';
 }
 
@@ -315,6 +320,9 @@ export function AiPanel({
             sectionId,
             content,
             rationale: actionPayload.rationale,
+            selection: actionKind === 'replace_selection' && activeSelection?.sectionId === sectionId
+              ? { from: activeSelection.from, to: activeSelection.to, text: activeSelection.text }
+              : undefined,
             status: 'proposed',
           },
           ...current,
@@ -547,14 +555,10 @@ export function AiPanel({
   };
 
   const acceptLocalEditorAction = (action: LocalEditorAction) => {
-    if (action.sectionId !== activeSectionId) {
-      toast.error('Focus the target section before applying this AI action');
-      return;
-    }
     if (action.action === 'replace_selection') {
-      onReplaceSelection(action.content);
+      onReplaceSelection(action.content, action.sectionId, action.selection);
     } else {
-      onInsertAtCursor(action.content);
+      onInsertAtCursor(action.content, action.sectionId);
     }
     setLocalEditorActions((current) =>
       current.map((item) => item.id === action.id ? { ...item, status: 'accepted' } : item),

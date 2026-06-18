@@ -178,6 +178,7 @@ function SectionBlock({
   onRejectStaleness,
   isStalenessProcessing,
   onFocusChange,
+  onEditorReady,
   onSelectionChange,
   onAiCommand,
   isDocumentApproved,
@@ -202,6 +203,7 @@ function SectionBlock({
   onRejectStaleness?: (sectionId: number) => void;
   isStalenessProcessing?: boolean;
   onFocusChange?: (sectionId: number, editor: Editor | null) => void;
+  onEditorReady?: (sectionId: number, editor: Editor | null) => void;
   onSelectionChange?: (sectionId: number, selection: MarkdownSelectionSnapshot | null) => void;
   onAiCommand?: (sectionId: number, prompt: string) => void;
   isDocumentApproved?: boolean;
@@ -353,6 +355,7 @@ function SectionBlock({
             onSavingChange={(saving) => onSavingChange(section.id, saving)}
             onSaved={onSaved}
             onFocusChange={handleEditorFocusChange}
+            onEditorReady={(editor) => onEditorReady?.(section.id, editor)}
             onSelectionChange={(selection) => onSelectionChange?.(section.id, selection)}
             onAiCommand={(prompt) => onAiCommand?.(section.id, prompt)}
             onPolish={(text) => onAiCommand?.(section.id, `Polish this selected text and prepare a replacement:\n\n${text}`)}
@@ -401,6 +404,7 @@ export function DocumentEditorPage() {
   const [localContentBySectionId, setLocalContentBySectionId] = useState<Record<number, string>>({});
   const tocKeyboard = useTocKeyboardNavigation();
   const scrollRootRef = useRef<HTMLDivElement>(null);
+  const editorBySectionIdRef = useRef(new Map<number, Editor>());
 
   const { data: document, isLoading: documentLoading } = useQuery({
     queryKey: ['document-meta', pid, did],
@@ -637,8 +641,13 @@ export function DocumentEditorPage() {
     toast.success('Accepting all review-ready sections');
   };
 
-  const handleInsertAtCursor = useCallback((content: string) => {
-    const targetEditor = activeEditorSectionId === activeSectionId ? activeEditor : null;
+  const handleInsertAtCursor = useCallback((content: string, sectionId?: number) => {
+    const targetSectionId = sectionId ?? activeSectionId;
+    const targetEditor = activeEditorSectionId === targetSectionId
+      ? activeEditor
+      : targetSectionId
+        ? editorBySectionIdRef.current.get(targetSectionId) ?? null
+        : null;
     if (!targetEditor) {
       toast.error('Focus a section before inserting AI content');
       return;
@@ -647,15 +656,25 @@ export function DocumentEditorPage() {
     toast.success('Inserted at cursor');
   }, [activeEditor, activeEditorSectionId, activeSectionId]);
 
-  const handleReplaceSelection = useCallback((content: string) => {
-    const targetEditor = activeEditorSectionId === activeSectionId ? activeEditor : null;
+  const handleReplaceSelection = useCallback((
+    content: string,
+    sectionId?: number,
+    selectionOverride?: { from: number; to: number; text: string },
+  ) => {
+    const targetSectionId = sectionId ?? activeSectionId;
+    const targetEditor = activeEditorSectionId === targetSectionId
+      ? activeEditor
+      : targetSectionId
+        ? editorBySectionIdRef.current.get(targetSectionId) ?? null
+        : null;
     if (!targetEditor) {
       toast.error('Focus a section and select text before replacing it');
       return;
     }
-    const savedSelection = editorSelection && editorSelection.sectionId === activeSectionId
-      ? editorSelection
-      : null;
+    let savedSelection = selectionOverride ?? null;
+    if (!savedSelection && editorSelection?.sectionId === targetSectionId) {
+      savedSelection = editorSelection;
+    }
     const { selection } = targetEditor.state;
     if (savedSelection) {
       targetEditor.chain().focus().insertContentAt(
@@ -674,16 +693,24 @@ export function DocumentEditorPage() {
     toast.success('AI content replaced the selection');
   }, [activeEditor, activeEditorSectionId, activeSectionId, editorSelection]);
 
+  const handleSectionEditorReady = useCallback((sectionId: number, editor: Editor | null) => {
+    if (editor) {
+      editorBySectionIdRef.current.set(sectionId, editor);
+      return;
+    }
+    editorBySectionIdRef.current.delete(sectionId);
+  }, []);
+
   const handleSectionFocusChange = useCallback((sectionId: number, editor: Editor | null) => {
     if (!editor) return;
     setActiveEditor(editor);
     setActiveEditorSectionId(sectionId);
     setActiveSectionId(sectionId);
+    setEditorSelection((current) => current?.sectionId === sectionId ? current : null);
   }, []);
 
   const handleSectionSelectionChange = useCallback((sectionId: number, selection: MarkdownSelectionSnapshot | null) => {
     if (!selection) {
-      setEditorSelection((current) => current?.sectionId === sectionId ? null : current);
       return;
     }
     setActiveSectionId(sectionId);
@@ -961,6 +988,7 @@ export function DocumentEditorPage() {
                   onRejectStaleness={(sectionId) => rejectFreshness.mutate(sectionId)}
                   isStalenessProcessing={acceptFreshness.isPending || rejectFreshness.isPending}
                   onFocusChange={handleSectionFocusChange}
+                  onEditorReady={handleSectionEditorReady}
                   onSelectionChange={handleSectionSelectionChange}
                   onAiCommand={handleAiCommand}
                   isDocumentApproved={document?.status === 'approved'}
