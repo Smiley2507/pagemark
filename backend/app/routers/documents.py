@@ -30,6 +30,7 @@ from app.models.generation import GenerationMode, GenerationRun, GenerationSecti
 from app.models.organization import OrganizationMember, OrgMemberRole, OrgMemberStatus
 from app.models.outline_proposal import OutlineProposal, OutlineProposalBasis
 from app.models.project import Project
+from app.models.resource import Resource
 from app.models.template import Template
 from app.models.template_recommendation import TemplateRecommendationBasis
 from app.models.user import User
@@ -960,6 +961,109 @@ def _editor_action_user_prompt(body: AIChatActionRequest, target_section: Sectio
     return "\n".join(parts)
 
 
+def _document_context_block(document: Document, sections: list[Section]) -> str:
+    lines = [
+        "## Attached Document Context",
+        f"Title: {document.title}",
+    ]
+    if document.purpose:
+        lines.append(f"Purpose: {document.purpose}")
+    if document.audience:
+        lines.append(f"Audience: {document.audience}")
+    if document.context:
+        lines.append(f"Context: {document.context}")
+    lines.append("Sections:")
+    for section in sorted(sections, key=lambda item: (item.order_index, item.id)):
+        content = (section.content_md or "").strip()
+        excerpt = content[:1200] + ("..." if len(content) > 1200 else "")
+        lines.append(f"### {section.heading}\n{excerpt or '(empty)'}")
+    return "\n".join(lines)
+
+
+def _source_context_block(analysis_detail: dict) -> str:
+    parts = [
+        "## Attached Source Analysis",
+        f"Languages: {analysis_detail.get('languages', '')}",
+        f"File count: {analysis_detail.get('file_count', 0)}",
+        f"Complexity notes: {analysis_detail.get('complexity_notes', '')}",
+    ]
+    source_files = analysis_detail.get("source_files", [])
+    if source_files:
+        parts.append("Source files: " + ", ".join(str(path) for path in source_files[:30]))
+    endpoints = analysis_detail.get("endpoints", [])
+    if endpoints:
+        parts.append("Endpoints: " + ", ".join(str(endpoint) for endpoint in endpoints[:20]))
+    classes = analysis_detail.get("classes", [])
+    if classes:
+        parts.append("Classes: " + json.dumps(classes[:10]))
+    functions = analysis_detail.get("functions", [])
+    if functions:
+        parts.append("Functions: " + json.dumps(functions[:10]))
+    return "\n".join(parts)
+
+
+def _template_context_block(template: Template | None) -> str | None:
+    if template is None:
+        return None
+    parts = [
+        "## Attached Document Template",
+        f"Name: {template.name}",
+    ]
+    for label, value in [
+        ("Purpose", template.purpose),
+        ("Audience", template.intended_audience),
+        ("Expected outcome", template.expected_outcome),
+        ("Guidance", template.guidance),
+        ("System prompt", template.system_prompt),
+    ]:
+        if value:
+            parts.append(f"{label}: {value}")
+    if template.sections_json:
+        parts.append("Sections: " + json.dumps(template.sections_json)[:2000])
+    return "\n".join(parts)
+
+
+async def _resource_context_blocks(db: AsyncSession, project_id: int, resource_ids: list[int]) -> list[str]:
+    if not resource_ids:
+        return []
+    result = await db.execute(
+        select(Resource).where(Resource.project_id == project_id, Resource.id.in_(resource_ids))
+    )
+    resources = list(result.scalars().all())
+    blocks: list[str] = []
+    for resource in resources:
+        text = (resource.extracted_text or "").strip()
+        if not text:
+            continue
+        excerpt = text[:3000] + ("..." if len(text) > 3000 else "")
+        blocks.append(f"## Attached Resource: {resource.original_name}\n{excerpt}")
+    return blocks
+
+
+async def _editor_reference_context_blocks(
+    db: AsyncSession,
+    document: Document,
+    body: AIChatActionRequest,
+    analysis_detail: dict,
+) -> list[str]:
+    sections = list(document.sections or [])
+    blocks: list[str] = []
+    ref_types = {ref.type for ref in body.references}
+    ref_labels = {str(ref.label or ref.id or "") for ref in body.references}
+
+    if "document" in ref_types or "current-document" in ref_labels:
+        blocks.append(_document_context_block(document, sections))
+    if "source" in ref_types or "repository-source" in ref_labels:
+        blocks.append(_source_context_block(analysis_detail))
+    if "template" in ref_types or "document-template" in ref_labels:
+        template = await db.get(Template, document.template_id) if document.template_id else None
+        template_block = _template_context_block(template)
+        if template_block:
+            blocks.append(template_block)
+    blocks.extend(await _resource_context_blocks(db, document.project_id, body.resource_ids))
+    return blocks
+
+
 def _change_from_editor_action(data: dict, document: Document, target_section: Section | None) -> AIProposedChangeCreate | None:
     action = str(data.get("action") or "").strip()
     title = str(data.get("title") or action.replace("_", " ").title() or "AI editor action")
@@ -1056,6 +1160,9 @@ async def create_ai_chat_action(
     analysis_detail = ai_service._analysis_detail(analysis)
     system_prompt = _editor_action_system_prompt(project, document, list(document.sections or []), analysis_detail)
     user_prompt = _editor_action_user_prompt(body, target_section, referenced_sections)
+    context_blocks = await _editor_reference_context_blocks(db, document, body, analysis_detail)
+    if context_blocks:
+        user_prompt = f"{user_prompt}\n\n" + "\n\n".join(context_blocks)
 
     try:
         raw = complete_text(

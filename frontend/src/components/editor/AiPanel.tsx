@@ -255,7 +255,7 @@ export function AiPanel({
         .filter((a) => a.type !== 'transient')
         .map((a) => ({
           type: a.type === 'file' || a.type === 'note' ? 'source' : a.type,
-          id: a.resourceId ?? null,
+          id: a.referenceId ?? a.resourceId ?? null,
           label: a.label || a.reference || null,
         } satisfies AIEditorReference)),
     ];

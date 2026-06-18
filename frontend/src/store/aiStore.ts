@@ -8,6 +8,7 @@ export interface AiAttachment {
   type: 'file' | 'note' | 'section' | 'document' | 'source' | 'template' | 'transient';
   label: string;
   reference?: string;
+  referenceId?: number;
   resourceId?: number;
 }
 

@@ -118,7 +118,7 @@ export function AiPanelComposer({
     }
   };
 
-  const insertMention = (label: string) => {
+  const insertMention = (label: string, id?: string) => {
     if (mentionTriggerPos.current === null || !textareaRef.current) return;
     const cursorPos = mentionTriggerPos.current;
     const currentVal = value;
@@ -138,7 +138,13 @@ export function AiPanelComposer({
     const newCursor = atIndex + referencePrefix.length + label.length + 1;
     textareaRef.current.setSelectionRange(newCursor, newCursor);
 
-    addAttachment({ id: `ref-${label}`, type: mentionKind, label, reference: label });
+    addAttachment({
+      id: `ref-${mentionKind}-${id || label}`,
+      type: mentionKind,
+      label,
+      reference: label,
+      referenceId: id && /^\d+$/.test(id) ? Number(id) : undefined,
+    });
   };
 
   const filteredMentions = mentionKind === 'section'
@@ -203,7 +209,7 @@ export function AiPanelComposer({
               {referenceItems.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => insertMention(item.label)}
+                  onClick={() => insertMention(item.label, item.id)}
                   className="w-full rounded px-2 py-1 text-left text-xs text-text-muted transition-colors hover:bg-panel-muted hover:text-text-primary"
                 >
                   @{mentionKind}:{item.label}
