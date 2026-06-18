@@ -637,21 +637,6 @@ export function DocumentEditorPage() {
     toast.success('Accepting all review-ready sections');
   };
 
-  const handleApplyContent = useCallback((content: string) => {
-    if (!activeSectionId) {
-      toast.error('No active section selected');
-      return;
-    }
-    const targetEditor = activeEditorSectionId === activeSectionId ? activeEditor : null;
-    if (targetEditor) {
-      targetEditor.commands.setContent(content, { contentType: 'markdown' });
-      toast.success('AI content applied to section');
-      return;
-    }
-    updateDocumentSection.mutate({ id: activeSectionId, data: { content_md: content } });
-    toast.success('AI content applied to section');
-  }, [activeEditor, activeEditorSectionId, activeSectionId, updateDocumentSection]);
-
   const handleInsertAtCursor = useCallback((content: string) => {
     const targetEditor = activeEditorSectionId === activeSectionId ? activeEditor : null;
     if (!targetEditor) {
@@ -688,27 +673,6 @@ export function DocumentEditorPage() {
     targetEditor.chain().focus().deleteSelection().insertContent(content, { contentType: 'markdown' }).run();
     toast.success('AI content replaced the selection');
   }, [activeEditor, activeEditorSectionId, activeSectionId, editorSelection]);
-
-  const handleAppendToSection = useCallback((content: string) => {
-    if (!activeSectionId) {
-      toast.error('No active section selected');
-      return;
-    }
-    const targetEditor = activeEditorSectionId === activeSectionId ? activeEditor : null;
-    if (targetEditor) {
-      targetEditor.chain().focus('end').insertContent(`\n\n${content}`, { contentType: 'markdown' }).run();
-      toast.success('AI content appended to section');
-      return;
-    }
-    const current = localContentBySectionId[activeSectionId]
-      ?? sections.find((section) => section.id === activeSectionId)?.content_md
-      ?? '';
-    updateDocumentSection.mutate({
-      id: activeSectionId,
-      data: { content_md: `${current.trimEnd()}\n\n${content}` },
-    });
-    toast.success('AI content appended to section');
-  }, [activeEditor, activeEditorSectionId, activeSectionId, localContentBySectionId, sections, updateDocumentSection]);
 
   const handleSectionFocusChange = useCallback((sectionId: number, editor: Editor | null) => {
     if (!editor) return;
@@ -1067,10 +1031,8 @@ export function DocumentEditorPage() {
                     activeSectionStatus={activeSection?.status || 'pending'}
                     activeSelection={editorSelection}
                     sections={sections.map((s) => ({ id: s.id, heading: s.title || s.heading }))}
-                    onApplyContent={handleApplyContent}
                     onInsertAtCursor={handleInsertAtCursor}
                     onReplaceSelection={handleReplaceSelection}
-                    onAppendToSection={handleAppendToSection}
                     projectName={project?.name || document?.title || 'Project'}
                     projectContextMd={project?.context_md || undefined}
                     draftPrompt={aiDraftPrompt}

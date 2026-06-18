@@ -21,18 +21,10 @@ function parseContextAction(content: string): { action: string; text: string } |
 
 interface MessageBubbleProps {
   message: ChatMessage;
-  onPreviewRewrite?: (content: string) => void;
-  onPreviewReplaceSelection?: (content: string) => void;
-  onPreviewInsert?: (content: string) => void;
-  onPreviewAppend?: (content: string) => void;
 }
 
 function MessageBubble({
   message,
-  onPreviewRewrite,
-  onPreviewReplaceSelection,
-  onPreviewInsert,
-  onPreviewAppend,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
@@ -77,38 +69,6 @@ function MessageBubble({
           </span>
           {!isUser && (
             <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-              {onPreviewRewrite && (
-                <button
-                  onClick={() => onPreviewRewrite(message.content)}
-                  className="rounded px-1.5 py-0.5 text-[10px] font-medium text-interaction-hover transition-colors hover:bg-interaction-muted"
-                >
-                  Rewrite
-                </button>
-              )}
-              {onPreviewReplaceSelection && (
-                <button
-                  onClick={() => onPreviewReplaceSelection(message.content)}
-                  className="rounded px-1.5 py-0.5 text-[10px] font-medium text-interaction-hover transition-colors hover:bg-interaction-muted"
-                >
-                  Selection
-                </button>
-              )}
-              {onPreviewInsert && (
-                <button
-                  onClick={() => onPreviewInsert(message.content)}
-                  className="rounded px-1.5 py-0.5 text-[10px] font-medium text-interaction-hover transition-colors hover:bg-interaction-muted"
-                >
-                  Insert
-                </button>
-              )}
-              {onPreviewAppend && (
-                <button
-                  onClick={() => onPreviewAppend(message.content)}
-                  className="rounded px-1.5 py-0.5 text-[10px] font-medium text-interaction-hover transition-colors hover:bg-interaction-muted"
-                >
-                  Append
-                </button>
-              )}
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(message.content);
@@ -135,20 +95,12 @@ interface AiPanelMessagesProps {
   messages: ChatMessage[];
   isStreaming: boolean;
   streamingContent: string;
-  onPreviewRewrite?: (content: string) => void;
-  onPreviewReplaceSelection?: (content: string) => void;
-  onPreviewInsert?: (content: string) => void;
-  onPreviewAppend?: (content: string) => void;
 }
 
 export function AiPanelMessages({
   messages,
   isStreaming,
   streamingContent,
-  onPreviewRewrite,
-  onPreviewReplaceSelection,
-  onPreviewInsert,
-  onPreviewAppend,
 }: AiPanelMessagesProps) {
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -162,10 +114,6 @@ export function AiPanelMessages({
         <MessageBubble
           key={msg.id}
           message={msg}
-          onPreviewRewrite={msg.role === 'ai' ? onPreviewRewrite : undefined}
-          onPreviewReplaceSelection={msg.role === 'ai' ? onPreviewReplaceSelection : undefined}
-          onPreviewInsert={msg.role === 'ai' ? onPreviewInsert : undefined}
-          onPreviewAppend={msg.role === 'ai' ? onPreviewAppend : undefined}
         />
       ))}
       {isStreaming && (

@@ -138,40 +138,65 @@ export function SlashCommandMenu({
     close()
   }, [editor, state.range, close])
 
-  /* ── Poll editor state for / at cursor ──────────────────────────── */
+  const updateSlashState = useCallback(() => {
+    if (!editor) return
+    const { selection } = editor.state
+    const { $from } = selection
+    const node = $from.parent
+    if (node.type.name === 'codeBlock' || node.type.name === 'code' || !selection.empty) {
+      if (openRef.current) close()
+      return
+    }
+
+    const blockStart = $from.start()
+    const cursorPos = $from.pos
+    const textBefore = editor.state.doc.textBetween(blockStart, cursorPos)
+    const slashIndex = textBefore.lastIndexOf('/')
+    if (slashIndex === -1) {
+      if (openRef.current) close()
+      return
+    }
+
+    const beforeSlash = textBefore.slice(0, slashIndex)
+    const query = textBefore.slice(slashIndex + 1)
+    if (query.includes(' ') || !/^\s*$/.test(beforeSlash)) {
+      if (openRef.current) close()
+      return
+    }
+
+    const from = blockStart + slashIndex
+    const coords = editor.view.coordsAtPos(cursorPos)
+    setState(s => ({
+      ...s,
+      open: true,
+      query,
+      range: { from, to: cursorPos },
+      position: { top: coords.bottom + 4, left: coords.left },
+      selectedIndex: s.query !== query ? 0 : s.selectedIndex,
+    }))
+  }, [close, editor])
+
+  /* ── Track editor transactions for / at cursor ──────────────────── */
   useEffect(() => {
     if (!editor) return
-    const poll = () => {
-      const { selection } = editor.state
-      const { $from } = selection
-      const node = $from.parent
-      if (node.type.name === 'codeBlock' || node.type.name === 'code') {
-        if (openRef.current) close()
-        return
-      }
-
-      const startPos = $from.start()
-      const cursorPos = $from.pos
-      const textBefore = editor.state.doc.textBetween(startPos, cursorPos)
-
-      if (textBefore.startsWith('/') && !textBefore.includes(' ')) {
-        const query = textBefore.slice(1)
-        const coords = editor.view.coordsAtPos(cursorPos)
-        setState(s => ({
-          ...s,
-          open: true,
-          query,
-          range: { from: startPos, to: cursorPos },
-          position: { top: coords.bottom + 4, left: coords.left },
-          selectedIndex: s.query !== query ? 0 : s.selectedIndex,
-        }))
-      } else if (openRef.current) {
-        close()
-      }
+    let frame: number | null = null
+    const schedule = () => {
+      if (frame !== null) cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(updateSlashState)
     }
-    const id = setInterval(poll, 100)
-    return () => clearInterval(id)
-  }, [editor, close])
+    editor.on('update', schedule)
+    editor.on('selectionUpdate', schedule)
+    editor.on('focus', schedule)
+    editor.on('blur', close)
+    schedule()
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame)
+      editor.off('update', schedule)
+      editor.off('selectionUpdate', schedule)
+      editor.off('focus', schedule)
+      editor.off('blur', close)
+    }
+  }, [editor, close, updateSlashState])
 
   /* ── Capture-phase keydown interception ────────────────────────── */
   useEffect(() => {

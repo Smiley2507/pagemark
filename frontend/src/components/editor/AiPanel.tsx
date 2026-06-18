@@ -42,22 +42,13 @@ interface AiPanelProps {
   activeSectionStatus: Section['status'];
   activeSelection?: { sectionId: number; from: number; to: number; text: string } | null;
   sections: { id: number; heading: string }[];
-  onApplyContent: (content: string) => void;
   onInsertAtCursor: (content: string) => void;
   onReplaceSelection: (content: string) => void;
-  onAppendToSection: (content: string) => void;
   projectName: string;
   projectContextMd?: string | null;
   draftPrompt?: string;
   onDraftPromptConsumed?: () => void;
   onOpenPalette?: () => void;
-}
-
-type AiProposalKind = 'rewrite' | 'replace_selection' | 'insert' | 'append';
-
-interface AiProposal {
-  kind: AiProposalKind;
-  content: string;
 }
 
 interface LocalEditorAction {
@@ -162,10 +153,8 @@ export function AiPanel({
   activeSectionStatus,
   activeSelection,
   sections,
-  onApplyContent,
   onInsertAtCursor,
   onReplaceSelection,
-  onAppendToSection,
   projectName,
   projectContextMd,
   draftPrompt,
@@ -182,7 +171,6 @@ export function AiPanel({
   const [showAttachments, setShowAttachments] = useState(false);
   const [showContextEditor, setShowContextEditor] = useState(false);
   const [contextDraft, setContextDraft] = useState(projectContextMd || '');
-  const [proposal, setProposal] = useState<AiProposal | null>(null);
   const [structureSuggestions, setStructureSuggestions] = useState<StructuralSuggestion[] | null>(null);
   const [contextAction, setContextAction] = useState<{ action: 'ask_user' | 'insufficient_context'; question: string } | null>(null);
   const [contextActionAnswer, setContextActionAnswer] = useState('');
@@ -507,7 +495,6 @@ export function AiPanel({
         },
       ],
     });
-    setProposal(null);
   };
 
   const handleApplyAllSuggestions = async () => {
@@ -559,41 +546,6 @@ export function AiPanel({
     }
   };
 
-  const previewProposal = (kind: AiProposalKind, content: string) => {
-    if (!activeSectionId) {
-      toast.error('Select a section before preparing an AI edit');
-      return;
-    }
-    setProposal({ kind, content });
-  };
-
-  const acceptProposal = () => {
-    if (!proposal) return;
-    if (proposal.kind === 'rewrite') {
-      void queueSectionContentChange({
-        title: 'Chat proposed rewrite',
-        content: proposal.content,
-        rationale: 'Created from assistant chat output.',
-      });
-      return;
-    }
-    if (proposal.kind === 'append') {
-      onAppendToSection(proposal.content);
-      setProposal(null);
-      toast.success('Appended AI content to the active section');
-      return;
-    }
-    if (proposal.kind === 'replace_selection') {
-      onReplaceSelection(proposal.content);
-      setProposal(null);
-      toast.success('Inserted AI content into the selected text');
-      return;
-    }
-    onInsertAtCursor(proposal.content);
-    setProposal(null);
-    toast.success('Inserted AI content at cursor');
-  };
-
   const acceptLocalEditorAction = (action: LocalEditorAction) => {
     if (action.sectionId !== activeSectionId) {
       toast.error('Focus the target section before applying this AI action');
@@ -614,14 +566,6 @@ export function AiPanel({
       current.map((item) => item.id === actionId ? { ...item, status: 'rejected' } : item),
     );
   };
-
-  const proposalLabel = proposal?.kind === 'rewrite'
-    ? 'Rewrite active section'
-    : proposal?.kind === 'replace_selection'
-      ? 'Replace selected text'
-      : proposal?.kind === 'insert'
-        ? 'Insert at cursor'
-        : 'Append to active section';
 
   const hasMessages = messages.length > 0 || isStreaming || Boolean(latestActionMessage) || localEditorActions.length > 0;
 
@@ -866,37 +810,7 @@ export function AiPanel({
             messages={messages}
             isStreaming={isStreaming}
             streamingContent={streamingContent}
-            onPreviewRewrite={(content) => previewProposal('rewrite', content)}
-            onPreviewReplaceSelection={(content) => previewProposal('replace_selection', content)}
-            onPreviewInsert={(content) => previewProposal('insert', content)}
-            onPreviewAppend={(content) => previewProposal('append', content)}
           />
-        )}
-
-        {proposal && (
-          <div className="px-3 py-3">
-            <div className="rounded-lg border border-interaction/40 bg-interaction-muted/30" data-testid="ai-chat-proposal">
-              <div className="flex items-center justify-between gap-2 border-b border-interaction/20 px-3 py-2">
-                <div>
-                  <h4 className="text-xs font-semibold text-text-primary">{proposalLabel}</h4>
-                  <p className="text-[10px] text-text-muted">Review before changing the document.</p>
-                </div>
-                <div className="flex gap-1">
-                  <Button size="sm" className="h-7 gap-1 text-xs" onClick={acceptProposal}>
-                    <Check className="h-3 w-3" />
-                    Accept
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => setProposal(null)}>
-                    <X className="h-3 w-3" />
-                    Dismiss
-                  </Button>
-                </div>
-              </div>
-              <pre className="max-h-72 overflow-auto whitespace-pre-wrap px-3 py-2 text-[11px] leading-relaxed text-text-secondary">
-                {proposal.content}
-              </pre>
-            </div>
-          </div>
         )}
 
         {structureSuggestions !== null && (
