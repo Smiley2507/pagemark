@@ -13,7 +13,7 @@ from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user, verify_project_ownership, require_document_permission, verify_document_access
 from app.models.activity import ActivityEvent
-from app.models.analysis import Analysis
+from app.models.analysis import Analysis, AnalysisStatus
 from app.models.audit import AuditLog
 from app.models.document import (
     Document,
@@ -892,11 +892,30 @@ def _extract_json_object(raw: str) -> dict:
 async def _latest_analysis_for_project(db: AsyncSession, project_id: int):
     result = await db.execute(
         select(Analysis)
-        .where(Analysis.project_id == project_id)
+        .where(Analysis.project_id == project_id, Analysis.status == AnalysisStatus.COMPLETED)
         .order_by(Analysis.created_at.desc(), Analysis.id.desc())
         .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+async def _can_attach_project_resources(db: AsyncSession, project: Project, user_id: int) -> bool:
+    if project.created_by == user_id:
+        return True
+    result = await db.execute(
+        select(OrganizationMember).where(
+            OrganizationMember.org_id == project.org_id,
+            OrganizationMember.user_id == user_id,
+            OrganizationMember.status == OrgMemberStatus.ACTIVE,
+        )
+    )
+    member = result.scalar_one_or_none()
+    return bool(member and member.role in {
+        OrgMemberRole.ADMIN,
+        OrgMemberRole.PROJECT_MANAGER,
+        OrgMemberRole.DEVELOPER,
+        OrgMemberRole.TECHNICAL_WRITER,
+    })
 
 
 async def _project_for_editor_action(db: AsyncSession, project_id: int) -> Project:
@@ -1046,11 +1065,18 @@ def _template_context_block(template: Template | None) -> str | None:
     return "\n".join(parts)
 
 
-async def _resource_context_blocks(db: AsyncSession, project_id: int, resource_ids: list[int]) -> list[str]:
+async def _resource_context_blocks(
+    db: AsyncSession,
+    project: Project,
+    user_id: int,
+    resource_ids: list[int],
+) -> list[str]:
     if not resource_ids:
         return []
+    if not await _can_attach_project_resources(db, project, user_id):
+        raise HTTPException(status_code=403, detail="Project resource context requires project-level access")
     result = await db.execute(
-        select(Resource).where(Resource.project_id == project_id, Resource.id.in_(resource_ids))
+        select(Resource).where(Resource.project_id == project.id, Resource.id.in_(resource_ids))
     )
     resources = list(result.scalars().all())
     blocks: list[str] = []
@@ -1065,7 +1091,9 @@ async def _resource_context_blocks(db: AsyncSession, project_id: int, resource_i
 
 async def _editor_reference_context_blocks(
     db: AsyncSession,
+    project: Project,
     document: Document,
+    user_id: int,
     body: AIChatActionRequest,
     analysis_detail: dict,
 ) -> list[str]:
@@ -1083,8 +1111,79 @@ async def _editor_reference_context_blocks(
         template_block = _template_context_block(template)
         if template_block:
             blocks.append(template_block)
-    blocks.extend(await _resource_context_blocks(db, document.project_id, body.resource_ids))
+    blocks.extend(await _resource_context_blocks(db, project, user_id, body.resource_ids))
     return blocks
+
+
+def _editor_action_section(document: Document, section_id: int | None, target_section: Section | None) -> Section:
+    resolved_id = section_id or (target_section.id if target_section else None)
+    if resolved_id is None:
+        raise HTTPException(status_code=400, detail="AI editor action requires section_id")
+    section = next((item for item in document.sections if item.id == int(resolved_id)), None)
+    if section is None:
+        raise HTTPException(status_code=400, detail="AI action targeted an unknown section")
+    return section
+
+
+def _required_editor_action_content(data: dict, action: str) -> str:
+    content = str(data.get("content_md") or data.get("content") or "")
+    if not content.strip():
+        raise HTTPException(status_code=400, detail=f"AI {action} action requires content_md")
+    return content
+
+
+def _inline_change_from_editor_action(
+    data: dict,
+    body: AIChatActionRequest,
+    document: Document,
+    target_section: Section | None,
+) -> AIProposedChangeCreate:
+    action = str(data.get("action") or "").strip()
+    title = str(data.get("title") or action.replace("_", " ").title() or "AI editor action")
+    rationale = data.get("rationale")
+    if data.get("section_id") is None:
+        raise HTTPException(status_code=400, detail=f"AI {action} action requires section_id")
+    section = _editor_action_section(document, data.get("section_id"), target_section)
+    content = _required_editor_action_content(data, action)
+
+    if action == "insert_at_cursor":
+        cursor = body.cursor if body.cursor and body.cursor.section_id == section.id else None
+        pos = cursor.pos if cursor else None
+        if pos is None and body.selection and body.selection.section_id == section.id:
+            pos = body.selection.to_pos
+        if pos is None:
+            pos = len(section.content_md or "")
+        return AIProposedChangeCreate(
+            change_type=AIProposedChangeTypeEnum.INSERT_AT_CURSOR,
+            title=title,
+            section_id=section.id,
+            rationale=rationale,
+            before={"section_id": section.id, "pos": pos},
+            after={"content_md": content, "pos": pos},
+            preview_markdown=content,
+        )
+
+    if action == "replace_selection":
+        if body.selection is None or body.selection.section_id != section.id:
+            raise HTTPException(status_code=400, detail="AI replace_selection action requires selection metadata")
+        if body.selection.from_pos is None or body.selection.to_pos is None or not body.selection.text:
+            raise HTTPException(status_code=400, detail="AI replace_selection action requires selection range and text")
+        return AIProposedChangeCreate(
+            change_type=AIProposedChangeTypeEnum.REPLACE_SELECTION,
+            title=title,
+            section_id=section.id,
+            rationale=rationale,
+            before={
+                "section_id": section.id,
+                "from": body.selection.from_pos,
+                "to": body.selection.to_pos,
+                "text": body.selection.text,
+            },
+            after={"content_md": content},
+            preview_markdown=content,
+        )
+
+    raise HTTPException(status_code=400, detail=f"Unsupported inline AI action: {action}")
 
 
 def _change_from_editor_action(data: dict, document: Document, target_section: Section | None) -> AIProposedChangeCreate | None:
@@ -1096,7 +1195,7 @@ def _change_from_editor_action(data: dict, document: Document, target_section: S
         section = next((item for item in document.sections if item.id == section_id), None)
         if section is None:
             raise HTTPException(status_code=400, detail="AI action targeted an unknown section")
-        content = str(data.get("content_md") or data.get("content") or "")
+        content = _required_editor_action_content(data, action)
         if action == "append_to_section":
             content = f"{(section.content_md or '').rstrip()}\n\n{content.strip()}".strip()
         return AIProposedChangeCreate(
@@ -1183,7 +1282,7 @@ async def create_ai_chat_action(
     analysis_detail = ai_service._analysis_detail(analysis)
     system_prompt = _editor_action_system_prompt(project, document, list(document.sections or []), analysis_detail)
     user_prompt = _editor_action_user_prompt(body, target_section, referenced_sections)
-    context_blocks = await _editor_reference_context_blocks(db, document, body, analysis_detail)
+    context_blocks = await _editor_reference_context_blocks(db, project, document, current_user.id, body, analysis_detail)
     if context_blocks:
         user_prompt = f"{user_prompt}\n\n" + "\n\n".join(context_blocks)
 
@@ -1205,27 +1304,12 @@ async def create_ai_chat_action(
     if action in {"answer", "ask_user", "insufficient_context"}:
         return AIChatActionResponse(message=message, action=action, work_run=None)
     if action in {"insert_at_cursor", "replace_selection"}:
-        section_id = data.get("section_id") or (target_section.id if target_section else None)
-        content = str(data.get("content_md") or data.get("content") or "")
-        if not section_id:
-            raise HTTPException(status_code=400, detail="AI editor action requires a section_id")
-        if not content.strip():
-            raise HTTPException(status_code=400, detail="AI editor action requires content_md")
-        return AIChatActionResponse(
-            message=message or data.get("rationale") or str(data.get("title") or "AI prepared an editor action."),
-            action=action,
-            action_payload={
-                "title": str(data.get("title") or action.replace("_", " ").title()),
-                "section_id": int(section_id),
-                "content_md": content,
-                "rationale": data.get("rationale"),
-            },
-            work_run=None,
-        )
+        change = _inline_change_from_editor_action(data, body, document, target_section)
+    else:
+        change = _change_from_editor_action(data, document, target_section)
 
-    change = _change_from_editor_action(data, document, target_section)
     if change is None:
-        return AIChatActionResponse(message=message or raw, action="answer", work_run=None)
+        raise HTTPException(status_code=400, detail=f"Unsupported AI editor action: {action}")
 
     work_run = await ai_work_service.create_work_run(
         db,
@@ -1654,6 +1738,18 @@ async def authorize_section_collaboration(
             liveblocks_status,
             liveblocks_body,
         )
+    else:
+        try:
+            auth_payload = json.loads(liveblocks_body)
+            if isinstance(auth_payload, dict):
+                user_info = auth_payload.get("userInfo")
+                if not isinstance(user_info, dict):
+                    user_info = {}
+                user_info["permission"] = permission
+                auth_payload["userInfo"] = user_info
+                liveblocks_body = json.dumps(auth_payload)
+        except json.JSONDecodeError:
+            logger.warning("Liveblocks authorization returned non-JSON success for room %s", room_id)
     return Response(
         content=liveblocks_body,
         status_code=liveblocks_status,

@@ -11,7 +11,7 @@ interface MockChange {
   work_run_id: number;
   document_id: number;
   section_id: number | null;
-  change_type: 'rewrite_selection' | 'add_section' | 'rename_section';
+  change_type: 'rewrite_selection' | 'insert_at_cursor' | 'replace_selection' | 'add_section' | 'rename_section';
   status: ChangeStatus;
   title: string;
   rationale?: string;
@@ -223,36 +223,82 @@ async function handleApi(route: Route, url: URL, state: MockState) {
   if (method === 'PUT' && path === '/projects/10/documents/10/sections/reorder') return json(route, { sections: state.sections });
   if (method === 'GET' && path === '/projects/10/documents/10/freshness') return json(route, { freshness: 'fresh', stale_count: 0, stale_sections: [] });
   if (method === 'GET' && path === '/projects/10/documents/10/quality') return json(route, { report: null });
-  if (method === 'POST' && path.match(/^\/projects\/10\/documents\/10\/sections\/\d+\/collaboration\/auth$/)) return json(route, { token: 'mock-liveblocks-token' });
+  if (method === 'POST' && path.match(/^\/projects\/10\/documents\/10\/sections\/\d+\/collaboration\/auth$/)) {
+    return json(route, { token: 'mock-liveblocks-token', userInfo: { permission: 'edit' } });
+  }
   if (method === 'PATCH' && path.match(/^\/projects\/10\/documents\/10\/sections\/\d+\/collaboration\/snapshot$/)) return json(route, { saved: true, updated_at: now });
   if (method === 'GET' && path === '/projects/10/documents/10/ai/proposed-changes') return json(route, { proposed_changes: state.changes });
   if (method === 'POST' && path === '/projects/10/documents/10/ai/chat-actions') {
     const body = postBody(request);
     const message = String(body.message || '').toLowerCase();
     if (message.includes('insert')) {
+      const runId = state.nextRunId++;
+      const change = {
+        id: state.nextChangeId++,
+        work_run_id: runId,
+        document_id: 10,
+        section_id: 301,
+        change_type: 'insert_at_cursor' as const,
+        status: 'proposed' as const,
+        title: 'Insert lifecycle note',
+        rationale: 'Adds a concise lifecycle detail.',
+        before: { section_id: 301, pos: 0 },
+        after: { content_md: 'Inserted lifecycle note from AI.', pos: 0 },
+        preview_markdown: 'Inserted lifecycle note from AI.',
+        created_at: now,
+      };
+      state.changes = [change, ...state.changes];
       return json(route, {
         message: 'Prepared an insertion for the active section.',
         action: 'insert_at_cursor',
-        action_payload: {
-          title: 'Insert lifecycle note',
-          section_id: 301,
-          content_md: 'Inserted lifecycle note from AI.',
-          rationale: 'Adds a concise lifecycle detail.',
+        work_run: {
+          id: runId,
+          document_id: 10,
+          status: 'proposed',
+          prompt_context: body,
+          proposed_changes: [change],
+          created_at: now,
+          updated_at: now,
         },
-        work_run: null,
       });
     }
     if (message.includes('polish') || message.includes('replace')) {
+      if (!body.selection?.text) {
+        return json(route, { detail: 'AI replace_selection action requires selection metadata' }, 400);
+      }
+      const runId = state.nextRunId++;
+      const change = {
+        id: state.nextChangeId++,
+        work_run_id: runId,
+        document_id: 10,
+        section_id: 301,
+        change_type: 'replace_selection' as const,
+        status: 'proposed' as const,
+        title: 'Replace selected lifecycle text',
+        rationale: 'Clarifies the selected text.',
+        before: {
+          section_id: 301,
+          from: body.selection?.from ?? 0,
+          to: body.selection?.to ?? 0,
+          text: body.selection?.text || 'Existing architecture summary.',
+        },
+        after: { content_md: 'Replacement lifecycle text from AI.' },
+        preview_markdown: 'Replacement lifecycle text from AI.',
+        created_at: now,
+      };
+      state.changes = [change, ...state.changes];
       return json(route, {
         message: 'Prepared a replacement for the selected text.',
         action: 'replace_selection',
-        action_payload: {
-          title: 'Replace selected lifecycle text',
-          section_id: 301,
-          content_md: 'Replacement lifecycle text from AI.',
-          rationale: 'Clarifies the selected text.',
+        work_run: {
+          id: runId,
+          document_id: 10,
+          status: 'proposed',
+          prompt_context: body,
+          proposed_changes: [change],
+          created_at: now,
+          updated_at: now,
         },
-        work_run: null,
       });
     }
     if (message.includes('add') || message.includes('create')) {
@@ -416,6 +462,34 @@ function applyChange(state: MockState, change: MockChange) {
     state.sections = state.sections.map((section) => section.id === change.section_id
       ? { ...section, content_md: String(change.after.content_md || ''), updated_at: now }
       : section);
+  }
+  if (change.change_type === 'insert_at_cursor' && change.section_id) {
+    state.sections = state.sections.map((section) => {
+      if (section.id !== change.section_id) return section;
+      const current = String(section.content_md || '');
+      const pos = Math.max(0, Math.min(Number(change.after.pos ?? current.length), current.length));
+      return {
+        ...section,
+        content_md: `${current.slice(0, pos)}${String(change.after.content_md || '')}${current.slice(pos)}`,
+        updated_at: now,
+      };
+    });
+  }
+  if (change.change_type === 'replace_selection' && change.section_id) {
+    state.sections = state.sections.map((section) => {
+      if (section.id !== change.section_id) return section;
+      const current = String(section.content_md || '');
+      const selected = String(change.before?.text || '');
+      const replacement = String(change.after.content_md || '');
+      const index = current.indexOf(selected);
+      return {
+        ...section,
+        content_md: index >= 0
+          ? `${current.slice(0, index)}${replacement}${current.slice(index + selected.length)}`
+          : current,
+        updated_at: now,
+      };
+    });
   }
   if (change.change_type === 'add_section') {
     const heading = String(change.after.heading || 'Added Section');

@@ -69,7 +69,7 @@ async def test_collaboration_auth_uses_section_room_and_edit_permission(
     )
 
     assert response.status_code == 200
-    assert response.json() == {"token": "test-token"}
+    assert response.json() == {"token": "test-token", "userInfo": {"permission": "edit"}}
     assert captured["room_id"] == f"project:{test_project.id}:document:{document.id}:section:{section.id}"
     assert captured["permission"] == "edit"
     assert captured["approved"] is False

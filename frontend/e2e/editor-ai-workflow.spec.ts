@@ -57,39 +57,61 @@ test('chat action creates a reviewable add-section card', async ({ page }) => {
   await expect(page.getByLabel('Heading for AI Created Section')).toHaveValue('AI Created Section');
 });
 
-test('chat insert renders an inline action card and mutates active editor on accept', async ({ page }) => {
+test('chat answer renders user and assistant bubbles', async ({ page }) => {
+  await openEditor(page);
+  await page.getByTestId('editor-section-301').locator('.tiptap p').first().click();
+  await page.getByRole('button', { name: 'Open AI assistant' }).click();
+
+  await sendAiPrompt(page, 'What does this section explain?');
+  await expect(page.getByTestId('ai-panel-transcript')).toContainText('What does this section explain?');
+  await expect(page.getByTestId('ai-panel-transcript')).toContainText('Mock answer from editor action endpoint.');
+});
+
+test('chat insert renders a proposed change card and mutates active editor on accept', async ({ page }) => {
   await openEditor(page);
   await page.getByTestId('editor-section-301').locator('.tiptap p').first().click();
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
 
   await sendAiPrompt(page, 'Insert a lifecycle note at the cursor');
-  const card = page.getByTestId('ai-local-action-insert_at_cursor');
+  const card = page.getByTestId('ai-proposed-change-600');
   await expect(card).toContainText('Insert lifecycle note');
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Inserted lifecycle note from AI.');
 });
 
-test('chat replace renders an inline action card and uses preserved editor selection', async ({ page }) => {
+test('chat replace renders a proposed change card and uses preserved editor selection', async ({ page }) => {
   await openEditor(page);
   await page.getByTestId('editor-section-301').locator('.tiptap p').first().selectText();
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
 
   await sendAiPrompt(page, 'Replace the selected overview text');
-  const card = page.getByTestId('ai-local-action-replace_selection');
+  const card = page.getByTestId('ai-proposed-change-600');
   await expect(card).toContainText('Replace selected lifecycle text');
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Replacement lifecycle text from AI.');
 });
 
-test('slash insert command auto-submits and creates an inline action card', async ({ page }) => {
+test('collapsed selections show a visible replace failure instead of reusing stale ranges', async ({ page }) => {
   await openEditor(page);
-  await page.getByTestId('editor-section-301').locator('.tiptap p').first().click();
+  await page.getByTestId('editor-section-301').locator('.tiptap p').first().selectText();
+  await page.getByTestId('editor-section-302').locator('.tiptap p').first().click();
+  await page.getByRole('button', { name: 'Open AI assistant' }).click();
+
+  await sendAiPrompt(page, 'Replace the selected overview text');
+  await expect(page.getByTestId('ai-panel-transcript')).toContainText('requires selection metadata');
+  await expect(page.getByTestId('editor-section-301')).toContainText('Existing architecture summary.');
+  await expect(page.getByTestId('editor-section-301')).not.toContainText('Replacement lifecycle text from AI.');
+});
+
+test('slash insert command auto-submits and creates a proposed change card', async ({ page }) => {
+  await openEditor(page);
+  await page.getByTestId('editor-section-301').locator('[contenteditable="true"]').first().click();
   await page.keyboard.press('End');
   await page.keyboard.press('Enter');
   await page.keyboard.type('/insert');
   await page.getByRole('button', { name: /Insert with AI/ }).click();
 
-  const card = page.getByTestId('ai-local-action-insert_at_cursor');
+  const card = page.getByTestId('ai-proposed-change-600');
   await expect(card).toContainText('Insert lifecycle note');
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Inserted lifecycle note from AI.');
@@ -97,10 +119,16 @@ test('slash insert command auto-submits and creates an inline action card', asyn
 
 test('selection polish command auto-submits and preserves the selected range', async ({ page }) => {
   await openEditor(page);
-  await page.getByTestId('editor-section-301').locator('.tiptap p').first().selectText();
+  const paragraph = page.getByTestId('editor-section-301').locator('.tiptap p').first();
+  const box = await paragraph.boundingBox();
+  if (!box) throw new Error('Expected overview paragraph to be visible');
+  await page.mouse.move(box.x + 4, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 4, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
   await page.getByRole('button', { name: 'Polish selection' }).click();
 
-  const card = page.getByTestId('ai-local-action-replace_selection');
+  const card = page.getByTestId('ai-proposed-change-600');
   await expect(card).toContainText('Replace selected lifecycle text');
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Replacement lifecycle text from AI.');
@@ -116,7 +144,7 @@ test('right-click polish command auto-submits a replace-selection action card', 
   await expect(page.getByText('Polish phrasing')).toBeVisible();
   await page.getByText('Polish phrasing').click();
 
-  const card = page.getByTestId('ai-local-action-replace_selection');
+  const card = page.getByTestId('ai-proposed-change-600');
   await expect(card).toContainText('Replace selected lifecycle text');
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Replacement lifecycle text from AI.');

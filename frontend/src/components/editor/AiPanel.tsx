@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import axios from 'axios';
 import { AlertCircle, Check, ChevronDown, Eye, Loader2, RotateCcw, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -9,11 +10,7 @@ import {
   useCreateAiChatAction,
   useCreateAiWorkRun,
   useRefineSection,
-  useMessages,
   useRejectAiProposedChange,
-  useStreamMessage,
-  useThreads,
-  useCreateThread,
   useSuggestStructure,
   useUndoAiWorkRun,
   useUpdateProjectContext,
@@ -27,7 +24,6 @@ import { proposedChangeDiffText, proposedChangePreviewText } from '@/lib/ai-prop
 
 import { AiPanelHeader } from './ai/AiPanelHeader';
 import { AiPanelEmptyState } from './ai/AiPanelEmptyState';
-import { AiPanelMessages } from './ai/AiPanelMessages';
 import { AiPanelContextBar } from './ai/AiPanelContextBar';
 import { AiPanelComposer } from './ai/AiPanelComposer';
 import { AiPanelAttachments } from './ai/AiPanelAttachments';
@@ -41,18 +37,20 @@ interface AiPanelProps {
   activeSectionContent: string;
   activeSectionStatus: Section['status'];
   activeSelection?: { sectionId: number; from: number; to: number; text: string } | null;
+  activeCursor?: { sectionId: number; pos: number } | null;
   sections: { id: number; heading: string }[];
-  onInsertAtCursor: (content: string, sectionId?: number) => void;
+  onInsertAtCursor: (content: string, sectionId?: number) => boolean;
   onReplaceSelection: (
     content: string,
     sectionId?: number,
     selection?: { from: number; to: number; text: string },
-  ) => void;
+  ) => boolean;
   projectName: string;
   projectContextMd?: string | null;
   draftPrompt?: string;
   draftPromptId?: number;
   draftPromptAutoSubmit?: boolean;
+  draftSelection?: { sectionId: number; from: number; to: number; text: string };
   onDraftPromptConsumed?: () => void;
   onOpenPalette?: () => void;
 }
@@ -66,6 +64,13 @@ interface LocalEditorAction {
   rationale?: string | null;
   selection?: { from: number; to: number; text: string };
   status: 'proposed' | 'accepted' | 'rejected';
+}
+
+interface PanelTranscriptEntry {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  tone?: 'normal' | 'error';
 }
 
 const quickChips = [
@@ -159,6 +164,7 @@ export function AiPanel({
   activeSectionContent,
   activeSectionStatus,
   activeSelection,
+  activeCursor,
   sections,
   onInsertAtCursor,
   onReplaceSelection,
@@ -167,6 +173,7 @@ export function AiPanel({
   draftPrompt,
   draftPromptId,
   draftPromptAutoSubmit,
+  draftSelection,
   onDraftPromptConsumed,
   onOpenPalette,
 }: AiPanelProps) {
@@ -186,6 +193,8 @@ export function AiPanel({
   const [showPendingChanges, setShowPendingChanges] = useState(false);
   const [latestActionMessage, setLatestActionMessage] = useState<string | null>(null);
   const [localEditorActions, setLocalEditorActions] = useState<LocalEditorAction[]>([]);
+  const [transcript, setTranscript] = useState<PanelTranscriptEntry[]>([]);
+  const [returnedWorkRunChanges, setReturnedWorkRunChanges] = useState<AIProposedChange[]>([]);
   const consumedDraftPromptIdRef = useRef<number | null>(null);
 
   const refineSection = useRefineSection();
@@ -196,6 +205,10 @@ export function AiPanel({
   const rejectAiChange = useRejectAiProposedChange(projectId, documentId);
   const undoAiWorkRun = useUndoAiWorkRun(projectId, documentId);
   const { data: proposedChanges = [] } = useAiProposedChanges(projectId, documentId);
+  const visibleProposedChanges = [
+    ...returnedWorkRunChanges.filter((local) => !proposedChanges.some((change) => change.id === local.id)),
+    ...proposedChanges,
+  ];
   const updateProjectContext = useUpdateProjectContext(projectId);
   const { data: credentialsData, isLoading: credentialsLoading } = useAiCredentials();
   const activeCredential = credentialsData?.credentials.find((credential) => credential.is_active);
@@ -206,12 +219,6 @@ export function AiPanel({
     : activeCredential
       ? `${PROVIDER_LABELS[activeCredential.provider] || activeCredential.provider} / ${selectedModel || activeCredential.model_id}`
       : 'No active AI provider';
-
-  const { data: threads } = useThreads(projectId);
-  const createThread = useCreateThread(projectId);
-  const activeThreadId = threads && threads.length > 0 ? threads[0].id : null;
-  const { data: messages = [] } = useMessages(activeThreadId);
-  const { sendMessage: streamMessage, isStreaming, streamingContent } = useStreamMessage(activeThreadId);
 
   useEffect(() => {
     setContextDraft(projectContextMd || '');
@@ -245,10 +252,25 @@ export function AiPanel({
     return { cleanText: clean, references: refs };
   }, [sections]);
 
-  const sendPrompt = useCallback(async (prompt: string) => {
+  const sendPrompt = useCallback(async (
+    prompt: string,
+    selectionOverride?: { sectionId: number; from: number; to: number; text: string },
+  ) => {
     if (!prompt.trim()) return;
     const { cleanText, references } = parseMentions(prompt.trim());
+    const promptSelection = selectionOverride ?? activeSelection;
+    const promptCursor = promptSelection
+      ? { sectionId: promptSelection.sectionId, pos: promptSelection.to }
+      : activeCursor;
     setInputValue('');
+    setTranscript((current) => [
+      ...current,
+      {
+        id: `user-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        role: 'user',
+        text: cleanText,
+      },
+    ]);
 
     // Collect transient context from store
     const { attachments, removeAttachment } = useAiStore.getState();
@@ -286,47 +308,40 @@ export function AiPanel({
         mode: activeMode,
         model_name: selectedModel || activeCredential?.model_id || null,
         target_section_id: activeSectionId,
-        selection: activeSelection
+        selection: promptSelection
           ? {
-            section_id: activeSelection.sectionId,
-            from: activeSelection.from,
-            to: activeSelection.to,
-            text: activeSelection.text,
+            section_id: promptSelection.sectionId,
+            from: promptSelection.from,
+            to: promptSelection.to,
+            text: promptSelection.text,
+          }
+          : null,
+        cursor: promptCursor
+          ? {
+            section_id: promptCursor.sectionId,
+            pos: promptCursor.pos,
           }
           : null,
         references: structuredReferences,
         resource_ids: resourceIds,
       });
       if (response.work_run) {
-        setLatestActionMessage(response.message || 'AI prepared an editor action for review.');
-        setShowPendingChanges(true);
-        return;
-      }
-      const actionPayload = response.action_payload;
-      if (
-        (response.action === 'insert_at_cursor' || response.action === 'replace_selection')
-        && actionPayload?.content_md
-        && typeof actionPayload.section_id === 'number'
-      ) {
-        const actionKind: LocalEditorAction['action'] = response.action;
-        const sectionId = actionPayload.section_id;
-        const content = actionPayload.content_md;
-        setLocalEditorActions((current) => [
-          {
-            id: `local-${Date.now()}`,
-            action: actionKind,
-            title: actionPayload.title || actionKind.replaceAll('_', ' '),
-            sectionId,
-            content,
-            rationale: actionPayload.rationale,
-            selection: actionKind === 'replace_selection' && activeSelection?.sectionId === sectionId
-              ? { from: activeSelection.from, to: activeSelection.to, text: activeSelection.text }
-              : undefined,
-            status: 'proposed',
-          },
+        setReturnedWorkRunChanges((current) => {
+          const incoming = response.work_run?.proposed_changes ?? [];
+          return [
+            ...incoming,
+            ...current.filter((local) => !incoming.some((change) => change.id === local.id)),
+          ];
+        });
+        setTranscript((current) => [
           ...current,
+          {
+            id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            role: 'assistant',
+            text: response.message || 'AI prepared an editor action for review.',
+          },
         ]);
-        setLatestActionMessage(response.message || 'AI prepared an editor action for review.');
+        setShowPendingChanges(true);
         return;
       }
       if (response.action === 'ask_user' || response.action === 'insufficient_context') {
@@ -334,55 +349,49 @@ export function AiPanel({
           action: response.action === 'insufficient_context' ? 'insufficient_context' : 'ask_user',
           question: response.message || 'More context is needed.',
         });
+        setTranscript((current) => [
+          ...current,
+          {
+            id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            role: 'assistant',
+            text: response.message || 'More context is needed.',
+          },
+        ]);
         return;
       }
-      setLatestActionMessage(response.message || null);
-      if (response.message) return;
-    } catch {
-      // Fall back to the legacy stream so provider/configuration issues remain visible in chat.
-    }
-
-    const referenceLabels = structuredReferences.map((ref) => ref.label).filter((label): label is string => Boolean(label));
-    if (referenceLabels.length > 0) {
-      messagePayload = `${messagePayload}\n\n(referencing: ${referenceLabels.join(', ')})`;
-    }
-
-    if (!activeThreadId) {
-      const thread = await createThread.mutateAsync({
-        title: activeSectionHeading ? `Chat: ${activeSectionHeading}` : 'Editor chat',
-      });
-      streamMessage(
-        messagePayload,
-        undefined,
-        referenceLabels,
-        selectedModel || activeCredential?.model_id || null,
-        activeSectionId,
-        temperature,
-        maxTokens,
-        thread.id,
-      );
-    } else {
-      streamMessage(
-        messagePayload,
-        resourceIds,
-        referenceLabels,
-        selectedModel || activeCredential?.model_id || null,
-        activeSectionId,
-        temperature,
-        maxTokens,
-      );
+      if (response.message) {
+        setTranscript((current) => [
+          ...current,
+          {
+            id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            role: 'assistant',
+            text: response.message,
+          },
+        ]);
+      }
+    } catch (error) {
+      const detail = axios.isAxiosError(error)
+        ? String(error.response?.data?.detail || error.message || 'AI editor action failed')
+        : error instanceof Error ? error.message : 'AI editor action failed';
+      setTranscript((current) => [
+        ...current,
+        {
+          id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          role: 'assistant',
+          text: detail,
+          tone: 'error',
+        },
+      ]);
+      toast.error(detail);
     }
   }, [
     activeCredential?.model_id,
-    activeSectionHeading,
+    activeCursor,
     activeSectionId,
     activeSelection,
-    activeThreadId,
     createAiChatAction,
-    createThread,
     parseMentions,
     selectedModel,
-    streamMessage,
   ]);
 
   useEffect(() => {
@@ -392,12 +401,12 @@ export function AiPanel({
       consumedDraftPromptIdRef.current = draftPromptId;
     }
     if (draftPromptAutoSubmit) {
-      void sendPrompt(draftPrompt);
+      void sendPrompt(draftPrompt, draftSelection);
     } else {
       setInputValue(draftPrompt);
     }
     onDraftPromptConsumed?.();
-  }, [draftPrompt, draftPromptAutoSubmit, draftPromptId, onDraftPromptConsumed, sendPrompt]);
+  }, [draftPrompt, draftPromptAutoSubmit, draftPromptId, draftSelection, onDraftPromptConsumed, sendPrompt]);
 
   const handleSendMessage = async () => {
     await sendPrompt(inputValue);
@@ -579,11 +588,10 @@ export function AiPanel({
   };
 
   const acceptLocalEditorAction = (action: LocalEditorAction) => {
-    if (action.action === 'replace_selection') {
-      onReplaceSelection(action.content, action.sectionId, action.selection);
-    } else {
-      onInsertAtCursor(action.content, action.sectionId);
-    }
+    const applied = action.action === 'replace_selection'
+      ? onReplaceSelection(action.content, action.sectionId, action.selection)
+      : onInsertAtCursor(action.content, action.sectionId);
+    if (!applied) return;
     setLocalEditorActions((current) =>
       current.map((item) => item.id === action.id ? { ...item, status: 'accepted' } : item),
     );
@@ -595,7 +603,12 @@ export function AiPanel({
     );
   };
 
-  const hasMessages = messages.length > 0 || isStreaming || Boolean(latestActionMessage) || localEditorActions.length > 0;
+  const hasPanelActivity = Boolean(latestActionMessage)
+    || transcript.length > 0
+    || localEditorActions.length > 0
+    || visibleProposedChanges.length > 0
+    || Boolean(contextAction)
+    || structureSuggestions !== null;
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
@@ -667,7 +680,7 @@ export function AiPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {proposedChanges.length > 0 && (
+        {visibleProposedChanges.length > 0 && (
           <div className="border-b border-separator px-3 py-2">
             <button
               type="button"
@@ -677,14 +690,14 @@ export function AiPanel({
               <span className="min-w-0">
                 <span className="block text-xs font-semibold text-text-primary">Pending changes</span>
                 <span className="block text-[10px] text-text-muted">
-                  {proposedChanges.filter((change) => change.status === 'proposed').length} pending · {proposedChanges.length} total
+                  {visibleProposedChanges.filter((change) => change.status === 'proposed').length} pending · {visibleProposedChanges.length} total
                 </span>
               </span>
               <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-text-muted transition-transform ${showPendingChanges ? 'rotate-180' : ''}`} />
             </button>
             {showPendingChanges && (
               <div className="mt-2 space-y-2">
-                {proposedChanges.slice(0, 5).map((change) => (
+                {visibleProposedChanges.slice(0, 5).map((change) => (
                   <ProposedChangeCard
                     key={change.id}
                     change={change}
@@ -783,6 +796,30 @@ export function AiPanel({
           </div>
         )}
 
+        {transcript.length > 0 && (
+          <div className="space-y-2 px-3 py-3" data-testid="ai-panel-transcript">
+            {transcript.map((entry) => (
+              <div
+                key={entry.id}
+                className={`flex ${entry.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={[
+                    'max-w-[88%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm leading-relaxed',
+                    entry.role === 'user'
+                      ? 'bg-foreground text-background'
+                      : entry.tone === 'error'
+                        ? 'border border-status-danger-foreground/30 bg-status-danger/10 text-text-primary'
+                        : 'border border-border bg-panel text-text-primary',
+                  ].join(' ')}
+                >
+                  {entry.text}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {localEditorActions.length > 0 && (
           <div className="px-3 py-3">
             <div className="space-y-2">
@@ -822,7 +859,7 @@ export function AiPanel({
           </div>
         )}
 
-        {!hasMessages && !clarification ? (
+        {!hasPanelActivity && !clarification ? (
           <AiPanelEmptyState
             onSelectSuggestion={(action) => {
               const chip = quickChips.find((c) => c.text === action);
@@ -833,13 +870,7 @@ export function AiPanel({
               }
             }}
           />
-        ) : (
-          <AiPanelMessages
-            messages={messages}
-            isStreaming={isStreaming}
-            streamingContent={streamingContent}
-          />
-        )}
+        ) : null}
 
         {structureSuggestions !== null && (
           <div className="px-3 py-3">
@@ -854,14 +885,14 @@ export function AiPanel({
           </div>
         )}
 
-        {hasMessages && !clarification && activeSectionId && (
+        {hasPanelActivity && !clarification && activeSectionId && (
           <div className="border-t border-separator px-4 py-2">
             <div className="flex flex-wrap gap-1">
               {quickChips.slice(0, 3).map((chip) => (
                 <button
                   key={chip.label}
                   onClick={() => handleAction(chip.label.toLowerCase() as any)}
-                  disabled={isStreaming || isRefining}
+                  disabled={isRefining}
                   className="rounded px-2 py-1 text-[11px] text-text-muted transition-colors hover:bg-panel-muted hover:text-text-primary disabled:opacity-40"
                 >
                   {chip.label}
@@ -893,11 +924,11 @@ export function AiPanel({
       )}
 
       <div className="shrink-0 px-3 pb-3 pt-2">
-          <AiPanelComposer
-            value={inputValue}
-            onChange={setInputValue}
-            onSend={handleSendMessage}
-          isStreaming={isStreaming || createAiChatAction.isPending}
+        <AiPanelComposer
+          value={inputValue}
+          onChange={setInputValue}
+          onSend={handleSendMessage}
+          isStreaming={createAiChatAction.isPending}
           disabled={!activeSectionId}
           activeSectionId={activeSectionId}
           sections={sections}

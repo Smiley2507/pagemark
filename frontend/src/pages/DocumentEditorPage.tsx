@@ -74,7 +74,10 @@ type FlatSection = Section & { depth: number };
 
 type RightTab = 'ai' | 'notes';
 type ThemeChoice = 'light' | 'dark' | 'system';
-type AiCommandOptions = { autoSubmit?: boolean };
+type AiCommandOptions = {
+  autoSubmit?: boolean;
+  selection?: MarkdownSelectionSnapshot;
+};
 
 const themeOptions: Array<{ value: ThemeChoice; label: string; icon: typeof Sun }> = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -181,6 +184,7 @@ function SectionBlock({
   onFocusChange,
   onEditorReady,
   onSelectionChange,
+  onSectionPointerDown,
   onAiCommand,
   isDocumentApproved,
 }: {
@@ -206,6 +210,7 @@ function SectionBlock({
   onFocusChange?: (sectionId: number, editor: Editor | null) => void;
   onEditorReady?: (sectionId: number, editor: Editor | null) => void;
   onSelectionChange?: (sectionId: number, selection: MarkdownSelectionSnapshot | null) => void;
+  onSectionPointerDown?: (sectionId: number) => void;
   onAiCommand?: (sectionId: number, prompt: string, options?: AiCommandOptions) => void;
   isDocumentApproved?: boolean;
 }) {
@@ -261,6 +266,7 @@ function SectionBlock({
       id={`section-${section.id}`}
       data-editor-section="true"
       data-testid={`editor-section-${section.id}`}
+      onPointerDown={() => onSectionPointerDown?.(section.id)}
       className="group min-w-0 scroll-mt-24 overflow-x-hidden py-7"
     >
       <div className="relative mx-auto max-w-4xl min-w-0 px-2 py-1 transition-colors duration-150 sm:px-4">
@@ -359,10 +365,10 @@ function SectionBlock({
             onEditorReady={(editor) => onEditorReady?.(section.id, editor)}
             onSelectionChange={(selection) => onSelectionChange?.(section.id, selection)}
             onAiCommand={(prompt, options) => onAiCommand?.(section.id, prompt, options)}
-            onPolish={(text) => onAiCommand?.(
+            onPolish={(text, selection) => onAiCommand?.(
               section.id,
               `Replace the selected text with a polished version while preserving meaning. Return a replace_selection editor action.\n\nSelected text:\n${text}`,
-              { autoSubmit: true },
+              { autoSubmit: true, selection },
             )}
           />
         </div>
@@ -395,13 +401,19 @@ export function DocumentEditorPage() {
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [activeEditorSectionId, setActiveEditorSectionId] = useState<number | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
-  const [aiDraftCommand, setAiDraftCommand] = useState<{ id: number; prompt: string; autoSubmit: boolean } | null>(null);
+  const [aiDraftCommand, setAiDraftCommand] = useState<{
+    id: number;
+    prompt: string;
+    autoSubmit: boolean;
+    selection?: { sectionId: number; from: number; to: number; text: string };
+  } | null>(null);
   const [editorSelection, setEditorSelection] = useState<{
     sectionId: number;
     from: number;
     to: number;
     text: string;
   } | null>(null);
+  const [editorCursor, setEditorCursor] = useState<{ sectionId: number; pos: number } | null>(null);
   const [versionHistorySectionId, setVersionHistorySectionId] = useState<number | null>(null);
   const [focusMode, setFocusMode] = useState(false);
   const [focusBarVisible, setFocusBarVisible] = useState(false);
@@ -656,10 +668,11 @@ export function DocumentEditorPage() {
         : null;
     if (!targetEditor) {
       toast.error('Focus a section before inserting AI content');
-      return;
+      return false;
     }
     targetEditor.chain().focus().insertContent(content, { contentType: 'markdown' }).run();
     toast.success('Inserted at cursor');
+    return true;
   }, [activeEditor, activeEditorSectionId, activeSectionId]);
 
   const handleReplaceSelection = useCallback((
@@ -675,28 +688,34 @@ export function DocumentEditorPage() {
         : null;
     if (!targetEditor) {
       toast.error('Focus a section and select text before replacing it');
-      return;
+      return false;
     }
     let savedSelection = selectionOverride ?? null;
     if (!savedSelection && editorSelection?.sectionId === targetSectionId) {
       savedSelection = editorSelection;
     }
-    const { selection } = targetEditor.state;
     if (savedSelection) {
+      const { selection } = targetEditor.state;
+      const currentSelectionText = targetEditor.state.doc.textBetween(selection.from, selection.to);
+      const selectionStillCurrent = !selection.empty
+        && selection.from === savedSelection.from
+        && selection.to === savedSelection.to
+        && currentSelectionText === savedSelection.text;
+      if (!selectionStillCurrent) {
+        toast.error('Select text before replacing it');
+        return false;
+      }
       targetEditor.chain().focus().insertContentAt(
         { from: savedSelection.from, to: savedSelection.to },
         content,
         { parseOptions: { preserveWhitespace: 'full' } },
       ).run();
+      setEditorSelection(null);
       toast.success('AI content replaced the selection');
-      return;
+      return true;
     }
-    if (selection.empty) {
-      toast.error('Select text before replacing it');
-      return;
-    }
-    targetEditor.chain().focus().deleteSelection().insertContent(content, { contentType: 'markdown' }).run();
-    toast.success('AI content replaced the selection');
+    toast.error('Select text before replacing it');
+    return false;
   }, [activeEditor, activeEditorSectionId, activeSectionId, editorSelection]);
 
   const handleSectionEditorReady = useCallback((sectionId: number, editor: Editor | null) => {
@@ -712,11 +731,21 @@ export function DocumentEditorPage() {
     setActiveEditor(editor);
     setActiveEditorSectionId(sectionId);
     setActiveSectionId(sectionId);
-    setEditorSelection((current) => current?.sectionId === sectionId ? current : null);
+    setEditorSelection((current) => {
+      if (current?.sectionId !== sectionId) return null;
+      const { selection } = editor.state;
+      if (selection.empty) return null;
+      const selectedText = editor.state.doc.textBetween(selection.from, selection.to);
+      return selection.from === current.from && selection.to === current.to && selectedText === current.text
+        ? current
+        : null;
+    });
+    setEditorCursor({ sectionId, pos: editor.state.selection.to });
   }, []);
 
   const handleSectionSelectionChange = useCallback((sectionId: number, selection: MarkdownSelectionSnapshot | null) => {
     if (!selection) {
+      setEditorSelection((current) => current?.sectionId === sectionId ? null : current);
       return;
     }
     setActiveSectionId(sectionId);
@@ -726,6 +755,13 @@ export function DocumentEditorPage() {
       to: selection.to,
       text: selection.text,
     });
+    setEditorCursor({ sectionId, pos: selection.to });
+  }, []);
+
+  const handleSectionPointerDown = useCallback((sectionId: number) => {
+    setActiveSectionId(sectionId);
+    setEditorSelection(null);
+    setEditorCursor(null);
   }, []);
 
   const handleAiCommand = useCallback((sectionId: number, prompt: string, options?: AiCommandOptions) => {
@@ -737,6 +773,14 @@ export function DocumentEditorPage() {
       id: aiDraftCommandIdRef.current,
       prompt,
       autoSubmit: Boolean(options?.autoSubmit),
+      selection: options?.selection
+        ? {
+          sectionId,
+          from: options.selection.from,
+          to: options.selection.to,
+          text: options.selection.text,
+        }
+        : undefined,
     });
   }, []);
 
@@ -1001,6 +1045,7 @@ export function DocumentEditorPage() {
                   onFocusChange={handleSectionFocusChange}
                   onEditorReady={handleSectionEditorReady}
                   onSelectionChange={handleSectionSelectionChange}
+                  onSectionPointerDown={handleSectionPointerDown}
                   onAiCommand={handleAiCommand}
                   isDocumentApproved={document?.status === 'approved'}
                 />
@@ -1069,6 +1114,7 @@ export function DocumentEditorPage() {
                     activeSectionContent={activeSection ? (localContentBySectionId[activeSection.id] ?? activeSection.content_md ?? '') : ''}
                     activeSectionStatus={activeSection?.status || 'pending'}
                     activeSelection={editorSelection}
+                    activeCursor={editorCursor}
                     sections={sections.map((s) => ({ id: s.id, heading: s.title || s.heading }))}
                     onInsertAtCursor={handleInsertAtCursor}
                     onReplaceSelection={handleReplaceSelection}
@@ -1077,6 +1123,7 @@ export function DocumentEditorPage() {
                     draftPrompt={aiDraftCommand?.prompt}
                     draftPromptId={aiDraftCommand?.id}
                     draftPromptAutoSubmit={Boolean(aiDraftCommand?.autoSubmit)}
+                    draftSelection={aiDraftCommand?.selection}
                     onDraftPromptConsumed={() => setAiDraftCommand(null)}
                     onOpenPalette={() => setPaletteOpen(true)}
                   />

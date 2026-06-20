@@ -26,7 +26,7 @@ export function parseSectionRoomId(roomId: string): CollaborationRoomParts {
 }
 
 export const collaborationApi = {
-  async authorize(roomId?: string): Promise<{ token: string }> {
+  async authorize(roomId?: string): Promise<{ token: string; userInfo?: { permission?: 'view' | 'comment' | 'edit' } }> {
     if (!roomId) throw new Error('Missing collaboration room id');
     const { projectId, documentId, sectionId } = parseSectionRoomId(roomId);
     try {

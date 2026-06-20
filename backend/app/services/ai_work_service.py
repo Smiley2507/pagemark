@@ -301,6 +301,87 @@ async def _apply_change(
         )
         return before
 
+    if change.change_type == AIProposedChangeType.INSERT_AT_CURSOR:
+        section = await _section_for_change(db, document.id, change.section_id)
+        current_content = section.content_md or ""
+        pos = after.get("pos")
+        if pos is None:
+            pos = (change.before_json or {}).get("pos")
+        if pos is None:
+            raise HTTPException(status_code=400, detail="Insert AI change requires cursor metadata")
+        pos = max(0, min(int(pos), len(current_content)))
+        content = str(after.get("content_md") or after.get("content") or "")
+        before = {
+            "section_id": section.id,
+            "content_md": current_content,
+            "pos": pos,
+            "inserted_text": content,
+        }
+        new_content = f"{current_content[:pos]}{content}{current_content[pos:]}"
+        section.content_md = new_content
+        section.content_lifecycle = SectionContentLifecycle.GENERATED_DRAFT
+        section.status = SectionStatus.DRAFT
+        section.updated_at = _utcnow()
+        await create_version_snapshot(
+            db,
+            section_id=section.id,
+            old_content=current_content,
+            new_content=new_content,
+            author_type=AuthorType.AI,
+            summary=change.title,
+        )
+        return before
+
+    if change.change_type == AIProposedChangeType.REPLACE_SELECTION:
+        section = await _section_for_change(db, document.id, change.section_id)
+        current_content = section.content_md or ""
+        before_json = change.before_json or {}
+        expected_text = str(before_json.get("text") or "")
+        if not expected_text:
+            raise HTTPException(status_code=400, detail="Replace AI change requires selected text metadata")
+        from_pos = before_json.get("from")
+        to_pos = before_json.get("to")
+        start: int | None = None
+        end: int | None = None
+        if from_pos is not None and to_pos is not None:
+            candidate_start = max(0, min(int(from_pos), len(current_content)))
+            candidate_end = max(candidate_start, min(int(to_pos), len(current_content)))
+            if current_content[candidate_start:candidate_end] == expected_text:
+                start = candidate_start
+                end = candidate_end
+        if start is None:
+            first = current_content.find(expected_text)
+            if first >= 0 and current_content.find(expected_text, first + len(expected_text)) == -1:
+                start = first
+                end = first + len(expected_text)
+        if start is None or end is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Selected text no longer matches the current section content",
+            )
+        replacement = str(after.get("content_md") or after.get("content") or "")
+        before = {
+            "section_id": section.id,
+            "content_md": current_content,
+            "from": start,
+            "to": end,
+            "text": expected_text,
+        }
+        new_content = f"{current_content[:start]}{replacement}{current_content[end:]}"
+        section.content_md = new_content
+        section.content_lifecycle = SectionContentLifecycle.GENERATED_DRAFT
+        section.status = SectionStatus.DRAFT
+        section.updated_at = _utcnow()
+        await create_version_snapshot(
+            db,
+            section_id=section.id,
+            old_content=current_content,
+            new_content=new_content,
+            author_type=AuthorType.AI,
+            summary=change.title,
+        )
+        return before
+
     if change.change_type == AIProposedChangeType.RENAME_SECTION:
         section = await _section_for_change(db, document.id, change.section_id)
         before = {"section_id": section.id, "heading": section.heading, "title": section.title}

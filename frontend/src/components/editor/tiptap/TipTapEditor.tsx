@@ -37,6 +37,7 @@ export interface TipTapSelectionSnapshot {
 
 interface AiCommandOptions {
   autoSubmit?: boolean
+  selection?: TipTapSelectionSnapshot
 }
 
 interface TipTapEditorProps {
@@ -50,7 +51,7 @@ interface TipTapEditorProps {
   readOnly?: boolean
   onSavingChange?: (saving: boolean) => void
   onSaved?: (savedAt: Date) => void
-  onPolish?: (text: string) => void
+  onPolish?: (text: string, selection?: TipTapSelectionSnapshot) => void
   onAiCommand?: (prompt: string, options?: AiCommandOptions) => void
   grammarIssues?: GrammarIssue[]
   onFocusChange?: (editor: Editor | null) => void
@@ -77,7 +78,11 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
       documentId: props.documentId,
       sectionId: props.sectionId,
     }) : null
-    const [preflight, setPreflight] = useState<{ status: 'idle' | 'checking' | 'ready' | 'failed'; error?: string }>({
+    const [preflight, setPreflight] = useState<{
+      status: 'idle' | 'checking' | 'ready' | 'failed';
+      error?: string;
+      permission?: 'view' | 'comment' | 'edit';
+    }>({
       status: shouldCollaborate ? 'checking' : 'idle',
     })
 
@@ -90,8 +95,8 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
 
       setPreflight({ status: 'checking' })
       collaborationApi.authorize(roomId)
-        .then(() => {
-          if (!cancelled) setPreflight({ status: 'ready' })
+        .then((auth) => {
+          if (!cancelled) setPreflight({ status: 'ready', permission: auth.userInfo?.permission })
         })
         .catch((error) => {
           if (!cancelled) {
@@ -128,7 +133,7 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
     return (
       <RoomProvider id={roomId}>
         <ClientSideSuspense fallback={<TipTapEditorInner {...props} readOnly ref={ref} />}>
-          <CollaborativeTipTapEditor {...props} ref={ref} />
+          <CollaborativeTipTapEditor {...props} preflightPermission={preflight.permission} ref={ref} />
         </ClientSideSuspense>
       </RoomProvider>
     )
@@ -157,10 +162,10 @@ function CollaborationStatusCard({
   )
 }
 
-const CollaborativeTipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
-  function CollaborativeTipTapEditor(props, ref) {
+const CollaborativeTipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps & { preflightPermission?: 'view' | 'comment' | 'edit' }>(
+  function CollaborativeTipTapEditor({ preflightPermission, ...props }, ref) {
     const self = useSelf()
-    const permission = typeof self?.info?.permission === 'string' ? self.info.permission : 'view'
+    const permission = typeof self?.info?.permission === 'string' ? self.info.permission : preflightPermission ?? 'view'
     const initialContent = useMemo(() => {
       if (!props.value) return undefined
       return marked.parse(props.value, { async: false }) as string
@@ -506,7 +511,10 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
               `Explain this selected text in the Pagemark AI panel using this section and latest project analysis as context:\n\n${text}`,
               { autoSubmit: true },
             )}
-            onPolish={(text) => onPolish?.(text)}
+            onPolish={(text) => {
+              const { from, to } = editor.state.selection
+              onPolish?.(text, { from, to, text: editor.state.doc.textBetween(from, to) })
+            }}
             onClose={() => { setContextMenuState(null); editor?.chain().focus().run() }}
           />,
           document.body,
@@ -561,7 +569,7 @@ function SelectionToolbar({
 }: {
   editor: Editor
   onAddContext: (text: string) => void
-  onPolish?: (text: string) => void
+  onPolish?: (text: string, selection?: TipTapSelectionSnapshot) => void
 }) {
   const selectedText = editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to).trim()
 
@@ -623,7 +631,11 @@ function SelectionToolbar({
       {onPolish && (
         <ToolbarButton
           label="Polish selection"
-          onClick={() => selectedText && onPolish(selectedText)}
+          onClick={() => {
+            if (!selectedText) return
+            const { from, to } = editor.state.selection
+            onPolish(selectedText, { from, to, text: editor.state.doc.textBetween(from, to) })
+          }}
         >
           <MessageSquarePlus className="h-3.5 w-3.5" />
         </ToolbarButton>

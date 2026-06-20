@@ -9,6 +9,9 @@ from app.models.document import (
     SectionContentLifecycle,
     SectionStatus,
 )
+from app.models.analysis import Analysis, AnalysisStatus
+from app.models.organization import OrganizationMember, OrgMemberRole, OrgMemberStatus
+from app.routers.documents import _latest_analysis_for_project, _resource_context_blocks
 
 
 @dataclass
@@ -434,7 +437,106 @@ async def test_editor_chat_action_returns_clarification_without_work_run(
 
 
 @pytest.mark.anyio
-async def test_editor_chat_action_returns_replace_selection_payload(
+async def test_editor_chat_action_answer_returns_no_work_run(
+    client,
+    monkeypatch,
+    test_project,
+    ai_work_document,
+):
+    document, section = ai_work_document
+
+    async def fake_active_credential(_db, _user_id):
+        return StubCredential()
+
+    def fake_complete_text(system, user, provider, api_key, model_id, *, max_tokens):
+        return '{"action":"answer","message":"This section explains the operator workflow."}'
+
+    monkeypatch.setattr(
+        "app.routers.documents.ai_credential_service.get_active_credential",
+        fake_active_credential,
+    )
+    monkeypatch.setattr("app.routers.documents.complete_text", fake_complete_text)
+
+    response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/chat-actions",
+        json={
+            "message": "What does this section explain?",
+            "target_section_id": section.id,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["action"] == "answer"
+    assert payload["message"] == "This section explains the operator workflow."
+    assert payload["work_run"] is None
+
+
+@pytest.mark.anyio
+async def test_editor_chat_action_insert_creates_work_run_accepts_and_undoes(
+    client,
+    monkeypatch,
+    test_project,
+    ai_work_document,
+):
+    document, section = ai_work_document
+
+    async def fake_active_credential(_db, _user_id):
+        return StubCredential()
+
+    def fake_complete_text(system, user, provider, api_key, model_id, *, max_tokens):
+        return (
+            '{"action":"insert_at_cursor","title":"Insert lifecycle note",'
+            f'"section_id":{section.id},"content_md":" plus new detail",'
+            '"rationale":"Adds a concise detail."}'
+        )
+
+    monkeypatch.setattr(
+        "app.routers.documents.ai_credential_service.get_active_credential",
+        fake_active_credential,
+    )
+    monkeypatch.setattr("app.routers.documents.complete_text", fake_complete_text)
+
+    response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/chat-actions",
+        json={
+            "message": "Insert detail here",
+            "target_section_id": section.id,
+            "cursor": {"section_id": section.id, "pos": len("Old overview")},
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["action"] == "insert_at_cursor"
+    assert payload["action_payload"] is None
+    change = payload["work_run"]["proposed_changes"][0]
+    assert change["change_type"] == "insert_at_cursor"
+    assert change["before"]["pos"] == len("Old overview")
+
+    accept_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/proposed-changes/{change['id']}/accept"
+    )
+    assert accept_response.status_code == 200
+
+    sections_response = await client.get(
+        f"/projects/{test_project.id}/documents/{document.id}/sections"
+    )
+    assert sections_response.json()["sections"][0]["content_md"] == "Old overview plus new detail"
+
+    undo_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/work-runs/{payload['work_run']['id']}/undo"
+    )
+    assert undo_response.status_code == 200
+
+    restored_response = await client.get(
+        f"/projects/{test_project.id}/documents/{document.id}/sections"
+    )
+    assert restored_response.json()["sections"][0]["content_md"] == "Old overview"
+
+
+@pytest.mark.anyio
+async def test_editor_chat_action_replace_creates_work_run_accepts_and_undoes(
     client,
     monkeypatch,
     test_project,
@@ -476,6 +578,157 @@ async def test_editor_chat_action_returns_replace_selection_payload(
     assert response.status_code == 200
     payload = response.json()
     assert payload["action"] == "replace_selection"
-    assert payload["work_run"] is None
-    assert payload["action_payload"]["section_id"] == section.id
-    assert payload["action_payload"]["content_md"] == "New selected text."
+    assert payload["action_payload"] is None
+    change = payload["work_run"]["proposed_changes"][0]
+    assert change["change_type"] == "replace_selection"
+    assert change["before"]["text"] == "Old"
+    assert change["after"]["content_md"] == "New selected text."
+
+    accept_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/proposed-changes/{change['id']}/accept"
+    )
+    assert accept_response.status_code == 200
+
+    sections_response = await client.get(
+        f"/projects/{test_project.id}/documents/{document.id}/sections"
+    )
+    assert sections_response.json()["sections"][0]["content_md"] == "New selected text. overview"
+
+    undo_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/work-runs/{payload['work_run']['id']}/undo"
+    )
+    assert undo_response.status_code == 200
+
+    restored_response = await client.get(
+        f"/projects/{test_project.id}/documents/{document.id}/sections"
+    )
+    assert restored_response.json()["sections"][0]["content_md"] == "Old overview"
+
+
+@pytest.mark.anyio
+async def test_editor_chat_action_replace_accept_fails_when_selection_no_longer_matches(
+    client,
+    monkeypatch,
+    test_project,
+    ai_work_document,
+):
+    document, section = ai_work_document
+
+    async def fake_active_credential(_db, _user_id):
+        return StubCredential()
+
+    def fake_complete_text(system, user, provider, api_key, model_id, *, max_tokens):
+        return (
+            '{"action":"replace_selection","title":"Replace selected text",'
+            f'"section_id":{section.id},"content_md":"New selected text."}}'
+        )
+
+    monkeypatch.setattr(
+        "app.routers.documents.ai_credential_service.get_active_credential",
+        fake_active_credential,
+    )
+    monkeypatch.setattr("app.routers.documents.complete_text", fake_complete_text)
+
+    response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/chat-actions",
+        json={
+            "message": "Replace the selection",
+            "target_section_id": section.id,
+            "selection": {"section_id": section.id, "from": 0, "to": 3, "text": "Old"},
+        },
+    )
+    change = response.json()["work_run"]["proposed_changes"][0]
+
+    update_response = await client.patch(
+        f"/projects/{test_project.id}/documents/{document.id}/sections/{section.id}",
+        json={"content_md": "Changed overview"},
+    )
+    assert update_response.status_code == 200
+
+    accept_response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/proposed-changes/{change['id']}/accept"
+    )
+    assert accept_response.status_code == 409
+
+
+@pytest.mark.anyio
+async def test_editor_chat_action_malformed_insert_payload_returns_400(
+    client,
+    monkeypatch,
+    test_project,
+    ai_work_document,
+):
+    document, section = ai_work_document
+
+    async def fake_active_credential(_db, _user_id):
+        return StubCredential()
+
+    def fake_complete_text(system, user, provider, api_key, model_id, *, max_tokens):
+        return f'{{"action":"insert_at_cursor","section_id":{section.id}}}'
+
+    monkeypatch.setattr(
+        "app.routers.documents.ai_credential_service.get_active_credential",
+        fake_active_credential,
+    )
+    monkeypatch.setattr("app.routers.documents.complete_text", fake_complete_text)
+
+    response = await client.post(
+        f"/projects/{test_project.id}/documents/{document.id}/ai/chat-actions",
+        json={
+            "message": "Insert detail here",
+            "target_section_id": section.id,
+            "cursor": {"section_id": section.id, "pos": 0},
+        },
+    )
+
+    assert response.status_code == 400
+    assert "content_md" in response.json()["detail"]
+
+
+class _ScalarResult:
+    def __init__(self, value):
+        self.value = value
+
+    def scalar_one_or_none(self):
+        return self.value
+
+
+class _CapturingSession:
+    def __init__(self, value):
+        self.value = value
+        self.statements = []
+
+    async def execute(self, statement):
+        self.statements.append(statement)
+        return _ScalarResult(self.value)
+
+
+@pytest.mark.anyio
+async def test_editor_actions_use_latest_completed_analysis():
+    completed = Analysis(status=AnalysisStatus.COMPLETED, source_commit="completed")
+    session = _CapturingSession(completed)
+
+    analysis = await _latest_analysis_for_project(session, 123)
+
+    assert analysis is not None
+    assert analysis.status == AnalysisStatus.COMPLETED
+    assert analysis.source_commit == "completed"
+    compiled = session.statements[0].compile()
+    assert AnalysisStatus.COMPLETED in compiled.params.values()
+
+
+@pytest.mark.anyio
+async def test_document_editor_resource_context_requires_project_level_role():
+    project = type("ProjectStub", (), {"id": 10, "org_id": 20, "created_by": 1})()
+    viewer_member = OrganizationMember(
+        org_id=20,
+        user_id=2,
+        role=OrgMemberRole.VIEWER,
+        status=OrgMemberStatus.ACTIVE,
+    )
+    session = _CapturingSession(viewer_member)
+
+    with pytest.raises(Exception) as exc_info:
+        await _resource_context_blocks(session, project, 2, [99])
+
+    assert getattr(exc_info.value, "status_code", None) == 403

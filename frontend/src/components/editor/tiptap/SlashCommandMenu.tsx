@@ -12,6 +12,7 @@ interface CommandItem {
 
 interface AiCommandOptions {
   autoSubmit?: boolean
+  selection?: { from: number; to: number; text: string }
 }
 
 function createCommandGroups(
@@ -39,7 +40,11 @@ function createCommandGroups(
         description: 'Generate content here',
         keywords: ['generate', 'insert', 'draft'],
         execute: (e: Editor) => {
-          onAiCommand('Insert a concise, relevant markdown paragraph at the current cursor in this active section. Return an insert_at_cursor editor action.', { autoSubmit: true })
+          const { from } = e.state.selection
+          onAiCommand('Insert a concise, relevant markdown paragraph at the current cursor in this active section. Return an insert_at_cursor editor action.', {
+            autoSubmit: true,
+            selection: { from, to: from, text: '' },
+          })
           e.chain().focus().run()
           return true
         },

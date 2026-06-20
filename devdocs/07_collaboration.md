@@ -57,8 +57,10 @@ These Pagemark permissions are mapped to Liveblocks room permissions during auth
 | Pagemark Permission | Liveblocks Access |
 |---------------------|-------------------|
 | `VIEW` | `room:read`, `room:presence:write`, `comments:read` |
-| `COMMENT` | View access plus `comments:write` |
-| `EDIT` | Comment access plus `room:write`, unless the document is `APPROVED` |
+| `COMMENT` | `room:read`, `room:presence:write`, `comments:write` |
+| `EDIT` | `room:presence:write`, `room:write`, `comments:write`, unless the document is `APPROVED` |
+
+Liveblocks accepts at most one scope per feature. Do not send both `room:read` and `room:write`, or both `comments:read` and `comments:write`, for the same room. Write scopes imply read capability for that feature.
 
 ### Share Management
 

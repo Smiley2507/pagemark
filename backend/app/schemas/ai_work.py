@@ -21,6 +21,8 @@ class AIWorkRunStatusEnum(str, Enum):
 class AIProposedChangeTypeEnum(str, Enum):
     GENERATE_SECTION = "generate_section"
     REWRITE_SELECTION = "rewrite_selection"
+    INSERT_AT_CURSOR = "insert_at_cursor"
+    REPLACE_SELECTION = "replace_selection"
     RENAME_SECTION = "rename_section"
     ADD_SECTION = "add_section"
     REORDER_SECTIONS = "reorder_sections"

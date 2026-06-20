@@ -97,6 +97,9 @@ export function proposedChangeDiffText(change: AIProposedChange): {
   return {
     beforeText,
     afterText,
-    isTextChange: change.change_type === 'rewrite_selection' || change.change_type === 'generate_section',
+    isTextChange: change.change_type === 'rewrite_selection'
+      || change.change_type === 'generate_section'
+      || change.change_type === 'insert_at_cursor'
+      || change.change_type === 'replace_selection',
   };
 }

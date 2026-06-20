@@ -41,6 +41,8 @@ export interface ChatThread {
 export type AIProposedChangeType =
   | 'generate_section'
   | 'rewrite_selection'
+  | 'insert_at_cursor'
+  | 'replace_selection'
   | 'rename_section'
   | 'add_section'
   | 'reorder_sections'
