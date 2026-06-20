@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.models.time import utcnow
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,7 +66,7 @@ async def autosave_section(
         return SectionAutosaveResponse(saved=False, updated_at=section.updated_at)
 
     section.content_md = body.content_md
-    section.updated_at = datetime.utcnow()
+    section.updated_at = utcnow()
     section_service.clear_review_state_for_content_edit(section, edited_at=section.updated_at)
     await db.commit()
     await db.refresh(section)
@@ -104,7 +105,7 @@ async def update_section(
             section.status = new_status
 
     if content_changed or status_changed:
-        section.updated_at = datetime.utcnow()
+        section.updated_at = utcnow()
         summary_parts = []
         if content_changed:
             summary_parts.append("Content updated")
@@ -138,7 +139,7 @@ async def update_section_status(
 
     if new_status != section.status:
         section.status = new_status
-        section.updated_at = datetime.utcnow()
+        section.updated_at = utcnow()
         await create_version_snapshot(
             db,
             section_id=section.id,
@@ -211,7 +212,7 @@ async def update_section_title(
     section = await section_service.get_section_for_user(db, section_id, current_user.id)
     section.heading = body.title
     section.title = body.title
-    section.updated_at = datetime.utcnow()
+    section.updated_at = utcnow()
     await db.commit()
     await db.refresh(section)
     return section_service.section_to_response(section)

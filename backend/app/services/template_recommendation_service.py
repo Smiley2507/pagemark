@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from app.models.time import utcnow
 from typing import Any
 
 from fastapi import HTTPException
@@ -292,7 +293,7 @@ async def create_rule_based_recommendations(
         recommendations.append(recommendation)
 
     document.setup_stage = DocumentSetupStage.TEMPLATE_SELECTION
-    document.updated_at = datetime.utcnow()
+    document.updated_at = utcnow()
     await db.commit()
     return await list_recommendations(db, document.id)
 
@@ -331,7 +332,7 @@ async def create_ai_personalized_recommendation(
         "estimated_completion_tokens": 250,
         "actual_prompt_tokens": 0,
         "actual_completion_tokens": 0,
-        "recorded_at": datetime.utcnow().isoformat(),
+        "recorded_at": utcnow().isoformat(),
         "phase": "template_recommendation",
     }
     recommendation = TemplateRecommendation(
@@ -349,7 +350,7 @@ async def create_ai_personalized_recommendation(
     )
     db.add(recommendation)
     document.setup_stage = DocumentSetupStage.TEMPLATE_SELECTION
-    document.updated_at = datetime.utcnow()
+    document.updated_at = utcnow()
     await db.commit()
     return await list_recommendations(db, document.id)
 
@@ -439,7 +440,7 @@ async def adapt_template_outline(
             "actual_prompt_tokens": None,
             "actual_completion_tokens": None,
             "phase": "adapt_template",
-            "recorded_at": datetime.utcnow().isoformat(),
+            "recorded_at": utcnow().isoformat(),
         },
         "supporting_facts": facts,
     }
@@ -467,12 +468,12 @@ async def create_custom_outline_seeded_recommendation(
     db.add(recommendation)
     document.template_id = None
     document.custom_outline_metadata = {
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": utcnow().isoformat(),
         "reason": explanation,
         "outline_headings": [item.get("heading") for item in outline],
     }
     document.setup_stage = DocumentSetupStage.OUTLINE_REVIEW
-    document.updated_at = datetime.utcnow()
+    document.updated_at = utcnow()
     await db.commit()
     await db.refresh(recommendation)
     return recommendation
@@ -541,7 +542,7 @@ async def create_outline_proposal(
     )
     db.add(proposal)
     document.setup_stage = DocumentSetupStage.OUTLINE_REVIEW
-    document.updated_at = datetime.utcnow()
+    document.updated_at = utcnow()
     await db.commit()
     await db.refresh(proposal)
     return proposal
@@ -627,17 +628,17 @@ async def approve_outline_proposal(
     )
     for draft in other_drafts.scalars().all():
         draft.status = OutlineProposalStatus.SUPERSEDED
-        draft.superseded_at = datetime.utcnow()
+        draft.superseded_at = utcnow()
 
     proposal.status = OutlineProposalStatus.APPROVED
     proposal.approved_by = user_id
-    proposal.approved_at = datetime.utcnow()
+    proposal.approved_at = utcnow()
     proposal.approval_metadata = {
         "materialized_sections": len(proposal.outline_json),
         "approved_outline_snapshot": proposal.outline_json,
     }
     document.setup_stage = DocumentSetupStage.GENERATION_MODE
-    document.updated_at = datetime.utcnow()
+    document.updated_at = utcnow()
     await db.commit()
     await db.refresh(proposal)
     return proposal
@@ -663,7 +664,7 @@ async def create_clarification_request(
     )
     db.add(request)
     document.setup_stage = DocumentSetupStage.OUTLINE_REVIEW
-    document.updated_at = datetime.utcnow()
+    document.updated_at = utcnow()
     await db.commit()
     await db.refresh(request)
     return request
@@ -676,7 +677,7 @@ async def skip_clarification_request(
     if request.status != ClarificationStatus.PENDING:
         raise HTTPException(status_code=409, detail="Only pending Clarification Requests can be skipped")
     request.status = ClarificationStatus.SKIPPED
-    request.skipped_at = datetime.utcnow()
+    request.skipped_at = utcnow()
     await db.commit()
     await db.refresh(request)
     return request

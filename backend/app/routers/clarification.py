@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.models.time import utcnow
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,7 +81,7 @@ async def clarify_section(
     # Resolve request
     request.user_answer = body.answer
     request.status = ClarificationStatus.RESOLVED
-    request.resolved_at = datetime.utcnow()
+    request.resolved_at = utcnow()
 
     # Update section status to generating
     section.status = SectionStatus.PENDING

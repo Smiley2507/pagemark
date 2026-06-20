@@ -2,6 +2,7 @@ import json
 import secrets
 import asyncio
 from datetime import datetime
+from app.models.time import utcnow
 from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -594,7 +595,7 @@ async def update_project(
     if body.export_settings is not None:
         project.export_settings = body.export_settings
 
-    project.updated_at = datetime.utcnow()
+    project.updated_at = utcnow()
     await db.commit()
     await db.refresh(project)
 
@@ -654,7 +655,7 @@ async def replace_source_exclusions(
                 created_by=current_user.id,
             )
         )
-    project.updated_at = datetime.utcnow()
+    project.updated_at = utcnow()
     await db.commit()
     return [
         ProjectSourceExclusionResponse.model_validate(rule)
@@ -671,7 +672,7 @@ async def delete_project(
     current_user: User = Depends(get_current_user),
 ):
     project = await _get_project(project_id, current_user, db)
-    project.deleted_at = datetime.utcnow()
+    project.deleted_at = utcnow()
     await db.commit()
     db.add(AuditLog(
         user_id=current_user.id,
@@ -697,7 +698,7 @@ async def update_project_context(
 ):
     project = await _get_project(project_id, current_user, db)
     project.context_md = body.context_md
-    project.updated_at = datetime.utcnow()
+    project.updated_at = utcnow()
     await db.commit()
     await db.refresh(project)
 
@@ -1192,7 +1193,7 @@ async def generate_webhook_secret(
 ):
     project = await _get_project(project_id, current_user, db)
     project.webhook_secret = secrets.token_hex(32)
-    project.updated_at = datetime.utcnow()
+    project.updated_at = utcnow()
     await db.commit()
     webhook_url = f"{settings.BACKEND_URL}/webhooks/github"
     return WebhookGenerateSecretResponse(
@@ -1228,7 +1229,7 @@ async def register_github_webhook(
         decrypted, body.owner, body.repo, webhook_url, project.webhook_secret
     )
     project.webhook_id = result.get("id")
-    project.updated_at = datetime.utcnow()
+    project.updated_at = utcnow()
     await db.commit()
 
     return WebhookRegisterResponse(
@@ -1259,7 +1260,7 @@ async def delete_github_webhook(
             )
     project.webhook_id = None
     project.webhook_secret = None
-    project.updated_at = datetime.utcnow()
+    project.updated_at = utcnow()
     await db.commit()
     return None
 

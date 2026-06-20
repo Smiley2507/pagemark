@@ -10,6 +10,7 @@ Tests for generation_service.py:
 """
 import pytest
 from datetime import datetime
+from app.models.time import utcnow
 
 from app.services import generation_service
 from app.models.analysis import Analysis, AnalysisStatus
@@ -206,7 +207,7 @@ def test_section_content_lifecycle_for_review():
         content_lifecycle=SectionContentLifecycle.REVIEWED,
         status=SectionStatus.FINALIZED,
         reviewed_by=1,
-        reviewed_at=datetime.utcnow(),
+        reviewed_at=utcnow(),
     )
     assert section.content_lifecycle == SectionContentLifecycle.REVIEWED
     assert section.status == SectionStatus.FINALIZED
@@ -249,7 +250,7 @@ def test_explicit_review_acceptance():
     section.content_lifecycle = SectionContentLifecycle.REVIEWED
     section.status = SectionStatus.FINALIZED
     section.reviewed_by = 1
-    section.reviewed_at = datetime.utcnow()
+    section.reviewed_at = utcnow()
     
     assert section.content_lifecycle == SectionContentLifecycle.REVIEWED
     assert section.status == SectionStatus.FINALIZED

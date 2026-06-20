@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from app.models.time import utcnow
 from typing import Any
 
 from sqlalchemy import select
@@ -121,7 +122,7 @@ async def apply_freshness_update(
         section.content_lifecycle = SectionContentLifecycle.REVIEWED
         section.status = SectionStatus.FINALIZED
 
-    section.updated_at = datetime.utcnow()
+    section.updated_at = utcnow()
     await db.commit()
     await db.refresh(section)
     return section

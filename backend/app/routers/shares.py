@@ -18,6 +18,7 @@ from app.models.organization import OrganizationMember, OrgMemberRole, OrgMember
 from app.models.project import Project
 from app.models.user import User
 from app.models.audit import AuditLog
+from app.models.time import utcnow
 from app.schemas.share import (
     ShareCreateRequest,
     ShareResponse,
@@ -214,7 +215,7 @@ async def revoke_share(
     if share.revoked_at:
         raise HTTPException(status_code=400, detail="Share is already revoked")
 
-    share.revoked_at = __import__("datetime").datetime.utcnow()
+    share.revoked_at = utcnow()
 
     await _log_share_action(
         db, current_user.id, document_id,

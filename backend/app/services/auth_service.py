@@ -1,5 +1,6 @@
 import time
 from datetime import datetime, timedelta
+from app.models.time import utcnow
 from typing import Optional, Dict
 from jose import JWTError, jwt
 import bcrypt
@@ -23,12 +24,12 @@ def create_access_token(user_id: int, expires_delta: Optional[timedelta] = None)
     if expires_delta is None:
         expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    expire = datetime.utcnow() + expires_delta
+    expire = utcnow() + expires_delta
     to_encode = {"exp": expire, "sub": str(user_id), "type": "access"}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
 
 def create_refresh_token(user_id: int) -> str:
-    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode = {"exp": expire, "sub": str(user_id), "type": "refresh"}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
 

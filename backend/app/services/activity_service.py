@@ -5,6 +5,7 @@ import logging
 
 from collections import defaultdict
 from datetime import datetime, timedelta
+from app.models.time import utcnow
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -172,7 +173,7 @@ async def get_timeline(
         query = query.where(ActivityEvent.event_type == event_type)
 
     if days:
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = utcnow() - timedelta(days=days)
         query = query.where(ActivityEvent.created_at >= cutoff)
 
     query = query.order_by(ActivityEvent.created_at.desc()).offset(offset).limit(limit)
@@ -210,7 +211,7 @@ async def get_recent_for_org(
     )
 
     if days:
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = utcnow() - timedelta(days=days)
         query = query.where(ActivityEvent.created_at >= cutoff)
 
     query = query.order_by(ActivityEvent.created_at.desc()).limit(limit)
@@ -241,7 +242,7 @@ async def get_heatmap_data(
     """
     daily = days <= 90
     trunc = func.date_trunc("day" if daily else "week", ActivityEvent.created_at)
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = utcnow() - timedelta(days=days)
 
     result = await db.execute(
         select(
@@ -264,7 +265,7 @@ async def get_heatmap_data(
         cat = EVENT_CATEGORIES.get(row.event_type, "Other")
         buckets[key][cat] += float(row.total_weight)
 
-    now = datetime.utcnow()
+    now = utcnow()
     rows: list[dict[str, Any]] = []
     if daily:
         for i in range(days):

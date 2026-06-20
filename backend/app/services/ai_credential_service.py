@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from app.models.time import utcnow
 
 from fastapi import HTTPException
 from sqlalchemy import select, update
@@ -54,7 +55,7 @@ async def upsert_credential(
 
     encrypted = crypto_service.encrypt_token(api_key.strip())
     hint = _key_hint(api_key)
-    now = datetime.utcnow()
+    now = utcnow()
 
     result = await db.execute(
         select(UserAiCredential).where(

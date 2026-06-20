@@ -14,6 +14,7 @@ import asyncio
 import re
 from collections import Counter
 from datetime import datetime
+from app.models.time import utcnow
 
 import httpx
 import textstat
@@ -259,7 +260,7 @@ def score_quality_task(self, document_id: int):
             readability=round(readability, 1),
             consistency=round(consistency, 1),
             accuracy=round(accuracy, 1),
-            generated_at=datetime.utcnow(),
+            generated_at=utcnow(),
         )
         db.add(report)
         db.flush()  # get report.id

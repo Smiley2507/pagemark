@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime
+from app.models.time import utcnow
 from typing import Any
 
 from fastapi import HTTPException
@@ -277,7 +278,7 @@ async def create_generation_run(
             )
         )
     document.setup_stage = DocumentSetupStage.EDITOR_READY
-    document.updated_at = datetime.utcnow()
+    document.updated_at = utcnow()
     await db.commit()
     return await get_generation_run(db, document.id, run.id)
 
@@ -293,7 +294,7 @@ async def execute_generation_run(
     provider = override_provider or run.intended_provider
     model = override_model or run.intended_model
     run.status = GenerationRunStatus.RUNNING
-    run.started_at = run.started_at or datetime.utcnow()
+    run.started_at = run.started_at or utcnow()
     await db.commit()
 
     if run.mode == GenerationMode.COMPLETE_DOCUMENT:
@@ -344,7 +345,7 @@ async def _execute_complete_document(
         for task in blocked:
             task.status = GenerationTaskStatus.PAUSED
             task.error_message = "Paused because a foundational Section task failed."
-            task.updated_at = datetime.utcnow()
+            task.updated_at = utcnow()
         if blocked:
             await db.commit()
 
@@ -374,7 +375,7 @@ async def _execute_task(
         await db.commit()
         return
 
-    now = datetime.utcnow()
+    now = utcnow()
     task.status = GenerationTaskStatus.GENERATING
     task.actual_provider = provider
     task.actual_model = model
@@ -398,7 +399,7 @@ async def _execute_task(
         section.status = SectionStatus.NEEDS_INPUT
         task.status = GenerationTaskStatus.PAUSED
         task.error_message = exc.question
-        task.updated_at = datetime.utcnow()
+        task.updated_at = utcnow()
         db.add(
             ClarificationRequest(
                 section_id=section.id,
@@ -425,7 +426,7 @@ async def _execute_task(
             task.status = GenerationTaskStatus.FAILED
             section.has_failed = True
         task.error_message = str(exc)
-        task.updated_at = datetime.utcnow()
+        task.updated_at = utcnow()
         await db.commit()
         return
     except Exception as exc:  # deterministic generation/request failures stay task-local.
@@ -433,7 +434,7 @@ async def _execute_task(
         section.has_failed = True
         task.status = GenerationTaskStatus.FAILED
         task.error_message = str(exc)
-        task.updated_at = datetime.utcnow()
+        task.updated_at = utcnow()
         await db.commit()
         return
 
@@ -443,14 +444,14 @@ async def _execute_task(
     section.status = SectionStatus.DRAFT
     section.is_generating = False
     section.has_failed = False
-    section.updated_at = datetime.utcnow()
+    section.updated_at = utcnow()
     task.status = GenerationTaskStatus.READY
     task.prompt_tokens = result.prompt_tokens
     task.completion_tokens = result.completion_tokens
     task.cost = result.cost
     task.actual_provider = result.provider
     task.actual_model = result.model
-    task.completed_at = datetime.utcnow()
+    task.completed_at = utcnow()
     task.updated_at = task.completed_at
     await db.commit()
 
@@ -502,10 +503,10 @@ async def _finalize_run_status(db: AsyncSession, run: GenerationRun) -> None:
         run.status = GenerationRunStatus.RUNNING
     elif statuses and all(status == GenerationTaskStatus.READY for status in statuses):
         run.status = GenerationRunStatus.COMPLETED
-        run.completed_at = datetime.utcnow()
+        run.completed_at = utcnow()
     elif GenerationTaskStatus.FAILED in statuses:
         run.status = GenerationRunStatus.FAILED
-        run.completed_at = datetime.utcnow()
+        run.completed_at = utcnow()
     elif GenerationTaskStatus.PAUSED in statuses:
         run.status = GenerationRunStatus.PAUSED
     await _record_actual_usage(db, run)
@@ -518,7 +519,7 @@ async def _record_actual_usage(db: AsyncSession, run: GenerationRun) -> None:
     run.actual_prompt_tokens = prompt
     run.actual_completion_tokens = completion
     run.actual_cost = round(cost, 6)
-    run.updated_at = datetime.utcnow()
+    run.updated_at = utcnow()
     await db.commit()
 
 
@@ -562,7 +563,7 @@ async def confirm_failover(
             "provider": provider,
             "model": model,
             "confirmed_by": user_id,
-            "confirmed_at": datetime.utcnow().isoformat(),
+            "confirmed_at": utcnow().isoformat(),
         },
     }
     for task in run.section_tasks:
@@ -586,7 +587,7 @@ async def accept_section_review(
 ) -> Section:
     document = await db.get(Document, section.document_id)
     analysis = await get_current_analysis(db, document.project_id) if document else None
-    now = datetime.utcnow()
+    now = utcnow()
     previous_lifecycle = section.content_lifecycle.value
     section.content_lifecycle = SectionContentLifecycle.REVIEWED
     section.status = SectionStatus.FINALIZED

@@ -6,6 +6,7 @@ from app.models.document import Document, Section, LifecycleStatus
 from app.services.version_service import create_version_snapshot
 from app.models.version import AuthorType
 from datetime import datetime
+from app.models.time import utcnow
 
 SYNONYM_GROUPS = [
     ["endpoint", "route", "path", "url"],
@@ -85,7 +86,7 @@ async def resolve_terminology(db: AsyncSession, project_id: int, term_to_replace
             new_content = pattern.sub(correct_term, old_content)
             if new_content != old_content:
                 s.content_md = new_content
-                s.updated_at = datetime.utcnow()
+                s.updated_at = utcnow()
                 await create_version_snapshot(
                     db,
                     section_id=s.id,

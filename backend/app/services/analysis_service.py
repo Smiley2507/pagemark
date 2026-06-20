@@ -13,6 +13,7 @@ import fnmatch
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
+from app.models.time import utcnow
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -662,9 +663,9 @@ async def update_analysis_step(
         if status:
             analysis.status = status
             if status == AnalysisStatus.RUNNING and not analysis.started_at:
-                analysis.started_at = datetime.utcnow()
+                analysis.started_at = utcnow()
             elif status in (AnalysisStatus.COMPLETED, AnalysisStatus.FAILED):
-                analysis.completed_at = datetime.utcnow()
+                analysis.completed_at = utcnow()
 
         if error:
             analysis.error_message = error
@@ -728,9 +729,9 @@ def update_analysis_step_sync(
         if status:
             analysis.status = status
             if status == AnalysisStatus.RUNNING and not analysis.started_at:
-                analysis.started_at = datetime.utcnow()
+                analysis.started_at = utcnow()
             elif status in (AnalysisStatus.COMPLETED, AnalysisStatus.FAILED):
-                analysis.completed_at = datetime.utcnow()
+                analysis.completed_at = utcnow()
 
         if error:
             analysis.error_message = error
@@ -820,7 +821,7 @@ def complete_analysis_snapshot_sync(
         analysis.current_step = STEP_NAMES[7]
         analysis.step_detail = "Saved repository facts"
         analysis.status = AnalysisStatus.COMPLETED
-        analysis.completed_at = datetime.utcnow()
+        analysis.completed_at = utcnow()
         analysis.file_tree_json = artifacts.file_tree_json
         analysis.languages_json = artifacts.languages_json
         analysis.endpoints_json = artifacts.endpoints_json
@@ -1240,7 +1241,7 @@ def build_steps_payload(
 def elapsed_seconds(analysis: Analysis) -> int | None:
     if not analysis.started_at:
         return None
-    end = analysis.completed_at or datetime.utcnow()
+    end = analysis.completed_at or utcnow()
     return int((end - analysis.started_at).total_seconds())
 
 

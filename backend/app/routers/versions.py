@@ -1,4 +1,5 @@
 from datetime import datetime
+from app.models.time import utcnow
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -106,7 +107,7 @@ async def restore_version(
             summary=f"Restored to version {version.id}",
         )
         section.content_md = restore_content
-        section.updated_at = datetime.utcnow()
+        section.updated_at = utcnow()
         doc_result = await db.execute(
             select(Document).where(Document.id == section.document_id)
         )

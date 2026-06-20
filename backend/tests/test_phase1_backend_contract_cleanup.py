@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from app.models.time import utcnow
 
 import pytest
 from sqlalchemy import select
@@ -215,7 +216,7 @@ async def test_project_summary_is_derived_from_documents_and_sections(
             document_id=document.id,
             event_type="generation_run_started",
             weight=1.5,
-            created_at=datetime.utcnow() - timedelta(minutes=5),
+            created_at=utcnow() - timedelta(minutes=5),
         )
     )
     await db.commit()

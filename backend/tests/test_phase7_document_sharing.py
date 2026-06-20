@@ -22,6 +22,7 @@ from app.models.project import Project, SourceType
 from app.models.document import Document
 from app.models.document_share import DocumentShare, DocumentSharePermission
 from app.models.audit import AuditLog
+from app.models.time import utcnow
 
 
 @pytest.fixture
@@ -202,7 +203,6 @@ class TestDocumentSharingAuthorization:
         viewer_user = test_data["viewer_user"]
         project_id = test_data["project"].id
 
-        from datetime import datetime
         share_res = await db.execute(
             select(DocumentShare).where(
                 DocumentShare.document_id == doc_a.id,
@@ -210,7 +210,7 @@ class TestDocumentSharingAuthorization:
             )
         )
         share = share_res.scalar_one()
-        share.revoked_at = datetime.utcnow()
+        share.revoked_at = utcnow()
         await db.commit()
 
         async_session = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)

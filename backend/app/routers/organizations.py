@@ -19,6 +19,7 @@ Organizations router:
 import logging
 import secrets
 from datetime import datetime, timedelta
+from app.models.time import utcnow
 import re
 from typing import List, Optional
 
@@ -316,7 +317,7 @@ async def send_invite(
         invited_by=current_user.id,
         status=OrgMemberStatus.INVITED,
         invite_token=invite_token,
-        invite_token_expires=datetime.utcnow() + timedelta(days=7),
+        invite_token_expires=utcnow() + timedelta(days=7),
     )
     db.add(member)
 
@@ -354,7 +355,7 @@ async def resend_invite(
     invitee = user_res.scalar_one_or_none()
 
     member.invite_token = secrets.token_urlsafe(32)
-    member.invite_token_expires = datetime.utcnow() + timedelta(days=7)
+    member.invite_token_expires = utcnow() + timedelta(days=7)
     member.invited_by = current_user.id
 
     await _log(db, current_user.id, org_id, "resend_invite", f"user:{invitee.email}")
@@ -378,11 +379,11 @@ async def accept_invite(
         raise HTTPException(status_code=404, detail="Invite not found or already accepted")
     if member.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="This invite is for a different user")
-    if member.invite_token_expires and member.invite_token_expires < datetime.utcnow():
+    if member.invite_token_expires and member.invite_token_expires < utcnow():
         raise HTTPException(status_code=400, detail="Invite has expired")
 
     member.status = OrgMemberStatus.ACTIVE
-    member.joined_at = datetime.utcnow()
+    member.joined_at = utcnow()
     member.invite_token = None
     member.invite_token_expires = None
     await _log(db, current_user.id, member.org_id, "accept_invite", f"org:{member.org_id}")
@@ -565,7 +566,7 @@ async def create_join_link(
     code = secrets.token_urlsafe(12)
     expires_at = None
     if body.expires_in_days:
-        expires_at = datetime.utcnow() + timedelta(days=body.expires_in_days)
+        expires_at = utcnow() + timedelta(days=body.expires_in_days)
 
     link = OrganizationJoinLink(
         org_id=org_id,
@@ -619,7 +620,7 @@ async def revoke_join_link(
     if link.revoked_at:
         raise HTTPException(status_code=400, detail="Join link is already revoked")
 
-    link.revoked_at = datetime.utcnow()
+    link.revoked_at = utcnow()
     await _log(db, current_user.id, org_id, "revoke_join_link", f"link:{link.code}")
     await db.commit()
     return {"message": "Join link revoked"}
@@ -641,7 +642,7 @@ async def accept_join_link(
     if link.revoked_at:
         raise HTTPException(status_code=400, detail="Join link has been revoked")
 
-    if link.expires_at and link.expires_at < datetime.utcnow():
+    if link.expires_at and link.expires_at < utcnow():
         raise HTTPException(status_code=400, detail="Join link has expired")
 
     if link.max_uses is not None and link.use_count >= link.max_uses:

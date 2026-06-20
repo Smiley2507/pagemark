@@ -6,6 +6,7 @@ All existing OAuth + BYOK endpoints are preserved unchanged.
 import json
 import secrets
 from datetime import datetime, timedelta
+from app.models.time import utcnow
 import re
 from fastapi import APIRouter, Depends, HTTPException, Response, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -109,7 +110,7 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db),
         user_id=user.id,
         notifications_json=json.dumps(_get_default_notification_preferences()),
         verification_token=verification_token,
-        verification_token_expires=datetime.utcnow() + timedelta(hours=24),
+        verification_token_expires=utcnow() + timedelta(hours=24),
     ))
 
     org_name = request.organization_name or f"{request.name}'s Workspace"
@@ -146,7 +147,7 @@ async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db),
 async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(UserSettings).where(UserSettings.verification_token == token))
     us = res.scalar_one_or_none()
-    if not us or not us.verification_token_expires or us.verification_token_expires < datetime.utcnow():
+    if not us or not us.verification_token_expires or us.verification_token_expires < utcnow():
         raise HTTPException(status_code=400, detail="Invalid or expired verification token")
 
     user_res = await db.execute(select(User).where(User.id == us.user_id))
@@ -246,7 +247,7 @@ async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depend
         us = settings_res.scalar_one_or_none()
         if us:
             us.reset_token = token
-            us.reset_token_expires = datetime.utcnow() + timedelta(hours=1)
+            us.reset_token_expires = utcnow() + timedelta(hours=1)
             await db.commit()
             await send_reset_email(user.email, token)
     return {"message": "If this email is registered, a reset link has been sent"}
@@ -256,7 +257,7 @@ async def forgot_password(body: ForgotPasswordRequest, db: AsyncSession = Depend
 async def reset_password(body: ResetPasswordRequest, db: AsyncSession = Depends(get_db), _: None = rate_limit(5, 60)):
     result = await db.execute(select(UserSettings).where(UserSettings.reset_token == body.token))
     us = result.scalar_one_or_none()
-    if not us or us.reset_token_expires < datetime.utcnow():
+    if not us or us.reset_token_expires < utcnow():
         raise HTTPException(status_code=400, detail="Invalid or expired token")
     user_res = await db.execute(select(User).where(User.id == us.user_id))
     user = user_res.scalar_one_or_none()

@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from app.models.time import utcnow
 from typing import List
 from pydantic import BaseModel
 
@@ -208,7 +209,7 @@ async def generate_section(
         )
     except NeedsClarificationException as exc:
         section.status = SectionStatus.NEEDS_INPUT
-        section.updated_at = datetime.utcnow()
+        section.updated_at = utcnow()
         db.add(
             ClarificationRequest(
                 section_id=section_id,
@@ -230,7 +231,7 @@ async def generate_section(
     section.content_md = generated
     section.confidence_score = confidence
     section.status = SectionStatus.DRAFT
-    section.updated_at = datetime.utcnow()
+    section.updated_at = utcnow()
 
     # Version snapshot
     await create_version_snapshot(
@@ -294,7 +295,7 @@ async def accept_refined_section(
     old_content = section.content_md or ""
 
     section.content_md = body.refined_content
-    section.updated_at = datetime.utcnow()
+    section.updated_at = utcnow()
 
     await create_version_snapshot(
         db,

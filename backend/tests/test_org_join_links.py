@@ -10,6 +10,7 @@ Covers:
 """
 import uuid
 from datetime import datetime, timedelta
+from app.models.time import utcnow
 from contextlib import contextmanager
 import pytest
 from httpx import AsyncClient, ASGITransport, AsyncBaseTransport
@@ -227,7 +228,7 @@ async def test_accepting_expired_link_fails(db_engine, test_data):
             select(OrganizationJoinLink).where(OrganizationJoinLink.code == code)
         )
         link = res.scalar_one()
-        link.expires_at = datetime.utcnow() - timedelta(days=1)
+        link.expires_at = utcnow() - timedelta(days=1)
         await session.commit()
 
     with _client_context(db_engine, test_data["other_user"]) as user_client:

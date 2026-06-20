@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import datetime
+from app.models.time import utcnow
 from typing import Optional
 
 from fastapi import HTTPException
@@ -184,7 +185,7 @@ def clear_review_state_for_content_edit(
     ):
         return
 
-    now = edited_at or datetime.utcnow()
+    now = edited_at or utcnow()
     previous_review = (section.workflow_metadata or {}).get("review")
     metadata = dict(section.workflow_metadata or {})
     if previous_review is not None:
