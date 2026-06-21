@@ -841,6 +841,129 @@ def complete_analysis_snapshot_sync(
             project.last_synced_commit = source_commit
         db.commit()
 
+    try:
+        _auto_generate_project_overview_sync(analysis.project_id)
+    except Exception:
+        pass
+
+
+def _auto_generate_project_overview_sync(project_id: int) -> None:
+    """Auto-generate a project overview from analysis facts and save to project.context_md.
+
+    Called after analysis completes. Silently skips if no AI credential is
+    configured or the project already has a brief. Never raises — failures
+    are logged and don't affect the analysis pipeline.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    with SessionLocal() as db:
+        project = db.query(Project).filter(Project.id == project_id).first()
+        if not project:
+            return
+        if (project.context_md or "").strip():
+            return
+
+        analysis = (
+            db.query(Analysis)
+            .filter(
+                Analysis.project_id == project_id,
+                Analysis.is_current == True,
+                Analysis.status == AnalysisStatus.COMPLETED,
+            )
+            .first()
+        )
+        if not analysis:
+            return
+
+        credential = get_active_credential_sync(project.created_by)
+        if not credential:
+            return
+
+        endpoints = analysis.endpoints_json if isinstance(analysis.endpoints_json, dict) else {}
+        complexity = analysis.complexity_json if isinstance(analysis.complexity_json, dict) else {}
+        languages = analysis.languages_json if isinstance(analysis.languages_json, dict) else {}
+
+        context = {
+            "project": {
+                "id": project.id,
+                "name": project.name,
+                "description": project.description,
+                "source_type": project.source_type.value if project.source_type else None,
+                "source_provider": project.source_provider,
+                "source_repository": project.source_repository,
+                "selected_branch": project.selected_branch,
+                "last_synced_commit": project.last_synced_commit,
+            },
+            "analysis_summary": {
+                "id": analysis.id,
+                "status": analysis.status.value,
+                "total_files": complexity.get("total_files", 0) if complexity else 0,
+                "languages": [
+                    lang.get("language")
+                    for lang in (languages.get("breakdown") or [])[:8]
+                    if isinstance(lang, dict)
+                ],
+                "frameworks": endpoints.get("frameworks", [])[:8] if endpoints else [],
+                "endpoint_count": endpoints.get("count", 0) if endpoints else 0,
+            },
+            "facts": {
+                "file_tree": json.dumps(analysis.file_tree_json)[:2500] if analysis.file_tree_json else None,
+                "languages": languages,
+                "endpoints": (endpoints.get("items") or endpoints.get("endpoints") or [])[:20],
+                "complexity": {
+                    "total_lines": complexity.get("total_lines") if complexity else None,
+                    "total_files": complexity.get("total_files") if complexity else None,
+                    "largest_files": (complexity.get("largest_files") or [])[:8] if complexity else [],
+                } if complexity else None,
+            },
+            "source_connection": {
+                "type": project.source_type.value if project.source_type else None,
+                "provider": project.source_provider,
+                "owner": project.source_owner,
+                "repository": project.source_repository,
+                "branch": project.selected_branch,
+            },
+        }
+
+        prompt = (
+            "Create a maintainer-reviewable Project Overview from the provided AI Context. "
+            "Ground every project-specific claim in the available facts. Do not invent behavior. "
+            "If important product intent is missing, list focused questions instead of filling gaps.\n\n"
+            "Return only JSON with this shape: "
+            '{"overview_md":"<markdown overview>","questions":["<question>"],"confidence_score":<0-100>}.\n\n'
+            f"AI Context:\n{json.dumps(context, indent=2)[:12000]}"
+        )
+
+        try:
+            raw = ai_service.complete_text(
+                "Return only valid JSON for a grounded Project Overview.",
+                prompt,
+                credential.provider,
+                credential.api_key,
+                credential.model_id,
+                max_tokens=1800,
+            )
+        except Exception as exc:
+            logger.warning("Failed to auto-generate project overview for project %d: %s", project_id, exc)
+            return
+
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.warning("AI returned invalid JSON for auto-generated overview (project %d): %s", project_id, exc)
+            return
+
+        overview = str(parsed.get("overview_md") or "").strip()
+        if not overview:
+            logger.warning("AI did not return a Project overview for project %d", project_id)
+            return
+
+        project.context_md = overview
+        project.updated_at = utcnow()
+        db.commit()
+        logger.info("Auto-generated project overview saved for project %d", project_id)
+
 
 def get_active_credential_sync(user_id: int):
     """Synchronous version of get_active_credential for Celery workers."""
