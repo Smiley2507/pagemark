@@ -812,11 +812,13 @@ def complete_analysis_snapshot_sync(
     partial_failures: list[dict] | None = None,
     source_commit: str | None = None,
 ) -> None:
+    project_id = None
     with SessionLocal() as db:
         analysis = db.query(Analysis).filter(Analysis.id == analysis_id).first()
         if not analysis:
             return
 
+        project_id = analysis.project_id
         analysis.step_number = 7
         analysis.current_step = STEP_NAMES[7]
         analysis.step_detail = "Saved repository facts"
@@ -836,15 +838,20 @@ def complete_analysis_snapshot_sync(
             analysis.source_commit = source_commit
 
         mark_analysis_current_sync(db, analysis)
-        project = db.query(Project).filter(Project.id == analysis.project_id).first()
+        project = db.query(Project).filter(Project.id == project_id).first()
         if project and source_commit:
             project.last_synced_commit = source_commit
         db.commit()
 
-    try:
-        _auto_generate_project_overview_sync(analysis.project_id)
-    except Exception:
-        pass
+    if project_id is not None:
+        try:
+            _auto_generate_project_overview_sync(project_id)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "auto_generate_project_overview_sync failed for project %d: %s",
+                project_id, exc,
+            )
 
 
 def _auto_generate_project_overview_sync(project_id: int) -> None:
