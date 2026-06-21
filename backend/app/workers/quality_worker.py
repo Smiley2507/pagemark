@@ -3,11 +3,12 @@ quality_worker.py — Celery task that scores a Document's documentation quality
 
 Scores (all 0-100):
   completeness  – fraction of sections with substantial content (>100 words)
+  acceptance_coverage – fraction of Template acceptance criteria with evidence of coverage
   readability   – Flesch reading ease mapped to 0-100
   consistency   – synonym-inconsistency penalty
   accuracy      – fraction of URLs that resolve successfully
 
-overall = 0.30*completeness + 0.25*readability + 0.25*consistency + 0.20*accuracy
+overall = 0.25*completeness + 0.25*acceptance_coverage + 0.20*readability + 0.15*consistency + 0.15*accuracy
 """
 
 import asyncio
@@ -64,6 +65,91 @@ def _score_completeness(sections: list) -> tuple[float, list[dict]]:
                 "suggestion": "Expand this section to at least 100 words for better documentation quality.",
             })
     return min(score, 100.0), issues
+
+
+def _criteria_for_section(section) -> list[str]:
+    metadata = section.workflow_metadata or {}
+    if not isinstance(metadata, dict):
+        return []
+    criteria = metadata.get("acceptance_criteria") or []
+    if not isinstance(criteria, list):
+        return []
+    return [str(item).strip() for item in criteria if str(item).strip()]
+
+
+def _has_source_reference(text: str) -> bool:
+    return bool(
+        re.search(r"\b[\w.-]+/[\w./-]+\b", text)
+        or re.search(r"\b[\w.-]+\.(py|ts|tsx|js|jsx|json|toml|ya?ml|md|go|rs|java)\b", text)
+        or re.search(r"\b(GET|POST|PUT|PATCH|DELETE)\s+/\S+", text)
+        or re.search(r"\b[A-Z][A-Z0-9_]{2,}\b", text)
+    )
+
+
+def _has_structured_detail(text: str) -> bool:
+    return bool(
+        "```" in text
+        or re.search(r"^\s*[-*]\s+\S+", text, re.MULTILINE)
+        or re.search(r"^\s*\d+\.\s+\S+", text, re.MULTILINE)
+        or "|" in text
+        or re.search(r"\bexample\b|\brequest\b|\bresponse\b|\bdefault\b|\bfield\b|\bparameter\b", text, re.IGNORECASE)
+    )
+
+
+def _has_unknown_or_caveat(text: str) -> bool:
+    return bool(re.search(r"\bunknown\b|\bmissing\b|\bnot shown\b|\bnot available\b|\bcaveat\b|\bassumption\b|\bunsupported\b", text, re.IGNORECASE))
+
+
+def _criterion_is_covered(criterion: str, content: str) -> bool:
+    words = _word_count(content)
+    if words < 120:
+        return False
+
+    criterion_lower = criterion.lower()
+    source_requested = any(
+        term in criterion_lower
+        for term in ("source", "evidence", "file path", "command", "api", "configuration", "schema", "ui label")
+    )
+    detail_requested = any(
+        term in criterion_lower
+        for term in ("field", "example", "caveat", "unknown", "summary paragraph", "default", "parameter")
+    )
+    unknown_requested = any(term in criterion_lower for term in ("unknown", "unsupported", "missing", "invent"))
+
+    if source_requested and not _has_source_reference(content):
+        return False
+    if detail_requested and not _has_structured_detail(content):
+        return False
+    if unknown_requested and not (_has_unknown_or_caveat(content) or _has_source_reference(content)):
+        return False
+    return True
+
+
+def _score_acceptance_coverage(sections: list) -> tuple[float, list[dict]]:
+    total = 0
+    covered = 0
+    issues = []
+
+    for section in sections:
+        criteria = _criteria_for_section(section)
+        if not criteria:
+            continue
+        content = section.content_md or ""
+        for criterion in criteria:
+            total += 1
+            if _criterion_is_covered(criterion, content):
+                covered += 1
+            else:
+                issues.append({
+                    "severity": "warning",
+                    "section_ref": section.heading,
+                    "message": f'Acceptance criterion unmet for "{section.heading}": {criterion}',
+                    "suggestion": "Revise this section with concrete source-grounded detail, examples, caveats, or unknowns before accepting review.",
+                })
+
+    if total == 0:
+        return 100.0, []
+    return round((covered / total) * 100, 1), issues
 
 
 def _score_readability(combined: str) -> tuple[float, list[dict]]:
@@ -231,16 +317,18 @@ def score_quality_task(self, document_id: int):
 
         # ── Run all scorers ──────────────────────────────────────────
         completeness, comp_issues = _score_completeness(sections)
+        acceptance_coverage, acceptance_issues = _score_acceptance_coverage(sections)
         combined_text = " ".join((s.content_md or "") for s in sections)
         readability, read_issues = _score_readability(combined_text)
         consistency, cons_issues = _score_consistency(sections)
         accuracy, acc_issues, broken = _run_async(_score_accuracy_async(sections))
 
         overall = (
-            0.30 * completeness
-            + 0.25 * readability
-            + 0.25 * consistency
-            + 0.20 * accuracy
+            0.25 * completeness
+            + 0.25 * acceptance_coverage
+            + 0.20 * readability
+            + 0.15 * consistency
+            + 0.15 * accuracy
         )
 
         # ── Upsert QualityReport (delete old, create new) ─────────────
@@ -257,6 +345,7 @@ def score_quality_task(self, document_id: int):
             document_id=doc.id,
             overall_score=round(overall, 1),
             completeness=round(completeness, 1),
+            acceptance_coverage=round(acceptance_coverage, 1),
             readability=round(readability, 1),
             consistency=round(consistency, 1),
             accuracy=round(accuracy, 1),
@@ -266,7 +355,7 @@ def score_quality_task(self, document_id: int):
         db.flush()  # get report.id
 
         # ── Persist issues ────────────────────────────────────────────
-        all_issues = comp_issues + read_issues + cons_issues + acc_issues
+        all_issues = comp_issues + acceptance_issues + read_issues + cons_issues + acc_issues
         for issue_data in all_issues:
             sev_str = issue_data.get("severity", "info")
             sev = IssueSeverity[sev_str.upper()]
@@ -293,6 +382,7 @@ def score_quality_task(self, document_id: int):
         "project_id": doc.project_id,
         "overall": round(overall, 1),
         "completeness": round(completeness, 1),
+        "acceptance_coverage": round(acceptance_coverage, 1),
         "readability": round(readability, 1),
         "consistency": round(consistency, 1),
         "accuracy": round(accuracy, 1),

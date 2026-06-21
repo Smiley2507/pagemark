@@ -198,6 +198,7 @@ class GenerationEstimateResponse(BaseModel):
     uncertainty: str
     section_breakdown: list[dict[str, Any]]
     pricing_note: str
+    model_guidance: str
 
 
 class GenerationRunCreateRequest(BaseModel):

@@ -334,6 +334,12 @@ export interface Section {
   children?: Section[];
 }
 
+export interface GenerationQualityWarning {
+  code: string;
+  message: string;
+  suggestion?: string;
+}
+
 export interface SectionTreeResponse {
   document_id: number;
   sections: Section[];
@@ -406,6 +412,7 @@ export interface QualityReport {
   document_id: number;
   overall_score: number;
   completeness: number;
+  acceptance_coverage: number;
   consistency: number;
   readability: number;
   accuracy: number;

@@ -24,6 +24,7 @@ class QualityReport(Base):
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
     overall_score = Column(Float, nullable=False, default=0.0)
     completeness = Column(Float, nullable=False, default=0.0)
+    acceptance_coverage = Column(Float, nullable=False, default=100.0)
     consistency = Column(Float, nullable=False, default=0.0)
     readability = Column(Float, nullable=False, default=0.0)
     accuracy = Column(Float, nullable=False, default=0.0)

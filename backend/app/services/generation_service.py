@@ -110,6 +110,54 @@ def _relative_usage(total_prompt: int, total_completion: int) -> str:
     return "high"
 
 
+def _model_quality_guidance(provider: str | None, model: str | None, mode: GenerationMode) -> str:
+    selected = f"{provider}/{model}" if provider and model else "the active provider"
+    if mode == GenerationMode.COMPLETE_DOCUMENT:
+        return (
+            f"{selected} will generate multiple Sections in one run. For reference-heavy Templates, "
+            "use a stronger reasoning model when available; low-cost models may produce shallower drafts."
+        )
+    return (
+        f"{selected} will generate selected Sections on demand. Review source grounding before accepting drafts, "
+        "especially when using fast or low-cost models."
+    )
+
+
+def _generated_draft_quality_warnings(section: Section, content_md: str) -> list[dict[str, str]]:
+    metadata = section.workflow_metadata or {}
+    guidance = str(metadata.get("guidance") or "").strip() if isinstance(metadata, dict) else ""
+    expected_sources = metadata.get("expected_sources") if isinstance(metadata, dict) else None
+    words = [word for word in content_md.split() if word.strip()]
+    warnings: list[dict[str, str]] = []
+
+    if len(words) < 120:
+        warnings.append(
+            {
+                "code": "thin_generated_draft",
+                "message": f"Generated draft is thin ({len(words)} words).",
+                "suggestion": "Regenerate or expand the Section with more source-grounded detail before review.",
+            }
+        )
+    if guidance and len(words) < 180:
+        warnings.append(
+            {
+                "code": "guided_section_underdeveloped",
+                "message": "Generated draft may not be deep enough for its Template guidance.",
+                "suggestion": "Check that the draft covers the concrete facts requested by the Section guidance.",
+            }
+        )
+    if expected_sources and not any(str(source) in content_md for source in expected_sources):
+        warnings.append(
+            {
+                "code": "expected_source_not_referenced",
+                "message": "Generated draft does not reference any expected source path.",
+                "suggestion": "Ask AI to ground the Section in the expected source evidence or mark the missing evidence as an unknown.",
+            }
+        )
+
+    return warnings
+
+
 async def _active_sections(db: AsyncSession, document_id: int) -> list[Section]:
     result = await db.execute(
         select(Section)
@@ -197,6 +245,7 @@ async def estimate_usage(
         "uncertainty": "medium",
         "section_breakdown": section_breakdown,
         "pricing_note": "Approximate provider cost estimate, not authoritative billing.",
+        "model_guidance": _model_quality_guidance(provider, model, mode),
     }
 
 
@@ -443,6 +492,13 @@ async def _execute_task(
     section.status = SectionStatus.DRAFT
     section.is_generating = False
     section.has_failed = False
+    quality_warnings = _generated_draft_quality_warnings(section, result.content_md)
+    metadata = dict(section.workflow_metadata or {})
+    if quality_warnings:
+        metadata["generation_quality_warnings"] = quality_warnings
+    else:
+        metadata.pop("generation_quality_warnings", None)
+    section.workflow_metadata = metadata or None
     section.updated_at = utcnow()
     task.status = GenerationTaskStatus.READY
     task.prompt_tokens = result.prompt_tokens
@@ -450,6 +506,11 @@ async def _execute_task(
     task.cost = result.cost
     task.actual_provider = result.provider
     task.actual_model = result.model
+    task.task_metadata = {
+        **(task.task_metadata or {}),
+        "generation_quality_warnings": quality_warnings,
+        "selected_evidence_paths": (section.workflow_metadata or {}).get("selected_evidence_paths", []),
+    }
     task.completed_at = utcnow()
     task.updated_at = task.completed_at
     await db.commit()

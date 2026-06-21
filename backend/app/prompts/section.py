@@ -8,6 +8,7 @@ def build_section_prompt(
     user_clarification: str | None = None,
     template_system_prompt: str | None = None,
     section_guidance: str | None = None,
+    acceptance_criteria: list[str] | None = None,
     expected_sources: list[str] | None = None,
 ) -> str:
     """Return a prompt for generating a documentation section in markdown.
@@ -18,6 +19,7 @@ def build_section_prompt(
                    file_count, complexity_notes
     template_system_prompt: optional writing instructions from the project's template.
     section_guidance: per-section guidance from the template on what to include.
+    acceptance_criteria: per-section criteria the generated draft should satisfy.
     expected_sources: per-section source path hints for evidence.
     """
     name = project_context.get("name", "this project")
@@ -34,6 +36,7 @@ def build_section_prompt(
     endpoints = analysis.get("endpoints", [])
     dependencies = analysis.get("dependencies", [])
     source_files = analysis.get("source_files", [])
+    source_excerpts = analysis.get("source_excerpts", [])
     languages = analysis.get("languages", "")
     file_count = analysis.get("file_count", 0)
     complexity_notes = analysis.get("complexity_notes", "")
@@ -79,6 +82,24 @@ def build_section_prompt(
         lines.append(f"- **Source Files**: {file_list}")
     if complexity_notes:
         lines.append(f"- **Complexity Notes**: {complexity_notes}")
+    if source_excerpts:
+        lines += [
+            "",
+            "## Source Excerpts",
+            "Use these excerpts as primary evidence for concrete claims. Reference file paths in prose where useful.",
+        ]
+        for item in source_excerpts[:6]:
+            if not isinstance(item, dict):
+                continue
+            path = item.get("path")
+            excerpt = item.get("excerpt")
+            if path and excerpt:
+                lines += [
+                    f"### {path}",
+                    "```",
+                    str(excerpt),
+                    "```",
+                ]
 
     if template_system_prompt:
         lines += [
@@ -93,6 +114,14 @@ def build_section_prompt(
             "## Section Guidance",
             section_guidance,
         ]
+
+    if acceptance_criteria:
+        lines += [
+            "",
+            "## Acceptance Criteria",
+        ]
+        for criterion in acceptance_criteria:
+            lines.append(f"- {criterion}")
 
     if expected_sources:
         srcs = ", ".join(expected_sources)
@@ -111,6 +140,13 @@ def build_section_prompt(
         "If source evidence is thin, provide the best grounded draft you can and clearly mark the assumptions. Ask one targeted question only if a single missing fact blocks the section.",
         "Do not invent product behavior, API semantics, deployment details, security guarantees, or business rules that are not supported by the Project Context, user clarification, template guidance, or Codebase Analysis.",
         "Use concise Markdown with useful headings, lists, code blocks, and examples only when they add real clarity.",
+        "",
+        "## Quality Bar",
+        "Do not satisfy the section with a generic summary paragraph when evidence is available.",
+        "Cover the concrete facts requested by the Section Guidance and Template Instructions before adding background explanation.",
+        "For reference-style sections, prefer tables or structured lists with names, types, defaults, paths, commands, status codes, examples, and caveats when those facts are available.",
+        "For explanatory sections, include the actual components, files, data flow, configuration, or user workflow that make this project different from a generic project.",
+        "If a requested subsection cannot be grounded, include a short 'Unknowns' note naming the missing fact instead of filling the gap with generic text.",
     ]
     if custom_instructions:
         lines.append(f"Additional instructions: {custom_instructions}")

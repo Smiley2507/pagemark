@@ -2,7 +2,9 @@
 
 import asyncio
 import difflib
+import fnmatch
 import json
+import re
 from typing import AsyncGenerator
 
 from fastapi import HTTPException
@@ -23,7 +25,7 @@ from app.services.ai_service import AiServiceError, complete_text
 from app.services.context_assembly import context_assembly_service
 from app.exceptions import NeedsClarificationException
 
-MAX_TOKENS_SECTION = 2000
+MAX_TOKENS_SECTION = 3500
 MAX_TOKENS_REFINE = 2000
 MAX_TOKENS_CHAT = 1500
 
@@ -142,7 +144,18 @@ class AIService:
         if analysis.languages_json:
             lang_data = analysis.languages_json
             if isinstance(lang_data, dict):
-                languages = ", ".join(lang_data.keys())
+                primary = lang_data.get("primary")
+                breakdown = lang_data.get("breakdown")
+                if isinstance(primary, list):
+                    languages = ", ".join(str(lang) for lang in primary)
+                elif isinstance(breakdown, list):
+                    languages = ", ".join(
+                        str(item.get("language"))
+                        for item in breakdown
+                        if isinstance(item, dict) and item.get("language")
+                    )
+                else:
+                    languages = ", ".join(str(key) for key in lang_data.keys())
             elif isinstance(lang_data, list):
                 languages = ", ".join(str(l) for l in lang_data)
 
@@ -150,11 +163,15 @@ class AIService:
             ep_data = analysis.endpoints_json
             if isinstance(ep_data, list):
                 endpoint_count = len(ep_data)
+            elif isinstance(ep_data, dict):
+                endpoint_count = int(ep_data.get("count") or len(ep_data.get("items") or ep_data.get("endpoints") or []))
 
         if analysis.file_tree_json:
             ft = analysis.file_tree_json
             if isinstance(ft, list):
                 file_count = len(ft)
+            elif isinstance(ft, dict):
+                file_count = int(ft.get("total_files") or len(ft.get("files") or []))
 
         if analysis.complexity_json:
             cx = analysis.complexity_json
@@ -169,7 +186,14 @@ class AIService:
             "complexity_notes": complexity_notes,
         }
 
-    def _analysis_detail(self, analysis: Analysis | None) -> dict:
+    def _analysis_detail(
+        self,
+        analysis: Analysis | None,
+        expected_sources: list[str] | None = None,
+        section_heading: str | None = None,
+        section_guidance: str | None = None,
+        acceptance_criteria: list[str] | None = None,
+    ) -> dict:
         """Extract granular lists (classes, functions, endpoints, deps) for prompts."""
         if not analysis:
             return {"classes": [], "functions": [], "endpoints": [], "dependencies": [], "source_files": []}
@@ -179,6 +203,8 @@ class AIService:
         endpoints: list = []
         dependencies: list = []
         source_files: list[str] = []
+        source_excerpts: list[dict[str, str]] = []
+        endpoint_files: list[str] = []
 
         if analysis.complexity_json:
             cx = analysis.complexity_json
@@ -188,17 +214,47 @@ class AIService:
 
         if analysis.endpoints_json:
             ep_data = analysis.endpoints_json
+            if isinstance(ep_data, dict):
+                ep_data = ep_data.get("items") or ep_data.get("endpoints") or []
             if isinstance(ep_data, list):
+                for ep in ep_data:
+                    if isinstance(ep, dict) and ep.get("file"):
+                        endpoint_files.append(str(ep["file"]))
                 endpoints = [
-                    ep.get("path", str(ep)) if isinstance(ep, dict) else str(ep)
+                    " ".join(
+                        str(part)
+                        for part in [ep.get("method"), ep.get("path"), ep.get("file")]
+                        if part
+                    )
+                    if isinstance(ep, dict)
+                    else str(ep)
                     for ep in ep_data[:30]
                 ]
 
         if analysis.file_contents_json:
             if isinstance(analysis.file_contents_json, dict):
-                source_files.extend([str(path) for path in analysis.file_contents_json.keys()][:30])
+                content_paths = [str(path) for path in analysis.file_contents_json.keys()]
+                source_files.extend(content_paths[:30])
+                excerpt_paths = self._prioritize_source_paths(
+                    content_paths,
+                    expected_sources,
+                    section_heading=section_heading,
+                    section_guidance=section_guidance,
+                    acceptance_criteria=acceptance_criteria,
+                    endpoint_files=endpoint_files,
+                )
+                for path in excerpt_paths[:6]:
+                    raw = analysis.file_contents_json.get(path)
+                    if raw is None:
+                        continue
+                    text = str(raw)
+                    source_excerpts.append({"path": path, "excerpt": text[:1400]})
 
         if analysis.file_tree_json and isinstance(analysis.file_tree_json, dict):
+            files = analysis.file_tree_json.get("files")
+            if isinstance(files, list):
+                source_files.extend(str(path) for path in files[:30])
+
             def _walk(node: dict, prefix: str = "") -> None:
                 name = str(node.get("name") or "")
                 node_type = node.get("type")
@@ -219,6 +275,15 @@ class AIService:
             lang_data = analysis.languages_json
             if isinstance(lang_data, dict):
                 dependencies = list(lang_data.get("dependencies", {}).keys())[:30]
+        if analysis.analysis_data and isinstance(analysis.analysis_data, dict):
+            data_dependencies = analysis.analysis_data.get("dependencies")
+            if isinstance(data_dependencies, list):
+                dependencies = [
+                    " -> ".join(str(item.get(part)) for part in ("source", "target") if item.get(part))
+                    if isinstance(item, dict)
+                    else str(item)
+                    for item in data_dependencies[:30]
+                ]
 
         summary = self._analysis_summary(analysis)
 
@@ -228,10 +293,83 @@ class AIService:
             "endpoints": endpoints,
             "dependencies": dependencies,
             "source_files": list(dict.fromkeys(source_files))[:30],
+            "source_excerpts": source_excerpts,
+            "selected_evidence_paths": [item["path"] for item in source_excerpts],
             "languages": summary.get("languages", ""),
             "file_count": summary.get("file_count", 0),
             "complexity_notes": summary.get("complexity_notes", ""),
         }
+
+    def _prioritize_source_paths(
+        self,
+        paths: list[str],
+        expected_sources: list[str] | None,
+        *,
+        section_heading: str | None = None,
+        section_guidance: str | None = None,
+        acceptance_criteria: list[str] | None = None,
+        endpoint_files: list[str] | None = None,
+    ) -> list[str]:
+        keywords = self._section_keywords(section_heading, section_guidance, acceptance_criteria)
+        endpoint_file_set = set(endpoint_files or [])
+
+        def score(path: str) -> tuple[int, str]:
+            path_lower = path.lower()
+            value = 0
+            if any(self._source_hint_matches(path, hint) for hint in expected_sources or []):
+                value += 100
+            if path in endpoint_file_set:
+                value += 90
+            if any(keyword in path_lower for keyword in keywords):
+                value += 40
+            if any(name in path_lower for name in ("readme", "package.json", "pyproject.toml", "docker-compose", "dockerfile", ".env")):
+                value += 15
+            return (-value, path)
+
+        return sorted(paths, key=score)
+
+    def _section_keywords(
+        self,
+        section_heading: str | None,
+        section_guidance: str | None,
+        acceptance_criteria: list[str] | None,
+    ) -> set[str]:
+        text = " ".join(
+            item
+            for item in [
+                section_heading or "",
+                section_guidance or "",
+                " ".join(str(criterion) for criterion in acceptance_criteria or []),
+            ]
+            if item
+        ).lower()
+        aliases = {
+            "endpoint": {"route", "routes", "router", "api", "handler", "controller"},
+            "authentication": {"auth", "login", "oauth", "token", "jwt"},
+            "configuration": {"config", "settings", "env", "environment"},
+            "deployment": {"deploy", "docker", "compose", "k8s", "helm"},
+            "testing": {"test", "tests", "pytest", "vitest"},
+            "database": {"db", "database", "models", "schema", "migration"},
+        }
+        keywords = {
+            word
+            for word in re.findall(r"[a-z0-9_./-]{3,}", text)
+            if word not in {"section", "document", "source", "available", "details", "project"}
+        }
+        for key, values in aliases.items():
+            if key in text:
+                keywords.update(values)
+        return keywords
+
+    def _source_hint_matches(self, path: str, hint: str) -> bool:
+        cleaned = hint.strip()
+        if not cleaned:
+            return False
+        if any(char in cleaned for char in "*?[]"):
+            return fnmatch.fnmatch(path, cleaned) or fnmatch.fnmatch(path, f"**/{cleaned}")
+        if cleaned.endswith("/"):
+            return path.startswith(cleaned) or f"/{cleaned}" in path
+        return path == cleaned or path.endswith(f"/{cleaned}") or cleaned in path
 
     def _parse_ai_action(self, raw: str) -> dict | None:
         try:
@@ -289,6 +427,11 @@ class AIService:
             parts.append(template.system_prompt)
         if template.guidance:
             parts.append(f"Writing guidance: {template.guidance}")
+        if template.section_generation_guidance:
+            parts.append(
+                "Section generation requirements: "
+                + json.dumps(template.section_generation_guidance, sort_keys=True)
+            )
         return "\n\n".join(parts) if parts else None
 
     # ── Public API ──────────────────────────────────────────────
@@ -312,20 +455,32 @@ class AIService:
         document = await self._fetch_document(db, section.document_id)
         if document.project_id != project_id:
             raise HTTPException(status_code=404, detail="Section not found")
+        wf = section.workflow_metadata or {}
+        section_guidance = wf.get("guidance") if isinstance(wf, dict) else None
+        acceptance_criteria = wf.get("acceptance_criteria") if isinstance(wf, dict) else None
+        expected_sources = wf.get("expected_sources") if isinstance(wf, dict) else None
         analysis = await self._fetch_latest_analysis(db, project_id)
 
         project_ctx = self._project_context(project)
-        analysis_detail = self._analysis_detail(analysis)
+        analysis_detail = self._analysis_detail(
+            analysis,
+            expected_sources=expected_sources,
+            section_heading=section.heading,
+            section_guidance=section_guidance,
+            acceptance_criteria=acceptance_criteria if isinstance(acceptance_criteria, list) else None,
+        )
         project_ctx["source_files"] = analysis_detail.get("source_files", [])
+        selected_evidence_paths = analysis_detail.get("selected_evidence_paths") or []
+        if selected_evidence_paths:
+            section.workflow_metadata = {
+                **(section.workflow_metadata or {}),
+                "selected_evidence_paths": selected_evidence_paths,
+            }
         template_prompt = await self._get_template_prompt(
             db,
             project_id=project_id,
             document_id=document.id,
         )
-
-        wf = section.workflow_metadata or {}
-        section_guidance = wf.get("guidance") if isinstance(wf, dict) else None
-        expected_sources = wf.get("expected_sources") if isinstance(wf, dict) else None
 
         prompt = build_section_prompt(
             section_heading=section.heading,
@@ -334,6 +489,7 @@ class AIService:
             user_clarification=answer,
             template_system_prompt=template_prompt,
             section_guidance=section_guidance,
+            acceptance_criteria=acceptance_criteria if isinstance(acceptance_criteria, list) else None,
             expected_sources=expected_sources,
         )
 

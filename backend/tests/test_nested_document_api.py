@@ -204,7 +204,7 @@ async def test_project_and_nested_document_api_behaviour(migrated_async_database
         assert first_doc["project_id"] == project["id"]
         assert second_doc["project_id"] == project["id"]
         assert first_doc["status"] == "empty"
-        assert second_doc["setup_stage"] == "purpose"
+        assert second_doc["setup_stage"] == "template_selection"
 
         list_response = await client.get(f"/projects/{project['id']}/documents")
         assert list_response.status_code == 200

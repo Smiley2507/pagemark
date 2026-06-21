@@ -608,6 +608,7 @@ async def approve_outline_proposal(
                     "description": item.get("description"),
                     "evidence": item.get("evidence"),
                     "guidance": item.get("guidance"),
+                    "acceptance_criteria": item.get("acceptance_criteria"),
                     "expected_sources": item.get("expected_sources"),
                 },
             )

@@ -65,7 +65,9 @@ export function TemplateRecommendationStep({
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-body font-semibold text-text-primary">Recommended</h2>
-              <p className="mt-1 text-meta text-text-secondary">Templates ranked from the current source and document context.</p>
+              <p className="mt-1 text-meta text-text-secondary">
+                Rule-based recommendations appear first when Analysis facts are available. AI-personalized recommendation results are marked when a Provider-consuming action was used.
+              </p>
             </div>
             {recommendations.length > 0 && <Badge variant="neutral">{recommendations.length} suggested</Badge>}
           </div>

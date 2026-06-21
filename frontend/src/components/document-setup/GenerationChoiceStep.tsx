@@ -132,6 +132,7 @@ export function GenerationChoiceStep({
 
           <Notice variant="generation" title="Estimate uncertainty remains explicit">
             {selectedEstimate.uncertainty} {selectedEstimate.pricing_note || 'Actual provider billing may differ from these estimates.'}
+            {selectedEstimate.model_guidance ? ` ${selectedEstimate.model_guidance}` : ''}
           </Notice>
 
           {showBreakdown && selectedEstimate.section_breakdown && selectedEstimate.section_breakdown.length > 0 && (

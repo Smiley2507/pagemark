@@ -250,6 +250,7 @@ export const documentsApi = {
       uncertainty: string;
     }>;
     pricing_note: string;
+    model_guidance: string;
     }> {
     const { data } = await apiClient.post(
       `/projects/${projectId}/documents/${documentId}/generation-estimate`,

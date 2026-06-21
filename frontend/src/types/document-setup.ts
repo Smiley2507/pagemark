@@ -180,6 +180,7 @@ export interface GenerationEstimate {
   estimated_cost: number;
   uncertainty: string;
   pricing_note: string;
+  model_guidance: string;
   section_breakdown?: Array<{
     section_id: number;
     heading: string;

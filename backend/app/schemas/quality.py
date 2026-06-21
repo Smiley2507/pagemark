@@ -31,6 +31,7 @@ class QualityReportOut(BaseModel):
     document_id: int
     overall_score: float
     completeness: float
+    acceptance_coverage: float
     consistency: float
     readability: float
     accuracy: float

@@ -293,7 +293,20 @@ DEFAULT_TECHNICAL_REPORT_PROFILE = {
 }
 
 
+def _default_section_acceptance_criteria(template: dict, section: dict) -> list[str]:
+    heading = section.get("heading", "This section")
+    return [
+        f"Addresses the Template guidance for {heading} with project-specific details.",
+        "Uses concrete source evidence when available, including file paths, commands, APIs, configuration keys, schemas, or UI labels as appropriate.",
+        "Covers the fields, examples, caveats, and unknowns requested by the section guidance instead of stopping at a summary paragraph.",
+        "Clearly marks unsupported or missing facts as unknown rather than inventing behavior.",
+        f"Contributes to the Template outcome: {template.get('expected_outcome', 'a source-grounded documentation artifact')}",
+    ]
+
+
 for template in BUILTIN_TEMPLATES:
+    for section in template.get("sections_json") or []:
+        section.setdefault("acceptance_criteria", _default_section_acceptance_criteria(template, section))
     template.setdefault(
         "structure_guidance",
         {

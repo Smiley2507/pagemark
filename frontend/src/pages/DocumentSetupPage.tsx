@@ -195,7 +195,8 @@ export function DocumentSetupPage() {
     }));
 
     if (snapshot.document.setup_stage === 'editor_ready') {
-      navigate(`/projects/${snapshot.document.project_id}/documents/${snapshot.document.id}`, {
+      const editorPath = `/projects/${setupState.projectId}/documents/${setupState.documentId}`;
+      navigate(editorPath, {
         replace: true,
       });
     }
@@ -203,6 +204,8 @@ export function DocumentSetupPage() {
     analysisStatusQuery.data,
     navigate,
     setupSnapshotQuery.data,
+    setupState.documentId,
+    setupState.projectId,
     setupState.repoMetadata?.fullName,
     setupState.sourceType,
   ]);
@@ -517,6 +520,7 @@ export function DocumentSetupPage() {
 
   const chooseGeneration = async (mode: 'on-demand' | 'complete' | 'manual') => {
     if (!setupState.projectId || !setupState.documentId) return;
+    const editorPath = `/projects/${setupState.projectId}/documents/${setupState.documentId}`;
     try {
       setGenerationSubmitting(true);
       setSetupState((current) => ({ ...current, generationMode: mode }));
@@ -525,6 +529,7 @@ export function DocumentSetupPage() {
           setup_stage: 'editor_ready',
         });
         await setupSnapshotQuery.refetch();
+        navigate(editorPath);
         return;
       }
 
@@ -538,6 +543,8 @@ export function DocumentSetupPage() {
       await setupSnapshotQuery.refetch();
       if (String(run.status) !== 'completed') {
         toast.error('Generation did not complete. The editor will stay locked until it does.');
+      } else {
+        navigate(editorPath);
       }
     } catch (error) {
       toast.error('Unable to enter the editor.');

@@ -88,6 +88,71 @@ def test_relative_usage_levels():
     assert generation_service._relative_usage(10000, 5000) == "high"
 
 
+def test_model_quality_guidance_is_advisory():
+    guidance = generation_service._model_quality_guidance(
+        "anthropic",
+        "claude-sonnet-4-20250514",
+        GenerationMode.COMPLETE_DOCUMENT,
+    )
+
+    assert "stronger reasoning model" in guidance
+    assert "may produce shallower drafts" in guidance
+
+
+def test_generated_draft_quality_warnings_flag_thin_guided_content():
+    section = Section(
+        id=1,
+        document_id=1,
+        heading="Endpoints",
+        workflow_metadata={
+            "guidance": "Document every endpoint with method, path, parameters, and response shape.",
+            "expected_sources": ["app/main.py"],
+        },
+    )
+
+    warnings = generation_service._generated_draft_quality_warnings(
+        section,
+        "The API exposes a health endpoint.",
+    )
+
+    assert [warning["code"] for warning in warnings] == [
+        "thin_generated_draft",
+        "guided_section_underdeveloped",
+        "expected_source_not_referenced",
+    ]
+
+
+def test_generated_draft_quality_warnings_accept_source_grounded_detail():
+    section = Section(
+        id=1,
+        document_id=1,
+        heading="Endpoints",
+        workflow_metadata={
+            "guidance": "Document every endpoint with method, path, parameters, and response shape.",
+            "expected_sources": ["app/main.py"],
+        },
+    )
+    content = (
+        "app/main.py defines the documented API surface. "
+        "The GET /health endpoint is implemented in the FastAPI application and returns a simple service-health payload. "
+        "Use it as a low-cost readiness check before calling authenticated project routes. "
+        "The route does not require a request body, query parameter, or path parameter in the observed source. "
+        "A successful response returns a JSON object that lets clients confirm the API process is reachable. "
+        "If this endpoint fails, callers should treat the backend as unavailable and avoid retrying higher-cost operations. "
+        "The same file initializes the application, so this endpoint also confirms that routing has loaded successfully. "
+        "Because the source excerpt does not show authentication middleware on this route, document it as a public operational check with that caveat. "
+        "A complete API reference should still verify status codes and response fields from route tests before review. "
+        "The section should include an example request, an example JSON response, and an unknowns note for status codes if tests or schemas do not confirm them. "
+        "It should also explain that the endpoint belongs to the operational health group rather than the user-facing project management API. "
+        "That distinction helps readers avoid confusing readiness checks with authenticated product workflows. "
+        "When more route files are available, this section should group each endpoint by domain and repeat the same method, path, request, response, and caveat structure. "
+    )
+
+    warnings = generation_service._generated_draft_quality_warnings(section, content)
+
+    assert warnings == []
+
+
 def test_section_dependency_resolution():
     """Test dependency resolution between sections."""
     from app.models.document import Section

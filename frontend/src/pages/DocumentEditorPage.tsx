@@ -5,6 +5,7 @@ import axios from 'axios';
 import {
   ArrowDown,
   ArrowUp,
+  AlertTriangle,
   ChevronLeft,
   Download,
   GripVertical,
@@ -68,7 +69,7 @@ import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
-import type { Section } from '@/types';
+import type { GenerationQualityWarning, Section } from '@/types';
 
 type FlatSection = Section & { depth: number };
 
@@ -78,6 +79,22 @@ type AiCommandOptions = {
   autoSubmit?: boolean;
   selection?: MarkdownSelectionSnapshot;
 };
+
+function sectionAcceptanceCriteria(section: Section): string[] {
+  const criteria = section.workflow_metadata?.acceptance_criteria;
+  if (!Array.isArray(criteria)) return [];
+  return criteria.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+function sectionGenerationQualityWarnings(section: Section): GenerationQualityWarning[] {
+  const warnings = section.workflow_metadata?.generation_quality_warnings;
+  if (!Array.isArray(warnings)) return [];
+  return warnings.filter((warning): warning is GenerationQualityWarning => {
+    if (warning == null || typeof warning !== 'object') return false;
+    const item = warning as Record<string, unknown>;
+    return typeof item.code === 'string' && typeof item.message === 'string';
+  });
+}
 
 const themeOptions: Array<{ value: ThemeChoice; label: string; icon: typeof Sun }> = [
   { value: 'light', label: 'Light', icon: Sun },
@@ -262,6 +279,8 @@ function SectionBlock({
   const isReviewed = sectionState.key === 'reviewed';
   const isStale = staleSectionMeta?.has(section.id) ?? false;
   const staleMeta = staleSectionMeta?.get(section.id);
+  const acceptanceCriteria = sectionAcceptanceCriteria(section);
+  const qualityWarnings = sectionGenerationQualityWarnings(section);
 
   return (
     <section
@@ -350,6 +369,47 @@ function SectionBlock({
             onReject={(id) => onRejectStaleness?.(id)}
             isProcessing={isStalenessProcessing}
           />
+        )}
+
+        {(qualityWarnings.length > 0 || acceptanceCriteria.length > 0) && (
+          <div className="mb-3 space-y-2">
+            {qualityWarnings.length > 0 && (
+              <div className="rounded-md border border-status-warning-foreground/25 bg-status-warning/10 px-3 py-2">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-status-warning-foreground" />
+                  <div className="min-w-0 text-sm">
+                    <p className="font-medium text-text-primary">Generated draft needs review</p>
+                    <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
+                      {qualityWarnings.slice(0, 3).map((warning) => (
+                        <li key={warning.code}>
+                          {warning.message}
+                          {warning.suggestion ? <span> {warning.suggestion}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+            {acceptanceCriteria.length > 0 && (
+              <div className="rounded-md border border-border bg-panel-muted/50 px-3 py-2">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-review" />
+                  <div className="min-w-0 text-sm">
+                    <p className="font-medium text-text-primary">Acceptance criteria</p>
+                    <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
+                      {acceptanceCriteria.slice(0, 5).map((criterion) => (
+                        <li key={criterion} className="flex gap-1.5">
+                          <span className="mt-[0.35rem] h-1.5 w-1.5 shrink-0 rounded-full bg-text-muted" />
+                          <span>{criterion}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         <div className="min-w-0 overflow-x-hidden px-1 py-1">

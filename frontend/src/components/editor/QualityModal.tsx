@@ -294,6 +294,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
         {/* Sub-score grid */}
         <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <SubScoreCard label="Completeness" score={report?.completeness ?? 0} />
+          <SubScoreCard label="Acceptance" score={report?.acceptance_coverage ?? 0} />
           <SubScoreCard label="Readability" score={report?.readability ?? 0} />
           <SubScoreCard label="Consistency" score={report?.consistency ?? 0} />
           <SubScoreCard label="Accuracy" score={report?.accuracy ?? 0} />

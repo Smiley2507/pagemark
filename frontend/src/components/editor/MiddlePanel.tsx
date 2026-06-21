@@ -12,7 +12,7 @@ import {
 } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Check, Loader2, Copy, GripVertical, Plus, Trash2, Lock } from 'lucide-react';
+import { AlertTriangle, Check, Loader2, Copy, GripVertical, Plus, Trash2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MarkdownEditor } from '@/components/editor/MarkdownEditor';
 import { PhrasingModal } from './PhrasingModal';
@@ -37,7 +37,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Section } from '@/types';
+import type { GenerationQualityWarning, Section } from '@/types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,6 +68,22 @@ export interface MiddlePanelHandle {
 }
 
 // ── Components ───────────────────────────────────────────────────────────────────
+
+function generationQualityWarnings(section: Section): GenerationQualityWarning[] {
+  const warnings = section.workflow_metadata?.generation_quality_warnings;
+  if (!Array.isArray(warnings)) return [];
+  return warnings.filter((warning): warning is GenerationQualityWarning => {
+    if (warning == null || typeof warning !== 'object') return false;
+    const item = warning as Record<string, unknown>;
+    return typeof item.code === 'string' && typeof item.message === 'string';
+  });
+}
+
+function acceptanceCriteria(section: Section): string[] {
+  const criteria = section.workflow_metadata?.acceptance_criteria;
+  if (!Array.isArray(criteria)) return [];
+  return criteria.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
 
 function SortableSection({
   section,
@@ -118,6 +134,8 @@ function SortableSection({
   const [draftTitle, setDraftTitle] = useState(section.title ?? section.heading);
   const confidenceScore = section.confidence_score;
   const displayTitle = section.title?.trim() ? section.title : section.heading;
+  const qualityWarnings = generationQualityWarnings(section);
+  const criteria = acceptanceCriteria(section);
 
   useEffect(() => {
     setDraftTitle(section.title ?? section.heading);
@@ -202,6 +220,44 @@ function SortableSection({
           )}
         </div>
       </div>
+
+      {qualityWarnings.length > 0 && (
+        <div className="mb-3 rounded-md border border-status-warning-foreground/25 bg-status-warning/10 px-3 py-2">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-status-warning-foreground" />
+            <div className="min-w-0 text-sm">
+              <p className="font-medium text-text-primary">Generated draft needs review</p>
+              <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
+                {qualityWarnings.slice(0, 3).map((warning) => (
+                  <li key={warning.code}>
+                    {warning.message}
+                    {warning.suggestion ? <span> {warning.suggestion}</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {criteria.length > 0 && (
+        <div className="mb-3 rounded-md border border-border bg-panel-muted/50 px-3 py-2">
+          <div className="flex items-start gap-2">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-review" />
+            <div className="min-w-0 text-sm">
+              <p className="font-medium text-text-primary">Acceptance criteria</p>
+              <ul className="mt-1 space-y-1 text-xs text-muted-foreground">
+                {criteria.slice(0, 5).map((criterion) => (
+                  <li key={criterion} className="flex gap-1.5">
+                    <span className="mt-[0.35rem] h-1.5 w-1.5 shrink-0 rounded-full bg-text-muted" />
+                    <span>{criterion}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="min-h-[180px]">
         <MarkdownEditor

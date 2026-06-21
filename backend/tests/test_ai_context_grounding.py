@@ -170,6 +170,32 @@ async def test_refine_section_returns_action_without_refined_content():
     assert result["question"] == "Which auth flow should be documented?"
 
 
+async def test_template_prompt_includes_section_generation_guidance():
+    service = AIService()
+    mock_document = MagicMock()
+    mock_document.id = 5
+    mock_document.project_id = 1
+    mock_document.template_id = 9
+    mock_template = MagicMock()
+    mock_template.system_prompt = "System prompt"
+    mock_template.guidance = "Write with concrete source evidence."
+    mock_template.section_generation_guidance = {
+        "evidence_required": True,
+        "minimum_words_for_guided_sections": 180,
+    }
+
+    db = AsyncMock()
+    db.execute.return_value.scalar_one_or_none = MagicMock(return_value=mock_template)
+
+    with patch.object(service, "_fetch_document", new=AsyncMock(return_value=mock_document)):
+        prompt = await service._get_template_prompt(db, project_id=1, document_id=5)
+
+    assert "System prompt" in prompt
+    assert "Write with concrete source evidence." in prompt
+    assert "Section generation requirements" in prompt
+    assert "minimum_words_for_guided_sections" in prompt
+
+
 def test_section_prompt_includes_source_files_and_prefers_draft_over_refusal():
     prompt = build_section_prompt(
         section_heading="Configuration",
@@ -194,3 +220,77 @@ def test_section_prompt_includes_source_files_and_prefers_draft_over_refusal():
     assert "pyproject.toml" in prompt
     assert "insufficient_context" not in prompt
     assert "best grounded draft" in prompt
+
+
+def test_analysis_detail_preserves_current_artifact_shapes_and_source_excerpts():
+    service = AIService()
+    analysis = MagicMock()
+    analysis.languages_json = {
+        "primary": ["Python"],
+        "breakdown": [{"language": "Python", "files": 2}],
+    }
+    analysis.endpoints_json = {
+        "count": 1,
+        "items": [{"method": "GET", "path": "/health", "file": "app/main.py"}],
+    }
+    analysis.file_tree_json = {"total_files": 2, "files": ["app/main.py", "pyproject.toml"]}
+    analysis.file_contents_json = {
+        "app/main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+        "pyproject.toml": "[project]\nname = 'docs-api'\n",
+    }
+    analysis.complexity_json = {"summary": "small"}
+    analysis.analysis_data = {
+        "dependencies": [{"source": "app/main.py", "target": "fastapi"}],
+    }
+
+    detail = service._analysis_detail(analysis, expected_sources=["app/"])
+
+    assert detail["languages"] == "Python"
+    assert detail["file_count"] == 2
+    assert detail["endpoints"] == ["GET /health app/main.py"]
+    assert detail["dependencies"] == ["app/main.py -> fastapi"]
+    assert detail["source_files"][:2] == ["app/main.py", "pyproject.toml"]
+    assert detail["source_excerpts"][0]["path"] == "app/main.py"
+    assert "FastAPI" in detail["source_excerpts"][0]["excerpt"]
+    assert detail["selected_evidence_paths"][0] == "app/main.py"
+
+
+def test_section_prompt_includes_source_excerpts_and_quality_bar():
+    prompt = build_section_prompt(
+        section_heading="Endpoints",
+        project_context={"name": "Docs API"},
+        analysis={
+            "endpoints": ["GET /health app/main.py"],
+            "source_files": ["app/main.py"],
+            "source_excerpts": [
+                {
+                    "path": "app/main.py",
+                    "excerpt": "@app.get('/health')\ndef health():\n    return {'ok': True}",
+                }
+            ],
+        },
+        section_guidance="Document every endpoint with method, path, parameters, and response shape.",
+        acceptance_criteria=[
+            "Includes method, path, request parameters, and response shape.",
+            "Marks missing status-code evidence as unknown.",
+        ],
+    )
+
+    assert "## Source Excerpts" in prompt
+    assert "app/main.py" in prompt
+    assert "@app.get('/health')" in prompt
+    assert "## Acceptance Criteria" in prompt
+    assert "Includes method, path, request parameters, and response shape." in prompt
+    assert "## Quality Bar" in prompt
+    assert "Do not satisfy the section with a generic summary paragraph" in prompt
+
+
+def test_builtin_template_sections_have_acceptance_criteria():
+    from app.data.builtin_templates import BUILTIN_TEMPLATES
+
+    for template in BUILTIN_TEMPLATES:
+        for section in template["sections_json"]:
+            criteria = section.get("acceptance_criteria")
+            assert isinstance(criteria, list), (template["name"], section["heading"])
+            assert len(criteria) >= 4, (template["name"], section["heading"])
+            assert any("unknown" in item.lower() for item in criteria)
