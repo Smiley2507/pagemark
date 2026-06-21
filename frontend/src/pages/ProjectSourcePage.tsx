@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { CheckCheck, Copy, ExternalLink, GitBranch, RefreshCw, ShieldCheck, Trash2, Webhook } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Surface } from '@/components/ui/surface';
+import { analysisApi } from '@/api/analysis';
 import { projectsApi } from '@/api/projects';
 import { useGenerateWebhookSecret, useRegisterGitHubWebhook, useDeleteWebhook, useGitHubStatus } from '@/hooks/useGit';
 import { ProjectSourceConnector } from '@/components/source/ProjectSourceConnector';
@@ -20,6 +22,26 @@ export function ProjectSourcePage() {
     queryKey: ['project', projectId],
     queryFn: () => projectsApi.getProject(Number(projectId)),
     enabled: !!projectId,
+  });
+
+  const { data: analysisStatus } = useQuery({
+    queryKey: ['analysis-status', projectId],
+    queryFn: async () => {
+      try {
+        return await analysisApi.getAnalysisStatus(Number(projectId));
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
+          return null;
+        }
+        throw error;
+      }
+    },
+    enabled: !!projectId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'pending' || status === 'running' ? 2500 : false;
+    },
+    retry: false,
   });
 
   const generateSecret = useGenerateWebhookSecret();
@@ -188,6 +210,28 @@ export function ProjectSourcePage() {
           </p>
         )}
       </Surface>
+
+      {analysisStatus?.steps && analysisStatus.steps.length > 0 && (
+        <Surface variant="panel" padding="lg" className="space-y-4">
+          <h3 className="text-section font-semibold text-text-primary">Analysis workflow</h3>
+          <div className="space-y-3">
+            {analysisStatus.steps.map((step) => (
+              <Surface key={step.number} variant="muted" padding="default" className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-body font-medium text-text-primary">{step.name}</p>
+                  <p className="text-meta text-text-muted">Step {step.number}</p>
+                </div>
+                <Badge
+                  variant={step.status === 'done' ? 'success' : step.status === 'failed' ? 'danger' : step.status === 'running' ? 'generation' : 'neutral'}
+                  showIcon={false}
+                >
+                  {step.status}
+                </Badge>
+              </Surface>
+            ))}
+          </div>
+        </Surface>
+      )}
     </div>
   );
 }
