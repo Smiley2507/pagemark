@@ -1409,6 +1409,8 @@ async def accept_ai_proposed_change(
 ):
     change = await ai_work_service.get_change(db, document.id, change_id)
     accepted = await ai_work_service.accept_change(db, document, change, current_user.id)
+    section_id = (change.after_json or {}).get("section_id") or change.section_id
+    print(f"[DEBUG-c9a1] accept_ai_proposed_change: change_id={change_id}, section_id={section_id}, after.content_md length={len(str(accepted.get('after', {}).get('content_md', '')))}")
     return _ai_change_to_response(accepted)
 
 

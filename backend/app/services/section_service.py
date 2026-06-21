@@ -54,6 +54,8 @@ def section_to_response(section: Section, children: Optional[list[SectionRespons
         reviewed_at=section.reviewed_at,
         reviewed_against_analysis_id=section.reviewed_against_analysis_id,
         workflow_metadata=section.workflow_metadata,
+        created_at=section.created_at,
+        updated_at=section.updated_at,
         children=children or [],
     )
 

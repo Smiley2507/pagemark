@@ -226,10 +226,12 @@ function SectionBlock({
   );
 
   useEffect(() => {
+    console.log('[DEBUG-b7c3] SectionBlock sync for section', section.id, 'content_md length:', (section.content_md || '').length, 'updated_at:', section.updated_at);
     setContent(section.content_md);
     setTitle(section.title || section.heading || 'Untitled Section');
     markPersisted(section.content_md, section.updated_at);
-  }, [markPersisted, section.content_md, section.heading, section.id, section.title, section.updated_at]);
+    onLocalContentChange(section.id, section.content_md);
+  }, [markPersisted, section.content_md, section.heading, section.id, section.title, section.updated_at, onLocalContentChange]);
 
   useEffect(() => {
     onSavingChange(section.id, isSaving);

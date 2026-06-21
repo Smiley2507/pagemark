@@ -287,6 +287,7 @@ async def _apply_change(
         section = await _section_for_change(db, document.id, change.section_id)
         before = {"section_id": section.id, "content_md": section.content_md or ""}
         new_content = str(after.get("content_md") or after.get("content") or "")
+        print(f"[DEBUG-e2f8] _apply_change: section_id={section.id}, old_content_length={len(section.content_md or '')}, new_content_length={len(new_content)}, change_type={change.change_type.value}")
         section.content_md = new_content
         section.content_lifecycle = SectionContentLifecycle.GENERATED_DRAFT
         section.status = SectionStatus.DRAFT

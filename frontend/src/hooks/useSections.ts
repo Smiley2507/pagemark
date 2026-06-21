@@ -24,6 +24,7 @@ export const useDocumentSections = (projectId: number, documentId: number) =>
     queryKey: ['document-sections', projectId, documentId],
     queryFn: () => documentsApi.getSections(projectId, documentId),
     enabled: projectId > 0 && documentId > 0,
+    structuralSharing: false,
   });
 
 export function useAutosave(sectionId: number | null, content: string) {

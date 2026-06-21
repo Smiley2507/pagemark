@@ -9,6 +9,7 @@ import { Bold, Code, Italic, Link2, MessageSquarePlus, Quote, Sparkles } from 'l
 import { marked } from 'marked'
 import { cn } from '@/lib/utils'
 import { useAiStore } from '@/store/aiStore'
+import { toast } from 'sonner'
 import { resourcesApi } from '@/api/resources'
 import { collaborationApi, sectionRoomId } from '@/api/collaboration'
 import { createExtensions } from './editorSetup'
@@ -286,13 +287,15 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
 
     useEffect(() => {
       if (editor && !collaborationExtension && value !== editor.getMarkdown()) {
+        console.log('[DEBUG-d1e9] Tiptap sync updating content, value length:', (value || '').length, 'editor length:', (editor.getMarkdown() || '').length);
         try {
           editor.commands.setContent(value || '', {
             emitUpdate: false,
             contentType: 'markdown',
           })
         } catch (error) {
-          console.error('Failed to load section Markdown into editor', error, { value })
+          console.error('[DEBUG-6f3b] Failed to load section Markdown into editor', error, { value })
+          toast.error('Editor content could not be loaded. Check console for details.')
           editor.commands.clearContent(false)
         }
       }

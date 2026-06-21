@@ -35,6 +35,8 @@ class SectionResponse(BaseModel):
     reviewed_at: Optional[datetime] = None
     reviewed_against_analysis_id: Optional[int] = None
     workflow_metadata: Optional[dict] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     children: List["SectionResponse"] = Field(default_factory=list)
 
 
