@@ -1,9 +1,12 @@
 import asyncio
 import json
+import logging
 import time
 from datetime import datetime
 
 from app.workers.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 _DEBUG_LOG = "/tmp/pagemark_agent_debug.log"
 
@@ -58,6 +61,7 @@ def run_async(coro):
 
 
 def _fail(analysis_id: int, step_num: int, message: str, exc: Exception):
+    logger.error("Analysis %d failed at step %d: %s", analysis_id, step_num, exc)
     update_analysis_step_sync(
         analysis_id,
         step_num,
@@ -137,7 +141,9 @@ def _run_pipeline(
         step_detail="Saving analysis results",
         artifacts=artifacts,
     )
+    logger.info("Pipeline complete for analysis %d, finalizing snapshot", analysis_id)
     complete_analysis_snapshot_sync(analysis_id, artifacts, source_commit=source_commit)
+    logger.info("Analysis snapshot %d finalized successfully", analysis_id)
 
 
 @celery_app.task(bind=True, max_retries=3)
@@ -163,6 +169,7 @@ def analyze_project_task(self, project_id: int, analysis_id: int, source_path: s
         _run_pipeline(project_id, analysis_id, root_path)
         _agent_log("A", "analysis_worker.py:analyze_project_task", "task_done", {"analysis_id": analysis_id})
     except Exception as e:
+        logger.exception("analyze_project_task failed for analysis %d", analysis_id)
         _agent_log("A", "analysis_worker.py:analyze_project_task", "task_error", {"error_type": type(e).__name__, "error": str(e)[:300]})
         step = getattr(e, "_analysis_step", 2)
         _fail(analysis_id, step, str(e), e)
@@ -202,6 +209,7 @@ def clone_and_analyze_task(
         _run_pipeline(project_id, analysis_id, cloned_path, source_commit=source_commit)
         _agent_log("A", "analysis_worker.py:clone_and_analyze_task", "task_done", {"analysis_id": analysis_id})
     except Exception as e:
+        logger.exception("clone_and_analyze_task failed for analysis %d", analysis_id)
         _agent_log("A", "analysis_worker.py:clone_and_analyze_task", "task_error", {"error_type": type(e).__name__, "error": str(e)[:300]})
         _fail(analysis_id, 2, str(e), e)
         raise self.retry(exc=e, countdown=10)
@@ -209,6 +217,7 @@ def clone_and_analyze_task(
         git_service.cleanup_repo(target_path)
 
 def _run_nlp_analysis(project_id: int, analysis_id: int):
+    logger.info("Starting NLP analysis for project %d, analysis %d", project_id, analysis_id)
     from app.database import SessionLocal
     from app.models.nlp import NLPReport
     from app.models.document import Document, Section
@@ -287,6 +296,7 @@ def generate_section_task(self, section_id: int, project_id: int, user_id: int):
             db.add(clarification)
             db.commit()
         except Exception as e:
+            logger.exception("generate_section_task failed for section %d", section_id)
             _agent_log("A", "analysis_worker.py:generate_section_task", "error", {"error": str(e)})
             raise self.retry(exc=e, countdown=10)
 
