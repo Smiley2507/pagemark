@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
-import { Activity, ChevronLeft, FileText, GitBranch, Pencil, Settings, X } from 'lucide-react';
+import { Activity, Braces, ChevronLeft, FileText, GitBranch, Pencil, Settings, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 const tabs = [
   { path: '', label: 'Documents', icon: FileText },
   { path: 'source', label: 'Source', icon: GitBranch },
+  { path: 'analysis', label: 'Analysis', icon: Braces },
   { path: 'activity', label: 'Activity', icon: Activity },
   { path: 'settings', label: 'Settings', icon: Settings },
 ];

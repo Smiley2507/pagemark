@@ -36,6 +36,7 @@ const ProjectWorkspacePage = React.lazy(() => import('./pages/ProjectWorkspacePa
 const DocumentLibraryPage = React.lazy(() => import('./pages/DocumentLibraryPage').then((m) => ({ default: m.DocumentLibraryPage })));
 const ProjectSourcePage = React.lazy(() => import('./pages/ProjectSourcePage').then((m) => ({ default: m.ProjectSourcePage })));
 const ProjectActivityPage = React.lazy(() => import('./pages/ProjectActivityPage').then((m) => ({ default: m.ProjectActivityPage })));
+const ProjectAnalysisPage = React.lazy(() => import('./pages/ProjectAnalysisPage').then((m) => ({ default: m.ProjectAnalysisPage })));
 const DocumentEditorPage = React.lazy(() => import('./pages/DocumentEditorPage').then((m) => ({ default: m.DocumentEditorPage })));
 const ProjectSettingsPage = React.lazy(() => import('./pages/ProjectSettingsPage').then((m) => ({ default: m.ProjectSettingsPage })));
 const MembersPage = React.lazy(() => import('./pages/MembersPage').then((m) => ({ default: m.MembersPage })));
@@ -131,6 +132,7 @@ const AppRoutes = () => {
             <Route path="/projects/:projectId" element={<ProjectWorkspacePage />}>
               <Route index element={<DocumentLibraryPage />} />
               <Route path="source" element={<ProjectSourcePage />} />
+              <Route path="analysis" element={<ProjectAnalysisPage />} />
               <Route path="activity" element={<ProjectActivityPage />} />
               <Route path="settings" element={<ProjectSettingsPage />} />
             </Route>
