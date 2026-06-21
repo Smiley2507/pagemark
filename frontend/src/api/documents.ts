@@ -72,6 +72,10 @@ function normalizeSectionTree(tree: SectionTreeResponse): SectionTreeResponse {
   };
 }
 
+function toBackendGenerationMode(mode: 'on-demand' | 'complete') {
+  return mode === 'on-demand' ? 'section_on_demand' : 'complete_document';
+}
+
 export const documentsApi = {
   async createDocument(
     projectId: number,
@@ -246,10 +250,10 @@ export const documentsApi = {
       uncertainty: string;
     }>;
     pricing_note: string;
-  }> {
+    }> {
     const { data } = await apiClient.post(
       `/projects/${projectId}/documents/${documentId}/generation-estimate`,
-      { mode, section_ids }
+      { mode: toBackendGenerationMode(mode), section_ids }
     );
     return data;
   },
@@ -263,7 +267,7 @@ export const documentsApi = {
   ): Promise<any> {
     const { data } = await apiClient.post(
       `/projects/${projectId}/documents/${documentId}/generation-runs`,
-      { mode, section_ids, execute }
+      { mode: toBackendGenerationMode(mode), section_ids, execute }
     );
     return data;
   },

@@ -29,6 +29,17 @@ import { toast } from 'sonner';
 
 type FilterMode = 'all' | 'active' | 'stale';
 
+const PURPOSE_OPTIONS = ['Reference', 'Guide', 'Explanation', 'Workflow', 'Custom'] as const;
+const AUDIENCE_OPTIONS = ['Developers', 'Maintainers', 'Operators', 'End users', 'Custom'] as const;
+
+function toPresetValue<T extends string>(value: string, options: readonly T[]): T {
+  return (options.includes(value as T) ? value : options[options.length - 1]) as T;
+}
+
+function resolvePresetValue(preset: string, custom: string) {
+  return preset === 'Custom' ? custom.trim() : preset;
+}
+
 export function DocumentLibraryPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const pid = Number(projectId);
@@ -41,8 +52,10 @@ export function DocumentLibraryPage() {
   const [deletingDocument, setDeletingDocument] = useState<WorkspaceDocumentItem | null>(null);
   const [sharingDocument, setSharingDocument] = useState<WorkspaceDocumentItem | null>(null);
   const [title, setTitle] = useState('');
-  const [purpose, setPurpose] = useState('');
-  const [audience, setAudience] = useState('');
+  const [purposePreset, setPurposePreset] = useState<(typeof PURPOSE_OPTIONS)[number]>('Custom');
+  const [purposeCustom, setPurposeCustom] = useState('');
+  const [audiencePreset, setAudiencePreset] = useState<(typeof AUDIENCE_OPTIONS)[number]>('Custom');
+  const [audienceCustom, setAudienceCustom] = useState('');
   const [context, setContext] = useState('');
   const [tags, setTags] = useState('');
 
@@ -79,8 +92,8 @@ export function DocumentLibraryPage() {
       if (!editingDocument) throw new Error('No Document selected');
       return documentsApi.updateDocument(pid, editingDocument.id, {
         title: title.trim() || editingDocument.title,
-        purpose: purpose.trim() || undefined,
-        audience: audience.trim() || undefined,
+        purpose: resolvePresetValue(purposePreset, purposeCustom) || undefined,
+        audience: resolvePresetValue(audiencePreset, audienceCustom) || undefined,
         context: context.trim() || undefined,
         tags: parseTags(tags),
       });
@@ -105,17 +118,18 @@ export function DocumentLibraryPage() {
   const openEditDocument = (document: WorkspaceDocumentItem) => {
     setEditingDocument(document);
     setTitle(document.title);
-    setPurpose(document.purpose || '');
-    setAudience(document.audience || '');
+    setPurposePreset(toPresetValue(document.purpose || '', PURPOSE_OPTIONS));
+    setPurposeCustom(PURPOSE_OPTIONS.includes(document.purpose as (typeof PURPOSE_OPTIONS)[number]) ? '' : document.purpose || '');
+    setAudiencePreset(toPresetValue(document.audience || '', AUDIENCE_OPTIONS));
+    setAudienceCustom(
+      AUDIENCE_OPTIONS.includes(document.audience as (typeof AUDIENCE_OPTIONS)[number]) ? '' : document.audience || '',
+    );
     setContext(document.context || '');
     setTags(document.tags.join(', '));
   };
 
   const [isCreateDocOpen, setIsCreateDocOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newPurpose, setNewPurpose] = useState('');
-  const [newAudience, setNewAudience] = useState('');
-  const [newContext, setNewContext] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
   const handleCreateDocument = async () => {
@@ -124,10 +138,7 @@ export function DocumentLibraryPage() {
     try {
       const document = await documentsApi.createDocument(pid, {
         title: newTitle.trim(),
-        purpose: newPurpose.trim() || undefined,
-        audience: newAudience.trim() || undefined,
-        context: newContext.trim() || undefined,
-        setup_stage: 'purpose',
+        setup_stage: 'template_selection',
       });
 
       // Pre-seed recommendations
@@ -140,7 +151,6 @@ export function DocumentLibraryPage() {
       // Update to template_selection stage
       await documentsApi.updateDocument(pid, document.id, {
         setup_stage: 'template_selection',
-        context: newContext.trim() || undefined,
       });
 
       void queryClient.invalidateQueries({ queryKey: ['documents', projectId] });
@@ -148,9 +158,6 @@ export function DocumentLibraryPage() {
       
       // Reset state and close modal
       setNewTitle('');
-      setNewPurpose('');
-      setNewAudience('');
-      setNewContext('');
       setIsCreateDocOpen(false);
 
       // Navigate straight to template-selection stage in setup
@@ -300,11 +307,47 @@ export function DocumentLibraryPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="document-purpose">Purpose</Label>
-              <Input id="document-purpose" value={purpose} onChange={(event) => setPurpose(event.target.value)} />
+              <Select
+                id="document-purpose"
+                value={purposePreset}
+                onChange={(event) => setPurposePreset(event.target.value as (typeof PURPOSE_OPTIONS)[number])}
+              >
+                {PURPOSE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
+              {purposePreset === 'Custom' && (
+                <Input
+                  className="mt-2"
+                  value={purposeCustom}
+                  onChange={(event) => setPurposeCustom(event.target.value)}
+                  placeholder="Describe the document purpose"
+                />
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="document-audience">Audience</Label>
-              <Input id="document-audience" value={audience} onChange={(event) => setAudience(event.target.value)} />
+              <Select
+                id="document-audience"
+                value={audiencePreset}
+                onChange={(event) => setAudiencePreset(event.target.value as (typeof AUDIENCE_OPTIONS)[number])}
+              >
+                {AUDIENCE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </Select>
+              {audiencePreset === 'Custom' && (
+                <Input
+                  className="mt-2"
+                  value={audienceCustom}
+                  onChange={(event) => setAudienceCustom(event.target.value)}
+                  placeholder="Describe the target audience"
+                />
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="document-context">Context</Label>
@@ -356,33 +399,9 @@ export function DocumentLibraryPage() {
                 autoFocus
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="new-document-purpose">Purpose (optional)</Label>
-              <Input
-                id="new-document-purpose"
-                placeholder="e.g. Document the payment gateway integration endpoints"
-                value={newPurpose}
-                onChange={(event) => setNewPurpose(event.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="new-document-audience">Audience (optional)</Label>
-              <Input
-                id="new-document-audience"
-                placeholder="e.g. External third-party developers"
-                value={newAudience}
-                onChange={(event) => setNewAudience(event.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="new-document-context">Context / Guidelines (optional)</Label>
-              <Input
-                id="new-document-context"
-                placeholder="e.g. Focus on sandbox testing and error codes"
-                value={newContext}
-                onChange={(event) => setNewContext(event.target.value)}
-              />
-            </div>
+            <p className="text-body text-text-secondary">
+              You will choose a template next.
+            </p>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setIsCreateDocOpen(false)}>Cancel</Button>
               <Button

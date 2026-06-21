@@ -21,7 +21,7 @@ class DocumentCreateRequest(BaseModel):
     purpose: Optional[str] = None
     audience: Optional[str] = None
     context: Optional[str] = None
-    setup_stage: DocumentSetupStageEnum = DocumentSetupStageEnum.PURPOSE
+    setup_stage: DocumentSetupStageEnum = DocumentSetupStageEnum.TEMPLATE_SELECTION
     tags: list[str] = Field(default_factory=list)
     export_settings: Optional[dict[str, Any]] = None
     print_profile: Optional[dict[str, Any]] = None

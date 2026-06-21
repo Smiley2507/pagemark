@@ -4,12 +4,14 @@ import { GitBranch, Link2, PackageOpen, Play, Search, Upload } from 'lucide-reac
 import { toast } from 'sonner';
 import { analysisApi } from '@/api/analysis';
 import { useGitHubStatus } from '@/hooks/useGit';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Notice } from '@/components/ui/notice';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Surface } from '@/components/ui/surface';
 import { Select } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { getOAuthAuthorizeUrl, rememberOAuthReturnPath, validateGitUrl } from '@/lib/git';
 import type { GitRepo, Project } from '@/types';
@@ -29,25 +31,25 @@ const sourceModes: Array<{
   {
     id: 'github',
     label: 'GitHub',
-    description: 'Connect a repository with OAuth, including private repositories.',
+    description: 'Live repository sync.',
     icon: GitBranch,
   },
   {
     id: 'url',
     label: 'Git URL',
-    description: 'Analyze a public repository URL without OAuth.',
+    description: 'Public repository URL.',
     icon: Link2,
   },
   {
     id: 'zip',
     label: 'ZIP',
-    description: 'Upload a static source archive for one-time analysis.',
+    description: 'Snapshot upload.',
     icon: Upload,
   },
   {
     id: 'scratch',
     label: 'Scratch',
-    description: 'Keep this project without source-backed analysis.',
+    description: 'No source attached.',
     icon: PackageOpen,
   },
 ];
@@ -56,9 +58,16 @@ function repoName(repo: GitRepo) {
   return repo.full_name.split('/').pop() || repo.name;
 }
 
+function getInitialMode(project: Project): SourceMode {
+  if (project.source_type === 'zip') return 'zip';
+  if (project.source_type === 'scratch') return 'scratch';
+  if (project.source_provider === 'github') return 'github';
+  return 'url';
+}
+
 export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps) {
   const queryClient = useQueryClient();
-  const [mode, setMode] = useState<SourceMode>(project.source_provider === 'github' ? 'github' : 'github');
+  const [mode, setMode] = useState<SourceMode>(() => getInitialMode(project));
   const [repoSearch, setRepoSearch] = useState('');
   const [selectedRepo, setSelectedRepo] = useState<GitRepo | null>(null);
   const [selectedBranch, setSelectedBranch] = useState('');
@@ -70,6 +79,10 @@ export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps)
   const githubConnected = Boolean(githubStatus.data?.connected);
   const githubConfigured = githubStatus.data?.configured !== false;
   const missingGithubConfig = githubStatus.data?.missing_configuration || [];
+
+  useEffect(() => {
+    setMode(getInitialMode(project));
+  }, [project.id, project.source_provider, project.source_type]);
 
   const reposQuery = useQuery({
     queryKey: ['git', 'repos', 'github'],
@@ -96,6 +109,26 @@ export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps)
       setSelectedBranch(branch.name);
     }
   }, [branchesQuery.data, selectedBranch, selectedRepo]);
+
+  useEffect(() => {
+    if (mode !== 'github' || !reposQuery.data?.length || selectedRepo) return;
+    const currentRepoName = project.source_owner && project.source_repository
+      ? `${project.source_owner}/${project.source_repository}`
+      : null;
+    if (!currentRepoName) return;
+    const currentRepo = reposQuery.data.find((repo) => repo.full_name === currentRepoName);
+    if (currentRepo) {
+      setSelectedRepo(currentRepo);
+      setSelectedBranch(project.selected_branch || currentRepo.default_branch);
+    }
+  }, [
+    mode,
+    project.selected_branch,
+    project.source_owner,
+    project.source_repository,
+    reposQuery.data,
+    selectedRepo,
+  ]);
 
   const filteredRepos = useMemo(() => {
     const query = repoSearch.trim().toLowerCase();
@@ -173,15 +206,26 @@ export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps)
 
   const hasGitSource = project.source_type === 'git';
   const disableGitUrlSubmit = !gitUrl.trim() || !validateGitUrl(gitUrl) || connectUrl.isPending;
+  const currentSourceLabel =
+    project.source_metadata?.repo_url as string
+    || (project.source_owner && project.source_repository ? `${project.source_owner}/${project.source_repository}` : '')
+    || (project.source_type === 'zip' ? 'ZIP snapshot connected' : '')
+    || (project.source_type === 'scratch' ? 'Scratch workspace' : 'No source connected');
 
   return (
     <Surface variant="panel" padding="lg" className="space-y-5">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
-          <h2 className="text-section font-semibold text-text-primary">Connect source</h2>
-          <p className="text-body text-text-secondary">
-            Configure or replace this Project source, then run Analysis from the selected codebase.
-          </p>
+          <div className="flex items-center gap-2 text-meta font-medium uppercase tracking-[0.14em] text-text-muted">
+            <GitBranch className="h-4 w-4" aria-hidden="true" />
+            Source
+          </div>
+          <div className="space-y-1">
+            <h2 className="text-section font-semibold text-text-primary">Select the source</h2>
+            <p className="max-w-2xl text-body text-text-secondary">
+              Pick the source that feeds analysis. GitHub keeps syncing, Git URL is a public repository, ZIP is a one-time snapshot, and Scratch stays source-free.
+            </p>
+          </div>
         </div>
         <Button
           type="button"
@@ -191,74 +235,57 @@ export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps)
           disabled={!hasGitSource || syncSource.isPending}
         >
           <Play className="h-4 w-4" />
-          {syncSource.isPending ? 'Starting...' : 'Analyze current Git source'}
+          {syncSource.isPending ? 'Starting...' : 'Analyze'}
         </Button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {sourceModes.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setMode(item.id)}
-              className={cn(
-                'rounded-lg border p-4 text-left transition-colors',
-                mode === item.id
-                  ? 'border-interaction bg-interaction-muted'
-                  : 'border-border bg-panel hover:bg-panel-muted',
-              )}
-            >
-              <Icon className="mb-3 h-4 w-4 text-text-secondary" aria-hidden="true" />
-              <div className="text-body font-semibold text-text-primary">{item.label}</div>
-              <p className="mt-1 text-meta text-text-secondary">{item.description}</p>
-            </button>
-          );
-        })}
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-panel-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <p className="text-meta font-medium uppercase tracking-[0.12em] text-text-muted">Current source</p>
+          <p className="truncate text-body font-semibold text-text-primary">{currentSourceLabel}</p>
+        </div>
+        <Badge variant={project.source_type === 'scratch' ? 'neutral' : 'success'} showIcon={false}>
+          {project.source_type === 'scratch' ? 'Source-free' : 'Connected'}
+        </Badge>
       </div>
+
+      <SegmentedControl
+        label="Source mode"
+        value={mode}
+        onValueChange={(value) => setMode(value as SourceMode)}
+        options={sourceModes.map((item) => ({
+          value: item.id,
+          label: (
+            <span className="inline-flex items-center gap-1.5">
+              <item.icon className="h-3.5 w-3.5" aria-hidden="true" />
+              {item.label}
+            </span>
+          ),
+        }))}
+      />
 
       {mode === 'github' && (
         <div className="space-y-4">
           {githubStatus.isLoading ? (
-            <Surface variant="muted" padding="default">
-              <p className="text-body text-text-secondary">Checking GitHub connection...</p>
-            </Surface>
+            <Notice variant="info">Checking GitHub connection...</Notice>
           ) : !githubConfigured ? (
-            <Surface variant="muted" padding="default">
-              <p className="text-body font-medium text-text-primary">GitHub OAuth is not configured</p>
-              <p className="mt-1 text-meta text-text-secondary">
-                Set {missingGithubConfig.length ? missingGithubConfig.join(', ') : 'the GitHub OAuth environment variables'} on the backend before connecting GitHub accounts.
-              </p>
-            </Surface>
+            <Notice variant="warning" title="GitHub OAuth is not configured">
+              Set {missingGithubConfig.length ? missingGithubConfig.join(', ') : 'the GitHub OAuth environment variables'} on the backend before connecting GitHub accounts.
+            </Notice>
           ) : !githubConnected ? (
-            <Surface variant="muted" padding="default" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-body font-medium text-text-primary">GitHub is not connected</p>
-                <p className="text-meta text-text-secondary">Connect GitHub to list and analyze repositories you can access.</p>
-              </div>
-              <Button type="button" className="gap-2" onClick={handleOAuthConnect}>
+            <Notice
+              variant="info"
+              title="GitHub is not connected"
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between"
+            >
+              <span>Connect GitHub to list and analyze repositories you can access.</span>
+              <Button type="button" className="mt-3 gap-2 sm:mt-0" onClick={handleOAuthConnect}>
                 <GitBranch className="h-4 w-4" />
                 Connect GitHub
               </Button>
-            </Surface>
+            </Notice>
           ) : (
             <>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
-                  {githubStatus.data?.avatar && (
-                    <img src={githubStatus.data.avatar} alt="" className="h-9 w-9 rounded object-cover" />
-                  )}
-                  <div>
-                    <p className="text-body font-medium text-text-primary">{githubStatus.data?.username || 'GitHub connected'}</p>
-                    <p className="text-meta text-text-secondary">Private repositories are available through OAuth.</p>
-                  </div>
-                </div>
-                <Button type="button" variant="outline" size="sm" onClick={handleOAuthConnect}>
-                  Reconnect
-                </Button>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="source-repo-search">Repository</Label>
                 <div className="relative">
@@ -274,54 +301,49 @@ export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps)
               </div>
 
               {reposQuery.isLoading ? (
-                <Surface variant="muted" padding="default">
-                  <p className="text-body text-text-secondary">Loading repositories...</p>
-                </Surface>
+                <Notice variant="info">Loading repositories...</Notice>
               ) : reposQuery.isError ? (
-                <Surface variant="muted" padding="default">
-                  <p className="text-body text-text-secondary">Repositories could not be loaded. Reconnect GitHub or use a Git URL.</p>
-                </Surface>
+                <Notice variant="warning">Repositories could not be loaded. Reconnect GitHub or use a Git URL.</Notice>
               ) : (
-                <div className="grid max-h-72 gap-3 overflow-y-auto pr-1">
-                  {filteredRepos.slice(0, 12).map((repo) => (
-                    <button
-                      key={repo.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedRepo(repo);
-                        setSelectedBranch('');
-                      }}
-                      className={cn(
-                        'rounded-lg border p-3 text-left transition-colors',
-                        selectedRepo?.id === repo.id
-                          ? 'border-interaction bg-interaction-muted'
-                          : 'border-border bg-panel hover:bg-panel-muted',
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-body font-semibold text-text-primary">{repo.full_name}</p>
-                          {repo.description && <p className="mt-1 line-clamp-2 text-meta text-text-secondary">{repo.description}</p>}
+                <div className="grid max-h-64 gap-2 overflow-y-auto pr-1">
+                  {filteredRepos.slice(0, 10).map((repo) => {
+                    const active = selectedRepo?.id === repo.id;
+                    return (
+                      <button
+                        key={repo.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedRepo(repo);
+                          setSelectedBranch('');
+                        }}
+                        className={cn(
+                          'rounded-lg border px-3 py-3 text-left transition-colors',
+                          active ? 'border-interaction bg-interaction-muted' : 'border-border bg-panel-muted/30 hover:bg-panel',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-body font-medium text-text-primary">{repo.full_name}</p>
+                            {repo.description && <p className="mt-1 line-clamp-2 text-meta text-text-secondary">{repo.description}</p>}
+                          </div>
+                          <Badge variant={repo.private ? 'info' : 'neutral'} showIcon={false}>
+                            {repo.private ? 'Private' : 'Public'}
+                          </Badge>
                         </div>
-                        <Badge variant={repo.private ? 'info' : 'neutral'} showIcon={false}>
-                          {repo.private ? 'Private' : 'Public'}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2 text-meta text-text-muted">
-                        {repo.language && <span>{repo.language}</span>}
-                        <span>{repo.default_branch}</span>
-                        <span>Updated {new Date(repo.updated_at).toLocaleDateString()}</span>
-                      </div>
-                    </button>
-                  ))}
-                  {filteredRepos.length === 0 && (
-                    <p className="text-body text-text-muted">No repositories match this search.</p>
-                  )}
+                        <div className="mt-2 flex flex-wrap gap-2 text-meta text-text-muted">
+                          {repo.language && <span>{repo.language}</span>}
+                          <span>{repo.default_branch}</span>
+                          <span>Updated {new Date(repo.updated_at).toLocaleDateString()}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {filteredRepos.length === 0 && <p className="text-body text-text-muted">No repositories match this search.</p>}
                 </div>
               )}
 
               {selectedRepo && (
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                   <div className="space-y-2">
                     <Label htmlFor="source-repo-branch">Branch for {repoName(selectedRepo)}</Label>
                     <Select
@@ -342,7 +364,7 @@ export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps)
                     onClick={() => connectGithub.mutate()}
                     disabled={!selectedBranch || connectGithub.isPending}
                   >
-                    {connectGithub.isPending ? 'Connecting...' : 'Connect and analyze'}
+                    {connectGithub.isPending ? 'Connecting...' : 'Connect'}
                   </Button>
                 </div>
               )}
@@ -352,34 +374,29 @@ export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps)
       )}
 
       {mode === 'url' && (
-        <div className="space-y-3">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto] lg:items-end">
-            <div className="space-y-2">
-              <Label htmlFor="source-git-url">Repository URL</Label>
-              <Input
-                id="source-git-url"
-                type="url"
-                value={gitUrl}
-                onChange={(event) => setGitUrl(event.target.value)}
-                placeholder="https://github.com/org/repository.git"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="source-git-branch">Branch</Label>
-              <Input
-                id="source-git-branch"
-                value={gitBranch}
-                onChange={(event) => setGitBranch(event.target.value)}
-                placeholder="main"
-              />
-            </div>
-            <Button type="button" onClick={() => connectUrl.mutate()} disabled={disableGitUrlSubmit}>
-              {connectUrl.isPending ? 'Connecting...' : 'Connect and analyze'}
-            </Button>
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_auto] lg:items-end">
+          <div className="space-y-2">
+            <Label htmlFor="source-git-url">Repository URL</Label>
+            <Input
+              id="source-git-url"
+              type="url"
+              value={gitUrl}
+              onChange={(event) => setGitUrl(event.target.value)}
+              placeholder="https://github.com/org/repository.git"
+            />
           </div>
-          <p className="text-meta text-text-secondary">
-            Git URL cloning is anonymous. Use GitHub OAuth for private repositories.
-          </p>
+          <div className="space-y-2">
+            <Label htmlFor="source-git-branch">Branch</Label>
+            <Input
+              id="source-git-branch"
+              value={gitBranch}
+              onChange={(event) => setGitBranch(event.target.value)}
+              placeholder="main"
+            />
+          </div>
+          <Button type="button" onClick={() => connectUrl.mutate()} disabled={disableGitUrlSubmit}>
+            {connectUrl.isPending ? 'Connecting...' : 'Connect'}
+          </Button>
         </div>
       )}
 
@@ -395,17 +412,13 @@ export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps)
             />
           </div>
           <Button type="button" onClick={() => uploadZip.mutate()} disabled={!zipFile || uploadZip.isPending}>
-            {uploadZip.isPending ? 'Uploading...' : 'Upload and analyze'}
+            {uploadZip.isPending ? 'Uploading...' : 'Upload'}
           </Button>
         </div>
       )}
 
       {mode === 'scratch' && (
-        <Surface variant="muted" padding="default">
-          <p className="text-body text-text-secondary">
-            This project can stay source-free. You can return here later to connect GitHub, a Git URL, or a ZIP snapshot.
-          </p>
-        </Surface>
+        <Notice variant="info">This project can stay source-free. You can connect GitHub, a Git URL, or a ZIP snapshot later.</Notice>
       )}
     </Surface>
   );

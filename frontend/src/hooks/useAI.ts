@@ -211,14 +211,12 @@ export const useAcceptAiProposedChange = (projectId: number, documentId: number)
   return useMutation({
     mutationFn: (changeId: number) => aiApi.acceptProposedChange(projectId, documentId, changeId),
     onSuccess: () => {
-      console.log('[DEBUG-a4f2] acceptProposedChange succeeded, invalidating queries');
       queryClient.invalidateQueries({ queryKey: ['ai-proposed-changes', projectId, documentId] });
       queryClient.invalidateQueries({ queryKey: ['document-sections', projectId, documentId] });
       queryClient.invalidateQueries({ queryKey: ['document-meta', projectId, documentId] });
       toast.success('AI change accepted');
     },
     onError: (error) => {
-      console.error('[DEBUG-a4f2] acceptProposedChange failed', error);
       toast.error('Failed to accept AI change');
     },
   });

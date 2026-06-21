@@ -20,7 +20,9 @@ interface GenerationChoiceStepProps {
   completeEstimate?: GenerationEstimate;
   hasActiveProvider: boolean;
   onChoose: (mode: 'on-demand' | 'complete' | 'manual') => void;
+  onBack?: () => void;
   onConfigureProvider?: () => void;
+  isSubmitting?: boolean;
 }
 
 type ChoiceMode = 'on-demand' | 'complete' | 'manual';
@@ -30,7 +32,9 @@ export function GenerationChoiceStep({
   completeEstimate,
   hasActiveProvider,
   onChoose,
+  onBack,
   onConfigureProvider,
+  isSubmitting = false,
 }: GenerationChoiceStepProps) {
   const [selectedMode, setSelectedMode] = useState<ChoiceMode>(
     initialGenerationMode(hasActiveProvider),
@@ -167,11 +171,20 @@ export function GenerationChoiceStep({
       )}
 
       <div className="flex flex-wrap gap-3">
+        {onBack && (
+          <Button variant="outline" onClick={onBack}>
+            Back to outline
+          </Button>
+        )}
         <Button
-          disabled={generationModeRequiresProvider(selectedMode) && !hasActiveProvider}
+          disabled={isSubmitting || (generationModeRequiresProvider(selectedMode) && !hasActiveProvider)}
           onClick={() => onChoose(selectedMode)}
         >
-          {selectedMode === 'manual' ? 'Enter editor now' : 'Start generation and enter editor'}
+          {isSubmitting
+            ? 'Preparing…'
+            : selectedMode === 'manual'
+              ? 'Enter editor now'
+              : 'Start generation and enter editor'}
         </Button>
       </div>
     </div>

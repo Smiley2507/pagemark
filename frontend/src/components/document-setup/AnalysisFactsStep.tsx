@@ -1,18 +1,8 @@
 import React from 'react';
-import {
-  AlertCircle,
-  CheckCircle2,
-  FileCode2,
-  FolderTree,
-  Loader2,
-  Network,
-  Route,
-} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { Progress } from '@/components/ui/progress';
 import { Surface } from '@/components/ui/surface';
-import { cn } from '@/lib/utils';
 import type { AnalysisResults, AnalysisStatus } from '@/types';
 
 interface AnalysisFactsStepProps {
@@ -38,47 +28,6 @@ function mapStepStatus(value?: string): FactStatus {
   if (value === 'failed') return 'failed';
   if (value === 'skipped') return 'skipped';
   return 'pending';
-}
-
-function FactCard({
-  title,
-  status,
-  summary,
-}: {
-  title: string;
-  status: FactStatus;
-  summary: string;
-}) {
-  const icon =
-    status === 'done' ? (
-      <CheckCircle2 className="h-4 w-4 text-status-success-foreground" />
-    ) : status === 'running' ? (
-      <Loader2 className="h-4 w-4 animate-spin text-status-info-foreground" />
-    ) : status === 'failed' ? (
-      <AlertCircle className="h-4 w-4 text-status-danger-foreground" />
-    ) : (
-      <div className="h-2.5 w-2.5 rounded-full bg-text-muted" />
-    );
-
-  return (
-    <Surface
-      variant={status === 'failed' ? 'panel' : 'panel'}
-      padding="lg"
-      className={cn(
-        status === 'done' && 'bg-status-success',
-        status === 'running' && 'bg-status-info',
-        status === 'failed' && 'bg-status-danger',
-      )}
-    >
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5">{icon}</div>
-        <div>
-          <h3 className="text-body font-semibold text-text-primary">{title}</h3>
-          <p className="mt-1 text-meta text-text-secondary">{summary}</p>
-        </div>
-      </div>
-    </Surface>
-  );
 }
 
 function countFiles(node?: { type: string; children?: unknown[] }): number {
@@ -173,66 +122,47 @@ export function AnalysisFactsStep({
         )}
       </Surface>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <FactCard
-          title="Repository structure"
-          status={fileTreeStep}
-          summary={
-            analysisResults?.file_tree_json
-              ? `${countFiles(analysisResults.file_tree_json)} files indexed.`
-              : 'Waiting for repository structure data.'
-          }
-        />
-        <FactCard
-          title="Languages and stack"
-          status={languageStep}
-          summary={
-            analysisResults?.languages_json?.primary?.length
-              ? `Primary languages: ${analysisResults.languages_json.primary.join(', ')}.`
-              : 'Detecting languages used in the codebase.'
-          }
-        />
-        <FactCard
-          title="API surface"
-          status={endpointStep}
-          summary={
-            analysisResults?.endpoints_json
-              ? `${analysisResults.endpoints_json.count} endpoints detected across ${analysisResults.endpoints_json.frameworks.join(', ') || 'the repository'}.`
-              : 'Extracting API endpoints from the codebase.'
-          }
-        />
-        <FactCard
-          title="Complexity"
-          status={complexityStep}
-          summary={
-            analysisResults?.complexity_json
-              ? `${analysisResults.complexity_json.total_files} files and ${analysisResults.complexity_json.total_lines.toLocaleString()} lines analyzed.`
-              : 'Computing complexity metrics.'
-          }
-        />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <Surface variant="muted" padding="lg">
-          <h2 className="text-body font-semibold text-text-primary">Used for</h2>
-          <ul className="mt-3 space-y-2 text-meta text-text-secondary">
-            <li>Template recommendations.</li>
-            <li>Outline evidence.</li>
-            <li>Freshness checks.</li>
-          </ul>
-        </Surface>
-        <Surface variant="muted" padding="lg">
-          <div className="flex items-center gap-2 text-body font-semibold text-text-primary">
-            <FolderTree className="h-4 w-4 text-interaction" />
-            Live categories
-          </div>
-          <ul className="mt-3 space-y-2 text-meta text-text-secondary">
-            <li className="flex items-center gap-2"><FileCode2 className="h-3.5 w-3.5 text-interaction" /> Languages</li>
-            <li className="flex items-center gap-2"><Route className="h-3.5 w-3.5 text-interaction" /> Endpoints</li>
-            <li className="flex items-center gap-2"><Network className="h-3.5 w-3.5 text-interaction" /> Complexity</li>
-          </ul>
-        </Surface>
-      </div>
+      <Surface variant="panel" padding="lg" className="space-y-3">
+        <h2 className="text-body font-semibold text-text-primary">Analysis snapshot</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <SummaryLine
+            label="Repository structure"
+            status={fileTreeStep}
+            summary={
+              analysisResults?.file_tree_json
+                ? `${countFiles(analysisResults.file_tree_json)} files indexed`
+                : 'Waiting for repository structure data'
+            }
+          />
+          <SummaryLine
+            label="Languages and stack"
+            status={languageStep}
+            summary={
+              analysisResults?.languages_json?.primary?.length
+                ? analysisResults.languages_json.primary.join(', ')
+                : 'Detecting languages'
+            }
+          />
+          <SummaryLine
+            label="API surface"
+            status={endpointStep}
+            summary={
+              analysisResults?.endpoints_json
+                ? `${analysisResults.endpoints_json.count} endpoints`
+                : 'Extracting API endpoints'
+            }
+          />
+          <SummaryLine
+            label="Complexity"
+            status={complexityStep}
+            summary={
+              analysisResults?.complexity_json
+                ? `${analysisResults.complexity_json.total_files} files`
+                : 'Computing complexity'
+            }
+          />
+        </div>
+      </Surface>
 
       {isComplete && (
         <Surface variant="panel" padding="lg" className="space-y-4">
@@ -240,7 +170,7 @@ export function AnalysisFactsStep({
             <div>
               <h2 className="text-body font-semibold text-text-primary">Project overview draft</h2>
               <p className="mt-1 text-meta text-text-secondary">
-                Turn Analysis facts into a maintainer-approved brief before choosing templates and generating sections.
+                Use the analyzed facts to shape the brief before moving on.
               </p>
             </div>
             {!projectOverviewDraft && (
@@ -282,7 +212,7 @@ export function AnalysisFactsStep({
             </div>
           ) : (
             <Notice variant="generation" title="Recommended next step">
-              Create and review a Project overview so templates, outlines, and generated drafts share the same corrected context.
+              Create and review a Project overview before choosing templates.
             </Notice>
           )}
         </Surface>
@@ -305,6 +235,26 @@ export function AnalysisFactsStep({
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+function SummaryLine({
+  label,
+  status,
+  summary,
+}: {
+  label: string;
+  status: FactStatus;
+  summary: string;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-canvas p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-body font-medium text-text-primary">{label}</p>
+        <span className="text-meta text-text-muted">{status}</span>
+      </div>
+      <p className="mt-1 text-meta text-text-secondary">{summary}</p>
     </div>
   );
 }

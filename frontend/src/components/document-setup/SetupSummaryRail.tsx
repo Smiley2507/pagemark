@@ -12,12 +12,12 @@ interface SetupSummaryRailProps {
 }
 
 const stages: Array<{ key: DocumentSetupStage; label: string; icon: ElementType }> = [
-  { key: 'source', label: 'Connect source', icon: GitBranch },
-  { key: 'analysis', label: 'Progressive Analysis', icon: FileCode2 },
-  { key: 'template-selection', label: 'Template recommendation', icon: FileText },
-  { key: 'outline-review', label: 'Outline review', icon: PenSquare },
-  { key: 'generation-mode', label: 'Generation choice', icon: Sparkles },
-  { key: 'editor-ready', label: 'Enter editor', icon: CheckCircle2 },
+  { key: 'source', label: 'Source', icon: GitBranch },
+  { key: 'analysis', label: 'Analysis', icon: FileCode2 },
+  { key: 'template-selection', label: 'Template', icon: FileText },
+  { key: 'outline-review', label: 'Outline', icon: PenSquare },
+  { key: 'generation-mode', label: 'Generate', icon: Sparkles },
+  { key: 'editor-ready', label: 'Editor', icon: CheckCircle2 },
 ];
 
 export function SetupSummaryRail({ state, isDrawer = false }: SetupSummaryRailProps) {

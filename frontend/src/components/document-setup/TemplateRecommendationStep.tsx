@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { ChevronRight, FileText, Plus, Sparkles } from 'lucide-react';
+import { FileText, Plus, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
+import { Input } from '@/components/ui/input';
 import { Surface } from '@/components/ui/surface';
 import { cn } from '@/lib/utils';
 import type { Template } from '@/types';
@@ -11,37 +12,32 @@ import type { TemplateRecommendation, SourceConnectionType } from '@/types/docum
 interface TemplateRecommendationStepProps {
   recommendations: TemplateRecommendation[];
   availableTemplates?: Template[];
-  hasActiveProvider: boolean;
   sourceType?: SourceConnectionType;
-  requestingAiRecommendations?: boolean;
   onSelectTemplate: (templateId: number, recommendation?: TemplateRecommendation) => void;
   onCreateCustom: () => void;
-  onConfigureProvider?: () => void;
-  onRequestAiRecommendations?: () => void;
 }
 
 export function TemplateRecommendationStep({
   recommendations,
   availableTemplates = [],
-  hasActiveProvider,
   sourceType,
-  requestingAiRecommendations = false,
   onSelectTemplate,
   onCreateCustom,
-  onConfigureProvider,
-  onRequestAiRecommendations,
 }: TemplateRecommendationStepProps) {
-  const [showAllTemplates, setShowAllTemplates] = useState(false);
+  const [templateQuery, setTemplateQuery] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
 
-  const ruleBased = recommendations.filter((item) => item.basis === 'rule_based');
-  const aiPersonalized = recommendations.filter((item) => item.basis === 'ai_personalized');
   const sourceConnected = sourceType !== 'none';
 
   const hiddenTemplateIds = new Set(recommendations.map((item) => item.template_id).filter(Boolean));
   const fallbackTemplates = useMemo(
     () => availableTemplates.filter((template) => !hiddenTemplateIds.has(template.id)),
     [availableTemplates, hiddenTemplateIds],
+  );
+
+  const filteredFallbackTemplates = useMemo(
+    () => fallbackTemplates.filter((template) => template.name.toLowerCase().includes(templateQuery.toLowerCase())),
+    [fallbackTemplates, templateQuery],
   );
 
   const handleSelect = (templateId: number, recommendation?: TemplateRecommendation) => {
@@ -54,7 +50,7 @@ export function TemplateRecommendationStep({
       <div className="max-w-3xl">
         <h1 className="text-title text-text-primary">Choose structure</h1>
         <p className="mt-3 text-body text-text-secondary">
-          Pick a template or start from a custom outline.
+          Pick a starting template, then review the outline.
         </p>
       </div>
 
@@ -64,134 +60,84 @@ export function TemplateRecommendationStep({
         </Notice>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="space-y-6">
-          <Surface variant="panel" padding="lg" className="space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-body font-semibold text-text-primary">Rule-based recommendations</h2>
-                <p className="mt-1 text-meta text-text-secondary">Fast defaults.</p>
-              </div>
-              <Badge variant="neutral">No provider usage</Badge>
+      <div className="space-y-6">
+        <Surface variant="panel" padding="lg" className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-body font-semibold text-text-primary">Recommended</h2>
+              <p className="mt-1 text-meta text-text-secondary">Templates ranked from the current source and document context.</p>
             </div>
+            {recommendations.length > 0 && <Badge variant="neutral">{recommendations.length} suggested</Badge>}
+          </div>
 
-            {ruleBased.length > 0 ? (
-              <div className="grid gap-3">
-                {ruleBased.map((recommendation) => (
-                  <TemplateCard
-                    key={recommendation.id}
-                    template={recommendation.template}
-                    recommendation={recommendation}
-                    selected={selectedTemplateId === recommendation.template_id}
-                    onSelect={() => handleSelect(recommendation.template_id!, recommendation)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-meta text-text-secondary">
-                No rule-based recommendations available yet.
+          {recommendations.length > 0 ? (
+            <div className="grid gap-3">
+              {recommendations.map((recommendation) => (
+                <TemplateCard
+                  key={recommendation.id}
+                  template={recommendation.template}
+                  recommendation={recommendation}
+                  selected={selectedTemplateId === recommendation.template_id}
+                  onSelect={() => handleSelect(recommendation.template_id!, recommendation)}
+                />
+              ))}
+            </div>
+          ) : (
+            <Notice variant="warning" title="No recommendations yet">
+              Pick from the full template list below.
+            </Notice>
+          )}
+        </Surface>
+
+        <Surface variant="panel" padding="lg" className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-body font-semibold text-text-primary">Browse all templates</h2>
+              <p className="mt-1 text-meta text-text-secondary">
+                Search to narrow the list.
               </p>
-            )}
-          </Surface>
-
-          <Surface variant="panel" padding="lg" className="space-y-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-body font-semibold text-text-primary">AI-personalized recommendation</h2>
-                <p className="mt-1 text-meta text-text-secondary">Tailored from analysis.</p>
-              </div>
-              <Badge variant="generation">Provider-consuming action</Badge>
             </div>
-
-            {!sourceConnected ? (
-                <Notice variant="warning" title="Source connection required">
-                Connect a source code repository first to enable AI-personalized recommendations.
-              </Notice>
-            ) : aiPersonalized.length > 0 ? (
-              <div className="grid gap-3">
-                {aiPersonalized.map((recommendation) => (
-                  <TemplateCard
-                    key={recommendation.id}
-                    template={recommendation.template}
-                    recommendation={recommendation}
-                    selected={selectedTemplateId === recommendation.template_id}
-                    onSelect={() => handleSelect(recommendation.template_id!, recommendation)}
-                  />
-                ))}
+            <div className="w-full max-w-sm">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+                <Input
+                  value={templateQuery}
+                  onChange={(event) => setTemplateQuery(event.target.value)}
+                  placeholder="Search templates"
+                  className="pl-9"
+                />
               </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            {filteredFallbackTemplates.length > 0 ? (
+              filteredFallbackTemplates.slice(0, 8).map((template) => (
+                <TemplateCard
+                  key={template.id}
+                  template={{
+                    ...template,
+                    sections_preview: Array.isArray(template.sections_json)
+                      ? template.sections_json.map((section) =>
+                          typeof section === 'string'
+                            ? { heading: section }
+                            : { heading: section.heading, description: section.description },
+                        )
+                      : undefined,
+                  }}
+                  selected={selectedTemplateId === template.id}
+                  onSelect={() => handleSelect(template.id)}
+                />
+              ))
             ) : (
-              <>
-              <Notice variant="generation" title="Provider usage required">
-                Creating an AI-personalized recommendation uses your provider and may consume tokens.
-              </Notice>
-                <div className="flex flex-wrap gap-3">
-                  {hasActiveProvider ? (
-                    <Button
-                      variant="outline"
-                      disabled={requestingAiRecommendations}
-                      onClick={onRequestAiRecommendations}
-                    >
-                      {requestingAiRecommendations ? 'Generating recommendation…' : 'Generate AI-personalized recommendation'}
-                    </Button>
-                  ) : (
-                    <Button variant="outline" onClick={onConfigureProvider}>
-                      Configure provider for AI recommendation
-                    </Button>
-                  )}
-                </div>
-              </>
+              <p className="text-meta text-text-secondary">No templates match your search.</p>
             )}
-          </Surface>
+          </div>
 
-          <Surface variant="panel" padding="lg" className="space-y-4">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-body font-semibold text-text-primary">Other Templates</h2>
-                <p className="mt-1 text-meta text-text-secondary">
-                  Browse all available templates.
-                </p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => setShowAllTemplates((value) => !value)}>
-                {showAllTemplates ? 'Hide' : 'Show'} list
-              </Button>
-            </div>
-
-            {showAllTemplates && fallbackTemplates.length > 0 && (
-              <div className="grid gap-3">
-                {fallbackTemplates.map((template) => (
-                  <TemplateCard
-                    key={template.id}
-                    template={{
-                      ...template,
-                      sections_preview: Array.isArray(template.sections_json)
-                        ? template.sections_json.map((section) =>
-                            typeof section === 'string'
-                              ? { heading: section }
-                              : { heading: section.heading, description: section.description },
-                          )
-                        : undefined,
-                    }}
-                    selected={selectedTemplateId === template.id}
-                    onSelect={() => handleSelect(template.id)}
-                  />
-                ))}
-              </div>
-            )}
-
-            <Button variant="outline" className="w-full justify-center gap-2" onClick={onCreateCustom}>
-              <Plus className="h-4 w-4" />
-              Create Custom Outline
-            </Button>
-          </Surface>
-        </div>
-
-        <Surface variant="muted" padding="lg">
-          <h2 className="text-body font-semibold text-text-primary">Options</h2>
-          <ul className="mt-3 space-y-2 text-meta text-text-secondary">
-            <li>Rule-based: no provider.</li>
-            <li>AI-personalized: uses tokens.</li>
-            <li>Custom: start from scratch.</li>
-          </ul>
+          <Button variant="outline" className="w-full justify-center gap-2" onClick={onCreateCustom}>
+            <Plus className="h-4 w-4" />
+            Create Custom Outline
+          </Button>
         </Surface>
       </div>
     </div>
@@ -254,7 +200,7 @@ function TemplateCard({
             </div>
           )}
         </div>
-        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-text-muted" />
+        <FileText className="mt-1 h-4 w-4 shrink-0 text-text-muted" />
       </div>
     </button>
   );

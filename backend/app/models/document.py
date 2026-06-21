@@ -49,7 +49,11 @@ class Document(Base):
     template_id = Column(Integer, ForeignKey("templates.id"), nullable=True)
     title = Column(String, nullable=False, default="Documentation")
     status = Column(Enum(DocumentStatus), nullable=False, default=DocumentStatus.DRAFT)
-    setup_stage = Column(Enum(DocumentSetupStage), nullable=False, default=DocumentSetupStage.PURPOSE)
+    setup_stage = Column(
+        Enum(DocumentSetupStage),
+        nullable=False,
+        default=DocumentSetupStage.TEMPLATE_SELECTION,
+    )
     purpose = Column(Text, nullable=True)
     audience = Column(Text, nullable=True)
     context = Column(Text, nullable=True)

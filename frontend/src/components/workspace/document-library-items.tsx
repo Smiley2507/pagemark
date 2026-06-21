@@ -173,7 +173,7 @@ export function mapDocumentStatus(status: string) {
     return { label: 'Generating', variant: 'generation' as const };
   }
   if (normalized.includes('draft')) {
-    return { label: 'Draft', variant: 'review' as const };
+    return { label: 'Draft', variant: 'neutral' as const };
   }
   return { label: 'In progress', variant: 'neutral' as const };
 }

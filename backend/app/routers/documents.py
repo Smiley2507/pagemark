@@ -27,6 +27,7 @@ from app.models.document import (
 from app.models.clarification import ClarificationRequest
 from app.models.document_share import DocumentShare, DocumentSharePermission
 from app.models.generation import GenerationMode, GenerationRun, GenerationSectionTask
+from app.models.generation import GenerationRunStatus
 from app.models.organization import OrganizationMember, OrgMemberRole, OrgMemberStatus
 from app.models.outline_proposal import OutlineProposal, OutlineProposalBasis
 from app.models.project import Project
@@ -1409,8 +1410,6 @@ async def accept_ai_proposed_change(
 ):
     change = await ai_work_service.get_change(db, document.id, change_id)
     accepted = await ai_work_service.accept_change(db, document, change, current_user.id)
-    section_id = (change.after_json or {}).get("section_id") or change.section_id
-    print(f"[DEBUG-c9a1] accept_ai_proposed_change: change_id={change_id}, section_id={section_id}, after.content_md length={len(str(accepted.get('after', {}).get('content_md', '')))}")
     return _ai_change_to_response(accepted)
 
 
@@ -1528,6 +1527,10 @@ async def create_document_generation_run(
 
     if body.execute:
         run = await generation_service.execute_generation_run(db, run, user_id=current_user.id)
+        if run.status == GenerationRunStatus.COMPLETED:
+            document.setup_stage = DocumentSetupStage.EDITOR_READY
+            document.updated_at = _utcnow()
+            await db.commit()
     return _generation_run_to_response(run)
 
 

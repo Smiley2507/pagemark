@@ -39,12 +39,6 @@ interface AiPanelProps {
   activeSelection?: { sectionId: number; from: number; to: number; text: string } | null;
   activeCursor?: { sectionId: number; pos: number } | null;
   sections: { id: number; heading: string }[];
-  onInsertAtCursor: (content: string, sectionId?: number) => boolean;
-  onReplaceSelection: (
-    content: string,
-    sectionId?: number,
-    selection?: { from: number; to: number; text: string },
-  ) => boolean;
   projectName: string;
   projectContextMd?: string | null;
   draftPrompt?: string;
@@ -53,17 +47,6 @@ interface AiPanelProps {
   draftSelection?: { sectionId: number; from: number; to: number; text: string };
   onDraftPromptConsumed?: () => void;
   onOpenPalette?: () => void;
-}
-
-interface LocalEditorAction {
-  id: string;
-  action: 'insert_at_cursor' | 'replace_selection';
-  title: string;
-  sectionId: number;
-  content: string;
-  rationale?: string | null;
-  selection?: { from: number; to: number; text: string };
-  status: 'proposed' | 'accepted' | 'rejected';
 }
 
 interface PanelTranscriptEntry {
@@ -166,8 +149,6 @@ export function AiPanel({
   activeSelection,
   activeCursor,
   sections,
-  onInsertAtCursor,
-  onReplaceSelection,
   projectName,
   projectContextMd,
   draftPrompt,
@@ -191,8 +172,6 @@ export function AiPanel({
   const [contextAction, setContextAction] = useState<{ action: 'ask_user' | 'insufficient_context'; question: string } | null>(null);
   const [contextActionAnswer, setContextActionAnswer] = useState('');
   const [showPendingChanges, setShowPendingChanges] = useState(false);
-  const [latestActionMessage, setLatestActionMessage] = useState<string | null>(null);
-  const [localEditorActions, setLocalEditorActions] = useState<LocalEditorAction[]>([]);
   const [transcript, setTranscript] = useState<PanelTranscriptEntry[]>([]);
   const [returnedWorkRunChanges, setReturnedWorkRunChanges] = useState<AIProposedChange[]>([]);
   const consumedDraftPromptIdRef = useRef<number | null>(null);
@@ -587,25 +566,7 @@ export function AiPanel({
     }
   };
 
-  const acceptLocalEditorAction = (action: LocalEditorAction) => {
-    const applied = action.action === 'replace_selection'
-      ? onReplaceSelection(action.content, action.sectionId, action.selection)
-      : onInsertAtCursor(action.content, action.sectionId);
-    if (!applied) return;
-    setLocalEditorActions((current) =>
-      current.map((item) => item.id === action.id ? { ...item, status: 'accepted' } : item),
-    );
-  };
-
-  const rejectLocalEditorAction = (actionId: string) => {
-    setLocalEditorActions((current) =>
-      current.map((item) => item.id === actionId ? { ...item, status: 'rejected' } : item),
-    );
-  };
-
-  const hasPanelActivity = Boolean(latestActionMessage)
-    || transcript.length > 0
-    || localEditorActions.length > 0
+  const hasPanelActivity = transcript.length > 0
     || visibleProposedChanges.length > 0
     || Boolean(contextAction)
     || structureSuggestions !== null;
@@ -780,22 +741,6 @@ export function AiPanel({
           </div>
         )}
 
-        {latestActionMessage && (
-          <div className="mx-3 mt-3 rounded-lg border border-interaction/30 bg-interaction-muted/20 px-3 py-2">
-            <div className="flex items-start justify-between gap-2">
-              <p className="text-sm text-text-primary">{latestActionMessage}</p>
-              <button
-                type="button"
-                onClick={() => setLatestActionMessage(null)}
-                className="rounded p-1 text-text-muted hover:bg-panel-muted hover:text-text-primary"
-                aria-label="Dismiss AI action message"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          </div>
-        )}
-
         {transcript.length > 0 && (
           <div className="space-y-2 px-3 py-3" data-testid="ai-panel-transcript">
             {transcript.map((entry) => (
@@ -817,45 +762,6 @@ export function AiPanel({
                 </div>
               </div>
             ))}
-          </div>
-        )}
-
-        {localEditorActions.length > 0 && (
-          <div className="px-3 py-3">
-            <div className="space-y-2">
-              {localEditorActions.slice(0, 5).map((action) => (
-                <div
-                  key={action.id}
-                  className="rounded-lg border border-interaction/40 bg-interaction-muted/20"
-                  data-testid={`ai-local-action-${action.action}`}
-                >
-                  <div className="flex items-start justify-between gap-2 border-b border-interaction/20 px-3 py-2">
-                    <div className="min-w-0">
-                      <h4 className="text-xs font-semibold text-text-primary">{action.title}</h4>
-                      <p className="text-[10px] capitalize text-text-muted">
-                        {action.action.replaceAll('_', ' ')} · {action.status}
-                      </p>
-                    </div>
-                    {action.status === 'proposed' && (
-                      <div className="flex shrink-0 gap-1">
-                        <Button size="sm" className="h-7 gap-1 text-xs" onClick={() => acceptLocalEditorAction(action)}>
-                          <Check className="h-3 w-3" />
-                          Accept
-                        </Button>
-                        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => rejectLocalEditorAction(action.id)}>
-                          <X className="h-3 w-3" />
-                          Reject
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  {action.rationale && <p className="px-3 pt-2 text-[11px] text-text-secondary">{action.rationale}</p>}
-                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap px-3 py-2 text-[11px] leading-relaxed text-text-secondary">
-                    {action.content}
-                  </pre>
-                </div>
-              ))}
-            </div>
           </div>
         )}
 

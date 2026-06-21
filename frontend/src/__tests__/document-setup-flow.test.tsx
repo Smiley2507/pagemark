@@ -31,15 +31,15 @@ describe('document setup lifecycle helpers', () => {
     expect(summary.limitations[0]).toContain('Analysis-grounded recommendations');
   });
 
-  it('keeps source-backed purpose-stage Documents in analysis until analysis is resolved', () => {
+  it('moves legacy purpose-stage Documents into template selection', () => {
     const running = { status: 'running' } as AnalysisStatus;
     const completed = { status: 'completed' } as AnalysisStatus;
     const failed = { status: 'failed' } as AnalysisStatus;
 
-    expect(deriveUiStage('purpose', 'github-oauth', null)).toBe('analysis');
-    expect(deriveUiStage('purpose', 'github-oauth', running)).toBe('analysis');
-    expect(deriveUiStage('purpose', 'github-oauth', completed)).toBe('analysis');
-    expect(deriveUiStage('purpose', 'github-oauth', failed)).toBe('analysis');
+    expect(deriveUiStage('purpose', 'github-oauth', null)).toBe('template-selection');
+    expect(deriveUiStage('purpose', 'github-oauth', running)).toBe('template-selection');
+    expect(deriveUiStage('purpose', 'github-oauth', completed)).toBe('template-selection');
+    expect(deriveUiStage('purpose', 'github-oauth', failed)).toBe('template-selection');
   });
 
   it('resumes persisted setup stages without sending source-less Documents through analysis', () => {
@@ -141,11 +141,10 @@ describe('template recommendation setup UI', () => {
     },
   };
 
-  it('keeps source-less setup on rule-based paths and blocks AI-personalized recommendations', () => {
+  it('keeps source-less setup on the compact browse path', () => {
     render(
       <TemplateRecommendationStep
         recommendations={[ruleRecommendation]}
-        hasActiveProvider
         sourceType="none"
         onSelectTemplate={vi.fn()}
         onCreateCustom={vi.fn()}
@@ -153,28 +152,22 @@ describe('template recommendation setup UI', () => {
     );
 
     expect(screen.getByText('No source connected')).toBeInTheDocument();
-    expect(screen.getByText('Source connection required')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /generate ai-personalized recommendation/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Browse all templates')).toBeInTheDocument();
   });
 
-  it('shows provider setup when source exists but no provider is configured', () => {
-    const onConfigureProvider = vi.fn();
-
+  it('keeps the template picker compact when source exists', () => {
     render(
       <TemplateRecommendationStep
         recommendations={[ruleRecommendation]}
-        hasActiveProvider={false}
         sourceType="github-oauth"
         onSelectTemplate={vi.fn()}
         onCreateCustom={vi.fn()}
-        onConfigureProvider={onConfigureProvider}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /configure provider for ai recommendation/i }));
-
-    expect(screen.getByText('Provider usage required')).toBeInTheDocument();
-    expect(onConfigureProvider).toHaveBeenCalledOnce();
+    expect(screen.queryByText('No source connected')).not.toBeInTheDocument();
+    expect(screen.getByText('Browse all templates')).toBeInTheDocument();
+    expect(screen.queryByText('Configure provider for AI recommendation')).not.toBeInTheDocument();
   });
 
   it('selects AI-personalized recommendations through the template callback', () => {

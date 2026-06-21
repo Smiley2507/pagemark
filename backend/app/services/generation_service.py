@@ -277,7 +277,6 @@ async def create_generation_run(
                 },
             )
         )
-    document.setup_stage = DocumentSetupStage.EDITOR_READY
     document.updated_at = utcnow()
     await db.commit()
     return await get_generation_run(db, document.id, run.id)

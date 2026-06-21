@@ -58,17 +58,15 @@ export function deriveUiStage(
   sourceType?: SourceConnectionType,
   analysisStatus?: AnalysisStatus | null,
 ): DocumentSetupStage {
+  if (persistedStage === 'purpose') {
+    return sourceType && sourceType !== 'none' ? 'template-selection' : 'source';
+  }
   if (persistedStage === 'template_selection') return 'template-selection';
   if (persistedStage === 'outline_review') return 'outline-review';
   if (persistedStage === 'generation_mode') return 'generation-mode';
   if (persistedStage === 'editor_ready') return 'editor-ready';
-  if (sourceType && sourceType !== 'none') {
-    if (!analysisStatus || analysisStatus.status === 'pending' || analysisStatus.status === 'running') {
-      return 'analysis';
-    }
-    if (analysisStatus.status === 'completed' || analysisStatus.status === 'failed') {
-      return 'analysis';
-    }
+  if (sourceType && sourceType !== 'none' && (!analysisStatus || analysisStatus.status === 'pending' || analysisStatus.status === 'running')) {
+    return 'analysis';
   }
   return 'source';
 }

@@ -49,10 +49,11 @@ export function DocumentSetupPage() {
 
   const [setupState, setSetupState] = useState<DocumentSetupState>(INITIAL_STATE);
   const [showRailDrawer, setShowRailDrawer] = useState(false);
-  const [providerContext, setProviderContext] = useState<'recommendation' | 'overview' | 'generation' | null>(null);
+  const [providerContext, setProviderContext] = useState<'overview' | 'generation' | null>(null);
   const [resumeLoaded, setResumeLoaded] = useState(false);
   const [projectOverviewDraft, setProjectOverviewDraft] = useState('');
   const [overviewQuestions, setOverviewQuestions] = useState<string[]>([]);
+  const [generationSubmitting, setGenerationSubmitting] = useState(false);
 
   const { data: credentialList } = useQuery({
     queryKey: ['ai-credentials'],
@@ -249,23 +250,6 @@ export function DocumentSetupPage() {
     retry: false,
   });
 
-  const requestAiRecommendationMutation = useMutation({
-    mutationFn: () =>
-      documentsApi.createTemplateRecommendations(
-        setupState.projectId!,
-        setupState.documentId!,
-        'ai_personalized',
-        true,
-      ),
-    onSuccess: async () => {
-      await setupSnapshotQuery.refetch();
-      setProviderContext(null);
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
-
   const generateOverviewMutation = useMutation({
     mutationFn: () => projectsApi.generateAiOverview(setupState.projectId!),
     onSuccess: (overview) => {
@@ -321,7 +305,7 @@ export function DocumentSetupPage() {
       const document = await documentsApi.createDocument(projectId, {
         title: `${projectName} overview`,
         context: payload.projectContext,
-        setup_stage: 'purpose',
+        setup_stage: 'template_selection',
       });
 
       const sourceType =
@@ -534,34 +518,50 @@ export function DocumentSetupPage() {
   const chooseGeneration = async (mode: 'on-demand' | 'complete' | 'manual') => {
     if (!setupState.projectId || !setupState.documentId) return;
     try {
+      setGenerationSubmitting(true);
       setSetupState((current) => ({ ...current, generationMode: mode }));
       if (mode === 'manual') {
         await documentsApi.updateDocument(setupState.projectId, setupState.documentId, {
           setup_stage: 'editor_ready',
         });
-      } else {
-        await documentsApi.createGenerationRun(
+        await setupSnapshotQuery.refetch();
+        return;
+      }
+
+      const run = await documentsApi.createGenerationRun(
           setupState.projectId,
           setupState.documentId,
           mode,
           mode === 'on-demand' ? setupSectionIds : undefined,
           true,
         );
-        await documentsApi.updateDocument(setupState.projectId, setupState.documentId, {
-          setup_stage: 'editor_ready',
-        });
+      await setupSnapshotQuery.refetch();
+      if (String(run.status) !== 'completed') {
+        toast.error('Generation did not complete. The editor will stay locked until it does.');
       }
-      navigate(`/projects/${setupState.projectId}/documents/${setupState.documentId}`);
     } catch (error) {
       toast.error('Unable to enter the editor.');
+    } finally {
+      setGenerationSubmitting(false);
+    }
+  };
+
+  const returnToOutlineReview = async () => {
+    if (!setupState.projectId || !setupState.documentId) return;
+    try {
+      await documentsApi.updateDocument(setupState.projectId, setupState.documentId, {
+        setup_stage: 'outline_review',
+      });
+      await setupSnapshotQuery.refetch();
+      setSetupState((current) => ({ ...current, stage: 'outline-review' }));
+    } catch (error) {
+      toast.error('Unable to return to the outline review.');
     }
   };
 
   const providerActionLabel =
-    providerContext === 'recommendation'
-      ? 'AI-personalized recommendations'
-      : providerContext === 'overview'
-        ? 'AI Project overview'
+    providerContext === 'overview'
+      ? 'AI Project overview'
       : 'AI-powered generation';
 
   const loadingResume = !!resumeProjectId && !resumeLoaded;
@@ -593,9 +593,7 @@ export function DocumentSetupPage() {
                 actionLabel={providerActionLabel}
                 onCancel={() => setProviderContext(null)}
                 onComplete={() => {
-                  if (providerContext === 'recommendation') {
-                    void requestAiRecommendationMutation.mutateAsync();
-                  } else if (providerContext === 'overview') {
+                  if (providerContext === 'overview') {
                     setProviderContext(null);
                     void generateOverviewMutation.mutateAsync();
                   } else {
@@ -646,21 +644,11 @@ export function DocumentSetupPage() {
                 <TemplateRecommendationStep
                   recommendations={recommendations}
                   availableTemplates={templates}
-                  hasActiveProvider={hasActiveProvider}
                   sourceType={setupState.sourceType}
-                  requestingAiRecommendations={requestAiRecommendationMutation.isPending}
                   onSelectTemplate={(templateId, recommendation) =>
                     void selectTemplate(templateId, recommendation)
                   }
                   onCreateCustom={() => void createCustomOutline()}
-                  onConfigureProvider={() => setProviderContext('recommendation')}
-                  onRequestAiRecommendations={() => {
-                    if (!hasActiveProvider) {
-                      setProviderContext('recommendation');
-                      return;
-                    }
-                    void requestAiRecommendationMutation.mutateAsync();
-                  }}
                 />
               )}
 
@@ -687,6 +675,8 @@ export function DocumentSetupPage() {
                   completeEstimate={completeEstimateQuery.data}
                   hasActiveProvider={hasActiveProvider}
                   onConfigureProvider={() => setProviderContext('generation')}
+                  onBack={() => void returnToOutlineReview()}
+                  isSubmitting={generationSubmitting}
                   onChoose={(mode) => void chooseGeneration(mode)}
                 />
               )}

@@ -140,7 +140,8 @@ function documentStatusLabel(document: Document | undefined): string {
 
 function statusVariant(status: string | undefined): 'neutral' | 'success' | 'warning' | 'danger' | 'generation' | 'review' | 'needsInput' {
   if (status === 'approved' || status === 'reviewed') return 'review';
-  if (status === 'generating' || status === 'draft') return 'generation';
+  if (status === 'generating') return 'generation';
+  if (status === 'draft') return 'neutral';
   if (status === 'needs_input') return 'needsInput';
   if (status === 'potentially_stale') return 'warning';
   if (status === 'failed') return 'danger';
@@ -226,7 +227,6 @@ function SectionBlock({
   );
 
   useEffect(() => {
-    console.log('[DEBUG-b7c3] SectionBlock sync for section', section.id, 'content_md length:', (section.content_md || '').length, 'updated_at:', section.updated_at);
     setContent(section.content_md);
     setTitle(section.title || section.heading || 'Untitled Section');
     markPersisted(section.content_md, section.updated_at);
@@ -661,65 +661,6 @@ export function DocumentEditorPage() {
     toast.success('Accepting all review-ready sections');
   };
 
-  const handleInsertAtCursor = useCallback((content: string, sectionId?: number) => {
-    const targetSectionId = sectionId ?? activeSectionId;
-    const targetEditor = activeEditorSectionId === targetSectionId
-      ? activeEditor
-      : targetSectionId
-        ? editorBySectionIdRef.current.get(targetSectionId) ?? null
-        : null;
-    if (!targetEditor) {
-      toast.error('Focus a section before inserting AI content');
-      return false;
-    }
-    targetEditor.chain().focus().insertContent(content, { contentType: 'markdown' }).run();
-    toast.success('Inserted at cursor');
-    return true;
-  }, [activeEditor, activeEditorSectionId, activeSectionId]);
-
-  const handleReplaceSelection = useCallback((
-    content: string,
-    sectionId?: number,
-    selectionOverride?: { from: number; to: number; text: string },
-  ) => {
-    const targetSectionId = sectionId ?? activeSectionId;
-    const targetEditor = activeEditorSectionId === targetSectionId
-      ? activeEditor
-      : targetSectionId
-        ? editorBySectionIdRef.current.get(targetSectionId) ?? null
-        : null;
-    if (!targetEditor) {
-      toast.error('Focus a section and select text before replacing it');
-      return false;
-    }
-    let savedSelection = selectionOverride ?? null;
-    if (!savedSelection && editorSelection?.sectionId === targetSectionId) {
-      savedSelection = editorSelection;
-    }
-    if (savedSelection) {
-      const { selection } = targetEditor.state;
-      const currentSelectionText = targetEditor.state.doc.textBetween(selection.from, selection.to);
-      const selectionStillCurrent = !selection.empty
-        && selection.from === savedSelection.from
-        && selection.to === savedSelection.to
-        && currentSelectionText === savedSelection.text;
-      if (!selectionStillCurrent) {
-        toast.error('Select text before replacing it');
-        return false;
-      }
-      targetEditor.chain().focus().insertContentAt(
-        { from: savedSelection.from, to: savedSelection.to },
-        content,
-        { parseOptions: { preserveWhitespace: 'full' } },
-      ).run();
-      setEditorSelection(null);
-      toast.success('AI content replaced the selection');
-      return true;
-    }
-    toast.error('Select text before replacing it');
-    return false;
-  }, [activeEditor, activeEditorSectionId, activeSectionId, editorSelection]);
-
   const handleSectionEditorReady = useCallback((sectionId: number, editor: Editor | null) => {
     if (editor) {
       editorBySectionIdRef.current.set(sectionId, editor);
@@ -1108,18 +1049,16 @@ export function DocumentEditorPage() {
               </div>
               <div className="min-h-0 flex-1 overflow-hidden">
                 {rightTab === 'ai' ? (
-                   <AiPanel
-                    projectId={pid}
-                    documentId={did}
-                    activeSectionId={activeSection?.id ?? null}
+                <AiPanel
+                   projectId={pid}
+                   documentId={did}
+                   activeSectionId={activeSection?.id ?? null}
                     activeSectionHeading={activeSection?.title || activeSection?.heading || null}
                     activeSectionContent={activeSection ? (localContentBySectionId[activeSection.id] ?? activeSection.content_md ?? '') : ''}
                     activeSectionStatus={activeSection?.status || 'pending'}
                     activeSelection={editorSelection}
                     activeCursor={editorCursor}
                     sections={sections.map((s) => ({ id: s.id, heading: s.title || s.heading }))}
-                    onInsertAtCursor={handleInsertAtCursor}
-                    onReplaceSelection={handleReplaceSelection}
                     projectName={project?.name || document?.title || 'Project'}
                     projectContextMd={project?.context_md || undefined}
                     draftPrompt={aiDraftCommand?.prompt}
