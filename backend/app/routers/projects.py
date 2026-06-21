@@ -24,6 +24,7 @@ from app.schemas.project import (
     AiProjectOverviewResponse,
     AiContextProjectSummary,
     AiContextResponse,
+    BriefGenerateResponse,
     ProjectCreateRequest,
     ProjectSourceExclusionRequest,
     ProjectSourceExclusionResponse,
@@ -1128,6 +1129,75 @@ async def generate_project_overview(
         questions=[str(item) for item in questions[:8]],
         confidence_score=int(parsed.get("confidence_score") or 0),
     )
+
+
+@router.post("/{project_id}/brief/generate", response_model=BriefGenerateResponse)
+async def generate_project_brief(
+    project_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = await _get_project(project_id, current_user, db)
+    analysis = await get_latest_analysis(project_id, db)
+    if not analysis or analysis.status != AnalysisStatus.COMPLETED:
+        raise HTTPException(status_code=400, detail="Completed Analysis is required before generating a Project Brief.")
+
+    credential = await ai_credential_service.get_active_credential(db, current_user.id)
+    if credential is None:
+        raise HTTPException(status_code=400, detail="Active provider credential required for brief generation.")
+
+    effective_exclusions = await get_effective_exclusions(project_id, db)
+    context = _build_ai_context_response(project, analysis, effective_exclusions).model_dump(mode="json")
+    prompt = (
+        "You are generating a Project Brief for a maintainer to review and refine. "
+        "Ground every project-specific claim in the available Analysis facts below. "
+        "Do not invent features, behavior, or intent. "
+        "If important product context is missing (purpose, audience, deployment target), "
+        "list focused questions instead of guessing.\n\n"
+        "Return only valid JSON with this exact shape:\n"
+        '{\n'
+        '  "overview_md": "<structured markdown — see sections below>",\n'
+        '  "questions": ["Question 1?", "Question 2?"],\n'
+        '  "confidence_score": <0-100>\n'
+        '}\n\n'
+        "Structure overview_md with these sections (use ## headings):\n"
+        "1. **Project Purpose** — What this project does, inferred from code structure, endpoints, and files.\n"
+        "2. **Architecture & Tech Stack** — Primary languages, frameworks, key directories, and their roles.\n"
+        "3. **Key Capabilities** — Main features/modules found in the code, with file path references.\n"
+        "4. **Configuration & Setup** — Build tools, dependencies, environment requirements (from root config files).\n"
+        "5. **Development Status** — What's present vs placeholder (e.g., test directories, CI configs, stub routes).\n\n"
+        "Where facts are available, reference them (e.g., language percentages, endpoint counts, file paths). "
+        "Where facts are absent, note it as a question instead of inventing.\n\n"
+        f"AI Context:\n{json.dumps(context, indent=2)[:12000]}"
+    )
+
+    try:
+        raw = await asyncio.to_thread(
+            complete_text,
+            "You are a documentation assistant. Return only valid JSON for a grounded Project Brief.",
+            prompt,
+            credential.provider,
+            credential.api_key,
+            credential.model_id,
+            max_tokens=2500,
+        )
+    except AiServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise HTTPException(status_code=502, detail="AI returned invalid JSON for the Project Brief.") from exc
+
+    overview = str(parsed.get("overview_md") or "").strip()
+    if not overview:
+        raise HTTPException(status_code=502, detail="AI did not return a Project Brief.")
+
+    project.context_md = overview
+    project.updated_at = utcnow()
+    await db.commit()
+
+    return BriefGenerateResponse(brief_md=overview)
 
 
 @router.get("/{project_id}/analysis/outline-diff", response_model=OutlineDiffResponse)

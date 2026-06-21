@@ -934,22 +934,36 @@ def _auto_generate_project_overview_sync(project_id: int) -> None:
         }
 
         prompt = (
-            "Create a maintainer-reviewable Project Overview from the provided AI Context. "
-            "Ground every project-specific claim in the available facts. Do not invent behavior. "
-            "If important product intent is missing, list focused questions instead of filling gaps.\n\n"
-            "Return only JSON with this shape: "
-            '{"overview_md":"<markdown overview>","questions":["<question>"],"confidence_score":<0-100>}.\n\n'
+            "You are generating a Project Brief for a maintainer to review and refine. "
+            "Ground every project-specific claim in the available Analysis facts below. "
+            "Do not invent features, behavior, or intent. "
+            "If important product context is missing (purpose, audience, deployment target), "
+            "list focused questions instead of guessing.\n\n"
+            "Return only valid JSON with this exact shape:\n"
+            '{\n'
+            '  "overview_md": "<structured markdown — see sections below>",\n'
+            '  "questions": ["Question 1?", "Question 2?"],\n'
+            '  "confidence_score": <0-100>\n'
+            '}\n\n'
+            "Structure overview_md with these sections (use ## headings):\n"
+            "1. **Project Purpose** — What this project does, inferred from code structure, endpoints, and files.\n"
+            "2. **Architecture & Tech Stack** — Primary languages, frameworks, key directories, and their roles.\n"
+            "3. **Key Capabilities** — Main features/modules found in the code, with file path references.\n"
+            "4. **Configuration & Setup** — Build tools, dependencies, environment requirements (from root config files).\n"
+            "5. **Development Status** — What's present vs placeholder (e.g., test directories, CI configs, stub routes).\n\n"
+            "Where facts are available, reference them (e.g., language percentages, endpoint counts, file paths). "
+            "Where facts are absent, note it as a question instead of inventing.\n\n"
             f"AI Context:\n{json.dumps(context, indent=2)[:12000]}"
         )
 
         try:
             raw = ai_service.complete_text(
-                "Return only valid JSON for a grounded Project Overview.",
+                "You are a documentation assistant. Return only valid JSON for a grounded Project Brief.",
                 prompt,
                 credential.provider,
                 credential.api_key,
                 credential.model_id,
-                max_tokens=1800,
+                max_tokens=2500,
             )
         except Exception as exc:
             logger.warning("Failed to auto-generate project overview for project %d: %s", project_id, exc)

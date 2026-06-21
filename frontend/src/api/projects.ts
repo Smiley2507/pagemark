@@ -53,6 +53,11 @@ export const projectsApi = {
     return data;
   },
 
+  async generateBrief(id: number): Promise<{ brief_md: string }> {
+    const { data } = await apiClient.post(`/projects/${id}/brief/generate`);
+    return data;
+  },
+
   async createProject(projectData: {
     name: string;
     description?: string;

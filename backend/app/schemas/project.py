@@ -143,3 +143,7 @@ class AiProjectOverviewResponse(BaseModel):
     overview_md: str
     questions: List[str] = []
     confidence_score: int = 0
+
+
+class BriefGenerateResponse(BaseModel):
+    brief_md: str

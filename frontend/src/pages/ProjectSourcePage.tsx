@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, BookOpenText, Braces, CheckCheck, Copy, ExternalLink, FileCode, GitBranch, RefreshCw, Save, SearchCode, ShieldCheck, Trash2, Webhook } from 'lucide-react';
+import { AlertTriangle, BookOpenText, Braces, CheckCheck, Copy, ExternalLink, GitBranch, RefreshCw, Save, SearchCode, ShieldCheck, Trash2, Webhook } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { Button } from '@/components/ui/button';
@@ -64,6 +64,15 @@ export function ProjectSourcePage() {
       toast.success('Project brief updated');
     },
     onError: () => toast.error('Failed to save project brief'),
+  });
+
+  const generateBrief = useMutation({
+    mutationFn: () => projectsApi.generateBrief(Number(projectId)),
+    onSuccess: (result) => {
+      setBriefDraft(result.brief_md);
+      toast.success('Brief generated. Review and save.');
+    },
+    onError: () => toast.error('Failed to generate brief'),
   });
 
   const generateSecret = useGenerateWebhookSecret();
@@ -165,20 +174,56 @@ export function ProjectSourcePage() {
             <div className="grid gap-4 xl:grid-cols-2">
               <Surface variant="muted" padding="default" className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <FileCode className="h-4 w-4 text-text-secondary" aria-hidden="true" />
-                  <h3 className="text-body font-semibold text-text-primary">Source previews</h3>
+                  <SearchCode className="h-4 w-4 text-text-secondary" aria-hidden="true" />
+                  <h3 className="text-body font-semibold text-text-primary">Source analysis</h3>
                 </div>
-                {aiContext?.context_files_preview.length ? (
-                  <div className="space-y-2">
-                    {aiContext.context_files_preview.slice(0, 5).map((file) => (
-                      <div key={file.path} className="space-y-1">
-                        <p className="truncate text-meta font-medium text-text-primary">{file.path}</p>
-                        <pre className="max-h-20 overflow-hidden rounded bg-canvas p-2 text-[10px] text-text-secondary">{file.preview}</pre>
+                {aiContext?.analysis_summary.status === "completed" ? (
+                  <div className="space-y-4">
+                    {(aiContext.analysis_summary.largest_files as Array<{ path: string; lines: number; language?: string }>)?.length > 0 && (
+                      <div>
+                        <p className="text-meta font-medium text-text-secondary mb-2">Largest files</p>
+                        <div className="space-y-1">
+                          {(aiContext.analysis_summary.largest_files as Array<{ path: string; lines: number; language?: string }>).slice(0, 5).map((file) => (
+                            <div key={file.path} className="flex items-center justify-between gap-2 rounded bg-canvas px-2 py-1">
+                              <span className="truncate text-meta text-text-primary font-mono">{file.path}</span>
+                              <span className="shrink-0 text-meta text-text-secondary">{file.lines} lines</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    ))}
+                    )}
+                    {((aiContext.facts as Record<string, unknown>).endpoints as Array<{ method: string; path: string }>)?.length > 0 && (
+                      <div>
+                        <p className="text-meta font-medium text-text-secondary mb-2">Endpoints</p>
+                        <div className="space-y-1">
+                          {((aiContext.facts as Record<string, unknown>).endpoints as Array<{ method: string; path: string }>).slice(0, 6).map((ep, i) => (
+                            <div key={i} className="flex items-center gap-2 text-meta">
+                              <span className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase ${
+                                ep.method === 'GET' ? 'bg-green-100 text-green-800' :
+                                ep.method === 'POST' ? 'bg-blue-100 text-blue-800' :
+                                ep.method === 'PUT' || ep.method === 'PATCH' ? 'bg-amber-100 text-amber-800' :
+                                ep.method === 'DELETE' ? 'bg-red-100 text-red-800' :
+                                'bg-neutral-100 text-neutral-800'
+                              }`}>{ep.method}</span>
+                              <span className="font-mono text-text-primary truncate">{ep.path}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {((aiContext.facts as Record<string, unknown>).dependencies as Array<{ name: string }>)?.length > 0 && (
+                      <div>
+                        <p className="text-meta font-medium text-text-secondary mb-2">Dependencies</p>
+                        <div className="flex flex-wrap gap-1">
+                          {((aiContext.facts as Record<string, unknown>).dependencies as Array<{ name: string }>).slice(0, 8).map((dep, i) => (
+                            <span key={i} className="rounded bg-canvas px-2 py-0.5 text-meta text-text-secondary">{dep.name}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <p className="text-body text-text-secondary">No source file previews are available.</p>
+                  <p className="text-body text-text-secondary">Complete an analysis run to see source analysis details.</p>
                 )}
               </Surface>
 
@@ -206,16 +251,29 @@ export function ProjectSourcePage() {
                 <BookOpenText className="h-4 w-4 text-text-secondary" aria-hidden="true" />
                 <h3 className="text-body font-semibold text-text-primary">Project Brief & Corrections</h3>
               </div>
-              <Button
-                type="button"
-                size="sm"
-                className="gap-2"
-                onClick={() => saveBrief.mutate(briefDraft.trim() || null)}
-                disabled={saveBrief.isPending}
-              >
-                <Save className="h-4 w-4" />
-                Save
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="gap-2"
+                  onClick={() => generateBrief.mutate()}
+                  disabled={generateBrief.isPending}
+                >
+                  <RefreshCw className={`h-4 w-4 ${generateBrief.isPending ? 'animate-spin' : ''}`} />
+                  Regenerate with AI
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => saveBrief.mutate(briefDraft.trim() || null)}
+                  disabled={saveBrief.isPending}
+                >
+                  <Save className="h-4 w-4" />
+                  Save
+                </Button>
+              </div>
             </div>
             <textarea
               value={briefDraft}
