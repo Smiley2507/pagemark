@@ -19,7 +19,7 @@ import { useAiCredentials, useAiProviderModels } from '@/hooks/useAiCredentials'
 import { useAiStore } from '@/store/aiStore';
 import type { Section } from '@/types';
 import { DiffViewer } from './DiffViewer';
-import type { AIEditorReference, AIProposedChange, StructuralSuggestion } from '@/api/ai';
+import type { AIEditorReference, AIProposedChange, AIWorkRun, StructuralSuggestion } from '@/api/ai';
 import { proposedChangeDiffText, proposedChangePreviewText } from '@/lib/ai-proposed-change-preview';
 
 import { AiPanelHeader } from './ai/AiPanelHeader';
@@ -49,11 +49,13 @@ interface AiPanelProps {
   onOpenPalette?: () => void;
 }
 
-interface PanelTranscriptEntry {
+interface AiTurn {
   id: string;
   role: 'user' | 'assistant';
   text: string;
   tone?: 'normal' | 'error';
+  kind?: 'message' | 'clarification' | 'work_run';
+  workRun?: AIWorkRun;
 }
 
 const quickChips = [
@@ -169,11 +171,10 @@ export function AiPanel({
   const [showContextEditor, setShowContextEditor] = useState(false);
   const [contextDraft, setContextDraft] = useState(projectContextMd || '');
   const [structureSuggestions, setStructureSuggestions] = useState<StructuralSuggestion[] | null>(null);
-  const [contextAction, setContextAction] = useState<{ action: 'ask_user' | 'insufficient_context'; question: string } | null>(null);
-  const [contextActionAnswer, setContextActionAnswer] = useState('');
-  const [showPendingChanges, setShowPendingChanges] = useState(false);
-  const [transcript, setTranscript] = useState<PanelTranscriptEntry[]>([]);
-  const [returnedWorkRunChanges, setReturnedWorkRunChanges] = useState<AIProposedChange[]>([]);
+  const [turns, setTurns] = useState<AiTurn[]>([]);
+  const [pendingClarification, setPendingClarification] = useState<{ turnId: string; question: string } | null>(null);
+  const [pendingClarificationAnswer, setPendingClarificationAnswer] = useState('');
+  const [showReviewHistory, setShowReviewHistory] = useState(false);
   const consumedDraftPromptIdRef = useRef<number | null>(null);
 
   const refineSection = useRefineSection();
@@ -184,10 +185,6 @@ export function AiPanel({
   const rejectAiChange = useRejectAiProposedChange(projectId, documentId);
   const undoAiWorkRun = useUndoAiWorkRun(projectId, documentId);
   const { data: proposedChanges = [] } = useAiProposedChanges(projectId, documentId);
-  const visibleProposedChanges = [
-    ...returnedWorkRunChanges.filter((local) => !proposedChanges.some((change) => change.id === local.id)),
-    ...proposedChanges,
-  ];
   const updateProjectContext = useUpdateProjectContext(projectId);
   const { data: credentialsData, isLoading: credentialsLoading } = useAiCredentials();
   const activeCredential = credentialsData?.credentials.find((credential) => credential.is_active);
@@ -198,6 +195,13 @@ export function AiPanel({
     : activeCredential
       ? `${PROVIDER_LABELS[activeCredential.provider] || activeCredential.provider} / ${selectedModel || activeCredential.model_id}`
       : 'No active AI provider';
+
+  const turnChangeIds = new Set(
+    turns.flatMap((turn) => turn.workRun?.proposed_changes?.map((change) => change.id) ?? []),
+  );
+  const openProposedChanges = proposedChanges.filter((change) => change.status === 'proposed');
+  const detachedOpenProposedChanges = openProposedChanges.filter((change) => !turnChangeIds.has(change.id));
+  const closedProposedChanges = proposedChanges.filter((change) => change.status !== 'proposed');
 
   useEffect(() => {
     setContextDraft(projectContextMd || '');
@@ -242,10 +246,11 @@ export function AiPanel({
       ? { sectionId: promptSelection.sectionId, pos: promptSelection.to }
       : activeCursor;
     setInputValue('');
-    setTranscript((current) => [
+    const userTurnId = `user-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setTurns((current) => [
       ...current,
       {
-        id: `user-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        id: userTurnId,
         role: 'user',
         text: cleanText,
       },
@@ -304,47 +309,47 @@ export function AiPanel({
         references: structuredReferences,
         resource_ids: resourceIds,
       });
-      if (response.work_run) {
-        setReturnedWorkRunChanges((current) => {
-          const incoming = response.work_run?.proposed_changes ?? [];
-          return [
-            ...incoming,
-            ...current.filter((local) => !incoming.some((change) => change.id === local.id)),
-          ];
-        });
-        setTranscript((current) => [
+      const workRun = response.work_run;
+      if (workRun) {
+        const assistantTurnId = `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        setTurns((current) => [
           ...current,
           {
-            id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            id: assistantTurnId,
             role: 'assistant',
             text: response.message || 'AI prepared an editor action for review.',
+            kind: 'work_run',
+            workRun,
           },
         ]);
-        setShowPendingChanges(true);
         return;
       }
       if (response.action === 'ask_user' || response.action === 'insufficient_context') {
-        setContextAction({
-          action: response.action === 'insufficient_context' ? 'insufficient_context' : 'ask_user',
-          question: response.message || 'More context is needed.',
-        });
-        setTranscript((current) => [
+        const assistantTurnId = `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        setTurns((current) => [
           ...current,
           {
-            id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            id: assistantTurnId,
             role: 'assistant',
             text: response.message || 'More context is needed.',
+            kind: 'clarification',
           },
         ]);
+        setPendingClarification({
+          turnId: assistantTurnId,
+          question: response.message || 'More context is needed.',
+        });
+        setPendingClarificationAnswer('');
         return;
       }
       if (response.message) {
-        setTranscript((current) => [
+        setTurns((current) => [
           ...current,
           {
             id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
             role: 'assistant',
             text: response.message,
+            kind: 'message',
           },
         ]);
       }
@@ -352,13 +357,14 @@ export function AiPanel({
       const detail = axios.isAxiosError(error)
         ? String(error.response?.data?.detail || error.message || 'AI editor action failed')
         : error instanceof Error ? error.message : 'AI editor action failed';
-      setTranscript((current) => [
+      setTurns((current) => [
         ...current,
         {
           id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
           role: 'assistant',
           text: detail,
           tone: 'error',
+          kind: 'message',
         },
       ]);
       toast.error(detail);
@@ -548,11 +554,22 @@ export function AiPanel({
           modelName: selectedModel || activeCredential?.model_id || null,
         });
         if (data.action) {
-          setContextAction({
-            action: data.action,
-            question: data.question || 'More project context is needed before AI can safely refine this section.',
+          const assistantTurnId = `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          const question = data.question || 'More project context is needed before AI can safely refine this section.';
+          setTurns((current) => [
+            ...current,
+            {
+              id: assistantTurnId,
+              role: 'assistant',
+              text: question,
+              kind: 'clarification',
+            },
+          ]);
+          setPendingClarification({
+            turnId: assistantTurnId,
+            question,
           });
-          setContextActionAnswer('');
+          setPendingClarificationAnswer('');
           return;
         }
         await queueSectionContentChange({
@@ -566,9 +583,98 @@ export function AiPanel({
     }
   };
 
-  const hasPanelActivity = transcript.length > 0
-    || visibleProposedChanges.length > 0
-    || Boolean(contextAction)
+  const submitPendingClarification = () => {
+    if (!pendingClarification || !pendingClarificationAnswer.trim()) return;
+    const addition = pendingClarificationAnswer.trim();
+    const nextContext = [
+      contextDraft.trim(),
+      `## Correction from AI clarification\n\n${addition}`,
+    ].filter(Boolean).join('\n\n');
+    setContextDraft(nextContext);
+    updateProjectContext.mutate(nextContext);
+    setPendingClarification(null);
+    setPendingClarificationAnswer('');
+  };
+
+  const getProposedChange = useCallback((change: AIProposedChange) => {
+    return proposedChanges.find((item) => item.id === change.id) ?? change;
+  }, [proposedChanges]);
+
+  const renderTurnReview = (workRun: AIWorkRun) => {
+    const changes = workRun.proposed_changes
+      .map(getProposedChange)
+      .filter((change): change is AIProposedChange => Boolean(change));
+    if (changes.length === 0) return null;
+    return (
+      <div className="mt-3 space-y-2">
+        {changes.map((change) => (
+          <ProposedChangeCard
+            key={change.id}
+            change={change}
+            onAccept={(changeId) => acceptAiChange.mutate(changeId)}
+            onReject={(changeId) => rejectAiChange.mutate(changeId)}
+            onUndo={(runId) => undoAiWorkRun.mutate(runId)}
+            isAccepting={acceptAiChange.isPending}
+            isRejecting={rejectAiChange.isPending}
+            isUndoing={undoAiWorkRun.isPending}
+          />
+        ))}
+      </div>
+    );
+  };
+
+  const renderTurn = (turn: AiTurn) => {
+    const isUser = turn.role === 'user';
+    return (
+      <div
+        key={turn.id}
+        className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
+        data-testid={`ai-turn-${turn.role}-${turn.kind || 'message'}`}
+      >
+        <div className="max-w-[88%]">
+          <div
+            className={[
+              'whitespace-pre-wrap rounded-lg px-3 py-2 text-sm leading-relaxed',
+              isUser
+                ? 'bg-foreground text-background'
+                : turn.tone === 'error'
+                  ? 'border border-status-danger-foreground/30 bg-status-danger/10 text-text-primary'
+                  : 'border border-border bg-panel text-text-primary',
+            ].join(' ')}
+          >
+            {turn.text}
+          </div>
+          {!isUser && turn.kind === 'clarification' && pendingClarification?.turnId === turn.id && (
+            <div className="mt-2 space-y-2 rounded-lg border border-warning bg-warning/5 p-3">
+              <textarea
+                value={pendingClarificationAnswer}
+                onChange={(event) => setPendingClarificationAnswer(event.target.value)}
+                placeholder="Add the missing correction or project fact..."
+                className="w-full resize-none rounded border border-input bg-canvas px-2.5 py-1.5 text-sm placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-ring"
+                rows={3}
+              />
+              <Button
+                size="sm"
+                className="h-8 w-full text-xs"
+                onClick={submitPendingClarification}
+                disabled={updateProjectContext.isPending || !pendingClarificationAnswer.trim()}
+              >
+                {updateProjectContext.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                Save to Project Brief
+              </Button>
+            </div>
+          )}
+          {!isUser && turn.kind === 'work_run' && turn.workRun && renderTurnReview(turn.workRun)}
+        </div>
+      </div>
+    );
+  };
+
+  const hasPanelActivity = turns.length > 0
+    || detachedOpenProposedChanges.length > 0
+    || closedProposedChanges.length > 0
+    || pendingClarification !== null
+    || clarification !== null
     || structureSuggestions !== null;
 
   return (
@@ -641,81 +747,6 @@ export function AiPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {visibleProposedChanges.length > 0 && (
-          <div className="border-b border-separator px-3 py-2">
-            <button
-              type="button"
-              onClick={() => setShowPendingChanges((value) => !value)}
-              className="flex w-full items-center justify-between gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-panel-muted"
-            >
-              <span className="min-w-0">
-                <span className="block text-xs font-semibold text-text-primary">Pending changes</span>
-                <span className="block text-[10px] text-text-muted">
-                  {visibleProposedChanges.filter((change) => change.status === 'proposed').length} pending · {visibleProposedChanges.length} total
-                </span>
-              </span>
-              <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-text-muted transition-transform ${showPendingChanges ? 'rotate-180' : ''}`} />
-            </button>
-            {showPendingChanges && (
-              <div className="mt-2 space-y-2">
-                {visibleProposedChanges.slice(0, 5).map((change) => (
-                  <ProposedChangeCard
-                    key={change.id}
-                    change={change}
-                    onAccept={(changeId) => acceptAiChange.mutate(changeId)}
-                    onReject={(changeId) => rejectAiChange.mutate(changeId)}
-                    onUndo={(runId) => undoAiWorkRun.mutate(runId)}
-                    isAccepting={acceptAiChange.isPending}
-                    isRejecting={rejectAiChange.isPending}
-                    isUndoing={undoAiWorkRun.isPending}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {contextAction && (
-          <div className="mx-3 mt-3 space-y-2 rounded-lg border border-warning bg-warning/5 p-3">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-              <div className="space-y-1">
-                <p className="text-sm font-medium text-text-primary">
-                  {contextAction.action === 'insufficient_context' ? 'Insufficient source context' : 'Clarification needed'}
-                </p>
-                <p className="text-sm text-text-secondary">{contextAction.question}</p>
-              </div>
-            </div>
-            <textarea
-              value={contextActionAnswer}
-              onChange={(e) => setContextActionAnswer(e.target.value)}
-              placeholder="Add the missing correction or project fact..."
-              className="w-full resize-none rounded border border-input bg-canvas px-2.5 py-1.5 text-sm placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-ring"
-              rows={3}
-            />
-            <Button
-              size="sm"
-              className="h-8 w-full text-xs"
-              onClick={() => {
-                const addition = contextActionAnswer.trim();
-                if (!addition) return;
-                const nextContext = [
-                  contextDraft.trim(),
-                  `## Correction from AI clarification\n\n${addition}`,
-                ].filter(Boolean).join('\n\n');
-                setContextDraft(nextContext);
-                updateProjectContext.mutate(nextContext);
-                setContextAction(null);
-                setContextActionAnswer('');
-              }}
-              disabled={updateProjectContext.isPending || !contextActionAnswer.trim()}
-            >
-              {updateProjectContext.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-              Save to Project Brief
-            </Button>
-          </div>
-        )}
-
         {clarification && (
           <div className="mx-3 mt-3 space-y-2 rounded-lg border border-warning bg-warning/5 p-3">
             <div className="flex items-start gap-2">
@@ -741,27 +772,71 @@ export function AiPanel({
           </div>
         )}
 
-        {transcript.length > 0 && (
+        {turns.length > 0 && (
           <div className="space-y-2 px-3 py-3" data-testid="ai-panel-transcript">
-            {transcript.map((entry) => (
-              <div
-                key={entry.id}
-                className={`flex ${entry.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={[
-                    'max-w-[88%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm leading-relaxed',
-                    entry.role === 'user'
-                      ? 'bg-foreground text-background'
-                      : entry.tone === 'error'
-                        ? 'border border-status-danger-foreground/30 bg-status-danger/10 text-text-primary'
-                        : 'border border-border bg-panel text-text-primary',
-                  ].join(' ')}
-                >
-                  {entry.text}
-                </div>
+            {turns.map(renderTurn)}
+          </div>
+        )}
+
+        {detachedOpenProposedChanges.length > 0 && (
+          <div className="border-t border-separator px-3 py-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="text-xs font-semibold text-text-primary">Open review</h3>
+                <p className="text-[10px] text-text-muted">Queued changes not attached to the current conversation.</p>
               </div>
-            ))}
+              <span className="rounded bg-panel-muted px-2 py-1 text-[10px] text-text-muted">
+                {detachedOpenProposedChanges.length}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {detachedOpenProposedChanges.slice(0, 5).map((change) => (
+                <ProposedChangeCard
+                  key={change.id}
+                  change={change}
+                  onAccept={(changeId) => acceptAiChange.mutate(changeId)}
+                  onReject={(changeId) => rejectAiChange.mutate(changeId)}
+                  onUndo={(runId) => undoAiWorkRun.mutate(runId)}
+                  isAccepting={acceptAiChange.isPending}
+                  isRejecting={rejectAiChange.isPending}
+                  isUndoing={undoAiWorkRun.isPending}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {closedProposedChanges.length > 0 && (
+          <div className="border-t border-separator px-3 py-2">
+            <button
+              type="button"
+              onClick={() => setShowReviewHistory((value) => !value)}
+              className="flex w-full items-center justify-between gap-2 rounded-md px-1 py-1 text-left transition-colors hover:bg-panel-muted"
+            >
+              <span className="min-w-0">
+                <span className="block text-xs font-semibold text-text-primary">Review history</span>
+                <span className="block text-[10px] text-text-muted">
+                  {closedProposedChanges.length} closed changes
+                </span>
+              </span>
+              <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-text-muted transition-transform ${showReviewHistory ? 'rotate-180' : ''}`} />
+            </button>
+            {showReviewHistory && (
+              <div className="mt-2 space-y-2">
+                {closedProposedChanges.slice(0, 8).map((change) => (
+                  <ProposedChangeCard
+                    key={change.id}
+                    change={change}
+                    onAccept={(changeId) => acceptAiChange.mutate(changeId)}
+                    onReject={(changeId) => rejectAiChange.mutate(changeId)}
+                    onUndo={(runId) => undoAiWorkRun.mutate(runId)}
+                    isAccepting={acceptAiChange.isPending}
+                    isRejecting={rejectAiChange.isPending}
+                    isUndoing={undoAiWorkRun.isPending}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 

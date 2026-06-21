@@ -115,9 +115,20 @@ export interface AIChatActionRequest {
   resource_ids?: number[];
 }
 
+export type AIChatActionType =
+  | 'answer'
+  | 'ask_user'
+  | 'insufficient_context'
+  | 'insert_at_cursor'
+  | 'replace_selection'
+  | 'rewrite_section'
+  | 'append_to_section'
+  | 'rename_section'
+  | 'add_section';
+
 export interface AIChatActionResponse {
   message: string;
-  action: string;
+  action: AIChatActionType | string;
   action_payload?: {
     title?: string;
     section_id?: number;

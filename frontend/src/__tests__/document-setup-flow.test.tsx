@@ -176,7 +176,6 @@ describe('template recommendation setup UI', () => {
     render(
       <TemplateRecommendationStep
         recommendations={[ruleRecommendation, aiRecommendation]}
-        hasActiveProvider
         sourceType="github-oauth"
         onSelectTemplate={onSelectTemplate}
         onCreateCustom={vi.fn()}

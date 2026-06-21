@@ -17,8 +17,7 @@ async function sendAiPrompt(page: import('@playwright/test').Page, prompt: strin
 test('accepting proposed rewrite and add-section changes refreshes editor sections', async ({ page }) => {
   await openEditor(page);
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
-  await expect(page.getByText('Pending changes')).toBeVisible();
-  await page.getByRole('button', { name: /Pending changes/ }).click();
+  await expect(page.getByText('Open review')).toBeVisible();
 
   await page.getByTestId('ai-proposed-change-501').getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Rewritten architecture summary');
@@ -30,7 +29,7 @@ test('accepting proposed rewrite and add-section changes refreshes editor sectio
 test('reject and undo update panel state without keeping content mutations', async ({ page }) => {
   await openEditor(page);
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
-  await page.getByRole('button', { name: /Pending changes/ }).click();
+  await expect(page.getByText('Open review')).toBeVisible();
 
   await page.getByTestId('ai-proposed-change-502').getByRole('button', { name: 'Reject' }).click();
   await expect(page.getByText('add section · rejected')).toBeVisible();
@@ -50,8 +49,9 @@ test('chat action creates a reviewable add-section card', async ({ page }) => {
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
 
   await sendAiPrompt(page, 'Add a section from the latest analysis');
-  await expect(page.getByText('Queued a new section for review.')).toBeVisible();
-  const card = page.getByTestId('ai-proposed-change-600');
+  await expect(page.getByTestId('ai-turn-assistant-work_run')).toContainText('Queued a new section for review.');
+  const assistantTurn = page.getByTestId('ai-turn-assistant-work_run');
+  const card = assistantTurn.getByTestId('ai-proposed-change-600');
   await expect(card).toContainText('Add AI-created section');
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByLabel('Heading for AI Created Section')).toHaveValue('AI Created Section');
@@ -63,8 +63,10 @@ test('chat answer renders user and assistant bubbles', async ({ page }) => {
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
 
   await sendAiPrompt(page, 'What does this section explain?');
-  await expect(page.getByTestId('ai-panel-transcript')).toContainText('What does this section explain?');
-  await expect(page.getByTestId('ai-panel-transcript')).toContainText('Mock answer from editor action endpoint.');
+  const transcript = page.getByTestId('ai-panel-transcript');
+  await expect(transcript).toContainText('What does this section explain?');
+  await expect(transcript).toContainText('Mock answer from editor action endpoint.');
+  await expect(page.getByTestId('ai-turn-assistant-message')).toContainText('Mock answer from editor action endpoint.');
 });
 
 test('chat insert renders a proposed change card and mutates active editor on accept', async ({ page }) => {
@@ -73,7 +75,8 @@ test('chat insert renders a proposed change card and mutates active editor on ac
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
 
   await sendAiPrompt(page, 'Insert a lifecycle note at the cursor');
-  const card = page.getByTestId('ai-proposed-change-600');
+  const assistantTurn = page.getByTestId('ai-turn-assistant-work_run');
+  const card = assistantTurn.getByTestId('ai-proposed-change-600');
   await expect(card).toContainText('Insert lifecycle note');
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Inserted lifecycle note from AI.');
@@ -85,7 +88,8 @@ test('chat replace renders a proposed change card and uses preserved editor sele
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
 
   await sendAiPrompt(page, 'Replace the selected overview text');
-  const card = page.getByTestId('ai-proposed-change-600');
+  const assistantTurn = page.getByTestId('ai-turn-assistant-work_run');
+  const card = assistantTurn.getByTestId('ai-proposed-change-600');
   await expect(card).toContainText('Replace selected lifecycle text');
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Replacement lifecycle text from AI.');
@@ -111,7 +115,8 @@ test('slash insert command auto-submits and creates a proposed change card', asy
   await page.keyboard.type('/insert');
   await page.getByRole('button', { name: /Insert with AI/ }).click();
 
-  const card = page.getByTestId('ai-proposed-change-600');
+  const assistantTurn = page.getByTestId('ai-turn-assistant-work_run');
+  const card = assistantTurn.getByTestId('ai-proposed-change-600');
   await expect(card).toContainText('Insert lifecycle note');
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Inserted lifecycle note from AI.');
@@ -128,7 +133,8 @@ test('selection polish command auto-submits and preserves the selected range', a
   await page.mouse.up();
   await page.getByRole('button', { name: 'Polish selection' }).click();
 
-  const card = page.getByTestId('ai-proposed-change-600');
+  const assistantTurn = page.getByTestId('ai-turn-assistant-work_run');
+  const card = assistantTurn.getByTestId('ai-proposed-change-600');
   await expect(card).toContainText('Replace selected lifecycle text');
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Replacement lifecycle text from AI.');
@@ -144,7 +150,8 @@ test('right-click polish command auto-submits a replace-selection action card', 
   await expect(page.getByText('Polish phrasing')).toBeVisible();
   await page.getByText('Polish phrasing').click();
 
-  const card = page.getByTestId('ai-proposed-change-600');
+  const assistantTurn = page.getByTestId('ai-turn-assistant-work_run');
+  const card = assistantTurn.getByTestId('ai-proposed-change-600');
   await expect(card).toContainText('Replace selected lifecycle text');
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Replacement lifecycle text from AI.');
@@ -158,7 +165,7 @@ test('structural suggestions queue rename and add-with-content cards with undo',
   await expect(page.getByText('Suggested changes')).toBeVisible();
   await page.getByRole('button', { name: 'Apply all' }).click();
 
-  await page.getByRole('button', { name: /Pending changes/ }).click();
+  await expect(page.getByText('Open review')).toBeVisible();
   const renameCard = page.getByTestId('ai-proposed-change-600');
   const addCard = page.getByTestId('ai-proposed-change-601');
   await expect(renameCard).toContainText('Rename section to "System Architecture"');
