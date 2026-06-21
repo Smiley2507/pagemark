@@ -8,6 +8,7 @@ import secrets
 from datetime import datetime, timedelta
 from app.models.time import utcnow
 import re
+from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Response, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -41,6 +42,30 @@ from app.services.rate_limiter import rate_limit
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 _mail_conf: ConnectionConfig | None = None
+
+
+def _auth_cookie_kwargs() -> dict[str, object]:
+    frontend_scheme = urlparse(settings.FRONTEND_URL).scheme
+    backend_scheme = urlparse(settings.BACKEND_URL).scheme
+    secure = frontend_scheme == "https" and backend_scheme == "https"
+    return {
+        "httponly": True,
+        "secure": secure,
+        "samesite": "none" if secure else "lax",
+    }
+
+
+def _set_auth_cookie(response: Response, key: str, value: str) -> None:
+    response.set_cookie(key=key, value=value, **_auth_cookie_kwargs())
+
+
+def _delete_auth_cookie(response: Response, key: str) -> None:
+    kwargs = _auth_cookie_kwargs()
+    response.delete_cookie(
+        key,
+        secure=bool(kwargs["secure"]),
+        samesite=str(kwargs["samesite"]),
+    )
 
 
 def _get_mail_conf() -> ConnectionConfig:
@@ -183,7 +208,7 @@ async def login(request: LoginRequest, response: Response, db: AsyncSession = De
         ("access_token", auth_service.create_access_token(user.id)),
         ("refresh_token", auth_service.create_refresh_token(user.id)),
     ]:
-        response.set_cookie(key=key, value=value, httponly=True, secure=True, samesite="none")
+        _set_auth_cookie(response, key, value)
 
     return MeResponse(
         id=user.id,
@@ -198,8 +223,8 @@ async def login(request: LoginRequest, response: Response, db: AsyncSession = De
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie("access_token")
-    response.delete_cookie("refresh_token")
+    _delete_auth_cookie(response, "access_token")
+    _delete_auth_cookie(response, "refresh_token")
     return {"message": "logged out"}
 
 
@@ -211,11 +236,7 @@ async def refresh(request: Request, response: Response, db: AsyncSession = Depen
     payload = auth_service.decode_token(refresh_token)
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Invalid refresh token")
-    response.set_cookie(
-        key="access_token",
-        value=auth_service.create_access_token(int(payload.get("sub"))),
-        httponly=True, secure=True, samesite="none",
-    )
+    _set_auth_cookie(response, "access_token", auth_service.create_access_token(int(payload.get("sub"))))
     return {"message": "token refreshed"}
 
 
