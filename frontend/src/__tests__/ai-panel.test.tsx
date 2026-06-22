@@ -15,6 +15,45 @@ vi.mock('@/components/editor/ai/AiPanelHeader', () => ({
   AiPanelHeader: () => <div data-testid="ai-header" />,
 }));
 
+vi.mock('@/components/editor/ai/AiPanelTarget', () => ({
+  AiPanelTarget: ({ target }: { target: { type: string; sectionHeading: string | null } }) => (
+    <div data-testid="ai-target">{target.type}{target.sectionHeading ? `: ${target.sectionHeading}` : ''}</div>
+  ),
+}));
+
+vi.mock('@/components/editor/ai/AiPanelTranscript', () => ({
+  AiPanelTranscript: ({ turns }: { turns: { id: string; role: string; text: string }[] }) => (
+    <div data-testid="ai-panel-transcript">
+      {turns.map((t) => (
+        <div key={t.id} data-testid={`ai-turn-${t.role}`}>{t.text}</div>
+      ))}
+    </div>
+  ),
+}));
+
+vi.mock('@/components/editor/ai/AiPanelReviewQueue', () => ({
+  AiPanelReviewQueue: ({ items }: { items: { id: number; title: string }[] }) => (
+    <div data-testid="ai-review-queue">
+      {items.length > 0 && (
+        <div data-testid="review-open">
+          {items.map((item: any) => (
+            <div key={item.id} data-testid={`ai-proposed-change-${item.id}`}>{item.title}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  ),
+}));
+
+vi.mock('@/components/editor/ai/AiPanelClarification', () => ({
+  AiPanelClarification: ({ issue, onSubmit }: { issue: { message: string }; onSubmit: (a: string) => void }) => (
+    <div data-testid="ai-clarification">
+      <span data-testid="clarification-message">{issue.message}</span>
+      <button onClick={() => onSubmit('answer text')}>Submit</button>
+    </div>
+  ),
+}));
+
 vi.mock('@/components/editor/ai/AiPanelEmptyState', () => ({
   AiPanelEmptyState: () => <div data-testid="ai-empty-state" />,
 }));
@@ -47,12 +86,6 @@ vi.mock('@/components/editor/ai/AiPanelComposer', () => ({
         Send
       </button>
     </div>
-  ),
-}));
-
-vi.mock('@/components/editor/DiffViewer', () => ({
-  DiffViewer: ({ oldText, newText }: { oldText: string; newText: string }) => (
-    <div data-testid="diff-viewer">{oldText}{' -> '}{newText}</div>
   ),
 }));
 
@@ -100,6 +133,13 @@ vi.mock('@/store/aiStore', () => ({
   },
 }));
 
+vi.mock('@/api/analysis', () => ({
+  analysisApi: {
+    getClarification: vi.fn(),
+    clarifySection: vi.fn(),
+  },
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -120,8 +160,31 @@ function renderPanel() {
   );
 }
 
-describe('AI panel turns', () => {
-  it('renders a casual answer as a chat bubble', async () => {
+describe('AI panel', () => {
+  it('shows the target based on active section', () => {
+    renderPanel();
+    const target = screen.getByTestId('ai-target');
+    expect(target.textContent).toBe('section: Overview');
+  });
+
+  it('shows target type "document" when no section is active', () => {
+    render(
+      <AiPanel
+        projectId={1}
+        documentId={1}
+        activeSectionId={null}
+        activeSectionHeading={null}
+        activeSectionContent=""
+        activeSectionStatus="draft"
+        sections={[]}
+        projectName="Test"
+      />,
+    );
+    const target = screen.getByTestId('ai-target');
+    expect(target.textContent).toBe('document');
+  });
+
+  it('renders a casual answer as a chat bubble in the transcript', async () => {
     mutateAsync.mockResolvedValueOnce({
       message: 'This section explains the setup flow.',
       action: 'answer',
@@ -138,10 +201,9 @@ describe('AI panel turns', () => {
 
     expect(within(transcript).getByText('What does this section explain?')).toBeInTheDocument();
     expect(within(transcript).getByText('This section explains the setup flow.')).toBeInTheDocument();
-    expect(screen.queryByTestId('ai-proposed-change-101')).not.toBeInTheDocument();
   });
 
-  it('renders a proposed change card directly under the assistant turn that created it', async () => {
+  it('renders a work-run response as a transcript message, not embedded changes', async () => {
     mutateAsync.mockResolvedValueOnce({
       message: 'Prepared an insertion for review.',
       action: 'insert_at_cursor',
@@ -176,11 +238,44 @@ describe('AI panel turns', () => {
     fireEvent.change(screen.getByLabelText('ai prompt'), { target: { value: 'Insert a paragraph here' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    await waitFor(() => expect(screen.getByTestId('ai-turn-assistant-work_run')).toBeInTheDocument());
+    // The assistant message appears in the transcript
+    await waitFor(() => expect(screen.getByTestId('ai-panel-transcript')).toBeInTheDocument());
+    expect(screen.getByText('Prepared an insertion for review.')).toBeInTheDocument();
 
-    const assistantTurn = screen.getByTestId('ai-turn-assistant-work_run');
-    expect(within(assistantTurn).getByText('Prepared an insertion for review.')).toBeInTheDocument();
-    expect(within(assistantTurn).getByTestId('ai-proposed-change-101')).toBeInTheDocument();
-    expect(within(assistantTurn).getByText('Insert lifecycle note')).toBeInTheDocument();
+    // No proposed change card inside the transcript (they go to the review queue via React Query)
+    expect(screen.queryByTestId('ai-proposed-change-101')).not.toBeInTheDocument();
+  });
+
+  it('shows a clarification issue when AI asks for more context', async () => {
+    mutateAsync.mockResolvedValueOnce({
+      message: 'I need more details about the authentication flow.',
+      action: 'ask_user',
+      work_run: null,
+    });
+
+    renderPanel();
+
+    fireEvent.change(screen.getByLabelText('ai prompt'), { target: { value: 'Refine the auth section' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(screen.getByTestId('ai-clarification')).toBeInTheDocument());
+    expect(screen.getByText('I need more details about the authentication flow.')).toBeInTheDocument();
+  });
+
+  it('shows empty state when there is no panel activity', () => {
+    // Use a section status that doesn't trigger clarification
+    render(
+      <AiPanel
+        projectId={1}
+        documentId={1}
+        activeSectionId={null}
+        activeSectionHeading={null}
+        activeSectionContent=""
+        activeSectionStatus="draft"
+        sections={[]}
+        projectName="Test"
+      />,
+    );
+    expect(screen.getByTestId('ai-empty-state')).toBeInTheDocument();
   });
 });

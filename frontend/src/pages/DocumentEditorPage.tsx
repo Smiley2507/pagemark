@@ -25,14 +25,18 @@ import {
   Sun,
   Moon,
   Laptop,
+  Clock,
+  MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import type { Editor } from '@tiptap/core'
 import { MarkdownEditor, type MarkdownSelectionSnapshot } from '@/components/editor/MarkdownEditor';
 import { AiPanel } from '@/components/editor/AiPanel';
+import { AiPanelHistoryTab } from '@/components/editor/AiPanelHistoryTab';
+import { NotesSlideOver } from '@/components/editor/NotesSlideOver';
+import { useNotes } from '@/hooks/useNotes';
 import { ResourcePalette } from '@/components/editor/ResourcePalette';
-import { NotesPanel } from '@/components/editor/NotesPanel';
 import { QualityModal } from '@/components/editor/QualityModal';
 import { ExportModal } from '@/components/editor/ExportModal';
 import { ShareDialog } from '@/components/shared/ShareDialog';
@@ -73,7 +77,7 @@ import type { GenerationQualityWarning, Section } from '@/types';
 
 type FlatSection = Section & { depth: number };
 
-type RightTab = 'ai' | 'notes';
+type RightTab = 'ai' | 'history';
 type ThemeChoice = 'light' | 'dark' | 'system';
 type AiCommandOptions = {
   autoSubmit?: boolean;
@@ -460,6 +464,9 @@ export function DocumentEditorPage() {
   const [qualityModalOpen, setQualityModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const { data: allNotes = [] } = useNotes(pid, did, null);
+  const noteCount = allNotes.length;
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [activeEditorSectionId, setActiveEditorSectionId] = useState<number | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
@@ -924,6 +931,21 @@ export function DocumentEditorPage() {
             <span className="hidden text-xs sm:inline">Export</span>
           </Button>
 
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setNotesOpen(true)}
+            className="gap-1.5 relative"
+          >
+            <MessageSquare className="h-4 w-4" />
+            <span className="hidden text-xs sm:inline">Notes</span>
+            {!notesOpen && noteCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-500 px-1 text-[10px] font-medium text-white">
+                {noteCount > 9 ? '9+' : noteCount}
+              </span>
+            )}
+          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -1039,7 +1061,7 @@ export function DocumentEditorPage() {
                   onSaved={setLastSaved}
                   onLocalContentChange={handleLocalContentChange}
                   onAcceptReview={(sectionId) => acceptSectionReview.mutate(sectionId)}
-                  onJumpToSection={(sectionId) => { setActiveSectionId(sectionId); setRightPanelOpen(true); setRightTab('notes'); }}
+                  onJumpToSection={(sectionId) => { setActiveSectionId(sectionId); setNotesOpen(true); }}
                   onVersionHistory={setVersionHistorySectionId}
                   staleSectionMeta={staleSectionMeta}
                   onAcceptStaleness={(sectionId) => acceptFreshness.mutate(sectionId)}
@@ -1063,6 +1085,16 @@ export function DocumentEditorPage() {
           )}
         </main>
 
+        {notesOpen && (
+          <NotesSlideOver
+            projectId={pid}
+            documentId={did}
+            activeSectionId={activeSection?.id ?? null}
+            onClose={() => setNotesOpen(false)}
+            open={notesOpen}
+          />
+        )}
+
         <div className={cn(
           'flex shrink-0 border-l border-separator bg-panel transition-all duration-200',
           rightPanelOpen ? 'w-96' : 'w-10',
@@ -1084,16 +1116,16 @@ export function DocumentEditorPage() {
                     AI
                   </button>
                   <button
-                    onClick={() => setRightTab('notes')}
+                    onClick={() => setRightTab('history')}
                     className={cn(
                       'flex flex-1 items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors',
-                      rightTab === 'notes'
+                      rightTab === 'history'
                         ? 'border-b-2 border-interaction text-interaction-hover'
                         : 'text-text-muted hover:text-text-primary',
                     )}
                   >
-                    <FileText className="h-3.5 w-3.5" />
-                    Notes
+                    <Clock className="h-3.5 w-3.5" />
+                    History
                   </button>
                 </div>
                 <Button
@@ -1129,10 +1161,9 @@ export function DocumentEditorPage() {
                     onOpenPalette={() => setPaletteOpen(true)}
                   />
                 ) : (
-                  <NotesPanel
+                  <AiPanelHistoryTab
                     projectId={pid}
                     documentId={did}
-                    activeSectionId={activeSection?.id ?? null}
                   />
                 )}
               </div>
@@ -1148,12 +1179,12 @@ export function DocumentEditorPage() {
                 <Sparkles className="h-4 w-4" />
               </button>
               <button
-                onClick={() => { setRightPanelOpen(true); setRightTab('notes'); }}
+                onClick={() => { setRightPanelOpen(true); setRightTab('history'); }}
                 className="rounded p-1.5 text-text-muted transition-colors hover:bg-interaction-muted hover:text-text-primary"
-                aria-label="Open notes"
-                title="Notes"
+                aria-label="Open review history"
+                title="Review History"
               >
-                <FileText className="h-4 w-4" />
+                <Clock className="h-4 w-4" />
               </button>
             </div>
           )}
