@@ -105,6 +105,26 @@ class JoinLinkResponse(BaseModel):
         return role.name
 
 
+# ── Pending Invite ────────────────────────────────────────────────────────────
+
+class PendingInviteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    org_id: int
+    org_name: str
+    org_avatar_url: Optional[str] = None
+    role: OrgMemberRole
+    invited_by_name: Optional[str] = None
+    invited_by_email: Optional[str] = None
+    invited_at: datetime
+    expires_at: Optional[datetime] = None
+    invite_token: str
+
+    @field_serializer("role")
+    def serialize_role(self, role: OrgMemberRole) -> str:
+        return role.name
+
+
 # ── Audit Log ─────────────────────────────────────────────────────────────────
 
 class AuditLogResponse(BaseModel):

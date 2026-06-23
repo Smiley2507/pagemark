@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { FileText, FolderKanban, GitBranch, PenLine, Search, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,18 +9,24 @@ import { Surface } from '@/components/ui/surface';
 import { projectsApi } from '@/api/projects';
 import { documentsApi } from '@/api/documents';
 import { useAuthStore } from '@/store/authStore';
+import { useOrgStore } from '@/store/orgStore';
 import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
+import { orgApi } from '@/api/org';
+import type { PendingInvite } from '@/types';
 import {
   buildProjectWorkspaceSummary,
   filterProjectSummaries,
   ProjectLibrary,
 } from '@/components/workspace/project-library';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 type OverviewTab = 'recent-documents' | 'recent-projects' | 'need-review' | 'source-changes' | 'drafts';
 
 export function HomePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { setOrganizations, setActiveOrgId } = useOrgStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'active' | 'stale' | 'resume'>('all');
   const [activeOverviewTab, setActiveOverviewTab] = useState<OverviewTab>('recent-documents');
@@ -53,6 +59,27 @@ export function HomePage() {
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: () => projectsApi.getProjects({}),
+  });
+
+  const { data: pendingInvites = [] } = useQuery({
+    queryKey: ['pending-invites'],
+    queryFn: () => orgApi.listPendingInvites(),
+    refetchInterval: 30_000,
+  });
+
+  const { mutate: acceptInvite } = useMutation({
+    mutationFn: (token: string) => orgApi.acceptInvite(token),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['pending-invites'] });
+      orgApi.listOrganizations().then(setOrganizations);
+      if (data?.org_id) {
+        setActiveOrgId(data.org_id);
+      }
+      toast.success(`Joined ${data?.org_name || 'organization'} successfully`);
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail || 'Failed to accept invitation');
+    },
   });
 
   const documentQueries = useQueries({
@@ -162,6 +189,38 @@ export function HomePage() {
           <span aria-hidden="true" className="dashboard-type-cursor ml-1 inline-block h-8 w-0.5 translate-y-1 bg-text-primary" />
         </p>
       </section>
+
+      {pendingInvites.length > 0 && (
+        <section className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-5">
+          <div className="flex items-center gap-2">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">!</span>
+            <h2 className="text-title font-semibold text-amber-600 dark:text-amber-400">Pending Invitations</h2>
+          </div>
+          <div className="divide-y divide-amber-500/10">
+            {pendingInvites.map((invite) => (
+              <div key={`${invite.org_id}-${invite.invited_at}`} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0">
+                  <p className="truncate text-body font-medium text-amber-800 dark:text-amber-200">
+                    {invite.org_name}
+                  </p>
+                  <p className="text-meta text-amber-600/70 dark:text-amber-400/70">
+                    Invited by {invite.invited_by_name || invite.invited_by_email || 'someone'}
+                    {invite.expires_at && ` · Expires ${formatDate(invite.expires_at)}`}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => acceptInvite(invite.invite_token)}
+                  >
+                    Accept
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <Surface variant="panel" padding="none" className="overflow-hidden">
         <div className="border-b border-separator px-5 py-4">

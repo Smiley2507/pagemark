@@ -1,5 +1,5 @@
 import api from './client';
-import type { Organization, OrgMember, OrgJoinLink, AuditLog, OrgMemberRole } from '../types';
+import type { Organization, OrgMember, OrgJoinLink, AuditLog, OrgMemberRole, PendingInvite } from '../types';
 
 export const orgApi = {
   listOrganizations: () => 
@@ -13,6 +13,9 @@ export const orgApi = {
 
   inviteMember: (orgId: number, email: string, role: OrgMemberRole) =>
     api.post(`/organizations/${orgId}/invites`, { email, role }).then(res => res.data),
+
+  listPendingInvites: () =>
+    api.get<PendingInvite[]>('/organizations/invites/pending').then(res => res.data),
 
   acceptInvite: (token: string) =>
     api.post(`/organizations/invites/${token}/accept`).then(res => res.data),

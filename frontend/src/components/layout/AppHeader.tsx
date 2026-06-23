@@ -25,7 +25,8 @@ import { Badge } from '@/components/ui/badge';
 import { Surface } from '@/components/ui/surface';
 import { searchApi, type GlobalSearchSort, type GlobalSearchType } from '@/api/search';
 import { projectsApi, type ActivityEvent } from '@/api/projects';
-import type { SearchResult } from '@/types';
+import { orgApi } from '@/api/org';
+import type { PendingInvite, SearchResult } from '@/types';
 import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
 
 type Theme = 'light' | 'dark' | 'system';
@@ -101,6 +102,12 @@ export function AppHeader() {
     queryFn: () => projectsApi.getRecentActivity({ limit: 12, days: 30 }),
     refetchInterval: 60_000,
     staleTime: 30_000,
+  });
+
+  const { data: pendingInvites = [] as PendingInvite[] } = useQuery({
+    queryKey: ['pending-invites-header'],
+    queryFn: () => orgApi.listPendingInvites(),
+    refetchInterval: 30_000,
   });
 
   const cycleTheme = () => {
@@ -346,6 +353,9 @@ export function AppHeader() {
                 <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-danger px-1 text-meta-sm font-semibold text-status-danger-foreground">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
+              )}
+              {pendingInvites.length > 0 && !notifOpen && (
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-amber-500" />
               )}
             </Button>
             <span className="sr-only" aria-live="polite">

@@ -71,7 +71,7 @@ export const useMe = () => {
   return query;
 };
 
-export const useLogin = () => {
+export const useLogin = (redirectTo?: string) => {
   const navigate = useNavigate();
   return useMutation({
     mutationFn: authApi.login,
@@ -83,7 +83,7 @@ export const useLogin = () => {
       if (!user.is_verified) {
         navigate('/verify-email-pending');
       } else {
-        navigate('/home');
+        navigate(redirectTo || '/home');
       }
     },
     onError: (error: any) => {

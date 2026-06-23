@@ -41,7 +41,7 @@ from app.models.project import Project
 from app.schemas.organization import (
     OrganizationCreate, OrganizationResponse,
     MemberResponse, InviteMemberRequest, UpdateMemberRoleRequest,
-    JoinLinkCreateRequest, JoinLinkResponse,
+    JoinLinkCreateRequest, JoinLinkResponse, PendingInviteResponse,
     AuditLogResponse,
 )
 
@@ -388,7 +388,43 @@ async def accept_invite(
     member.invite_token_expires = None
     await _log(db, current_user.id, member.org_id, "accept_invite", f"org:{member.org_id}")
     await db.commit()
-    return {"message": "Joined organization successfully"}
+
+    org_res = await db.execute(select(Organization.name).where(Organization.id == member.org_id))
+    org_name = org_res.scalar_one_or_none()
+
+    return {"message": "Joined organization successfully", "org_id": member.org_id, "org_name": org_name}
+
+
+@router.get("/invites/pending", response_model=List[PendingInviteResponse])
+async def list_pending_invites(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    res = await db.execute(
+        select(OrganizationMember, Organization, User)
+        .join(Organization, Organization.id == OrganizationMember.org_id)
+        .join(User, User.id == OrganizationMember.invited_by, isouter=True)
+        .where(
+            OrganizationMember.user_id == current_user.id,
+            OrganizationMember.status == OrgMemberStatus.INVITED,
+            OrganizationMember.invite_token_expires > utcnow(),
+        )
+    )
+    rows = res.all()
+    result = []
+    for member, org, inviter in rows:
+        result.append(PendingInviteResponse(
+            org_id=org.id,
+            org_name=org.name,
+            org_avatar_url=org.avatar_url,
+            role=member.role,
+            invited_by_name=inviter.name if inviter else None,
+            invited_by_email=inviter.email if inviter else None,
+            invited_at=member.joined_at,
+            expires_at=member.invite_token_expires,
+            invite_token=member.invite_token,
+        ))
+    return result
 
 
 @router.get("/{org_id}/audit-logs", response_model=List[AuditLogResponse])

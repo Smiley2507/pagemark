@@ -29,13 +29,17 @@ export const OrgInvitePage: React.FC = () => {
     }
 
     orgApi.acceptInvite(token)
-      .then(async (res) => {
+      .then(async (res: any) => {
         setStatus('success');
         setMessage(res?.message || 'Joined organization successfully');
         const orgs = await orgApi.listOrganizations();
         setOrganizations(orgs);
-        const joinedOrg = orgs.find(o => !o.personal);
-        if (joinedOrg) setActiveOrgId(joinedOrg.id);
+        if (res?.org_id) {
+          setActiveOrgId(res.org_id);
+        } else {
+          const joinedOrg = orgs.find(o => !o.personal);
+          if (joinedOrg) setActiveOrgId(joinedOrg.id);
+        }
       })
       .catch((e: any) => {
         setStatus('error');
@@ -74,7 +78,7 @@ export const OrgInvitePage: React.FC = () => {
             <h2 className="text-xl font-semibold">Login Required</h2>
             <p className="text-muted-foreground">{message}</p>
             <div className="flex gap-3 mt-4">
-              <Button variant="outline" onClick={() => navigate('/login')}>
+              <Button variant="outline" onClick={() => navigate(`/login?redirect=/org/invite/${token}`)}>
                 Log In
               </Button>
               <Button onClick={() => navigate('/register')}>

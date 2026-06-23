@@ -501,6 +501,18 @@ export interface OrgMember {
   user_avatar?: string;
 }
 
+export interface PendingInvite {
+  org_id: number;
+  org_name: string;
+  org_avatar_url?: string;
+  role: OrgMemberRole;
+  invited_by_name?: string;
+  invited_by_email?: string;
+  invited_at: string;
+  expires_at?: string;
+  invite_token: string;
+}
+
 export interface OrgJoinLink {
   id: number;
   org_id: number;

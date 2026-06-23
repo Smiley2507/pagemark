@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,7 +6,9 @@ import { AuthLayout } from '@/components/layout/AuthLayout';
 import { useLogin } from '@/hooks/useAuth';
 
 export const LoginPage = () => {
-  const { mutate: login, isPending } = useLogin();
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirect') || undefined;
+  const { mutate: login, isPending } = useLogin(redirectTo);
 
   return (
     <AuthLayout
