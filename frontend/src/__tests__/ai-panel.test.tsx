@@ -123,15 +123,7 @@ vi.mock('@/hooks/useAiCredentials', () => ({
   }),
 }));
 
-vi.mock('@/store/aiStore', () => ({
-  useAiStore: {
-    getState: () => ({
-      activeMode: 'chat',
-      attachments: [],
-      removeAttachment: vi.fn(),
-    }),
-  },
-}));
+import { useAiStore } from '@/store/aiStore';
 
 vi.mock('@/api/analysis', () => ({
   analysisApi: {
@@ -142,6 +134,7 @@ vi.mock('@/api/analysis', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useAiStore.setState({ turns: [] });
 });
 
 function renderPanel() {

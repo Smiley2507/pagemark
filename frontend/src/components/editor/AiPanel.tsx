@@ -81,7 +81,6 @@ export function AiPanel({
 }: AiPanelProps) {
   // ── State ──────────────────────────────────────────────────────────────
   const [inputValue, setInputValue] = useState('');
-  const [turns, setTurns] = useState<AiTranscriptTurn[]>([]);
   const [issues, setIssues] = useState<AiIssue[]>([]);
 
   const [temperature, setTemperature] = useState(0.7);
@@ -93,6 +92,9 @@ export function AiPanel({
   const consumedDraftPromptIdRef = useRef<number | null>(null);
 
   // ── Hooks ──────────────────────────────────────────────────────────────
+  const turns = useAiStore((s) => s.turns);
+  const addTurns = useAiStore((s) => s.addTurns);
+  const clearTurns = useAiStore((s) => s.clearTurns);
   const refineSection = useRefineSection();
   const suggestStructure = useSuggestStructure();
   const createAiChatAction = useCreateAiChatAction(projectId, documentId);
@@ -205,7 +207,7 @@ export function AiPanel({
       role: 'user',
       text: cleanText,
     };
-    setTurns((current) => [...current, userTurn]);
+    addTurns((current) => [...current, userTurn]);
 
     const { attachments, removeAttachment } = useAiStore.getState();
     const transientItems = attachments.filter((a) => a.type === 'transient');
@@ -250,7 +252,7 @@ export function AiPanel({
 
       if (workRun) {
         const msg = response.message || 'AI proposed changes for review.';
-        setTurns((current) => [
+        addTurns((current) => [
           ...current,
           {
             id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -276,7 +278,7 @@ export function AiPanel({
       }
 
       if (response.message) {
-        setTurns((current) => [
+        addTurns((current) => [
           ...current,
           {
             id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -291,7 +293,7 @@ export function AiPanel({
             ? error.response.data.detail
             : JSON.stringify(error.response?.data?.detail) || error.message || 'AI editor action failed')
         : error instanceof Error ? error.message : 'AI editor action failed';
-      setTurns((current) => [
+      addTurns((current) => [
         ...current,
         {
           id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -553,7 +555,7 @@ export function AiPanel({
           />
         )}
 
-        <AiPanelTranscript turns={turns} />
+        <AiPanelTranscript turns={turns} onClear={clearTurns} />
 
         <AiPanelReviewQueue
           items={openReviewItems}

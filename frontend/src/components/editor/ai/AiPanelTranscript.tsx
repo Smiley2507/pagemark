@@ -1,18 +1,32 @@
+import { Trash2 } from 'lucide-react';
+import { Tooltip } from '@/components/ui/tooltip';
 import type { AiTranscriptTurn } from '@/lib/ai-panel-types';
 
 interface AiPanelTranscriptProps {
   turns: AiTranscriptTurn[];
+  onClear?: () => void;
 }
 
-export function AiPanelTranscript({ turns }: AiPanelTranscriptProps) {
+export function AiPanelTranscript({ turns, onClear }: AiPanelTranscriptProps) {
   if (turns.length === 0) return null;
 
   return (
     <div data-testid="ai-panel-transcript">
-      <div className="sticky top-0 z-10 bg-panel/90 px-3 pb-1 pt-2 backdrop-blur-sm">
+      <div className="sticky top-0 z-10 flex items-center justify-between bg-panel/90 px-3 pb-1 pt-2 backdrop-blur-sm">
         <span className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
           Conversation
         </span>
+        {onClear && (
+          <Tooltip content="Clear conversation">
+            <button
+              onClick={onClear}
+              className="rounded p-1 text-text-muted transition-colors hover:bg-panel-muted hover:text-text-primary"
+              aria-label="Clear conversation"
+            >
+              <Trash2 size={14} />
+            </button>
+          </Tooltip>
+        )}
       </div>
       <div className="space-y-2 px-3 pb-2">
         {turns.map((turn) => {

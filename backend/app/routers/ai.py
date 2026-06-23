@@ -251,8 +251,9 @@ async def generate_section(
 
 # ── POST /sections/{id}/ai/refine ───────────────────────────────
 
-class RefineRequest(SendMessageRequest):
+class RefineRequest(BaseModel):
     instruction: str
+    model_name: str | None = None
 
 
 @router.post("/sections/{section_id}/ai/refine")
@@ -278,9 +279,10 @@ async def refine_section(
 
 # ── POST /sections/{id}/ai/accept ───────────────────────────────
 
-class AcceptRefineRequest(SendMessageRequest):
+class AcceptRefineRequest(BaseModel):
     refined_content: str
     instruction: str = ""
+    model_name: str | None = None
 
 
 @router.post("/sections/{section_id}/ai/accept", response_model=SectionResponse)

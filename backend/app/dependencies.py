@@ -1,4 +1,4 @@
-from typing import List, Callable
+from typing import List, Callable, Optional
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -9,7 +9,7 @@ from app.models.organization import Organization, OrganizationMember, OrgMemberR
 from app.models.project import Project
 from app.models.document import Document, Section
 from app.models.document_share import DocumentShare, DocumentSharePermission
-from app.services import auth_service
+from app.services import auth_service, admin_auth_service
 
 
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
@@ -27,6 +27,9 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
 
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    if user.is_suspended:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account suspended")
 
     return user
 
@@ -245,3 +248,37 @@ def require_document_permission(required_permission: str) -> Callable:
         return document
 
     return _check
+
+
+async def require_superuser(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Dependency that requires a valid admin Bearer token in the Authorization header
+    AND that the user is a superuser (not suspended).
+    Returns the User if all checks pass.
+    """
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin authentication required")
+
+    token = auth_header.removeprefix("Bearer ")
+    payload = admin_auth_service.decode_admin_token(token)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired admin token")
+
+    user_id = payload.get("sub")
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    if not user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a superuser")
+
+    if user.is_suspended:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account suspended")
+
+    return user

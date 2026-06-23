@@ -13,6 +13,8 @@ const queryClient = new QueryClient();
 import { useOrgStore } from './store/orgStore';
 import { orgApi } from './api/org';
 import { MainLayout } from './components/layout/MainLayout';
+import { AdminGuard } from './components/admin/AdminGuard';
+import { AdminLayout } from './components/admin/AdminLayout';
 import { collaborationApi } from './api/collaboration';
 
 const LandingPage = React.lazy(() => import('./pages/LandingPage').then((m) => ({ default: m.LandingPage })));
@@ -39,6 +41,14 @@ const ProjectActivityPage = React.lazy(() => import('./pages/ProjectActivityPage
 const DocumentEditorPage = React.lazy(() => import('./pages/DocumentEditorPage').then((m) => ({ default: m.DocumentEditorPage })));
 const ProjectSettingsPage = React.lazy(() => import('./pages/ProjectSettingsPage').then((m) => ({ default: m.ProjectSettingsPage })));
 const MembersPage = React.lazy(() => import('./pages/MembersPage').then((m) => ({ default: m.MembersPage })));
+const AdminLoginPage = React.lazy(() => import('./pages/admin/AdminLoginPage').then((m) => ({ default: m.AdminLoginPage })));
+const AdminRequestSignupPage = React.lazy(() => import('./pages/admin/AdminRequestSignupPage').then((m) => ({ default: m.AdminRequestSignupPage })));
+const AdminDashboardPage = React.lazy(() => import('./pages/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
+const AdminUsersPage = React.lazy(() => import('./pages/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })));
+const AdminOrganizationsPage = React.lazy(() => import('./pages/admin/AdminOrganizationsPage').then((m) => ({ default: m.AdminOrganizationsPage })));
+const AdminActivityPage = React.lazy(() => import('./pages/admin/AdminActivityPage').then((m) => ({ default: m.AdminActivityPage })));
+const AdminSettingsPage = React.lazy(() => import('./pages/admin/AdminSettingsPage').then((m) => ({ default: m.AdminSettingsPage })));
+const AdminPendingPage = React.lazy(() => import('./pages/admin/AdminPendingPage').then((m) => ({ default: m.AdminPendingPage })));
 
 const PageFallback = () => (
   <div className="flex min-h-screen w-full items-center justify-center bg-background">
@@ -96,6 +106,20 @@ const AppRoutes = () => {
   return (
     <React.Suspense fallback={<PageFallback />}>
       <Routes>
+        {/* Admin routes (separate auth via OTP + Bearer token) — MUST be before catch-all */}
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path="/admin/request-signup" element={<AdminRequestSignupPage />} />
+        <Route element={<AdminGuard />}>
+          <Route element={<AdminLayout />}>
+            <Route path="/admin" element={<AdminDashboardPage />} />
+            <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/admin/organizations" element={<AdminOrganizationsPage />} />
+            <Route path="/admin/activity" element={<AdminActivityPage />} />
+            <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            <Route path="/admin/pending-admins" element={<AdminPendingPage />} />
+          </Route>
+        </Route>
+
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />

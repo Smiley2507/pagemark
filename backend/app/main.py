@@ -1,7 +1,8 @@
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.future import select
 
@@ -92,6 +93,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    origin = request.headers.get("origin")
+    headers = {}
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Access-Control-Expose-Headers"] = "*"
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {type(exc).__name__}. Check server logs for details."},
+        headers=headers or None,
+    )
+
+
 app.include_router(auth.router)
 app.include_router(search_router.router)
 app.include_router(projects.router)
@@ -115,6 +132,8 @@ app.include_router(shares_router.router)
 app.include_router(resources_router.router)
 app.include_router(context_search_router.router)
 app.include_router(webhooks_router.router)
+from app.routers import admin as admin_router
+app.include_router(admin_router.router)
 
 app.mount("/static", StaticFiles(directory=settings.UPLOAD_DIR), name="static")
 
