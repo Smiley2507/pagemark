@@ -12,6 +12,24 @@ class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
+class LoginResponse(BaseModel):
+    requires_otp: bool = False
+    user: Optional["MeResponse"] = None
+    message: Optional[str] = None
+
+class VerifyMfaRequest(BaseModel):
+    email: EmailStr
+    code: str
+
+class MfaSettingsResponse(BaseModel):
+    mfa_enabled: bool
+
+class MfaEnableRequest(BaseModel):
+    pass
+
+class MfaVerifyEnableRequest(BaseModel):
+    code: str
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 

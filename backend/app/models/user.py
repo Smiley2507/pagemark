@@ -45,6 +45,7 @@ class UserSettings(Base):
     notifications_json = Column(Text, nullable=True) # Store as JSON string or use JSON type if available
     language = Column(String, default="en")
     theme = Column(String, default="system")
+    mfa_enabled = Column(Boolean, default=False)
 
     # For forgot-password functionality
     reset_token = Column(String, nullable=True, index=True)
@@ -55,3 +56,17 @@ class UserSettings(Base):
     verification_token_expires = Column(DateTime, nullable=True)
 
     user = relationship("User", back_populates="settings")
+
+
+class UserOtpCode(Base):
+    __tablename__ = "user_otp_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    code_hash = Column(String, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False, nullable=False)
+    purpose = Column(String, nullable=True, default="login")
+    created_at = Column(DateTime, default=utcnow)
+
+    user = relationship("User")

@@ -1,4 +1,7 @@
 import time
+import hashlib
+import hmac
+import secrets
 from datetime import datetime, timedelta
 from app.models.time import utcnow
 from typing import Optional, Dict
@@ -39,3 +42,15 @@ def decode_token(token: str) -> Dict:
         return payload
     except JWTError:
         return None
+
+
+def generate_otp(length: int = 6) -> str:
+    return str(secrets.randbelow(10**length)).zfill(length)
+
+
+def hash_otp(code: str) -> str:
+    return hashlib.sha256(code.encode()).hexdigest()
+
+
+def verify_otp(code: str, code_hash: str) -> bool:
+    return hmac.compare_digest(hash_otp(code), code_hash)

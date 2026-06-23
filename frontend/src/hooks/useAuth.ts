@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { authApi } from '@/api/auth';
@@ -73,23 +73,71 @@ export const useMe = () => {
 
 export const useLogin = (redirectTo?: string) => {
   const navigate = useNavigate();
-  return useMutation({
+  const queryClient = useQueryClient();
+  const [mfaEmail, setMfaEmail] = useState<string | null>(null);
+  const [requiresMfa, setRequiresMfa] = useState(false);
+  const [loginMessage, setLoginMessage] = useState<string | null>(null);
+
+  const loginMutation = useMutation({
     mutationFn: authApi.login,
-    onSuccess: (user) => {
-      useAuthStore.getState().setUser(user);
-      if (user.is_first_login) {
-        useAuthStore.getState().setShowWelcome(true);
+    onSuccess: (res) => {
+      if (res.requires_otp) {
+        setMfaEmail(res.message ? null : null);
+        setRequiresMfa(true);
+        setLoginMessage(res.message || 'Verification code sent to your email');
+        return;
       }
-      if (!user.is_verified) {
-        navigate('/verify-email-pending');
-      } else {
-        navigate(redirectTo || '/home');
+      if (res.user) {
+        useAuthStore.getState().setUser(res.user);
+        if (res.user.is_first_login) {
+          useAuthStore.getState().setShowWelcome(true);
+        }
+        if (!res.user.is_verified) {
+          navigate('/verify-email-pending');
+        } else {
+          navigate(redirectTo || '/home');
+        }
       }
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || error.response?.data?.message || 'Login failed');
     },
   });
+
+  const verifyMfaMutation = useMutation({
+    mutationFn: ({ email, code }: { email: string; code: string }) =>
+      authApi.verifyMfa(email, code),
+    onSuccess: (user) => {
+      useAuthStore.getState().setUser(user);
+      setRequiresMfa(false);
+      setMfaEmail(null);
+      setLoginMessage(null);
+      if (user.is_first_login) {
+        useAuthStore.getState().setShowWelcome(true);
+      }
+      navigate(redirectTo || '/home');
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Invalid verification code');
+    },
+  });
+
+  const clearMfa = () => {
+    setRequiresMfa(false);
+    setMfaEmail(null);
+    setLoginMessage(null);
+  };
+
+  return {
+    login: loginMutation.mutate,
+    verifyMfa: verifyMfaMutation.mutate,
+    requiresMfa,
+    mfaEmail,
+    loginMessage,
+    clearMfa,
+    isPending: loginMutation.isPending,
+    isVerifying: verifyMfaMutation.isPending,
+  };
 };
 
 export const useRegister = () => {

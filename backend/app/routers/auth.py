@@ -17,10 +17,10 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 
 from app.database import get_db
 from app.config import settings
-from app.models.user import User, UserRole, UserSettings, RoleEnum
+from app.models.user import User, UserRole, UserSettings, UserOtpCode, RoleEnum
 from app.models.organization import Organization, OrganizationMember, OrgMemberRole, OrgMemberStatus
 from app.models.audit import AuditLog
-from app.schemas.auth import RegisterRequest, LoginRequest, MeResponse, UpdateMeRequest, ForgotPasswordRequest, ResetPasswordRequest
+from app.schemas.auth import RegisterRequest, LoginRequest, LoginResponse, VerifyMfaRequest, MfaSettingsResponse, MfaEnableRequest, MfaVerifyEnableRequest, MeResponse, UpdateMeRequest, ForgotPasswordRequest, ResetPasswordRequest
 from app.services import auth_service
 from app.dependencies import get_current_user
 from fastapi.responses import RedirectResponse
@@ -189,7 +189,19 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
 
 # ── Login ─────────────────────────────────────────────────────────────────────
 
-@router.post("/login", response_model=MeResponse)
+async def _send_otp_email(email: str, code: str):
+    await _send_email(
+        "Your Pagemark verification code",
+        email,
+        f"<h2>Your verification code</h2>"
+        f"<p style='font-size:24px;letter-spacing:6px;font-weight:bold;text-align:center;"
+        f"background:#f4f4f5;padding:16px;border-radius:8px;'>{code}</p>"
+        f"<p>This code expires in 5 minutes.</p>"
+        f"<p style='color:#888;font-size:12px;'>If you didn't request this, you can ignore this email.</p>",
+    )
+
+
+@router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest, response: Response, db: AsyncSession = Depends(get_db), _: None = rate_limit(10, 60)):
     result = await db.execute(select(User).where(User.email == request.email))
     user = result.scalar_one_or_none()
@@ -199,6 +211,72 @@ async def login(request: LoginRequest, response: Response, db: AsyncSession = De
 
     if not user.is_verified:
         raise HTTPException(status_code=401, detail="Email not verified")
+
+    settings_res = await db.execute(select(UserSettings).where(UserSettings.user_id == user.id))
+    us = settings_res.scalar_one_or_none()
+
+    if us and us.mfa_enabled:
+        code = auth_service.generate_otp()
+        code_hash = auth_service.hash_otp(code)
+        db.add(UserOtpCode(
+            user_id=user.id,
+            code_hash=code_hash,
+            expires_at=utcnow() + timedelta(minutes=5),
+            purpose="login",
+        ))
+        await db.commit()
+        try:
+            await _send_otp_email(user.email, code)
+        except Exception:
+            logger = logging.getLogger(__name__)
+            logger.warning("Failed to send OTP email to %s", user.email)
+        return LoginResponse(requires_otp=True, message="Verification code sent to your email")
+
+    is_first_login = user.login_count == 0
+    user.login_count += 1
+    await db.commit()
+
+    for key, value in [
+        ("access_token", auth_service.create_access_token(user.id)),
+        ("refresh_token", auth_service.create_refresh_token(user.id)),
+    ]:
+        _set_auth_cookie(response, key, value)
+
+    return LoginResponse(
+        requires_otp=False,
+        user=MeResponse(
+            id=user.id,
+            email=user.email,
+            name=user.name,
+            avatar_url=user.avatar_url,
+            is_verified=user.is_verified,
+            is_first_login=is_first_login,
+            created_at=user.created_at,
+        ),
+    )
+
+
+@router.post("/verify-mfa", response_model=MeResponse)
+async def verify_mfa(body: VerifyMfaRequest, response: Response, db: AsyncSession = Depends(get_db), _: None = rate_limit(5, 60)):
+    result = await db.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    otp_res = await db.execute(
+        select(UserOtpCode)
+        .where(
+            UserOtpCode.user_id == user.id,
+            UserOtpCode.used == False,
+            UserOtpCode.expires_at > utcnow(),
+        )
+        .order_by(UserOtpCode.created_at.desc())
+    )
+    otp_code = otp_res.scalar_one_or_none()
+    if not otp_code or not auth_service.verify_otp(body.code, otp_code.code_hash):
+        raise HTTPException(status_code=401, detail="Invalid or expired verification code")
+
+    otp_code.used = True
 
     is_first_login = user.login_count == 0
     user.login_count += 1
@@ -256,6 +334,88 @@ async def update_me(body: UpdateMeRequest, current_user: User = Depends(get_curr
     await db.commit()
     await db.refresh(current_user)
     return current_user
+
+
+@router.get("/me/mfa", response_model=MfaSettingsResponse)
+async def get_mfa_settings(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    res = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
+    us = res.scalar_one_or_none()
+    return MfaSettingsResponse(mfa_enabled=us.mfa_enabled if us else False)
+
+
+@router.post("/me/mfa/enable", response_model=dict)
+async def enable_mfa_start(
+    body: MfaEnableRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = rate_limit(3, 60),
+):
+    code = auth_service.generate_otp()
+    code_hash = auth_service.hash_otp(code)
+    db.add(UserOtpCode(
+        user_id=current_user.id,
+        code_hash=code_hash,
+        expires_at=utcnow() + timedelta(minutes=5),
+        purpose="enable_mfa",
+    ))
+    await db.commit()
+    try:
+        await _send_otp_email(current_user.email, code)
+    except Exception:
+        logger = logging.getLogger(__name__)
+        logger.warning("Failed to send MFA enable OTP to %s", current_user.email)
+    return {"message": "Verification code sent to your email"}
+
+
+@router.post("/me/mfa/verify-enable", response_model=MfaSettingsResponse)
+async def enable_mfa_verify(
+    body: MfaVerifyEnableRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    _: None = rate_limit(5, 60),
+):
+    otp_res = await db.execute(
+        select(UserOtpCode)
+        .where(
+            UserOtpCode.user_id == current_user.id,
+            UserOtpCode.used == False,
+            UserOtpCode.expires_at > utcnow(),
+            UserOtpCode.purpose == "enable_mfa",
+        )
+        .order_by(UserOtpCode.created_at.desc())
+    )
+    otp_code = otp_res.scalar_one_or_none()
+    if not otp_code or not auth_service.verify_otp(body.code, otp_code.code_hash):
+        raise HTTPException(status_code=401, detail="Invalid or expired verification code")
+
+    otp_code.used = True
+
+    res = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
+    us = res.scalar_one_or_none()
+    if not us:
+        us = UserSettings(user_id=current_user.id)
+        db.add(us)
+    us.mfa_enabled = True
+    await db.commit()
+    return MfaSettingsResponse(mfa_enabled=True)
+
+
+@router.post("/me/mfa/disable", response_model=MfaSettingsResponse)
+async def disable_mfa(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    res = await db.execute(select(UserSettings).where(UserSettings.user_id == current_user.id))
+    us = res.scalar_one_or_none()
+    if not us:
+        us = UserSettings(user_id=current_user.id)
+        db.add(us)
+    us.mfa_enabled = False
+    await db.commit()
+    return MfaSettingsResponse(mfa_enabled=False)
 
 
 @router.post("/forgot-password")
