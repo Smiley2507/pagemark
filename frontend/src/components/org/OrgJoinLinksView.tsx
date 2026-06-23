@@ -283,7 +283,7 @@ export const OrgJoinLinksView: React.FC = () => {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                className="h-8 w-8 p-0 text-amber-500 hover:text-amber-600 dark:text-amber-400 dark:hover:text-amber-300"
                                 onClick={() => revokeMutation.mutate(link.id)}
                                 title="Revoke link"
                               >
@@ -293,7 +293,7 @@ export const OrgJoinLinksView: React.FC = () => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              className="h-8 w-8 p-0 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
                               onClick={() => setDeleteTarget(link)}
                               title="Delete link"
                             >
