@@ -230,10 +230,15 @@ def _build_css(s: dict) -> str:
         elif text:
             parts.append(f'"{escape(str(text))}"')
         if logo_url and add_logo:
-            parts.append(f'url("{logo_url}")')
+            parts.append("element(pageLogo)")
         if not parts:
             return "content: none;"
         return f"content: {' '.join(parts)};"
+
+    def _mc_first(add_logo: bool) -> str:
+        if logo_url and add_logo:
+            return "content: element(pageLogo);"
+        return "content: none;"
 
     # ── Headers in @page ──
     top_left = _mc(header_left, logo_pos == "header-left")
@@ -255,6 +260,13 @@ def _build_css(s: dict) -> str:
     bottom_left = _mc(footer_left, logo_pos == "footer-left", pn if pn_pos == "bottom-left" else "")
     bottom_center = _mc(footer_center, logo_pos == "footer-center", pn if pn_pos in ("bottom-center", "center", "") else "")
     bottom_right = _mc(footer_right, logo_pos == "footer-right", pn if pn_pos == "bottom-right" else "")
+
+    top_left_first = _mc_first(logo_pos == "header-left")
+    top_center_first = _mc_first(logo_pos == "header-center")
+    top_right_first = _mc_first(logo_pos == "header-right")
+    bottom_left_first = _mc_first(logo_pos == "footer-left")
+    bottom_center_first = _mc_first(logo_pos == "footer-center")
+    bottom_right_first = _mc_first(logo_pos == "footer-right")
 
     # ── Table style variants ──
     if table_style == "minimal":
@@ -344,13 +356,15 @@ def _build_css(s: dict) -> str:
   @bottom-right {{ {bottom_right} font-family:var(--font-family); font-size:8pt; color:{muted_c}; }}
 }}
 
+#page-logo-runner {{ position: running(pageLogo); }}
+
 @page :first {{
-  @top-left {{ content:none; }}
-  @top-center {{ content:none; }}
-  @top-right {{ content:none; }}
-  @bottom-left {{ content:none; }}
-  @bottom-center {{ content:none; }}
-  @bottom-right {{ content:none; }}
+  @top-left {{ {top_left_first} }}
+  @top-center {{ {top_center_first} }}
+  @top-right {{ {top_right_first} }}
+  @bottom-left {{ {bottom_left_first} }}
+  @bottom-center {{ {bottom_center_first} }}
+  @bottom-right {{ {bottom_right_first} }}
 }}
 
 * {{ box-sizing:border-box; }}
@@ -568,6 +582,14 @@ def export_html(
         body_parts.append(toc)
 
     body_parts.append(_render_sections(sections))
+
+    # ── Running element for logo in margin boxes ──
+    logo_url_raw = s.get("logo_url") or s.get("logo_path")
+    logo_pos = _logo_position(s)
+    if logo_url_raw and logo_pos not in ("none", "title-page"):
+        logo_src = _resolve_logo_src(str(logo_url_raw))
+        logo_h = s.get("logo_height", "48px")
+        body_parts.append(f'<div id="page-logo-runner"><img src="{escape(logo_src)}" alt="Logo" style="height:{logo_h};" /></div>')
 
     css = _build_css(s)
     body = "\n".join(body_parts)

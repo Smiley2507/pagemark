@@ -295,10 +295,22 @@ class TestHtmlExport:
         assert "<img" in result
 
     def test_first_page_no_header_footer(self, sample_sections):
-        """The cover page should suppress headers/footers via @page :first."""
+        """The cover page should suppress headers/footers (but not logo) via @page :first."""
         result = export_html(sample_sections, "Proj", "Doc")
         assert "@page :first" in result
         assert result.index("@page {\n  size:") < result.index("@page :first")
+        assert "content: none;" in result[result.index("@page :first"):]
+
+    def test_logo_on_first_page(self, sample_sections):
+        """The @page :first block should preserve the logo but suppress text/page-num."""
+        result = export_html(sample_sections, "Proj", "Doc", {
+            "logo_url": "https://example.com/logo.png",
+            "logo_position": "header-right",
+            "include_page_numbers": False,
+        })
+        first_section = result[result.index("@page :first"):result.index("@page :first") + 300]
+        assert 'content: element(pageLogo);' in first_section
+        assert 'content: none;' in first_section
 
     def test_page_box_margins_and_header_footer_zones(self, sample_sections):
         result = export_html(sample_sections, "Proj", "Doc", {
@@ -348,7 +360,9 @@ class TestHtmlExport:
             "logo_position": "header-right",
             "include_page_numbers": False,
         })
-        assert '@top-right { content: url("https://example.com/logo.png");' in header
+        assert '@top-right { content: element(pageLogo);' in header
+        assert 'id="page-logo-runner"' in header
+        assert 'style="height:48px;"' in header
         assert 'page-header-logo' not in header
 
         footer = export_html(sample_sections, "Proj", "Doc", {
@@ -356,7 +370,8 @@ class TestHtmlExport:
             "logo_position": "footer-center",
             "include_page_numbers": False,
         })
-        assert '@bottom-center { content: url("https://example.com/logo.png");' in footer
+        assert '@bottom-center { content: element(pageLogo);' in footer
+        assert 'id="page-logo-runner"' in footer
         assert 'page-footer-logo' not in footer
 
     def test_no_h1_underline_unless_profile_selects_it(self, sample_sections):
