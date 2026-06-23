@@ -219,36 +219,42 @@ def _build_css(s: dict) -> str:
 
     watermark = s.get("watermark_text", "")
 
+    # ── Logo in page margin boxes ──
+    logo_url = _resolve_logo_src(s.get("logo_url", "")) if s.get("logo_url") else None
+    logo_pos = _logo_position(s)
+
+    def _mc(text: str, add_logo: bool, page_num: str = "") -> str:
+        parts = []
+        if page_num:
+            parts.append(page_num)
+        elif text:
+            parts.append(f'"{escape(str(text))}"')
+        if logo_url and add_logo:
+            parts.append(f'url("{logo_url}")')
+        if not parts:
+            return "content: none;"
+        return f"content: {' '.join(parts)};"
+
     # ── Headers in @page ──
-    top_left = f'content: "{escape(str(header_left))}";' if header_left else "content: none;"
-    top_center = f'content: "{escape(str(header_center))}";' if header_center else "content: none;"
-    top_right = f'content: "{escape(str(header_right))}";' if header_right else "content: none;"
+    top_left = _mc(header_left, logo_pos == "header-left")
+    top_center = _mc(header_center, logo_pos == "header-center")
+    top_right = _mc(header_right, logo_pos == "header-right")
 
     # ── Footer / page numbers ──
+    pn = ""
     if include_pn:
         if pn_fmt == "page-n-of-m":
-            pn_content = '"Page " counter(page) " of " counter(pages)'
+            pn = '"Page " counter(page) " of " counter(pages)'
         elif pn_fmt == "page-n":
-            pn_content = '"Page " counter(page)'
+            pn = '"Page " counter(page)'
+        elif isinstance(include_pn, str):
+            pn = f'"{escape(str(include_pn))}"'
         else:
-            pn_content = f'"{escape(str(include_pn))}"' if isinstance(include_pn, str) else 'counter(page)'
-        bottom_left = (
-            f'content: "{escape(str(footer_left))}";' if footer_left else "content: none;"
-        )
-        bottom_center = (
-            f"content: {pn_content};" if pn_pos in ("bottom-center", "center", "") else "content: none;"
-        )
-        bottom_right = (
-            f'content: "{escape(str(footer_right))}";' if footer_right else "content: none;"
-        )
-        if pn_pos == "bottom-left":
-            bottom_left = f"content: {pn_content};"
-        elif pn_pos == "bottom-right":
-            bottom_right = f"content: {pn_content};"
-    else:
-        bottom_left = f'content: "{escape(str(footer_left))}";' if footer_left else "content: none;"
-        bottom_center = f'content: "{escape(str(footer_center))}";' if footer_center else "content: none;"
-        bottom_right = f'content: "{escape(str(footer_right))}";' if footer_right else "content: none;"
+            pn = "counter(page)"
+
+    bottom_left = _mc(footer_left, logo_pos == "footer-left", pn if pn_pos == "bottom-left" else "")
+    bottom_center = _mc(footer_center, logo_pos == "footer-center", pn if pn_pos in ("bottom-center", "center", "") else "")
+    bottom_right = _mc(footer_right, logo_pos == "footer-right", pn if pn_pos == "bottom-right" else "")
 
     # ── Table style variants ──
     if table_style == "minimal":
@@ -535,65 +541,9 @@ hr {{
 .page-break-after {{ page-break-after:always; }}
 .page-break-before {{ page-break-before:always; }}
 
-/* ── Per-page header/footer logo ── */
-.page-header-logo,
-.page-footer-logo {{
-  position:fixed;
-  z-index:1000;
-  pointer-events:none;
-}}
-.page-header-logo {{ top:0; }}
-.page-footer-logo {{ bottom:0; }}
-.page-header-logo.left,
-.page-footer-logo.left {{ left:10px; }}
-.page-header-logo.center,
-.page-footer-logo.center {{ left:50%; transform:translateX(-50%); }}
-.page-header-logo.right,
-.page-footer-logo.right {{ right:10px; }}
-
 /* ── Watermark ── */
 {"body::after { content: ''; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 80pt; color: rgba(0,0,0,0.04); white-space: nowrap; pointer-events: none; z-index: 9999; }" if watermark else ""}
 """
-
-
-# ── Per-page header/footer logo ──────────────────────────────
-
-_HEADER_ALIGN_MAP = {
-    "header-left": "left",
-    "header-center": "center",
-    "header-right": "right",
-    "footer-left": "left",
-    "footer-center": "center",
-    "footer-right": "right",
-}
-
-_PAGE_ZONE_MAP = {
-    "header-left": "header",
-    "header-center": "header",
-    "header-right": "header",
-    "footer-left": "footer",
-    "footer-center": "footer",
-    "footer-right": "footer",
-}
-
-
-def _page_logo_zone(settings: dict) -> str:
-    pos = _logo_position(settings)
-    if pos == "none" or pos == "title-page":
-        return ""
-    return _PAGE_ZONE_MAP.get(pos, "")
-
-
-def _render_page_logo(settings: dict) -> str:
-    zone = _page_logo_zone(settings)
-    if not zone:
-        return ""
-    img = _logo_img_tag(settings)
-    if not img:
-        return ""
-    pos = _logo_position(settings)
-    align = _HEADER_ALIGN_MAP.get(pos, "left")
-    return f'<div class="page-{zone}-logo {align}">{img}</div>'
 
 
 # ── Full HTML document ────────────────────────────────────────
@@ -619,21 +569,8 @@ def export_html(
 
     body_parts.append(_render_sections(sections))
 
-    page_logo = _render_page_logo(s)
-    if page_logo:
-        body_parts.append(page_logo)
-
     css = _build_css(s)
     body = "\n".join(body_parts)
-
-    zone = _page_logo_zone(s)
-    body_style = ""
-    margin_top_value = s.get("margin_top", "25mm")
-    margin_bottom_value = s.get("margin_bottom", "22mm")
-    if zone == "header":
-        body_style = f' style="padding-top:{margin_top_value}"'
-    elif zone == "footer":
-        body_style = f' style="padding-bottom:{margin_bottom_value}"'
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -642,7 +579,7 @@ def export_html(
 <title>{escape(title)}</title>
 <style>{css}</style>
 </head>
-<body{body_style}>
+<body>
 {body}
 </body>
 </html>"""

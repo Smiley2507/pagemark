@@ -342,22 +342,22 @@ class TestHtmlExport:
         })
         assert '@bottom-right { content: "Page " counter(page);' in right
 
-    def test_header_and_footer_logo_placement_adds_preview_spacing(self, sample_sections):
+    def test_header_and_footer_logo_placement(self, sample_sections):
         header = export_html(sample_sections, "Proj", "Doc", {
             "logo_url": "https://example.com/logo.png",
             "logo_position": "header-right",
-            "margin_top": "21mm",
+            "include_page_numbers": False,
         })
-        assert 'class="page-header-logo right"' in header
-        assert '<body style="padding-top:21mm">' in header
+        assert '@top-right { content: url("https://example.com/logo.png");' in header
+        assert 'page-header-logo' not in header
 
         footer = export_html(sample_sections, "Proj", "Doc", {
             "logo_url": "https://example.com/logo.png",
             "logo_position": "footer-center",
-            "margin_bottom": "19mm",
+            "include_page_numbers": False,
         })
-        assert 'class="page-footer-logo center"' in footer
-        assert '<body style="padding-bottom:19mm">' in footer
+        assert '@bottom-center { content: url("https://example.com/logo.png");' in footer
+        assert 'page-footer-logo' not in footer
 
     def test_no_h1_underline_unless_profile_selects_it(self, sample_sections):
         result = export_html(sample_sections, "Proj", "Doc")
