@@ -35,7 +35,7 @@ export const OrgApiKeysView: React.FC = () => {
       setNewKeyName('');
       queryClient.invalidateQueries({ queryKey: ['api-keys'] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to create API key'),
+    onError: (err: any) => toast.error(err.response?.data?.detail || 'Failed to create API key'),
   });
 
   const revokeKeyMutation = useMutation({
@@ -44,7 +44,7 @@ export const OrgApiKeysView: React.FC = () => {
       toast.success('API Key revoked');
       queryClient.invalidateQueries({ queryKey: ['api-keys'] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to revoke API key'),
+    onError: (err: any) => toast.error(err.response?.data?.detail || 'Failed to revoke API key'),
   });
 
   const copyToClipboard = (text: string) => {

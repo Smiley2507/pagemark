@@ -487,14 +487,14 @@ export interface Organization {
 
 export type OrgMemberRole = 'ADMIN' | 'PROJECT_MANAGER' | 'DEVELOPER' | 'TECHNICAL_WRITER' | 'VIEWER';
 
-export type OrgMemberStatus = 'ACTIVE' | 'INVITED' | 'SUSPENDED';
+export type OrgMemberStatus = 'ACTIVE' | 'INVITED' | 'SUSPENDED' | 'DECLINED' | 'CANCELLED';
 
 export interface OrgMember {
   id: number;
   user_id: number;
   org_id: number;
   role: OrgMemberRole;
-  status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
+  status: 'ACTIVE' | 'INVITED' | 'SUSPENDED' | 'DECLINED' | 'CANCELLED';
   joined_at: string;
   user_name?: string;
   user_email?: string;

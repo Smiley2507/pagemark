@@ -10,6 +10,13 @@ class OrganizationCreate(BaseModel):
     name: str
     avatar_url: Optional[str] = None
 
+    @field_validator("avatar_url")
+    @classmethod
+    def validate_avatar_url(cls, v):
+        if v is not None and not v.startswith(("http://", "https://")):
+            raise ValueError("avatar_url must be a valid URL starting with http:// or https://")
+        return v
+
 
 class OrganizationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)

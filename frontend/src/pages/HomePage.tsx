@@ -82,6 +82,17 @@ export function HomePage() {
     },
   });
 
+  const { mutate: rejectInvite } = useMutation({
+    mutationFn: (token: string) => orgApi.rejectInvite(token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pending-invites'] });
+      toast.success('Invitation declined');
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail || 'Failed to decline invitation');
+    },
+  });
+
   const documentQueries = useQueries({
     queries: projects.map((project) => ({
       queryKey: ['documents', project.id],
@@ -199,16 +210,32 @@ export function HomePage() {
           <div className="divide-y divide-amber-500/10">
             {pendingInvites.map((invite) => (
               <div key={`${invite.org_id}-${invite.invited_at}`} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                <div className="min-w-0">
-                  <p className="truncate text-body font-medium text-amber-800 dark:text-amber-200">
-                    {invite.org_name}
-                  </p>
-                  <p className="text-meta text-amber-600/70 dark:text-amber-400/70">
-                    Invited by {invite.invited_by_name || invite.invited_by_email || 'someone'}
-                    {invite.expires_at && ` · Expires ${formatDate(invite.expires_at)}`}
-                  </p>
+                <div className="flex min-w-0 items-center gap-3">
+                  {invite.org_avatar_url ? (
+                    <img src={invite.org_avatar_url} alt="" className="h-8 w-8 shrink-0 rounded object-cover" />
+                  ) : (
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                      <span className="text-sm font-semibold">{invite.org_name[0]}</span>
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-body font-medium text-amber-800 dark:text-amber-200">
+                      {invite.org_name}
+                    </p>
+                    <p className="text-meta text-amber-600/70 dark:text-amber-400/70">
+                      Invited by {invite.invited_by_name || invite.invited_by_email || 'someone'}
+                      {invite.expires_at && ` · Expires ${formatDate(invite.expires_at)}`}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex shrink-0 gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => rejectInvite(invite.invite_token)}
+                  >
+                    Reject
+                  </Button>
                   <Button
                     size="sm"
                     onClick={() => acceptInvite(invite.invite_token)}

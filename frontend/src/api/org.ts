@@ -20,6 +20,12 @@ export const orgApi = {
   acceptInvite: (token: string) =>
     api.post(`/organizations/invites/${token}/accept`).then(res => res.data),
 
+  rejectInvite: (token: string) =>
+    api.post(`/organizations/invites/${token}/reject`).then(res => res.data),
+
+  cancelInvite: (orgId: number, userId: number) =>
+    api.delete(`/organizations/${orgId}/invites/${userId}`).then(res => res.data),
+
   resendInvite: (orgId: number, userId: number) =>
     api.post(`/organizations/${orgId}/invites/${userId}/resend`).then(res => res.data),
 

@@ -41,7 +41,7 @@ export const OrgSettingsView: React.FC = () => {
       toast.success('Organization updated');
       setIsEditing(false);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to update organization');
+      toast.error(error.response?.data?.detail || 'Failed to update organization');
     }
   };
 
@@ -52,7 +52,7 @@ export const OrgSettingsView: React.FC = () => {
       await refreshOrganizations();
       toast.success('Quality threshold updated');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to update quality threshold');
+      toast.error(error.response?.data?.detail || 'Failed to update quality threshold');
     }
   };
 

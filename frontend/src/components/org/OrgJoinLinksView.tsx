@@ -76,7 +76,7 @@ export const OrgJoinLinksView: React.FC = () => {
       setExpiresDays('');
       queryClient.invalidateQueries({ queryKey: ['org-join-links', activeOrgId] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to create join link'),
+    onError: (err: any) => toast.error(err.response?.data?.detail || 'Failed to create join link'),
   });
 
   const revokeMutation = useMutation({
@@ -85,7 +85,7 @@ export const OrgJoinLinksView: React.FC = () => {
       toast.success('Join link revoked');
       queryClient.invalidateQueries({ queryKey: ['org-join-links', activeOrgId] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to revoke join link'),
+    onError: (err: any) => toast.error(err.response?.data?.detail || 'Failed to revoke join link'),
   });
 
   const copyToClipboard = async (code: string) => {

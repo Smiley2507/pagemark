@@ -18,6 +18,8 @@ class OrgMemberStatus(enum.Enum):
     ACTIVE = "active"
     INVITED = "invited"
     SUSPENDED = "suspended"
+    DECLINED = "declined"
+    CANCELLED = "cancelled"
 
 
 class Organization(Base):

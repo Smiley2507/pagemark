@@ -180,12 +180,21 @@ export function SidebarNavigation() {
                 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
               )}
             >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-foreground">
-                {(user?.name || 'U')[0].toUpperCase()}
-              </div>
+              {user?.avatar_url ? (
+                <img src={user.avatar_url} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+              ) : (
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-foreground">
+                  {(user?.name || 'U')[0].toUpperCase()}
+                </div>
+              )}
               <div className="min-w-0 flex-1 text-left">
                 <div className="truncate text-sm font-medium text-sidebar-foreground">{user?.name || 'User'}</div>
-                <div className="truncate text-xs text-sidebar-foreground/70">{activeOrg?.name || 'No organization'}</div>
+                <div className="flex items-center gap-1.5">
+                  {activeOrg?.avatar_url ? (
+                    <img src={activeOrg.avatar_url} alt="" className="h-3.5 w-3.5 shrink-0 rounded-sm object-cover" />
+                  ) : null}
+                  <span className="truncate text-xs text-sidebar-foreground/70">{activeOrg?.name || 'No organization'}</span>
+                </div>
               </div>
               <ChevronRight className={cn('h-4 w-4 transition-transform', profileOpen && 'rotate-90')} />
             </button>
@@ -205,7 +214,11 @@ export function SidebarNavigation() {
                         organization.id === activeOrgId && 'bg-accent/50'
                       )}
                     >
-                      <Building2 className="h-4 w-4 shrink-0" />
+                      {organization.avatar_url ? (
+                        <img src={organization.avatar_url} alt="" className="h-5 w-5 shrink-0 rounded-sm object-cover" />
+                      ) : (
+                        <Building2 className="h-4 w-4 shrink-0" />
+                      )}
                       <span className="flex-1 truncate">{organization.name}</span>
                       {organization.personal && <span className="text-xs text-muted-foreground">Personal</span>}
                       {organization.id === activeOrgId && <Check className="h-4 w-4 text-primary" />}

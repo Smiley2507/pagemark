@@ -85,9 +85,13 @@ export function OrgSwitcher() {
           className="w-full justify-between px-2 hover:bg-accent hover:text-accent-foreground"
         >
           <div className="flex items-center gap-2 truncate">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary">
-              <Building2 className="h-4 w-4" />
-            </div>
+            {activeOrg?.avatar_url ? (
+              <img src={activeOrg.avatar_url} alt="" className="h-6 w-6 shrink-0 rounded-sm object-cover" />
+            ) : (
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary">
+                <Building2 className="h-4 w-4" />
+              </div>
+            )}
             <span className="truncate text-sm font-medium">
               {activeOrg?.name || 'Select Workspace'}
             </span>
@@ -117,7 +121,16 @@ export function OrgSwitcher() {
                       <Check className="h-4 w-4" />
                     </span>
                   )}
-                  <span className="truncate">{org.name}</span>
+                  <div className="flex items-center gap-2 truncate pl-1">
+                    {org.avatar_url ? (
+                      <img src={org.avatar_url} alt="" className="h-5 w-5 shrink-0 rounded-sm object-cover" />
+                    ) : (
+                      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary">
+                        <Building2 className="h-3 w-3" />
+                      </div>
+                    )}
+                    <span className="truncate">{org.name}</span>
+                  </div>
                   {org.personal && (
                     <span className="ml-auto text-xs text-muted-foreground">Personal</span>
                   )}

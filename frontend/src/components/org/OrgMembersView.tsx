@@ -45,13 +45,17 @@ const STATUS_OPTIONS: { value: OrgMemberStatus | ''; label: string }[] = [
   { value: 'ACTIVE', label: 'Active' },
   { value: 'INVITED', label: 'Invited' },
   { value: 'SUSPENDED', label: 'Suspended' },
+  { value: 'DECLINED', label: 'Declined' },
+  { value: 'CANCELLED', label: 'Cancelled' },
 ];
 
-function statusBadgeVariant(status: OrgMemberStatus): 'success' | 'warning' | 'neutral' | 'info' {
+function statusBadgeVariant(status: OrgMemberStatus): 'success' | 'warning' | 'neutral' | 'info' | 'danger' {
   switch (status) {
     case 'ACTIVE': return 'success';
     case 'INVITED': return 'info';
     case 'SUSPENDED': return 'warning';
+    case 'DECLINED': return 'danger';
+    case 'CANCELLED': return 'neutral';
   }
 }
 
@@ -107,7 +111,7 @@ export const OrgMembersView: React.FC = () => {
       setInviteRole('DEVELOPER');
       queryClient.invalidateQueries({ queryKey: ['org-members', activeOrgId] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to send invitation'),
+    onError: (err: any) => toast.error(err.response?.data?.detail || 'Failed to send invitation'),
   });
 
   const updateRoleMutation = useMutation({
@@ -117,7 +121,7 @@ export const OrgMembersView: React.FC = () => {
       toast.success('Member role updated');
       queryClient.invalidateQueries({ queryKey: ['org-members', activeOrgId] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to update role'),
+    onError: (err: any) => toast.error(err.response?.data?.detail || 'Failed to update role'),
   });
 
   const removeMemberMutation = useMutation({
@@ -127,7 +131,7 @@ export const OrgMembersView: React.FC = () => {
       setRemoveTarget(null);
       queryClient.invalidateQueries({ queryKey: ['org-members', activeOrgId] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to remove member'),
+    onError: (err: any) => toast.error(err.response?.data?.detail || 'Failed to remove member'),
   });
 
   const resendInviteMutation = useMutation({
@@ -136,7 +140,16 @@ export const OrgMembersView: React.FC = () => {
       toast.success('Invitation resent');
       queryClient.invalidateQueries({ queryKey: ['org-members', activeOrgId] });
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Failed to resend invitation'),
+    onError: (err: any) => toast.error(err.response?.data?.detail || 'Failed to resend invitation'),
+  });
+
+  const cancelInviteMutation = useMutation({
+    mutationFn: (userId: number) => orgApi.cancelInvite(activeOrgId!, userId),
+    onSuccess: () => {
+      toast.success('Invitation cancelled');
+      queryClient.invalidateQueries({ queryKey: ['org-members', activeOrgId] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.detail || 'Failed to cancel invitation'),
   });
 
   const isAdmin = currentRole === 'ADMIN';
@@ -349,16 +362,27 @@ export const OrgMembersView: React.FC = () => {
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
                         {member.status === 'INVITED' && isAdmin && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 gap-1.5 text-xs"
-                            onClick={() => resendInviteMutation.mutate(member.user_id)}
-                            disabled={resendInviteMutation.isPending}
-                          >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                            Resend
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 gap-1.5 text-xs text-destructive hover:text-destructive"
+                              onClick={() => cancelInviteMutation.mutate(member.user_id)}
+                              disabled={cancelInviteMutation.isPending}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 gap-1.5 text-xs"
+                              onClick={() => resendInviteMutation.mutate(member.user_id)}
+                              disabled={resendInviteMutation.isPending}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                              Resend
+                            </Button>
+                          </>
                         )}
                         {member.user_id !== user?.id && isAdmin && (
                           <Button

@@ -165,7 +165,7 @@ async def create_organization(
     return org
 
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class OrganizationUpdateRequest(BaseModel):
@@ -174,6 +174,13 @@ class OrganizationUpdateRequest(BaseModel):
     quality_threshold: Optional[int] = None
     ai_provider: Optional[str] = None
     ai_key: Optional[str] = None
+
+    @field_validator("avatar_url")
+    @classmethod
+    def validate_avatar_url(cls, v):
+        if v is not None and not v.startswith(("http://", "https://")):
+            raise ValueError("avatar_url must be a valid URL starting with http:// or https://")
+        return v
 
 
 @router.get("/{org_id}", response_model=OrganizationResponse)
@@ -393,6 +400,62 @@ async def accept_invite(
     org_name = org_res.scalar_one_or_none()
 
     return {"message": "Joined organization successfully", "org_id": member.org_id, "org_name": org_name}
+
+
+@router.post("/invites/{token}/reject")
+async def reject_invite(
+    token: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    res = await db.execute(
+        select(OrganizationMember).where(OrganizationMember.invite_token == token)
+    )
+    member = res.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Invite not found or already accepted")
+    if member.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="This invite is for a different user")
+    if member.status != OrgMemberStatus.INVITED:
+        raise HTTPException(status_code=400, detail="Invite is not pending")
+    if member.invite_token_expires and member.invite_token_expires < utcnow():
+        raise HTTPException(status_code=400, detail="Invite has expired")
+
+    member.status = OrgMemberStatus.DECLINED
+    member.invite_token = None
+    member.invite_token_expires = None
+    await _log(db, current_user.id, member.org_id, "reject_invite", f"org:{member.org_id}")
+    await db.commit()
+    return {"message": "Invitation declined"}
+
+
+@router.delete("/{org_id}/invites/{user_id}")
+async def cancel_invite(
+    org_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_membership(db, org_id, current_user.id, [OrgMemberRole.ADMIN])
+
+    res = await db.execute(
+        select(OrganizationMember).where(
+            OrganizationMember.org_id == org_id,
+            OrganizationMember.user_id == user_id,
+        )
+    )
+    member = res.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    if member.status != OrgMemberStatus.INVITED:
+        raise HTTPException(status_code=400, detail="Only pending invitations can be cancelled")
+
+    member.status = OrgMemberStatus.CANCELLED
+    member.invite_token = None
+    member.invite_token_expires = None
+    await _log(db, current_user.id, org_id, "cancel_invite", f"user:{user_id}")
+    await db.commit()
+    return {"message": "Invitation cancelled"}
 
 
 @router.get("/invites/pending", response_model=List[PendingInviteResponse])

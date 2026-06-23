@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
 
@@ -27,6 +27,13 @@ class UpdateMeRequest(BaseModel):
     name: Optional[str] = None
     avatar_url: Optional[str] = None
     password: Optional[str] = Field(None, min_length=8)
+
+    @field_validator("avatar_url")
+    @classmethod
+    def validate_avatar_url(cls, v):
+        if v is not None and not v.startswith(("http://", "https://")):
+            raise ValueError("avatar_url must be a valid URL starting with http:// or https://")
+        return v
 
 class MeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
