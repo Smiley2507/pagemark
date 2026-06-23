@@ -60,6 +60,9 @@ export const orgApi = {
   revokeJoinLink: (orgId: number, linkId: number) =>
     api.post(`/organizations/${orgId}/join-links/${linkId}/revoke`).then(res => res.data),
 
+  deleteJoinLink: (orgId: number, linkId: number) =>
+    api.delete(`/organizations/${orgId}/join-links/${linkId}`).then(res => res.data),
+
   acceptJoinLink: (code: string) =>
     api.post(`/organizations/join-links/${code}/accept`).then(res => res.data),
 };

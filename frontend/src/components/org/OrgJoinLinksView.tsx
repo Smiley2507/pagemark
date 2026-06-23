@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Surface } from '@/components/ui/surface';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,7 @@ import {
   Users,
   ShieldCheck,
   Ban,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -49,6 +51,7 @@ export const OrgJoinLinksView: React.FC = () => {
   const [maxUses, setMaxUses] = useState('');
   const [expiresDays, setExpiresDays] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<OrgJoinLink | null>(null);
 
   const isAdmin = currentRole === 'ADMIN';
 
@@ -86,6 +89,16 @@ export const OrgJoinLinksView: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['org-join-links', activeOrgId] });
     },
     onError: (err: any) => toast.error(err.response?.data?.detail || 'Failed to revoke join link'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (linkId: number) => orgApi.deleteJoinLink(activeOrgId!, linkId),
+    onSuccess: () => {
+      toast.success('Join link deleted');
+      setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ['org-join-links', activeOrgId] });
+    },
+    onError: (err: any) => toast.error(err.response?.data?.detail || 'Failed to delete join link'),
   });
 
   const copyToClipboard = async (code: string) => {
@@ -264,20 +277,29 @@ export const OrgJoinLinksView: React.FC = () => {
                             <Copy className="h-4 w-4" />
                           )}
                         </Button>
-                        {active && isAdmin && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                            onClick={() => {
-                              if (confirm('Revoke this join link? It will no longer be usable.')) {
-                                revokeMutation.mutate(link.id);
-                              }
-                            }}
-                            title="Revoke link"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
+                        {isAdmin && (
+                          <>
+                            {active && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                onClick={() => revokeMutation.mutate(link.id)}
+                                title="Revoke link"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              onClick={() => setDeleteTarget(link)}
+                              title="Delete link"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </>
                         )}
                       </div>
                     </td>
@@ -302,6 +324,22 @@ export const OrgJoinLinksView: React.FC = () => {
           }
         />
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete join link"
+        description={
+          deleteTarget
+            ? `Are you sure you want to permanently delete this join link? It will be removed from the organization.`
+            : ''
+        }
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+        }}
+      />
     </div>
   );
 };

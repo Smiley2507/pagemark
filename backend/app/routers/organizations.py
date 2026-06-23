@@ -698,6 +698,31 @@ async def list_join_links(
     return res.scalars().all()
 
 
+@router.delete("/{org_id}/join-links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_join_link(
+    org_id: int,
+    link_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await _get_membership(db, org_id, current_user.id, [OrgMemberRole.ADMIN])
+
+    res = await db.execute(
+        select(OrganizationJoinLink).where(
+            OrganizationJoinLink.id == link_id,
+            OrganizationJoinLink.org_id == org_id,
+        )
+    )
+    link = res.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404, detail="Join link not found")
+
+    await db.delete(link)
+    await _log(db, current_user.id, org_id, "delete_join_link", f"link:{link.code}")
+    await db.commit()
+    return None
+
+
 @router.post("/{org_id}/join-links/{link_id}/revoke")
 async def revoke_join_link(
     org_id: int,
