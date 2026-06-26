@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from app.models.time import utcnow
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, Float, ForeignKey, Enum, UniqueConstraint,
+    Column, Integer, String, Text, DateTime, Float, ForeignKey, Enum, UniqueConstraint, text,
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -24,7 +24,7 @@ class QualityReport(Base):
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
     overall_score = Column(Float, nullable=False, default=0.0)
     completeness = Column(Float, nullable=False, default=0.0)
-    acceptance_coverage = Column(Float, nullable=False, default=100.0)
+    acceptance_coverage = Column(Float, nullable=False, default=100.0, server_default=text("100.0"))
     consistency = Column(Float, nullable=False, default=0.0)
     readability = Column(Float, nullable=False, default=0.0)
     accuracy = Column(Float, nullable=False, default=0.0)
