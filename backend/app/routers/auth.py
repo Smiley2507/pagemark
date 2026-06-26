@@ -10,6 +10,7 @@ from app.models.time import utcnow
 import re
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Response, Request, status
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from pydantic import SecretStr
@@ -216,6 +217,15 @@ async def login(request: LoginRequest, response: Response, db: AsyncSession = De
     us = settings_res.scalar_one_or_none()
 
     if us and us.mfa_enabled:
+        await db.execute(
+            update(UserOtpCode)
+            .where(
+                UserOtpCode.user_id == user.id,
+                UserOtpCode.used == False,
+                UserOtpCode.purpose == "login",
+            )
+            .values(used=True)
+        )
         code = auth_service.generate_otp()
         code_hash = auth_service.hash_otp(code)
         db.add(UserOtpCode(
@@ -268,9 +278,11 @@ async def verify_mfa(body: VerifyMfaRequest, response: Response, db: AsyncSessio
         .where(
             UserOtpCode.user_id == user.id,
             UserOtpCode.used == False,
+            UserOtpCode.purpose == "login",
             UserOtpCode.expires_at > utcnow(),
         )
         .order_by(UserOtpCode.created_at.desc())
+        .limit(1)
     )
     otp_code = otp_res.scalar_one_or_none()
     if not otp_code or not auth_service.verify_otp(body.code, otp_code.code_hash):
@@ -353,6 +365,15 @@ async def enable_mfa_start(
     db: AsyncSession = Depends(get_db),
     _: None = rate_limit(3, 60),
 ):
+    await db.execute(
+        update(UserOtpCode)
+        .where(
+            UserOtpCode.user_id == current_user.id,
+            UserOtpCode.used == False,
+            UserOtpCode.purpose == "enable_mfa",
+        )
+        .values(used=True)
+    )
     code = auth_service.generate_otp()
     code_hash = auth_service.hash_otp(code)
     db.add(UserOtpCode(
@@ -386,6 +407,7 @@ async def enable_mfa_verify(
             UserOtpCode.purpose == "enable_mfa",
         )
         .order_by(UserOtpCode.created_at.desc())
+        .limit(1)
     )
     otp_code = otp_res.scalar_one_or_none()
     if not otp_code or not auth_service.verify_otp(body.code, otp_code.code_hash):
