@@ -65,6 +65,7 @@ import { documentsApi, type Document } from '@/api/documents';
 import { projectsApi } from '@/api/projects';
 import { useDocumentAutosave, useDocumentSections, useUpdateDocumentSection, useAcceptSectionReview } from '@/hooks/useSections';
 import { useQualityReport, useRunQuality } from '@/hooks/useQuality';
+import { useAiProposedChanges } from '@/hooks/useAI';
 import { getSectionState } from '@/lib/section-state';
 import { cn } from '@/lib/utils';
 import { OutlinePanel } from '@/components/editor/OutlinePanel';
@@ -526,6 +527,7 @@ export function DocumentEditorPage() {
   const updateDocumentSection = useUpdateDocumentSection(pid, did);
   const { data: qualityData } = useQualityReport(pid, did);
   const runQuality = useRunQuality(pid, did);
+  const { data: aiProposedChanges = [] } = useAiProposedChanges(pid, did);
 
   const canAcceptAll = sections.length > 0 && reviewedCount < reviewTotal;
 
@@ -568,6 +570,34 @@ export function DocumentEditorPage() {
     if (!freshnessData?.stale_sections) return new Map<number, { reviewed_at: string | null }>()
     return new Map(freshnessData.stale_sections.map(s => [s.id, { reviewed_at: s.reviewed_at }]))
   }, [freshnessData])
+
+  const exportReadinessSummary = useMemo(() => {
+    const warnings: string[] = [];
+    const openAiChanges = aiProposedChanges.filter((change) => change.status === 'proposed').length;
+    const generatedDrafts = sections.filter((section) => (
+      section.content_lifecycle === 'generated_draft' || section.status === 'draft'
+    ) && (section.content_md || '').trim().length > 0).length;
+    const incompleteCriteria = sections.filter((section) => (
+      sectionAcceptanceCriteria(section).length > 0 && getSectionState(section).key !== 'reviewed'
+    )).length;
+    const sectionsWithGenerationWarnings = sections.filter((section) => sectionGenerationQualityWarnings(section).length > 0).length;
+    const qualityIsStale = Boolean(
+      qualityData?.generated_at &&
+      document?.updated_at &&
+      new Date(qualityData.generated_at).getTime() < new Date(document.updated_at).getTime(),
+    );
+    const staleCount = freshnessData?.stale_count ?? 0;
+
+    if (openAiChanges > 0) warnings.push(`${openAiChanges} AI proposed change${openAiChanges === 1 ? '' : 's'} still need review.`);
+    if (generatedDrafts > 0) warnings.push(`${generatedDrafts} generated draft section${generatedDrafts === 1 ? '' : 's'} are not reviewed.`);
+    if (!qualityData) warnings.push('Quality report has not been run for this document.');
+    if (qualityIsStale) warnings.push('Quality report may be stale after recent document edits.');
+    if (incompleteCriteria > 0) warnings.push(`${incompleteCriteria} section${incompleteCriteria === 1 ? '' : 's'} have incomplete acceptance criteria review.`);
+    if (staleCount > 0) warnings.push(`${staleCount} section${staleCount === 1 ? '' : 's'} may be stale after source changes.`);
+    if (sectionsWithGenerationWarnings > 0) warnings.push(`${sectionsWithGenerationWarnings} section${sectionsWithGenerationWarnings === 1 ? '' : 's'} still have generated-draft warnings.`);
+
+    return { warningCount: warnings.length, warnings };
+  }, [aiProposedChanges, document?.updated_at, freshnessData?.stale_count, qualityData, sections]);
 
   const acceptFreshness = useMutation({
     mutationFn: (sectionId: number) => documentsApi.acceptFreshnessUpdate(pid, did, sectionId),
@@ -1205,6 +1235,7 @@ export function DocumentEditorPage() {
         open={exportModalOpen}
         onClose={() => setExportModalOpen(false)}
         initialSettings={document?.print_profile || document?.export_settings}
+        readinessSummary={exportReadinessSummary}
       />
 
       <ShareDialog

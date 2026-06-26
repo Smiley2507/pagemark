@@ -105,4 +105,34 @@ describe('ExportModal print profile requests', () => {
     expect(requestedUrl.searchParams.get('footer_left')).toBe('Draft');
     expect(requestedUrl.searchParams.get('margins')).toBe('narrow');
   });
+
+  it('shows readiness warnings and exports after acknowledgement', async () => {
+    render(
+      <ExportModal
+        projectId={42}
+        documentId={9}
+        projectName="Runtime Guide"
+        open
+        onClose={vi.fn()}
+        readinessSummary={{
+          warningCount: 2,
+          warnings: [
+            '1 AI proposed change still need review.',
+            'Quality report has not been run for this document.',
+          ],
+        }}
+      />,
+    );
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(screen.getByTestId('export-readiness-warning')).toHaveTextContent('Readiness warnings');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByLabelText('I understand and want to export anyway.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+  });
 });

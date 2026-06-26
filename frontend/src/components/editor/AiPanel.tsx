@@ -17,7 +17,7 @@ import {
 } from '@/hooks/useAI';
 import { useAiCredentials, useAiProviderModels } from '@/hooks/useAiCredentials';
 import { useAiStore } from '@/store/aiStore';
-import { buildTarget, buildChatActionRequest } from '@/lib/ai-panel-types';
+import { buildTarget, buildAiPanelChatActionPayload } from '@/lib/ai-panel-types';
 import type { AiTranscriptTurn, AiIssue } from '@/lib/ai-panel-types';
 
 import { AiPanelHeader } from './ai/AiPanelHeader';
@@ -121,8 +121,7 @@ export function AiPanel({
     [activeSectionId, activeSectionHeading, activeSelection],
   );
 
-  const openReviewItems = proposedChanges
-    .filter((c) => c.status === 'proposed')
+  const reviewItems = proposedChanges
     .map((change) => ({
       id: change.id,
       workRunId: change.work_run_id,
@@ -197,6 +196,7 @@ export function AiPanel({
     if (!prompt.trim()) return;
     const { cleanText, references } = parseMentions(prompt.trim());
     const promptSelection = selectionOverride ?? activeSelection;
+    const promptTarget = buildTarget(activeSectionId, activeSectionHeading, promptSelection ?? null);
     const promptCursor = promptSelection
       ? { sectionId: promptSelection.sectionId, pos: promptSelection.to }
       : activeCursor;
@@ -205,6 +205,7 @@ export function AiPanel({
     const userTurn: AiTranscriptTurn = {
       id: `user-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       role: 'user',
+      kind: 'message',
       text: cleanText,
     };
     addTurns((current) => [...current, userTurn]);
@@ -238,15 +239,15 @@ export function AiPanel({
 
     const { activeMode } = useAiStore.getState();
     try {
-      const request = buildChatActionRequest(
-        messagePayload,
-        activeMode,
-        selectedModel || activeCredential?.model_id || null,
-        target,
-        structuredReferences,
+      const request = buildAiPanelChatActionPayload({
+        message: messagePayload,
+        mode: activeMode,
+        selectedModel: selectedModel || activeCredential?.model_id || null,
+        target: promptTarget,
+        references: structuredReferences,
         resourceIds,
-        promptCursor ?? null,
-      );
+        cursor: promptCursor ?? null,
+      });
       const response = await createAiChatAction.mutateAsync(request);
       const workRun = response.work_run;
 
@@ -257,7 +258,9 @@ export function AiPanel({
           {
             id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
             role: 'assistant',
+            kind: 'work_run',
             text: msg,
+            workRun,
           },
         ]);
         return;
@@ -283,6 +286,7 @@ export function AiPanel({
           {
             id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
             role: 'assistant',
+            kind: 'message',
             text: response.message,
           },
         ]);
@@ -298,6 +302,7 @@ export function AiPanel({
         {
           id: `assistant-${Date.now()}-${Math.random().toString(36).slice(2)}`,
           role: 'assistant',
+          kind: 'error',
           text: detail,
           tone: 'error',
         },
@@ -307,6 +312,8 @@ export function AiPanel({
   }, [
     activeCredential?.model_id,
     activeCursor,
+    activeSectionHeading,
+    activeSectionId,
     activeSelection,
     createAiChatAction,
     parseMentions,
@@ -356,7 +363,7 @@ export function AiPanel({
   const handleSuggestStructure = async () => {
     if (!documentId) return;
     try {
-      const suggestions = await suggestStructure.mutateAsync(documentId);
+      const suggestions = await suggestStructure.mutateAsync({ projectId, documentId });
       setStructureSuggestions(suggestions);
     } catch {
       toast.error('Failed to generate structural suggestions');
@@ -519,7 +526,7 @@ export function AiPanel({
   // ── Derived display state ──────────────────────────────────────────────
   const activeIssue = sectionClarificationIssue || inlineClarificationIssue;
   const hasPanelActivity = turns.length > 0
-    || openReviewItems.length > 0
+    || reviewItems.length > 0
     || issues.length > 0
     || structureSuggestions !== null;
 
@@ -555,10 +562,19 @@ export function AiPanel({
           />
         )}
 
-        <AiPanelTranscript turns={turns} onClear={clearTurns} />
+        <AiPanelTranscript
+          turns={turns}
+          onClear={clearTurns}
+          onAccept={(changeId) => acceptAiChange.mutate(changeId)}
+          onReject={(changeId) => rejectAiChange.mutate(changeId)}
+          onUndo={(runId) => undoAiWorkRun.mutate(runId)}
+          isAccepting={acceptAiChange.isPending}
+          isRejecting={rejectAiChange.isPending}
+          isUndoing={undoAiWorkRun.isPending}
+        />
 
         <AiPanelReviewQueue
-          items={openReviewItems}
+          items={reviewItems}
           onAccept={(changeId) => acceptAiChange.mutate(changeId)}
           onReject={(changeId) => rejectAiChange.mutate(changeId)}
           onUndo={(runId) => undoAiWorkRun.mutate(runId)}

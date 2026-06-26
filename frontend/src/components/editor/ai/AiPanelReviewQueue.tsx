@@ -21,6 +21,7 @@ export function AiPanelReviewQueue({
   isUndoing,
 }: AiPanelReviewQueueProps) {
   if (items.length === 0) return null;
+  const openCount = items.filter((item) => item.status === 'proposed').length;
 
   return (
     <div className="border-t border-separator">
@@ -29,9 +30,9 @@ export function AiPanelReviewQueue({
           <span className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
             Review
           </span>
-          {items.length > 0 && (
+          {openCount > 0 && (
             <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">
-              {items.length} open
+              {openCount} open
             </span>
           )}
         </div>

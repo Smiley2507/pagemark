@@ -17,7 +17,7 @@ async function sendAiPrompt(page: import('@playwright/test').Page, prompt: strin
 test('accepting proposed rewrite and add-section changes refreshes editor sections', async ({ page }) => {
   await openEditor(page);
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
-  await expect(page.getByText('Open review')).toBeVisible();
+  await expect(page.getByTestId('ai-proposed-change-501')).toContainText('Rewritten architecture summary');
 
   await page.getByTestId('ai-proposed-change-501').getByRole('button', { name: 'Accept' }).click();
   await expect(page.getByTestId('editor-section-301')).toContainText('Rewritten architecture summary');
@@ -29,7 +29,7 @@ test('accepting proposed rewrite and add-section changes refreshes editor sectio
 test('reject and undo update panel state without keeping content mutations', async ({ page }) => {
   await openEditor(page);
   await page.getByRole('button', { name: 'Open AI assistant' }).click();
-  await expect(page.getByText('Open review')).toBeVisible();
+  await expect(page.getByTestId('ai-proposed-change-501')).toContainText('Rewritten architecture summary');
 
   await page.getByTestId('ai-proposed-change-502').getByRole('button', { name: 'Reject' }).click();
   await expect(page.getByText('add section · rejected')).toBeVisible();
@@ -109,7 +109,7 @@ test('collapsed selections show a visible replace failure instead of reusing sta
 
 test('slash insert command auto-submits and creates a proposed change card', async ({ page }) => {
   await openEditor(page);
-  await page.getByTestId('editor-section-301').locator('[contenteditable="true"]').first().click();
+  await page.getByTestId('editor-section-301').locator('.tiptap p').first().click();
   await page.keyboard.press('End');
   await page.keyboard.press('Enter');
   await page.keyboard.type('/insert');
@@ -125,12 +125,7 @@ test('slash insert command auto-submits and creates a proposed change card', asy
 test('selection polish command auto-submits and preserves the selected range', async ({ page }) => {
   await openEditor(page);
   const paragraph = page.getByTestId('editor-section-301').locator('.tiptap p').first();
-  const box = await paragraph.boundingBox();
-  if (!box) throw new Error('Expected overview paragraph to be visible');
-  await page.mouse.move(box.x + 4, box.y + box.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width - 4, box.y + box.height / 2, { steps: 8 });
-  await page.mouse.up();
+  await paragraph.selectText();
   await page.getByRole('button', { name: 'Polish selection' }).click();
 
   const assistantTurn = page.getByTestId('ai-turn-assistant-work_run');
@@ -165,7 +160,6 @@ test('structural suggestions queue rename and add-with-content cards with undo',
   await expect(page.getByText('Suggested changes')).toBeVisible();
   await page.getByRole('button', { name: 'Apply all' }).click();
 
-  await expect(page.getByText('Open review')).toBeVisible();
   const renameCard = page.getByTestId('ai-proposed-change-600');
   const addCard = page.getByTestId('ai-proposed-change-601');
   await expect(renameCard).toContainText('Rename section to "System Architecture"');

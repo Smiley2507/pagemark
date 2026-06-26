@@ -210,6 +210,49 @@ async def test_ai_proposed_change_reject_marks_run_rejected_and_blocks_late_acce
 
 
 @pytest.mark.anyio
+async def test_nested_ai_work_routes_reject_document_from_another_project(
+    client,
+    db,
+    other_project,
+    ai_work_document,
+):
+    document, section = ai_work_document
+
+    response = await client.post(
+        f"/projects/{other_project.id}/documents/{document.id}/ai/work-runs",
+        json={
+            "prompt_context": {"source": "boundary-test"},
+            "changes": [
+                {
+                    "change_type": "rename_section",
+                    "title": "Cross-project rename",
+                    "section_id": section.id,
+                    "after": {"heading": "Leaked"},
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_nested_suggest_structure_rejects_document_from_another_project(
+    client,
+    db,
+    other_project,
+    ai_work_document,
+):
+    document, _section = ai_work_document
+
+    response = await client.post(
+        f"/projects/{other_project.id}/documents/{document.id}/ai/suggest-structure",
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
 async def test_add_section_change_accept_creates_draft_section_with_content(
     client,
     test_project,

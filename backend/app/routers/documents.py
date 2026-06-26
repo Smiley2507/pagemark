@@ -73,6 +73,7 @@ from app.schemas.ai_work import (
     AIWorkRunListResponse,
     AIWorkRunResponse,
 )
+from app.schemas.ai import SuggestStructureResponse
 from app.schemas.section import (
     CustomSectionRequest,
     SectionAutosaveRequest,
@@ -1337,6 +1338,23 @@ async def create_ai_chat_action(
         action=action,
         work_run=_ai_work_run_to_response(work_run),
     )
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/ai/suggest-structure",
+    response_model=SuggestStructureResponse,
+)
+async def suggest_document_structure_for_document(
+    document: Document = Depends(require_document_permission("edit")),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    suggestions = await ai_service.suggest_structure(
+        document_id=document.id,
+        db=db,
+        user_id=current_user.id,
+    )
+    return SuggestStructureResponse(suggestions=suggestions)
 
 
 @router.post(

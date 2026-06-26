@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import type { AIEditorReference, AIEditorSelection, AIEditorCursor, AIProposedChange, AIWorkRun, AIChatActionRequest, AIChatActionType } from '@/api/ai';
+import type { AIEditorReference, AIEditorSelection, AIEditorCursor, AIProposedChange, AIWorkRun, AIChatActionRequest } from '@/api/ai';
+import type { AiMode } from '@/store/aiStore';
 
 export interface AiTarget {
   type: 'document' | 'section' | 'selection';
@@ -30,8 +31,10 @@ export interface AiContextItem {
 export interface AiTranscriptTurn {
   id: string;
   role: 'user' | 'assistant';
+  kind: 'message' | 'work_run' | 'clarification' | 'error';
   text: string;
   tone?: 'normal' | 'error';
+  workRun?: AIWorkRun;
 }
 
 export interface AiReviewItem {
@@ -153,13 +156,16 @@ export function splitTranscriptAndIssues(
       transcript.push({
         id: turn.id,
         role: turn.role,
+        kind: 'work_run',
         text: turn.text || 'AI proposed changes.',
         tone: turn.tone,
+        workRun: turn.workRun,
       });
     } else {
       transcript.push({
         id: turn.id,
         role: turn.role,
+        kind: turn.tone === 'error' ? 'error' : 'message',
         text: turn.text,
         tone: turn.tone,
       });
@@ -193,7 +199,7 @@ export function parseMentions(
 
 export function buildChatActionRequest(
   message: string,
-  mode: string,
+  mode: AiMode,
   selectedModel: string | null,
   target: AiTarget,
   references: AIEditorReference[],
@@ -210,4 +216,39 @@ export function buildChatActionRequest(
     references,
     resource_ids: resourceIds,
   };
+}
+
+export function buildAiPanelChatActionPayload({
+  message,
+  mode,
+  selectedModel,
+  target,
+  references,
+  resourceIds,
+  cursor,
+}: {
+  message: string;
+  mode: AiMode;
+  selectedModel: string | null;
+  target: AiTarget;
+  references: AIEditorReference[];
+  resourceIds: number[];
+  cursor: { sectionId: number; pos: number } | AIEditorCursor | null;
+}): AIChatActionRequest {
+  const apiCursor = cursor
+    ? {
+        section_id: 'section_id' in cursor ? cursor.section_id : cursor.sectionId,
+        pos: cursor.pos,
+      }
+    : null;
+
+  return buildChatActionRequest(
+    message,
+    mode,
+    selectedModel,
+    target,
+    references,
+    resourceIds,
+    apiCursor,
+  );
 }

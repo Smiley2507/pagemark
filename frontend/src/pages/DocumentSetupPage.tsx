@@ -49,7 +49,7 @@ export function DocumentSetupPage() {
 
   const [setupState, setSetupState] = useState<DocumentSetupState>(INITIAL_STATE);
   const [showRailDrawer, setShowRailDrawer] = useState(false);
-  const [providerContext, setProviderContext] = useState<'overview' | 'generation' | null>(null);
+  const [providerContext, setProviderContext] = useState<'overview' | 'recommendation' | 'generation' | null>(null);
   const [resumeLoaded, setResumeLoaded] = useState(false);
   const [projectOverviewDraft, setProjectOverviewDraft] = useState('');
   const [overviewQuestions, setOverviewQuestions] = useState<string[]>([]);
@@ -569,6 +569,8 @@ export function DocumentSetupPage() {
   const providerActionLabel =
     providerContext === 'overview'
       ? 'AI Project overview'
+      : providerContext === 'recommendation'
+        ? 'AI-personalized recommendations'
       : 'AI-powered generation';
 
   const loadingResume = !!resumeProjectId && !resumeLoaded;
@@ -652,10 +654,12 @@ export function DocumentSetupPage() {
                   recommendations={recommendations}
                   availableTemplates={templates}
                   sourceType={setupState.sourceType}
+                  hasActiveProvider={hasActiveProvider}
                   onSelectTemplate={(templateId, recommendation) =>
                     void selectTemplate(templateId, recommendation)
                   }
                   onCreateCustom={() => void createCustomOutline()}
+                  onConfigureProvider={() => setProviderContext('recommendation')}
                 />
               )}
 

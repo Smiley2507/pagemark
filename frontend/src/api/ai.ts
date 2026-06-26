@@ -172,8 +172,8 @@ export const aiApi = {
   },
 
   /** Suggest structural changes (reorder, rename, add, remove, merge) for a document */
-  async suggestStructure(documentId: number): Promise<StructuralSuggestion[]> {
-    const { data } = await apiClient.post(`/documents/${documentId}/ai/suggest-structure`);
+  async suggestStructure(projectId: number, documentId: number): Promise<StructuralSuggestion[]> {
+    const { data } = await apiClient.post(`/projects/${projectId}/documents/${documentId}/ai/suggest-structure`);
     return data.suggestions ?? [];
   },
 

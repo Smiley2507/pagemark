@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react';
 import {
+  AlertTriangle,
   CheckCircle2,
   Code2,
   Download,
@@ -81,6 +82,12 @@ interface ExportModalProps {
   open: boolean;
   onClose: () => void;
   initialSettings?: ExportSettings;
+  readinessSummary?: ExportReadinessSummary;
+}
+
+export interface ExportReadinessSummary {
+  warningCount: number;
+  warnings: string[];
 }
 
 interface FormatOption {
@@ -166,6 +173,7 @@ export function ExportModal({
   open,
   onClose,
   initialSettings,
+  readinessSummary,
 }: ExportModalProps) {
   const [selected, setSelected] = useState<ExportFormat>('pdf');
   const [loading, setLoading] = useState(false);
@@ -174,6 +182,7 @@ export function ExportModal({
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewStatus, setPreviewStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [readinessAcknowledged, setReadinessAcknowledged] = useState(false);
   const previewDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialLoadDone = useRef(false);
 
@@ -236,6 +245,7 @@ export function ExportModal({
     setMargins(initialSettings?.margins || 'normal');
     setOrganizationName(initialSettings?.organization_name || '');
     setSubtitle(initialSettings?.subtitle || 'Technical Documentation');
+    setReadinessAcknowledged(false);
   }, [initialSettings, open]);
 
   const buildParams = useCallback(() => {
@@ -407,6 +417,10 @@ export function ExportModal({
   };
 
   const handleExport = async () => {
+    if ((readinessSummary?.warningCount ?? 0) > 0 && !readinessAcknowledged) {
+      toast.warning('Review the export readiness warning before exporting');
+      return;
+    }
     setLoading(true);
     setDone(false);
     try {
@@ -484,6 +498,37 @@ export function ExportModal({
             data-testid="export-controls"
           >
             <div className="space-y-5">
+              {readinessSummary && readinessSummary.warningCount > 0 && (
+                <section
+                  className="space-y-3 rounded-md border border-status-warning-foreground/30 bg-status-warning/10 p-3"
+                  data-testid="export-readiness-warning"
+                >
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-status-warning-foreground" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-text-primary">Readiness warnings</p>
+                      <p className="mt-1 text-xs text-text-secondary">
+                        Export is available, but this document still has review risks.
+                      </p>
+                    </div>
+                  </div>
+                  <ul className="space-y-1 text-xs text-text-secondary">
+                    {readinessSummary.warnings.slice(0, 5).map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                  <label className="flex items-start gap-2 text-xs text-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={readinessAcknowledged}
+                      onChange={(event) => setReadinessAcknowledged(event.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-current"
+                    />
+                    <span>I understand and want to export anyway.</span>
+                  </label>
+                </section>
+              )}
+
               <section className="space-y-3">
                 <div className="flex items-center gap-2 text-meta font-medium uppercase text-text-muted">
                   <FileText className="h-3.5 w-3.5" />

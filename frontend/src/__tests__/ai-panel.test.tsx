@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AiPanel } from '@/components/editor/AiPanel';
+import { buildAiPanelChatActionPayload, buildTarget } from '@/lib/ai-panel-types';
 
 const mutateAsync = vi.fn();
 const updateContextMutate = vi.fn();
@@ -22,10 +23,15 @@ vi.mock('@/components/editor/ai/AiPanelTarget', () => ({
 }));
 
 vi.mock('@/components/editor/ai/AiPanelTranscript', () => ({
-  AiPanelTranscript: ({ turns }: { turns: { id: string; role: string; text: string }[] }) => (
+  AiPanelTranscript: ({ turns }: { turns: { id: string; role: string; kind: string; text: string; workRun?: any }[] }) => (
     <div data-testid="ai-panel-transcript">
       {turns.map((t) => (
-        <div key={t.id} data-testid={`ai-turn-${t.role}`}>{t.text}</div>
+        <div key={t.id} data-testid={t.role === 'assistant' ? `ai-turn-assistant-${t.kind}` : 'ai-turn-user'}>
+          {t.text}
+          {t.workRun?.proposed_changes?.map((change: any) => (
+            <div key={change.id} data-testid={`ai-proposed-change-${change.id}`}>{change.title}</div>
+          ))}
+        </div>
       ))}
     </div>
   ),
@@ -154,6 +160,44 @@ function renderPanel() {
 }
 
 describe('AI panel', () => {
+  it('normalizes AI panel payloads at the API boundary', () => {
+    const target = buildTarget(
+      11,
+      'Overview',
+      { sectionId: 11, from: 2, to: 7, text: 'range' },
+    );
+
+    const payload = buildAiPanelChatActionPayload({
+      message: 'Refine this',
+      mode: 'refine',
+      selectedModel: 'gpt-4.1-mini',
+      target,
+      references: [{ type: 'section', id: 12, label: 'API' }],
+      resourceIds: [9],
+      cursor: { sectionId: 11, pos: 7 },
+    });
+
+    expect(payload.selection?.section_id).toBe(11);
+    expect(payload.cursor?.section_id).toBe(11);
+    expect(payload.mode).toBe('refine');
+    expect(JSON.stringify(payload)).not.toContain('sectionId');
+  });
+
+  it('accepts the supported AI modes in normalized payloads', () => {
+    const target = buildTarget(null, null, null);
+    for (const mode of ['chat', 'generate', 'refine', 'expand', 'auto'] as const) {
+      expect(buildAiPanelChatActionPayload({
+        message: mode,
+        mode,
+        selectedModel: null,
+        target,
+        references: [],
+        resourceIds: [],
+        cursor: null,
+      }).mode).toBe(mode);
+    }
+  });
+
   it('shows the target based on active section', () => {
     renderPanel();
     const target = screen.getByTestId('ai-target');
@@ -196,7 +240,7 @@ describe('AI panel', () => {
     expect(within(transcript).getByText('This section explains the setup flow.')).toBeInTheDocument();
   });
 
-  it('renders a work-run response as a transcript message, not embedded changes', async () => {
+  it('renders a work-run response with its proposed change card in the assistant turn', async () => {
     mutateAsync.mockResolvedValueOnce({
       message: 'Prepared an insertion for review.',
       action: 'insert_at_cursor',
@@ -231,12 +275,10 @@ describe('AI panel', () => {
     fireEvent.change(screen.getByLabelText('ai prompt'), { target: { value: 'Insert a paragraph here' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    // The assistant message appears in the transcript
     await waitFor(() => expect(screen.getByTestId('ai-panel-transcript')).toBeInTheDocument());
-    expect(screen.getByText('Prepared an insertion for review.')).toBeInTheDocument();
-
-    // No proposed change card inside the transcript (they go to the review queue via React Query)
-    expect(screen.queryByTestId('ai-proposed-change-101')).not.toBeInTheDocument();
+    const assistantTurn = screen.getByTestId('ai-turn-assistant-work_run');
+    expect(within(assistantTurn).getByText('Prepared an insertion for review.')).toBeInTheDocument();
+    expect(within(assistantTurn).getByTestId('ai-proposed-change-101')).toHaveTextContent('Insert lifecycle note');
   });
 
   it('shows a clarification issue when AI asks for more context', async () => {

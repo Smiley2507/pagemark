@@ -207,7 +207,11 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
     onEditorReady,
     onSelectionChange,
   }, ref) {
-    const [contextMenuState, setContextMenuState] = useState<{ position: { top: number; left: number }; selectedText: string } | null>(null)
+    const [contextMenuState, setContextMenuState] = useState<{
+      position: { top: number; left: number };
+      selection: TipTapSelectionSnapshot;
+      selectedText: string;
+    } | null>(null)
     const projectIdRef = useRef(projectId)
     useEffect(() => { projectIdRef.current = projectId })
     const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -392,12 +396,20 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
           if (!word) return
           editor.commands.setTextSelection({ from: word.from, to: word.to })
           onSelectionChange?.({ from: word.from, to: word.to, text: word.text })
-          setContextMenuState({ position: { top: e.clientY, left: e.clientX }, selectedText: word.text })
+          setContextMenuState({
+            position: { top: e.clientY, left: e.clientX },
+            selection: { from: word.from, to: word.to, text: word.text },
+            selectedText: word.text,
+          })
           return
         }
         const text = editor.state.doc.textBetween(from, to)
         onSelectionChange?.({ from, to, text })
-        setContextMenuState({ position: { top: e.clientY, left: e.clientX }, selectedText: text })
+        setContextMenuState({
+          position: { top: e.clientY, left: e.clientX },
+          selection: { from, to, text },
+          selectedText: text,
+        })
       }
 
       const editorDOM = editor.view.dom
@@ -513,8 +525,7 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
               { autoSubmit: true },
             )}
             onPolish={(text) => {
-              const { from, to } = editor.state.selection
-              onPolish?.(text, { from, to, text: editor.state.doc.textBetween(from, to) })
+              onPolish?.(text, contextMenuState.selection)
             }}
             onClose={() => { setContextMenuState(null); editor?.chain().focus().run() }}
           />,

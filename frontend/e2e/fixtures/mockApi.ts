@@ -395,7 +395,7 @@ async function handleApi(route: Route, url: URL, state: MockState) {
     removed: 2,
     diff_lines: [],
   });
-  if (method === 'POST' && path === '/documents/10/ai/suggest-structure') return json(route, {
+  if (method === 'POST' && path === '/projects/10/documents/10/ai/suggest-structure') return json(route, {
     suggestions: [
       {
         type: 'rename',

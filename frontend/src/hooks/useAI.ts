@@ -155,7 +155,8 @@ export const useStreamMessage = (threadId: number | null) => {
 
 export const useSuggestStructure = () => {
   return useMutation({
-    mutationFn: (documentId: number) => aiApi.suggestStructure(documentId),
+    mutationFn: ({ projectId, documentId }: { projectId: number; documentId: number }) =>
+      aiApi.suggestStructure(projectId, documentId),
     onError: (error) => {
       console.error('Failed to suggest structure:', error);
       toast.error('Failed to generate structural suggestions');

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FileText, Plus, Search } from 'lucide-react';
+import { FileText, Plus, Search, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
@@ -13,16 +13,20 @@ interface TemplateRecommendationStepProps {
   recommendations: TemplateRecommendation[];
   availableTemplates?: Template[];
   sourceType?: SourceConnectionType;
+  hasActiveProvider?: boolean;
   onSelectTemplate: (templateId: number, recommendation?: TemplateRecommendation) => void;
   onCreateCustom: () => void;
+  onConfigureProvider?: () => void;
 }
 
 export function TemplateRecommendationStep({
   recommendations,
   availableTemplates = [],
   sourceType,
+  hasActiveProvider = false,
   onSelectTemplate,
   onCreateCustom,
+  onConfigureProvider,
 }: TemplateRecommendationStepProps) {
   const [templateQuery, setTemplateQuery] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
@@ -88,6 +92,19 @@ export function TemplateRecommendationStep({
             <Notice variant="warning" title="No recommendations yet">
               Pick from the full template list below.
             </Notice>
+          )}
+
+          {!hasActiveProvider && onConfigureProvider && (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-panel-muted px-3 py-2">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-text-primary">AI-personalized recommendations disabled</p>
+                <p className="text-xs text-text-secondary">Rule-based recommendations remain available without provider usage.</p>
+              </div>
+              <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={onConfigureProvider}>
+                <Sparkles className="h-3.5 w-3.5" />
+                Configure provider for AI recommendation
+              </Button>
+            </div>
           )}
         </Surface>
 

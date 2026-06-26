@@ -13,8 +13,9 @@ test('source-less setup reaches the nested editor route through rule-based recom
   await expect(page).toHaveURL(/projectId=10&documentId=10/);
 
   await expect(page.getByRole('heading', { name: 'Choose structure' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Rule-based recommendations' })).toBeVisible();
-  await expect(page.getByText('No provider usage')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Recommended' })).toBeVisible();
+  await expect(page.getByRole('status').getByText('No source connected')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Technical Overview/ }).first()).toContainText('Rule-based');
   await page.getByRole('button', { name: /Technical Overview/ }).first().click();
 
   await expect(page.getByRole('heading', { name: 'Review the Outline' })).toBeVisible();
@@ -34,13 +35,15 @@ test('source-backed setup shows completed analysis and AI-personalized recommend
   await page.getByRole('button', { name: /acme\/pagemark/ }).click();
   await page.getByRole('button', { name: 'Connect GitHub repository' }).click();
 
-  await expect(page.getByRole('heading', { name: 'Analysis facts' })).toBeVisible();
-  await expect(page.getByText('Primary languages: TypeScript.')).toBeVisible();
-  await page.getByRole('button', { name: /Continue/ }).click();
+  await expect(page.getByText('Analysis snapshot ready')).toBeVisible();
+  await expect(page.getByText('TypeScript')).toBeVisible();
+  await expect(page.getByText('https://github.com/acme/pagemark')).toBeVisible();
 
   await expect(page.getByRole('heading', { name: 'Choose structure' })).toBeVisible();
-  await expect(page.getByText('AI-personalized recommendation')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Recommended' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Technical Overview AI-personalized/ })).toBeVisible();
   await expect(page.getByText('Personalized from repository facts')).toBeVisible();
+  await expect(page.getByText('Approximate provider usage: 1,420 tokens.')).toBeVisible();
   await page.getByRole('button', { name: /Technical Overview/ }).first().click();
   await page.getByRole('button', { name: 'Approve Outline' }).click();
   await page.getByRole('button', { name: 'Start generation and enter editor' }).click();
@@ -64,11 +67,13 @@ test('resume setup restores template, outline, and generation stages', async ({ 
 test('provider state controls recommendation affordances', async ({ page }) => {
   await installMockApi(page, createMockState('source-no-provider'));
   await page.goto('/document-setup?projectId=10&documentId=10');
-  await expect(page.getByText('No provider usage')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Recommended' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Technical Overview/ }).first()).toContainText('Rule-based');
   await expect(page.getByRole('button', { name: 'Configure provider for AI recommendation' })).toBeVisible();
 
   await installMockApi(page, createMockState('provider'));
   await page.goto('/document-setup?projectId=10&documentId=10');
   await expect(page.getByText('Provider-consuming action')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'AI-personalized recommendation' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Technical Overview AI-personalized/ })).toBeVisible();
+  await expect(page.getByText('Approximate provider usage: 1,420 tokens.')).toBeVisible();
 });
