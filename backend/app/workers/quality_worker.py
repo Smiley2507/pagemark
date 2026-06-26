@@ -297,6 +297,7 @@ def score_quality_task(self, document_id: int):
             if not doc:
                 logger.warning("Quality scoring task %s could not find document %s", self.request.id, document_id)
                 return {"error": "Document not found"}
+            project_id = doc.project_id
 
             sections = (
                 db.query(Section)
@@ -365,6 +366,7 @@ def score_quality_task(self, document_id: int):
             )
             db.add(report)
             db.flush()  # get report.id
+            report_id = report.id
 
             # ── Persist issues ────────────────────────────────────────────
             all_issues = comp_issues + acceptance_issues + read_issues + cons_issues + acc_issues
@@ -392,19 +394,20 @@ def score_quality_task(self, document_id: int):
             logger.info(
                 "Quality scoring task %s wrote report %s for document %s",
                 self.request.id,
-                report.id,
-                doc.id,
+                report_id,
+                document_id,
             )
+            result_payload = {
+                "project_id": project_id,
+                "overall": round(overall, 1),
+                "completeness": round(completeness, 1),
+                "acceptance_coverage": round(acceptance_coverage, 1),
+                "readability": round(readability, 1),
+                "consistency": round(consistency, 1),
+                "accuracy": round(accuracy, 1),
+            }
 
-        return {
-            "project_id": doc.project_id,
-            "overall": round(overall, 1),
-            "completeness": round(completeness, 1),
-            "acceptance_coverage": round(acceptance_coverage, 1),
-            "readability": round(readability, 1),
-            "consistency": round(consistency, 1),
-            "accuracy": round(accuracy, 1),
-        }
+        return result_payload
     except Exception:
         logger.exception("Quality scoring task %s failed for document %s", self.request.id, document_id)
         raise
