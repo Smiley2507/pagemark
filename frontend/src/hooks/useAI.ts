@@ -1,10 +1,31 @@
 import { useState, useCallback, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { aiApi } from '@/api/ai';
 import { toast } from 'sonner';
 
 type CreateAiWorkRunPayload = Parameters<typeof aiApi.createWorkRun>[2];
 type CreateAiChatActionPayload = Parameters<typeof aiApi.createChatAction>[2];
+
+function apiErrorMessage(error: unknown, fallback: string): string {
+  if (axios.isAxiosError(error)) {
+    const detail = error.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((item) => {
+          if (item && typeof item === 'object' && 'msg' in item) {
+            return String((item as { msg: unknown }).msg);
+          }
+          return String(item);
+        })
+        .join('; ');
+    }
+    if (detail) return JSON.stringify(detail);
+    return error.message || fallback;
+  }
+  return error instanceof Error ? error.message : fallback;
+}
 
 export const useGenerateSection = (projectId: number) => {
   const queryClient = useQueryClient();
@@ -200,8 +221,9 @@ export const useCreateAiChatAction = (projectId: number, documentId: number) => 
       }
     },
     onError: (error) => {
-      console.error('Failed to create AI editor action:', error);
-      toast.error('AI editor action failed');
+      const message = apiErrorMessage(error, 'AI editor action failed');
+      console.error('Failed to create AI editor action:', message, error);
+      toast.error(message);
     },
   });
 };
