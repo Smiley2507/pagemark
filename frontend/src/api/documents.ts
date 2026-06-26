@@ -1,5 +1,5 @@
 import apiClient from './client';
-import type { CollaborationNote, Section, SectionTreeResponse, DocumentShare, ShareListResponse } from '../types';
+import type { CollaborationNote, NoteReference, Section, SectionTreeResponse, DocumentShare, ShareListResponse } from '../types';
 import type {
   TemplateRecommendation,
   OutlineProposal,
@@ -390,8 +390,12 @@ export const documentsApi = {
     return data;
   },
 
-  async addNote(projectId: number, documentId: number, content: string, sectionId?: number): Promise<CollaborationNote> {
-    const { data } = await apiClient.post(`/projects/${projectId}/documents/${documentId}/notes`, { content, section_id: sectionId });
+  async addNote(projectId: number, documentId: number, content: string, sectionId?: number, references?: NoteReference[]): Promise<CollaborationNote> {
+    const { data } = await apiClient.post(`/projects/${projectId}/documents/${documentId}/notes`, {
+      content,
+      section_id: sectionId,
+      references: references ?? [],
+    });
     return data;
   },
 

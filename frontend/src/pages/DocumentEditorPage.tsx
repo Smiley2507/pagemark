@@ -353,7 +353,7 @@ function SectionBlock({
                 {onJumpToSection && (
                   <DropdownMenuItem onClick={() => onJumpToSection(section.id)}>
                     <BookOpen className="h-3.5 w-3.5" />
-                    Notes
+                    Add note
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
@@ -466,6 +466,8 @@ export function DocumentEditorPage() {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [notesInitialScope, setNotesInitialScope] = useState<'document' | 'section'>('document');
+  const [notesFocusSignal, setNotesFocusSignal] = useState(0);
   const { data: allNotes = [] } = useNotes(pid, did, null);
   const noteCount = allNotes.length;
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
@@ -824,6 +826,13 @@ export function DocumentEditorPage() {
     });
   }, []);
 
+  const openSectionNoteComposer = useCallback((sectionId: number | null) => {
+    if (sectionId) setActiveSectionId(sectionId);
+    setNotesInitialScope('section');
+    setNotesOpen(true);
+    setNotesFocusSignal((value) => value + 1);
+  }, []);
+
   useKeyboardShortcuts({
     shortcuts: [
       {
@@ -842,6 +851,20 @@ export function DocumentEditorPage() {
         handler: () => {
           setPaletteOpen(true);
         },
+      },
+      {
+        key: 'n',
+        mod: 'metaKey',
+        alt: true,
+        enabled: Boolean(activeEditorSectionId || activeSectionId),
+        handler: () => openSectionNoteComposer(activeEditorSectionId ?? activeSectionId),
+      },
+      {
+        key: 'n',
+        mod: 'ctrlKey',
+        alt: true,
+        enabled: Boolean(activeEditorSectionId || activeSectionId),
+        handler: () => openSectionNoteComposer(activeEditorSectionId ?? activeSectionId),
       },
       {
         key: 'F',
@@ -964,7 +987,7 @@ export function DocumentEditorPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setNotesOpen(true)}
+            onClick={() => { setNotesInitialScope('document'); setNotesOpen(true); }}
             className="gap-1.5 relative"
           >
             <MessageSquare className="h-4 w-4" />
@@ -1091,7 +1114,7 @@ export function DocumentEditorPage() {
                   onSaved={setLastSaved}
                   onLocalContentChange={handleLocalContentChange}
                   onAcceptReview={(sectionId) => acceptSectionReview.mutate(sectionId)}
-                  onJumpToSection={(sectionId) => { setActiveSectionId(sectionId); setNotesOpen(true); }}
+                  onJumpToSection={(sectionId) => openSectionNoteComposer(sectionId)}
                   onVersionHistory={setVersionHistorySectionId}
                   staleSectionMeta={staleSectionMeta}
                   onAcceptStaleness={(sectionId) => acceptFreshness.mutate(sectionId)}
@@ -1120,6 +1143,13 @@ export function DocumentEditorPage() {
             projectId={pid}
             documentId={did}
             activeSectionId={activeSection?.id ?? null}
+            initialScope={notesInitialScope}
+            focusSignal={notesFocusSignal}
+            sections={sections.map((section) => ({
+              id: section.id,
+              heading: section.heading,
+              title: section.title,
+            }))}
             onClose={() => setNotesOpen(false)}
             open={notesOpen}
           />

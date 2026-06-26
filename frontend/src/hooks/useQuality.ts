@@ -51,26 +51,49 @@ export const useRunQuality = (projectId: number, documentId: number) => {
 
   return useMutation({
     mutationFn: () => qualityApi.runQuality(projectId, documentId),
-    onSuccess: () => {
+    onSuccess: (run) => {
       toast.success('Quality analysis started');
       queryClient.invalidateQueries({ queryKey: ['quality', projectId, documentId] });
+      queryClient.setQueryData(['quality-status', projectId, documentId, run.task_id], {
+        status: 'queued',
+        task_id: run.task_id,
+        message: run.message,
+      });
 
       let attempts = 0;
-      const maxAttempts = 12;
-      pollTimerRef.current = setInterval(() => {
+      const maxAttempts = 24;
+      pollTimerRef.current = setInterval(async () => {
         attempts++;
-        queryClient.invalidateQueries({ queryKey: ['quality', projectId, documentId] });
-        const state = queryClient.getQueryState(['quality', projectId, documentId]);
-        if (state?.data) {
-          clearInterval(pollTimerRef.current!);
-          pollTimerRef.current = null;
-          toast.success('Quality analysis complete');
-        } else if (attempts >= maxAttempts) {
-          clearInterval(pollTimerRef.current!);
-          pollTimerRef.current = null;
-          toast.error('Quality analysis timed out. The celery task may have failed — check the worker logs.');
+        try {
+          const status = await qualityApi.getStatus(projectId, documentId, run.task_id);
+          queryClient.setQueryData(['quality-status', projectId, documentId, run.task_id], status);
+
+          if (status.status === 'completed') {
+            clearInterval(pollTimerRef.current!);
+            pollTimerRef.current = null;
+            queryClient.invalidateQueries({ queryKey: ['quality', projectId, documentId] });
+            queryClient.invalidateQueries({ queryKey: ['quality-modal', projectId, documentId] });
+            toast.success('Quality analysis complete');
+            return;
+          }
+
+          if (status.status === 'failed' || status.status === 'missing_report') {
+            clearInterval(pollTimerRef.current!);
+            pollTimerRef.current = null;
+            const message = status.error || status.message;
+            toast.error(message);
+            return;
+          }
+        } catch {
+          queryClient.invalidateQueries({ queryKey: ['quality', projectId, documentId] });
         }
-      }, 5000);
+
+        if (attempts >= maxAttempts) {
+          clearInterval(pollTimerRef.current!);
+          pollTimerRef.current = null;
+          toast.error('Quality analysis is still running. Check status again shortly or inspect the worker logs.');
+        }
+      }, 3000);
     },
     onError: (error) => {
       if (isNotFound(error)) {

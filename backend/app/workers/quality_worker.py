@@ -12,6 +12,7 @@ overall = 0.25*completeness + 0.25*acceptance_coverage + 0.20*readability + 0.15
 """
 
 import asyncio
+import logging
 import re
 from collections import Counter
 from datetime import datetime
@@ -21,6 +22,8 @@ import httpx
 import textstat
 
 from app.workers.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 
 # ── Synonym groups to detect inconsistencies ─────────────────────────────────
@@ -281,109 +284,127 @@ def score_quality_task(self, document_id: int):
     from app.models.document import Document, Section, SectionStatus, SectionContentLifecycle
     from app.models.quality import QualityReport, QualityIssue, BrokenLink, IssueSeverity
     from sqlalchemy import or_
-    from sqlalchemy.orm import selectinload
 
-    with sync_session_factory() as db:
-        # Fetch the selected Document + sections.
-        doc = (
-            db.query(Document)
-            .filter(Document.id == document_id)
-            .first()
-        )
-        if not doc:
-            return {"error": "Document not found"}
-
-        sections = (
-            db.query(Section)
-            .filter(
-                Section.document_id == doc.id,
-                or_(
-                    Section.status == SectionStatus.FINALIZED,
-                    Section.content_lifecycle == SectionContentLifecycle.REVIEWED,
-                ),
+    logger.info("Quality scoring task %s started for document %s", self.request.id, document_id)
+    try:
+        with sync_session_factory() as db:
+            # Fetch the selected Document + sections.
+            doc = (
+                db.query(Document)
+                .filter(Document.id == document_id)
+                .first()
             )
-            .order_by(Section.order_index)
-            .all()
-        )
+            if not doc:
+                logger.warning("Quality scoring task %s could not find document %s", self.request.id, document_id)
+                return {"error": "Document not found"}
 
-        # If no finalized sections, use all sections (fallback for scoring purposes)
-        if not sections:
             sections = (
                 db.query(Section)
-                .filter(Section.document_id == doc.id)
+                .filter(
+                    Section.document_id == doc.id,
+                    or_(
+                        Section.status == SectionStatus.FINALIZED,
+                        Section.content_lifecycle == SectionContentLifecycle.REVIEWED,
+                    ),
+                )
                 .order_by(Section.order_index)
                 .all()
             )
 
-        # ── Run all scorers ──────────────────────────────────────────
-        completeness, comp_issues = _score_completeness(sections)
-        acceptance_coverage, acceptance_issues = _score_acceptance_coverage(sections)
-        combined_text = " ".join((s.content_md or "") for s in sections)
-        readability, read_issues = _score_readability(combined_text)
-        consistency, cons_issues = _score_consistency(sections)
-        accuracy, acc_issues, broken = _run_async(_score_accuracy_async(sections))
+            # If no finalized sections, use all sections (fallback for scoring purposes)
+            if not sections:
+                sections = (
+                    db.query(Section)
+                    .filter(Section.document_id == doc.id)
+                    .order_by(Section.order_index)
+                    .all()
+                )
 
-        overall = (
-            0.25 * completeness
-            + 0.25 * acceptance_coverage
-            + 0.20 * readability
-            + 0.15 * consistency
-            + 0.15 * accuracy
-        )
+            logger.info(
+                "Quality scoring task %s scoring document %s with %d sections",
+                self.request.id,
+                doc.id,
+                len(sections),
+            )
 
-        # ── Upsert QualityReport (delete old, create new) ─────────────
-        existing = (
-            db.query(QualityReport)
-            .filter(QualityReport.document_id == doc.id)
-            .first()
-        )
-        if existing:
-            db.delete(existing)
-            db.flush()
+            # ── Run all scorers ──────────────────────────────────────────
+            completeness, comp_issues = _score_completeness(sections)
+            acceptance_coverage, acceptance_issues = _score_acceptance_coverage(sections)
+            combined_text = " ".join((s.content_md or "") for s in sections)
+            readability, read_issues = _score_readability(combined_text)
+            consistency, cons_issues = _score_consistency(sections)
+            accuracy, acc_issues, broken = _run_async(_score_accuracy_async(sections))
 
-        report = QualityReport(
-            document_id=doc.id,
-            overall_score=round(overall, 1),
-            completeness=round(completeness, 1),
-            acceptance_coverage=round(acceptance_coverage, 1),
-            readability=round(readability, 1),
-            consistency=round(consistency, 1),
-            accuracy=round(accuracy, 1),
-            generated_at=utcnow(),
-        )
-        db.add(report)
-        db.flush()  # get report.id
+            overall = (
+                0.25 * completeness
+                + 0.25 * acceptance_coverage
+                + 0.20 * readability
+                + 0.15 * consistency
+                + 0.15 * accuracy
+            )
 
-        # ── Persist issues ────────────────────────────────────────────
-        all_issues = comp_issues + acceptance_issues + read_issues + cons_issues + acc_issues
-        for issue_data in all_issues:
-            sev_str = issue_data.get("severity", "info")
-            sev = IssueSeverity[sev_str.upper()]
-            db.add(QualityIssue(
-                report_id=report.id,
-                severity=sev,
-                section_ref=issue_data.get("section_ref"),
-                message=issue_data["message"],
-                suggestion=issue_data.get("suggestion"),
-            ))
+            # ── Upsert QualityReport (delete old, create new) ─────────────
+            existing = (
+                db.query(QualityReport)
+                .filter(QualityReport.document_id == doc.id)
+                .first()
+            )
+            if existing:
+                db.delete(existing)
+                db.flush()
 
-        # ── Persist broken links ──────────────────────────────────────
-        for bl in broken:
-            db.add(BrokenLink(
-                report_id=report.id,
-                url=bl["url"],
-                status_code=bl.get("status_code"),
-                section_ref=bl.get("section_ref"),
-            ))
+            report = QualityReport(
+                document_id=doc.id,
+                overall_score=round(overall, 1),
+                completeness=round(completeness, 1),
+                acceptance_coverage=round(acceptance_coverage, 1),
+                readability=round(readability, 1),
+                consistency=round(consistency, 1),
+                accuracy=round(accuracy, 1),
+                generated_at=utcnow(),
+            )
+            db.add(report)
+            db.flush()  # get report.id
 
-        db.commit()
+            # ── Persist issues ────────────────────────────────────────────
+            all_issues = comp_issues + acceptance_issues + read_issues + cons_issues + acc_issues
+            for issue_data in all_issues:
+                sev_str = issue_data.get("severity", "info")
+                sev = IssueSeverity[sev_str.upper()]
+                db.add(QualityIssue(
+                    report_id=report.id,
+                    severity=sev,
+                    section_ref=issue_data.get("section_ref"),
+                    message=issue_data["message"],
+                    suggestion=issue_data.get("suggestion"),
+                ))
 
-    return {
-        "project_id": doc.project_id,
-        "overall": round(overall, 1),
-        "completeness": round(completeness, 1),
-        "acceptance_coverage": round(acceptance_coverage, 1),
-        "readability": round(readability, 1),
-        "consistency": round(consistency, 1),
-        "accuracy": round(accuracy, 1),
-    }
+            # ── Persist broken links ──────────────────────────────────────
+            for bl in broken:
+                db.add(BrokenLink(
+                    report_id=report.id,
+                    url=bl["url"],
+                    status_code=bl.get("status_code"),
+                    section_ref=bl.get("section_ref"),
+                ))
+
+            db.commit()
+            logger.info(
+                "Quality scoring task %s wrote report %s for document %s",
+                self.request.id,
+                report.id,
+                doc.id,
+            )
+
+        return {
+            "project_id": doc.project_id,
+            "overall": round(overall, 1),
+            "completeness": round(completeness, 1),
+            "acceptance_coverage": round(acceptance_coverage, 1),
+            "readability": round(readability, 1),
+            "consistency": round(consistency, 1),
+            "accuracy": round(accuracy, 1),
+        }
+    except Exception:
+        logger.exception("Quality scoring task %s failed for document %s", self.request.id, document_id)
+        raise

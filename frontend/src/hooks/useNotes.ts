@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { documentsApi } from '@/api/documents';
-import type { CollaborationNote } from '@/types';
+import type { CollaborationNote, NoteReference } from '@/types';
 
 export const useNotes = (projectId: number, documentId: number, sectionId?: number | null) =>
   useQuery({
@@ -13,8 +13,8 @@ export const useNotes = (projectId: number, documentId: number, sectionId?: numb
 export const useCreateNote = (projectId: number, documentId: number) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ content, sectionId }: { content: string; sectionId?: number | null }) =>
-      documentsApi.addNote(projectId, documentId, content, sectionId ?? undefined),
+    mutationFn: ({ content, sectionId, references }: { content: string; sectionId?: number | null; references?: NoteReference[] }) =>
+      documentsApi.addNote(projectId, documentId, content, sectionId ?? undefined, references ?? []),
     onSuccess: (_, { sectionId }) => {
       void queryClient.invalidateQueries({ queryKey: ['notes', projectId, documentId] });
       void queryClient.invalidateQueries({ queryKey: ['notes', projectId, documentId, sectionId] });

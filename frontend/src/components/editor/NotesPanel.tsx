@@ -1,23 +1,43 @@
 import { useState, useRef, useEffect } from 'react';
-import { MessageSquare, Plus, Loader2, User } from 'lucide-react';
+import { FileText, MessageSquare, Plus, Loader2, User, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useNotes, useCreateNote } from '@/hooks/useNotes';
 import { useAuthStore } from '@/store/authStore';
+import { resourcesApi } from '@/api/resources';
 import { cn } from '@/lib/utils';
+import type { NoteReference } from '@/types';
 
 interface NotesPanelProps {
   projectId: number;
   documentId: number;
   activeSectionId: number | null;
+  initialScope?: 'document' | 'section';
+  focusSignal?: number;
+  sections?: Array<{ id: number; heading: string; title?: string | null }>;
 }
 
-export function NotesPanel({ projectId, documentId, activeSectionId }: NotesPanelProps) {
-  const [scope, setScope] = useState<'document' | 'section'>('document');
+export function NotesPanel({ projectId, documentId, activeSectionId, initialScope = 'document', focusSignal = 0, sections = [] }: NotesPanelProps) {
+  const [scope, setScope] = useState<'document' | 'section'>(initialScope);
   const [newNote, setNewNote] = useState('');
+  const [references, setReferences] = useState<NoteReference[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const user = useAuthStore((s) => s.user);
   const resolvedSectionId = scope === 'section' ? activeSectionId : null;
   const { data: notes = [], isLoading } = useNotes(projectId, documentId, resolvedSectionId);
   const createNote = useCreateNote(projectId, documentId);
+  const { data: resourcesData } = useQuery({
+    queryKey: ['resources', projectId],
+    queryFn: () => resourcesApi.list(projectId),
+    enabled: projectId > 0,
+  });
+  const resources = resourcesData?.resources ?? [];
+
+  useEffect(() => {
+    setScope(initialScope);
+    if (focusSignal > 0) {
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+  }, [focusSignal, initialScope]);
 
   useEffect(() => {
     if (newNote && textareaRef.current) {
@@ -30,8 +50,8 @@ export function NotesPanel({ projectId, documentId, activeSectionId }: NotesPane
     const content = newNote.trim();
     if (!content) return;
     createNote.mutate(
-      { content, sectionId: resolvedSectionId },
-      { onSuccess: () => { setNewNote(''); } },
+      { content, sectionId: resolvedSectionId, references },
+      { onSuccess: () => { setNewNote(''); setReferences([]); } },
     );
   };
 
@@ -41,6 +61,29 @@ export function NotesPanel({ projectId, documentId, activeSectionId }: NotesPane
       handleSubmit();
     }
   };
+
+  const addReference = (reference: NoteReference) => {
+    if (references.some((item) => item.type === reference.type && item.id === reference.id && item.label === reference.label)) {
+      return;
+    }
+    setReferences((current) => [...current, reference]);
+  };
+
+  const removeReference = (index: number) => {
+    setReferences((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  const currentSection = sections.find((section) => section.id === activeSectionId);
+
+  useEffect(() => {
+    if (scope === 'section' && currentSection) {
+      addReference({
+        type: 'section',
+        id: currentSection.id,
+        label: currentSection.title || currentSection.heading || `Section ${currentSection.id}`,
+      });
+    }
+  }, [scope, currentSection?.id]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -104,6 +147,19 @@ export function NotesPanel({ projectId, documentId, activeSectionId }: NotesPane
                   </span>
                 </div>
                 <p className="text-xs text-text-secondary whitespace-pre-wrap">{note.content}</p>
+                {note.references && note.references.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {note.references.map((reference, index) => (
+                      <span
+                        key={`${reference.type}-${reference.id ?? reference.label}-${index}`}
+                        className="inline-flex max-w-full items-center gap-1 rounded border border-separator bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-muted"
+                      >
+                        <FileText className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{reference.label}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -136,6 +192,70 @@ export function NotesPanel({ projectId, documentId, activeSectionId }: NotesPane
                 <Plus className="h-3 w-3" />
               )}
             </button>
+          </div>
+          <div className="border-t border-separator px-2 py-2">
+            <div className="mb-2 flex flex-wrap gap-1">
+              {references.map((reference, index) => (
+                <button
+                  key={`${reference.type}-${reference.id ?? reference.label}-${index}`}
+                  type="button"
+                  onClick={() => removeReference(index)}
+                  className="inline-flex max-w-full items-center gap-1 rounded border border-separator bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary hover:text-text-primary"
+                  title="Remove citation"
+                >
+                  <span className="truncate">{reference.label}</span>
+                  <X className="h-3 w-3 shrink-0" />
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-1">
+              <select
+                value=""
+                onChange={(event) => {
+                  const section = sections.find((item) => String(item.id) === event.target.value);
+                  if (section) {
+                    addReference({
+                      type: 'section',
+                      id: section.id,
+                      label: section.title || section.heading || `Section ${section.id}`,
+                    });
+                  }
+                }}
+                className="h-7 rounded border border-input bg-canvas px-2 text-[10px] text-text-secondary"
+              >
+                <option value="">Add section</option>
+                {sections.map((section) => (
+                  <option key={section.id} value={section.id}>
+                    {section.title || section.heading || `Section ${section.id}`}
+                  </option>
+                ))}
+              </select>
+              <select
+                value=""
+                onChange={(event) => {
+                  const resource = resources.find((item) => String(item.id) === event.target.value);
+                  if (resource) {
+                    addReference({
+                      type: 'resource',
+                      id: resource.id,
+                      label: resource.original_name,
+                      metadata: {
+                        mime_type: resource.mime_type,
+                        file_path: resource.file_path,
+                      },
+                    });
+                  }
+                }}
+                className="h-7 rounded border border-input bg-canvas px-2 text-[10px] text-text-secondary"
+              >
+                <option value="">Add resource</option>
+                {resources.map((resource) => (
+                  <option key={resource.id} value={resource.id}>
+                    {resource.original_name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>

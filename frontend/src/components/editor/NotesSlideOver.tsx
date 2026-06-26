@@ -7,9 +7,12 @@ interface NotesSlideOverProps {
   projectId: number;
   documentId: number;
   activeSectionId: number | null;
+  initialScope?: 'document' | 'section';
+  focusSignal?: number;
+  sections?: Array<{ id: number; heading: string; title?: string | null }>;
 }
 
-export function NotesSlideOver({ open, onClose, projectId, documentId, activeSectionId }: NotesSlideOverProps) {
+export function NotesSlideOver({ open, onClose, projectId, documentId, activeSectionId, initialScope, focusSignal, sections }: NotesSlideOverProps) {
   if (!open) return null;
 
   return (
@@ -32,6 +35,9 @@ export function NotesSlideOver({ open, onClose, projectId, documentId, activeSec
           projectId={projectId}
           documentId={documentId}
           activeSectionId={activeSectionId}
+          initialScope={initialScope}
+          focusSignal={focusSignal}
+          sections={sections}
         />
       </div>
     </div>

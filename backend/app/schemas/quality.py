@@ -44,3 +44,21 @@ class QualityReportOut(BaseModel):
 
 class QualityRunResponse(BaseModel):
     message: str
+    task_id: str
+
+
+class QualityReportSummary(BaseModel):
+    id: int
+    document_id: int
+    overall_score: float
+    generated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class QualityStatusResponse(BaseModel):
+    status: str
+    task_id: str
+    message: str
+    report: Optional[QualityReportSummary] = None
+    error: Optional[str] = None

@@ -345,7 +345,7 @@ describe('Notes create/list against Document or Section', () => {
     const result = await documentsApi.addNote(1, 10, 'Doc note');
     expect(apiClient.post).toHaveBeenCalledWith(
       '/projects/1/documents/10/notes',
-      { content: 'Doc note', section_id: undefined },
+      { content: 'Doc note', section_id: undefined, references: [] },
     );
     expect(result.content).toBe('Doc note');
   });
@@ -357,7 +357,7 @@ describe('Notes create/list against Document or Section', () => {
     const result = await documentsApi.addNote(1, 10, 'Section note', 5);
     expect(apiClient.post).toHaveBeenCalledWith(
       '/projects/1/documents/10/notes',
-      { content: 'Section note', section_id: 5 },
+      { content: 'Section note', section_id: 5, references: [] },
     );
     expect(result.section_id).toBe(5);
   });

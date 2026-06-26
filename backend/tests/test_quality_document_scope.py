@@ -10,6 +10,7 @@ async def test_quality_run_dispatches_selected_document_id(client, test_project,
 
     def fake_delay(document_id: int):
         dispatched.append(document_id)
+        return SimpleNamespace(id="quality-task-1")
 
     monkeypatch.setattr("app.routers.quality.score_quality_task.delay", fake_delay)
 
@@ -31,6 +32,32 @@ async def test_quality_run_dispatches_selected_document_id(client, test_project,
 
     assert run_response.status_code == 202
     assert dispatched == [second_document["id"]]
+    assert run_response.json()["task_id"] == "quality-task-1"
+
+
+@pytest.mark.anyio
+async def test_quality_status_reports_missing_report_after_success(client, test_project, monkeypatch):
+    monkeypatch.setattr(
+        "app.routers.quality.AsyncResult",
+        lambda task_id, app: SimpleNamespace(state="SUCCESS", result={"overall": 90}),
+    )
+
+    response = await client.post(
+        f"/projects/{test_project.id}/documents",
+        json={"title": "Quality Status Document", "purpose": "Status purpose"},
+    )
+    assert response.status_code == 201
+    document = response.json()
+
+    status_response = await client.get(
+        f"/projects/{test_project.id}/documents/{document['id']}/quality/status",
+        params={"task_id": "quality-task-1"},
+    )
+
+    assert status_response.status_code == 200
+    payload = status_response.json()
+    assert payload["status"] == "missing_report"
+    assert payload["task_id"] == "quality-task-1"
 
 
 def test_acceptance_coverage_flags_generic_sections():

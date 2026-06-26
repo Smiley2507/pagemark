@@ -23,10 +23,37 @@ export interface QualityReportFull extends QualityReport {
   broken_links: BrokenLink[];
 }
 
+export interface QualityRunResponse {
+  message: string;
+  task_id: string;
+}
+
+export interface QualityStatus {
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'missing_report';
+  task_id: string;
+  message: string;
+  report?: {
+    id: number;
+    document_id: number;
+    overall_score: number;
+    generated_at: string;
+  } | null;
+  error?: string | null;
+}
+
 export const qualityApi = {
   /** Dispatch quality analysis job → 202 */
-  async runQuality(projectId: number, documentId: number): Promise<void> {
-    await apiClient.post(`/projects/${projectId}/documents/${documentId}/quality/run`);
+  async runQuality(projectId: number, documentId: number): Promise<QualityRunResponse> {
+    const { data } = await apiClient.post(`/projects/${projectId}/documents/${documentId}/quality/run`);
+    return data;
+  },
+
+  async getStatus(projectId: number, documentId: number, taskId: string): Promise<QualityStatus> {
+    const { data } = await apiClient.get(
+      `/projects/${projectId}/documents/${documentId}/quality/status`,
+      { params: { task_id: taskId } },
+    );
+    return data;
   },
 
   /** Fetch latest quality report with all issues + broken links */

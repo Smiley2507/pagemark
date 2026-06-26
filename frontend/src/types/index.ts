@@ -277,6 +277,13 @@ export interface Document {
 
 export type DocumentStatus = 'DRAFT' | 'IN_REVIEW' | 'APPROVED';
 
+export interface NoteReference {
+  type: 'section' | 'document' | 'resource' | 'source' | 'note';
+  id?: number | null;
+  label: string;
+  metadata?: Record<string, unknown> | null;
+}
+
 export interface CollaborationNote {
   id: number;
   document_id: number;
@@ -284,6 +291,7 @@ export interface CollaborationNote {
   user_id: number;
   content: string;
   created_at: string;
+  references?: NoteReference[];
   user_name?: string;
   user_avatar?: string;
 }

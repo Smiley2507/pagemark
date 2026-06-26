@@ -132,6 +132,22 @@ export function AiPanel({
       change,
     }));
 
+  const reconciledTurns = useMemo(() => {
+    if (proposedChanges.length === 0) return turns;
+    const changesById = new Map(proposedChanges.map((change) => [change.id, change]));
+    return turns.map((turn) => {
+      if (!turn.workRun?.proposed_changes?.length) return turn;
+      const nextChanges = turn.workRun.proposed_changes.map((change) => changesById.get(change.id) ?? change);
+      return {
+        ...turn,
+        workRun: {
+          ...turn.workRun,
+          proposed_changes: nextChanges,
+        },
+      };
+    });
+  }, [proposedChanges, turns]);
+
   const sectionClarificationIssue: AiIssue | null = issues.find(
     (i) => i.kind === 'clarification_section',
   ) ?? null;
@@ -563,7 +579,7 @@ export function AiPanel({
         )}
 
         <AiPanelTranscript
-          turns={turns}
+          turns={reconciledTurns}
           onClear={clearTurns}
           onAccept={(changeId) => acceptAiChange.mutate(changeId)}
           onReject={(changeId) => rejectAiChange.mutate(changeId)}

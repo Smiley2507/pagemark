@@ -25,6 +25,7 @@ import { Surface } from '@/components/ui/surface';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { qualityApi } from '@/api/quality';
+import type { QualityStatus } from '@/api/quality';
 import type { QualityIssue, BrokenLink } from '@/types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -160,6 +161,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
   const [progress, setProgress] = useState(0);
+  const [runStatus, setRunStatus] = useState<QualityStatus | null>(null);
   const hasDocumentContext = Number.isFinite(documentId) && (documentId ?? 0) > 0;
 
   const { data: report, isLoading, error, refetch } = useQuery({
@@ -203,11 +205,16 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
       }
       return qualityApi.runQuality(projectId, documentId!);
     },
-    onSuccess: () => {
-      toast.success('Quality analysis started. Results will appear shortly.');
+    onSuccess: (run) => {
+      const queued: QualityStatus = {
+        status: 'queued',
+        task_id: run.task_id,
+        message: run.message,
+      };
+      setRunStatus(queued);
+      toast.success('Quality analysis started.');
       setProgress(5);
       
-      // Fake progress bar that fills up over 5-10 seconds
       const interval = setInterval(() => {
         setProgress(p => {
           if (p >= 90) return p;
@@ -215,27 +222,36 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
         });
       }, 500);
 
-      // Poll until success
       const poll = setInterval(async () => {
         try {
-          const result = await refetch();
-          if (result.data) {
+          const status = await qualityApi.getStatus(projectId, documentId!, run.task_id);
+          setRunStatus(status);
+          if (status.status === 'completed') {
             clearInterval(poll);
             clearInterval(interval);
             setProgress(100);
-            setTimeout(() => setProgress(0), 500);
+            await refetch();
+            toast.success('Quality analysis complete');
+            setTimeout(() => {
+              setProgress(0);
+              setRunStatus(null);
+            }, 500);
+          } else if (status.status === 'failed' || status.status === 'missing_report') {
+            clearInterval(poll);
+            clearInterval(interval);
+            setProgress(0);
+            toast.error(status.error || status.message);
           }
-        } catch (e) {
-          // keep polling
+        } catch {
+          await refetch();
         }
       }, 2000);
 
-      // Cleanup if modal closes or after 30s
       setTimeout(() => {
         clearInterval(poll);
         clearInterval(interval);
         setProgress(0);
-      }, 30000);
+      }, 60000);
     },
     onError: () => toast.error(hasDocumentContext ? 'Failed to start quality analysis' : 'Open a Document to run quality analysis'),
   });
@@ -585,10 +601,18 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
           </div>
         </header>
 
-        {/* Fake Progress Bar */}
+        {/* Progress Bar */}
         {progress > 0 && (
-          <div className="h-1 w-full bg-panel-muted">
-            <div className="h-full bg-primary transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
+          <div className="border-b border-border bg-panel-muted">
+            <div className="h-1 w-full">
+              <div className="h-full bg-primary transition-all duration-300 ease-out" style={{ width: `${progress}%` }} />
+            </div>
+            {runStatus && (
+              <div className="px-6 py-2 text-xs text-text-secondary">
+                <span className="capitalize">{runStatus.status.replace('_', ' ')}</span>
+                <span className="text-text-muted"> · {runStatus.error || runStatus.message}</span>
+              </div>
+            )}
           </div>
         )}
 
