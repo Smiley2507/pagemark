@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, KeyRound, Lock, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,10 +10,14 @@ import { useLogin } from '@/hooks/useAuth';
 export const LoginPage = () => {
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('redirect') || undefined;
-  const { login, verifyMfa, requiresMfa, loginMessage, clearMfa, isPending, isVerifying } = useLogin(redirectTo);
-  const [email, setEmail] = useState('');
+  const { login, verifyMfa, requiresMfa, mfaEmail, loginMessage, clearMfa, isPending, isVerifying } = useLogin(redirectTo);
+  const [email, setEmail] = useState(mfaEmail ?? '');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
+
+  useEffect(() => {
+    if (mfaEmail) setEmail(mfaEmail);
+  }, [mfaEmail]);
 
   const handleCredentialsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +26,7 @@ export const LoginPage = () => {
 
   const handleOtpSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    verifyMfa({ email, code: otp });
+    verifyMfa({ email: mfaEmail ?? email, code: otp });
   };
 
   if (requiresMfa) {
@@ -55,7 +59,7 @@ export const LoginPage = () => {
                 autoComplete="one-time-code"
               />
             </div>
-            <p className="text-meta text-muted-foreground">Sent to {email}</p>
+            <p className="text-meta text-muted-foreground">Sent to {mfaEmail ?? email}</p>
           </div>
           <Button type="submit" className="h-10 w-full" disabled={isVerifying || otp.length < 6}>
             {isVerifying ? 'Verifying…' : 'Verify & Sign In'}

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { authApi } from '@/api/auth';
@@ -73,18 +73,16 @@ export const useMe = () => {
 
 export const useLogin = (redirectTo?: string) => {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [mfaEmail, setMfaEmail] = useState<string | null>(null);
-  const [requiresMfa, setRequiresMfa] = useState(false);
-  const [loginMessage, setLoginMessage] = useState<string | null>(null);
+  const pendingMfa = useAuthStore((state) => state.pendingMfa);
 
   const loginMutation = useMutation({
     mutationFn: authApi.login,
-    onSuccess: (res) => {
+    onSuccess: (res, variables) => {
       if (res.requires_otp) {
-        setMfaEmail(res.message ? null : null);
-        setRequiresMfa(true);
-        setLoginMessage(res.message || 'Verification code sent to your email');
+        useAuthStore.getState().setPendingMfa({
+          email: variables.email,
+          message: res.message || 'Verification code sent to your email',
+        });
         return;
       }
       if (res.user) {
@@ -109,9 +107,7 @@ export const useLogin = (redirectTo?: string) => {
       authApi.verifyMfa(email, code),
     onSuccess: (user) => {
       useAuthStore.getState().setUser(user);
-      setRequiresMfa(false);
-      setMfaEmail(null);
-      setLoginMessage(null);
+      useAuthStore.getState().clearPendingMfa();
       if (user.is_first_login) {
         useAuthStore.getState().setShowWelcome(true);
       }
@@ -123,17 +119,15 @@ export const useLogin = (redirectTo?: string) => {
   });
 
   const clearMfa = () => {
-    setRequiresMfa(false);
-    setMfaEmail(null);
-    setLoginMessage(null);
+    useAuthStore.getState().clearPendingMfa();
   };
 
   return {
     login: loginMutation.mutate,
     verifyMfa: verifyMfaMutation.mutate,
-    requiresMfa,
-    mfaEmail,
-    loginMessage,
+    requiresMfa: !!pendingMfa,
+    mfaEmail: pendingMfa?.email ?? null,
+    loginMessage: pendingMfa?.message ?? null,
     clearMfa,
     isPending: loginMutation.isPending,
     isVerifying: verifyMfaMutation.isPending,
