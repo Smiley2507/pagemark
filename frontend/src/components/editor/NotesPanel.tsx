@@ -23,7 +23,9 @@ export function NotesPanel({ projectId, documentId, activeSectionId, initialScop
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const user = useAuthStore((s) => s.user);
   const resolvedSectionId = scope === 'section' ? activeSectionId : null;
-  const { data: notes = [], isLoading } = useNotes(projectId, documentId, resolvedSectionId);
+  const { data: notes = [], isLoading } = useNotes(projectId, documentId, resolvedSectionId, {
+    refetchInterval: 2500,
+  });
   const createNote = useCreateNote(projectId, documentId);
   const { data: resourcesData } = useQuery({
     queryKey: ['resources', projectId],

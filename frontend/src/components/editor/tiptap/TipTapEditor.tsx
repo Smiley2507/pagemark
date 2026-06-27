@@ -10,6 +10,7 @@ import { marked } from 'marked'
 import { cn } from '@/lib/utils'
 import { useAiStore } from '@/store/aiStore'
 import { toast } from 'sonner'
+import axios from 'axios'
 import { resourcesApi } from '@/api/resources'
 import { collaborationApi, sectionRoomId } from '@/api/collaboration'
 import { createExtensions } from './editorSetup'
@@ -58,6 +59,10 @@ interface TipTapEditorProps {
   onFocusChange?: (editor: Editor | null) => void
   onEditorReady?: (editor: Editor | null) => void
   onSelectionChange?: (selection: TipTapSelectionSnapshot | null) => void
+  backendAppliedContent?: string
+  backendAppliedVersion?: string | number
+  backendAppliedStaleContent?: string
+  onCollaborationAuthFailed?: (detail: { sectionId: number; status?: number; message: string }) => void
 }
 
 interface TipTapEditorInnerProps extends TipTapEditorProps {
@@ -101,6 +106,16 @@ export const TipTapEditor = forwardRef<TipTapEditorHandle, TipTapEditorProps>(
         })
         .catch((error) => {
           if (!cancelled) {
+            const status = axios.isAxiosError(error instanceof Error ? error.cause : null)
+              ? (error.cause.response?.status)
+              : undefined
+            if (props.sectionId) {
+              props.onCollaborationAuthFailed?.({
+                sectionId: props.sectionId,
+                status,
+                message: error instanceof Error ? error.message : 'Collaboration auth failed',
+              })
+            }
             setPreflight({
               status: 'failed',
               error: error instanceof Error ? error.message : 'Collaboration auth failed',
@@ -206,6 +221,9 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
     onFocusChange,
     onEditorReady,
     onSelectionChange,
+    backendAppliedContent,
+    backendAppliedVersion,
+    backendAppliedStaleContent,
   }, ref) {
     const [contextMenuState, setContextMenuState] = useState<{
       position: { top: number; left: number };
@@ -216,6 +234,7 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
     useEffect(() => { projectIdRef.current = projectId })
     const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const lastSnapshotRef = useRef(value)
+    const backendAppliedRef = useRef<{ content: string; staleContent?: string } | null>(null)
     const canEdit = !readOnly
     const useCollaborationSnapshot = Boolean(collaboration && collaborationExtension && projectId && documentId && sectionId && canEdit)
 
@@ -283,6 +302,8 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
       },
       setContent: (text: string) => {
         editor?.commands.setContent(text, { contentType: 'markdown' })
+        lastSnapshotRef.current = text
+        backendAppliedRef.current = { content: text }
       },
       setGrammarIssues: (_issues: GrammarIssue[]) => {
         // TODO: port grammar decoration to ProseMirror plugin
@@ -304,12 +325,38 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
     }, [collaborationExtension, editor, value])
 
     useEffect(() => {
+      if (!editor || backendAppliedVersion == null || backendAppliedContent == null) return
+      const current = editor.getMarkdown()
+      if (current !== backendAppliedContent) {
+        editor.commands.setContent(backendAppliedContent, {
+          emitUpdate: false,
+          contentType: 'markdown',
+        })
+      }
+      lastSnapshotRef.current = backendAppliedContent
+      backendAppliedRef.current = {
+        content: backendAppliedContent,
+        staleContent: backendAppliedStaleContent,
+      }
+      onChange(backendAppliedContent)
+    }, [backendAppliedContent, backendAppliedStaleContent, backendAppliedVersion, editor, onChange])
+
+    useEffect(() => {
       if (!useCollaborationSnapshot || !projectId || !documentId || !sectionId) return
       if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
 
       snapshotTimerRef.current = setTimeout(async () => {
         const markdown = editor?.getMarkdown()
         if (markdown == null || markdown === lastSnapshotRef.current) return
+        const backendApplied = backendAppliedRef.current
+        if (
+          backendApplied?.staleContent != null &&
+          markdown === backendApplied.staleContent &&
+          backendApplied.content !== backendApplied.staleContent
+        ) {
+          lastSnapshotRef.current = backendApplied.content
+          return
+        }
         onSavingChange?.(true)
         try {
           const res = await collaborationApi.snapshotSection(projectId, documentId, sectionId, markdown)

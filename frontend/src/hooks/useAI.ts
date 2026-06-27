@@ -2,10 +2,72 @@ import { useState, useCallback, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { aiApi } from '@/api/ai';
+import { documentsApi } from '@/api/documents';
 import { toast } from 'sonner';
+import type { Section, SectionTreeResponse } from '@/types';
 
 type CreateAiWorkRunPayload = Parameters<typeof aiApi.createWorkRun>[2];
 type CreateAiChatActionPayload = Parameters<typeof aiApi.createChatAction>[2];
+
+type BackendAppliedSectionSync = {
+  nonce: number;
+  sections: Array<{
+    id: number;
+    content_md: string;
+    version?: string;
+    staleContent?: string;
+  }>;
+};
+
+function flattenSections(sections: Section[]): Section[] {
+  return sections.flatMap((section) => [
+    section,
+    ...flattenSections(section.children || []),
+  ]);
+}
+
+function recordBackendAppliedSectionSync(
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: number,
+  documentId: number,
+  freshTree: SectionTreeResponse,
+  affectedIds: Set<number>,
+  staleContentBySectionId: Map<number, string>,
+) {
+  const current = queryClient.getQueryData<BackendAppliedSectionSync>(['backend-applied-section-sync', projectId, documentId]);
+  const freshSections = flattenSections(freshTree.sections);
+  const sections = freshSections
+    .filter((section) => affectedIds.size === 0 || affectedIds.has(section.id))
+    .map((section) => ({
+      id: section.id,
+      content_md: section.content_md ?? '',
+      version: section.updated_at,
+      staleContent: staleContentBySectionId.get(section.id),
+    }));
+
+  if (sections.length === 0) return;
+
+  queryClient.setQueryData<BackendAppliedSectionSync>(
+    ['backend-applied-section-sync', projectId, documentId],
+    {
+      nonce: (current?.nonce ?? 0) + 1,
+      sections,
+    },
+  );
+}
+
+async function fetchSectionsAfterAiApply(
+  queryClient: ReturnType<typeof useQueryClient>,
+  projectId: number,
+  documentId: number,
+) {
+  const freshTree = await queryClient.fetchQuery({
+    queryKey: ['document-sections', projectId, documentId],
+    queryFn: () => documentsApi.getSections(projectId, documentId),
+  });
+  queryClient.setQueryData(['document-sections', projectId, documentId], freshTree);
+  return freshTree;
+}
 
 function apiErrorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
@@ -233,10 +295,25 @@ export const useAcceptAiProposedChange = (projectId: number, documentId: number)
 
   return useMutation({
     mutationFn: (changeId: number) => aiApi.acceptProposedChange(projectId, documentId, changeId),
-    onSuccess: () => {
+    onSuccess: async (change) => {
+      const affectedIds = new Set<number>();
+      const staleContentBySectionId = new Map<number, string>();
+      if (typeof change.section_id === 'number') {
+        affectedIds.add(change.section_id);
+        const beforeContent = change.before?.content_md;
+        if (typeof beforeContent === 'string') {
+          staleContentBySectionId.set(change.section_id, beforeContent);
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ['ai-proposed-changes', projectId, documentId] });
-      queryClient.invalidateQueries({ queryKey: ['document-sections', projectId, documentId] });
       queryClient.invalidateQueries({ queryKey: ['document-meta', projectId, documentId] });
+      try {
+        const freshTree = await fetchSectionsAfterAiApply(queryClient, projectId, documentId);
+        recordBackendAppliedSectionSync(queryClient, projectId, documentId, freshTree, affectedIds, staleContentBySectionId);
+      } catch (error) {
+        console.error('Failed to refresh sections after accepting AI change', error);
+        queryClient.invalidateQueries({ queryKey: ['document-sections', projectId, documentId] });
+      }
       toast.success('AI change accepted');
     },
     onError: (error) => {
@@ -265,10 +342,26 @@ export const useUndoAiWorkRun = (projectId: number, documentId: number) => {
 
   return useMutation({
     mutationFn: (runId: number) => aiApi.undoWorkRun(projectId, documentId, runId),
-    onSuccess: () => {
+    onSuccess: async (workRun) => {
+      const affectedIds = new Set<number>();
+      const staleContentBySectionId = new Map<number, string>();
+      for (const change of workRun.proposed_changes ?? []) {
+        if (typeof change.section_id !== 'number') continue;
+        affectedIds.add(change.section_id);
+        const acceptedContent = change.after?.content_md;
+        if (typeof acceptedContent === 'string') {
+          staleContentBySectionId.set(change.section_id, acceptedContent);
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ['ai-proposed-changes', projectId, documentId] });
-      queryClient.invalidateQueries({ queryKey: ['document-sections', projectId, documentId] });
       queryClient.invalidateQueries({ queryKey: ['document-meta', projectId, documentId] });
+      try {
+        const freshTree = await fetchSectionsAfterAiApply(queryClient, projectId, documentId);
+        recordBackendAppliedSectionSync(queryClient, projectId, documentId, freshTree, affectedIds, staleContentBySectionId);
+      } catch (error) {
+        console.error('Failed to refresh sections after undoing AI work run', error);
+        queryClient.invalidateQueries({ queryKey: ['document-sections', projectId, documentId] });
+      }
       toast.success('AI work run undone');
     },
     onError: () => {

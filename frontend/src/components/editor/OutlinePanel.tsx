@@ -70,7 +70,7 @@ function SortableTocItem({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'flex items-center gap-0.5 rounded py-1 pr-2 transition-all duration-150',
+        'group flex min-h-8 items-start gap-0.5 rounded py-1 pr-2 transition-all duration-150',
         isDragging && 'opacity-50 shadow-md z-10',
         isActive && !isDragging ? 'bg-interaction-muted' : 'hover:bg-panel-muted',
       )}
@@ -78,7 +78,7 @@ function SortableTocItem({
       {isDraggable && (
         <button
           type="button"
-          className="flex items-center justify-center w-5 h-5 shrink-0 cursor-grab text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-foreground"
+          className="mt-0.5 flex h-5 w-5 shrink-0 cursor-grab items-center justify-center text-muted-foreground opacity-0 hover:text-foreground group-hover:opacity-100"
           {...attributes}
           {...listeners}
           tabIndex={-1}
@@ -91,10 +91,11 @@ function SortableTocItem({
       <button
         type="button"
         data-toc-item="true"
+        title={item.label}
         onClick={onClick}
         onKeyDown={onKeyboard}
         className={cn(
-          'flex-1 text-left text-meta focus-visible:ring-2 focus-visible:ring-ring',
+          'min-w-0 flex-1 rounded-sm text-left text-meta leading-snug focus-visible:ring-2 focus-visible:ring-ring',
           item.kind === 'h1' && 'pl-6',
           item.kind === 'h2' && 'pl-8',
           isActive && !isDragging
@@ -103,7 +104,16 @@ function SortableTocItem({
         )}
         aria-current={isActive ? 'true' : undefined}
       >
-        <span className="block truncate">{item.label}</span>
+        <span
+          className={cn(
+            'block min-w-0 overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical]',
+            item.kind === 'section'
+              ? '[-webkit-line-clamp:2]'
+              : '[-webkit-line-clamp:1] sm:[-webkit-line-clamp:2]',
+          )}
+        >
+          {item.label}
+        </span>
       </button>
     </div>
   );

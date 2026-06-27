@@ -85,6 +85,16 @@ type AiCommandOptions = {
   selection?: MarkdownSelectionSnapshot;
 };
 
+type BackendAppliedSectionSync = {
+  nonce: number;
+  sections: Array<{
+    id: number;
+    content_md: string;
+    version?: string;
+    staleContent?: string;
+  }>;
+};
+
 function sectionAcceptanceCriteria(section: Section): string[] {
   const criteria = section.workflow_metadata?.acceptance_criteria;
   if (!Array.isArray(criteria)) return [];
@@ -210,6 +220,11 @@ function SectionBlock({
   onSectionPointerDown,
   onAiCommand,
   isDocumentApproved,
+  isActive,
+  backendAppliedContent,
+  backendAppliedVersion,
+  backendAppliedStaleContent,
+  onCollaborationAuthFailed,
 }: {
   projectId: number;
   documentId: number;
@@ -236,6 +251,11 @@ function SectionBlock({
   onSectionPointerDown?: (sectionId: number) => void;
   onAiCommand?: (sectionId: number, prompt: string, options?: AiCommandOptions) => void;
   isDocumentApproved?: boolean;
+  isActive?: boolean;
+  backendAppliedContent?: string;
+  backendAppliedVersion?: string | number;
+  backendAppliedStaleContent?: string;
+  onCollaborationAuthFailed?: (detail: { sectionId: number; status?: number; message: string }) => void;
 }) {
   const [content, setContent] = useState(section.content_md);
   const [title, setTitle] = useState(section.title || section.heading || 'Untitled Section');
@@ -424,7 +444,7 @@ function SectionBlock({
             sectionId={section.id}
             projectId={projectId}
             documentId={documentId}
-            collaboration={collaborationEnabled}
+            collaboration={collaborationEnabled && isActive}
             readOnly={isDocumentApproved}
             onSavingChange={(saving) => onSavingChange(section.id, saving)}
             onSaved={onSaved}
@@ -432,6 +452,10 @@ function SectionBlock({
             onEditorReady={(editor) => onEditorReady?.(section.id, editor)}
             onSelectionChange={(selection) => onSelectionChange?.(section.id, selection)}
             onAiCommand={(prompt, options) => onAiCommand?.(section.id, prompt, options)}
+            backendAppliedContent={backendAppliedContent}
+            backendAppliedVersion={backendAppliedVersion}
+            backendAppliedStaleContent={backendAppliedStaleContent}
+            onCollaborationAuthFailed={onCollaborationAuthFailed}
             onPolish={(text, selection) => onAiCommand?.(
               section.id,
               `Replace the selected text with a polished version while preserving meaning. Return a replace_selection editor action.\n\nSelected text:\n${text}`,
@@ -495,6 +519,7 @@ export function DocumentEditorPage() {
   const scrollRootRef = useRef<HTMLDivElement>(null);
   const editorBySectionIdRef = useRef(new Map<number, Editor>());
   const aiDraftCommandIdRef = useRef(0);
+  const collaborationAuthFailureRef = useRef(new Set<string>());
 
   const { data: document, isLoading: documentLoading } = useQuery({
     queryKey: ['document-meta', pid, did],
@@ -509,6 +534,12 @@ export function DocumentEditorPage() {
   });
 
   const { data: sectionTree, isLoading: sectionsLoading } = useDocumentSections(pid, did);
+  const { data: backendAppliedSync } = useQuery<BackendAppliedSectionSync | null>({
+    queryKey: ['backend-applied-section-sync', pid, did],
+    queryFn: async () => null,
+    enabled: false,
+    staleTime: Infinity,
+  });
   const sections = useMemo(() => flattenSections(sectionTree?.sections || []), [sectionTree?.sections]);
   const sectionsForStats = useMemo(() => (
     sections.map((section) => ({
@@ -546,6 +577,32 @@ export function DocumentEditorPage() {
       return changed ? next : current;
     });
   }, [sections]);
+
+  useEffect(() => {
+    if (!sections.length || activeSectionId) return;
+    setActiveSectionId(sections[0].id);
+    setActiveTocId(`section-${sections[0].id}`);
+  }, [activeSectionId, sections]);
+
+  const backendAppliedBySectionId = useMemo(() => {
+    const syncSections = backendAppliedSync?.sections ?? [];
+    return new Map(syncSections.map((section) => [section.id, section]));
+  }, [backendAppliedSync]);
+
+  useEffect(() => {
+    if (!backendAppliedSync) return;
+    setLocalContentBySectionId((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const section of backendAppliedSync.sections) {
+        if (next[section.id] !== section.content_md) {
+          next[section.id] = section.content_md;
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [backendAppliedSync]);
 
   const { data: freshnessData } = useQuery({
     queryKey: ['freshness', pid, did],
@@ -805,6 +862,42 @@ export function DocumentEditorPage() {
     setEditorSelection(null);
     setEditorCursor(null);
   }, []);
+
+  const handleCollaborationAuthFailed = useCallback(async ({ sectionId, status, message }: { sectionId: number; status?: number; message: string }) => {
+    if (sectionId !== activeSectionId) return;
+    const failureKey = `${sectionId}:${status ?? 'unknown'}:${message}`;
+    if (collaborationAuthFailureRef.current.has(failureKey)) return;
+    collaborationAuthFailureRef.current.add(failureKey);
+
+    if (status !== 404) return;
+
+    try {
+      const freshTree = await queryClient.fetchQuery({
+        queryKey: ['document-sections', pid, did],
+        queryFn: () => documentsApi.getSections(pid, did),
+      });
+      const freshSections = flattenSections(freshTree.sections || []);
+      const stillExists = freshSections.some((section) => section.id === sectionId);
+      if (stillExists) {
+        toast.message('Collaboration room refreshed for this section.');
+        return;
+      }
+
+      const currentIndex = sections.findIndex((section) => section.id === sectionId);
+      const fallback = freshSections[Math.max(0, Math.min(currentIndex, freshSections.length - 1))] ?? freshSections[0];
+      if (fallback) {
+        setActiveSectionId(fallback.id);
+        setActiveTocId(`section-${fallback.id}`);
+        toast.message('That section is no longer available. Moved to the nearest section.');
+      } else {
+        setActiveSectionId(null);
+        setActiveTocId(null);
+        toast.message('That section is no longer available.');
+      }
+    } catch {
+      void queryClient.invalidateQueries({ queryKey: ['document-sections', pid, did] });
+    }
+  }, [activeSectionId, did, pid, queryClient, sections]);
 
   const handleAiCommand = useCallback((sectionId: number, prompt: string, options?: AiCommandOptions) => {
     setActiveSectionId(sectionId);
@@ -1098,36 +1191,44 @@ export function DocumentEditorPage() {
                 <span>{sections.length} section{sections.length !== 1 ? 's' : ''}</span>
                 <span>{wordCount.toLocaleString()} words</span>
               </div>
-              {sections.map((section, index) => (
-                <SectionBlock
-                  key={section.id}
-                  projectId={pid}
-                  documentId={did}
-                  section={section}
-                  index={index}
-                  total={sections.length}
-                  onAdd={(anchorSectionId, placement) => createSection.mutate({ anchorSectionId, placement })}
-                  onDeleteRequest={setSectionToDelete}
-                  onMove={moveSection}
-                  onRename={(sectionId, title) => renameSection.mutate({ sectionId, title })}
-                  onSavingChange={handleSavingChange}
-                  onSaved={setLastSaved}
-                  onLocalContentChange={handleLocalContentChange}
-                  onAcceptReview={(sectionId) => acceptSectionReview.mutate(sectionId)}
-                  onJumpToSection={(sectionId) => openSectionNoteComposer(sectionId)}
-                  onVersionHistory={setVersionHistorySectionId}
-                  staleSectionMeta={staleSectionMeta}
-                  onAcceptStaleness={(sectionId) => acceptFreshness.mutate(sectionId)}
-                  onRejectStaleness={(sectionId) => rejectFreshness.mutate(sectionId)}
-                  isStalenessProcessing={acceptFreshness.isPending || rejectFreshness.isPending}
-                  onFocusChange={handleSectionFocusChange}
-                  onEditorReady={handleSectionEditorReady}
-                  onSelectionChange={handleSectionSelectionChange}
-                  onSectionPointerDown={handleSectionPointerDown}
-                  onAiCommand={handleAiCommand}
-                  isDocumentApproved={document?.status === 'approved'}
-                />
-              ))}
+              {sections.map((section, index) => {
+                const backendApplied = backendAppliedBySectionId.get(section.id);
+                return (
+                  <SectionBlock
+                    key={section.id}
+                    projectId={pid}
+                    documentId={did}
+                    section={section}
+                    index={index}
+                    total={sections.length}
+                    onAdd={(anchorSectionId, placement) => createSection.mutate({ anchorSectionId, placement })}
+                    onDeleteRequest={setSectionToDelete}
+                    onMove={moveSection}
+                    onRename={(sectionId, title) => renameSection.mutate({ sectionId, title })}
+                    onSavingChange={handleSavingChange}
+                    onSaved={setLastSaved}
+                    onLocalContentChange={handleLocalContentChange}
+                    onAcceptReview={(sectionId) => acceptSectionReview.mutate(sectionId)}
+                    onJumpToSection={(sectionId) => openSectionNoteComposer(sectionId)}
+                    onVersionHistory={setVersionHistorySectionId}
+                    staleSectionMeta={staleSectionMeta}
+                    onAcceptStaleness={(sectionId) => acceptFreshness.mutate(sectionId)}
+                    onRejectStaleness={(sectionId) => rejectFreshness.mutate(sectionId)}
+                    isStalenessProcessing={acceptFreshness.isPending || rejectFreshness.isPending}
+                    onFocusChange={handleSectionFocusChange}
+                    onEditorReady={handleSectionEditorReady}
+                    onSelectionChange={handleSectionSelectionChange}
+                    onSectionPointerDown={handleSectionPointerDown}
+                    onAiCommand={handleAiCommand}
+                    isDocumentApproved={document?.status === 'approved'}
+                    isActive={section.id === activeSectionId}
+                    backendAppliedContent={backendApplied?.content_md}
+                    backendAppliedVersion={backendApplied ? `${backendAppliedSync?.nonce ?? 0}:${backendApplied.version ?? ''}` : undefined}
+                    backendAppliedStaleContent={backendApplied?.staleContent}
+                    onCollaborationAuthFailed={handleCollaborationAuthFailed}
+                  />
+                );
+              })}
               <div className="mx-auto max-w-4xl py-8">
                 <Button type="button" variant="outline" onClick={() => createSection.mutate({})} disabled={createSection.isPending} className="gap-2">
                   {createSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
