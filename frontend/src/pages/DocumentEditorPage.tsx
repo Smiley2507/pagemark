@@ -220,7 +220,7 @@ function SectionBlock({
   onSectionPointerDown,
   onAiCommand,
   isDocumentApproved,
-  isActive,
+  isCollaborationActive,
   backendAppliedContent,
   backendAppliedVersion,
   backendAppliedStaleContent,
@@ -251,7 +251,7 @@ function SectionBlock({
   onSectionPointerDown?: (sectionId: number) => void;
   onAiCommand?: (sectionId: number, prompt: string, options?: AiCommandOptions) => void;
   isDocumentApproved?: boolean;
-  isActive?: boolean;
+  isCollaborationActive?: boolean;
   backendAppliedContent?: string;
   backendAppliedVersion?: string | number;
   backendAppliedStaleContent?: string;
@@ -265,7 +265,7 @@ function SectionBlock({
     documentId,
     section.id,
     content,
-    !collaborationEnabled,
+    !isCollaborationActive,
   );
 
   useEffect(() => {
@@ -444,7 +444,7 @@ function SectionBlock({
             sectionId={section.id}
             projectId={projectId}
             documentId={documentId}
-            collaboration={collaborationEnabled && isActive}
+            collaboration={collaborationEnabled && Boolean(isCollaborationActive)}
             readOnly={isDocumentApproved}
             onSavingChange={(saving) => onSavingChange(section.id, saving)}
             onSaved={onSaved}
@@ -497,6 +497,7 @@ export function DocumentEditorPage() {
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [activeEditorSectionId, setActiveEditorSectionId] = useState<number | null>(null);
   const [activeSectionId, setActiveSectionId] = useState<number | null>(null);
+  const [collaborationSectionId, setCollaborationSectionId] = useState<number | null>(null);
   const [aiDraftCommand, setAiDraftCommand] = useState<{
     id: number;
     prompt: string;
@@ -518,6 +519,7 @@ export function DocumentEditorPage() {
   const tocKeyboard = useTocKeyboardNavigation();
   const scrollRootRef = useRef<HTMLDivElement>(null);
   const editorBySectionIdRef = useRef(new Map<number, Editor>());
+  const focusedEditorSectionIdRef = useRef<number | null>(null);
   const aiDraftCommandIdRef = useRef(0);
   const collaborationAuthFailureRef = useRef(new Set<string>());
 
@@ -583,6 +585,18 @@ export function DocumentEditorPage() {
     setActiveSectionId(sections[0].id);
     setActiveTocId(`section-${sections[0].id}`);
   }, [activeSectionId, sections]);
+
+  useEffect(() => {
+    if (!sections.length) {
+      setCollaborationSectionId(null);
+      return;
+    }
+
+    setCollaborationSectionId((current) => {
+      if (current && sections.some((section) => section.id === current)) return current;
+      return sections[0].id;
+    });
+  }, [sections]);
 
   const backendAppliedBySectionId = useMemo(() => {
     const syncSections = backendAppliedSync?.sections ?? [];
@@ -695,7 +709,11 @@ export function DocumentEditorPage() {
         if (visible?.target.id) {
           setActiveTocId(visible.target.id);
           const sectionMatch = visible.target.id.match(/^section-(\d+)/);
-          if (sectionMatch) setActiveSectionId(Number(sectionMatch[1]));
+          if (sectionMatch) {
+            const sectionId = Number(sectionMatch[1]);
+            setActiveSectionId(sectionId);
+            if (!focusedEditorSectionIdRef.current) setCollaborationSectionId(sectionId);
+          }
         }
       },
       { root, rootMargin: '-25% 0px -60% 0px', threshold: [0.1, 0.4, 0.8] },
@@ -788,6 +806,10 @@ export function DocumentEditorPage() {
   const scrollToTocItem = (item: TocItem) => {
     globalThis.document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setActiveTocId(item.id);
+    if (item.sectionId) {
+      setActiveSectionId(item.sectionId);
+      setCollaborationSectionId(item.sectionId);
+    }
   };
 
   const handleLocalContentChange = useCallback((sectionId: number, content: string) => {
@@ -826,7 +848,14 @@ export function DocumentEditorPage() {
   }, []);
 
   const handleSectionFocusChange = useCallback((sectionId: number, editor: Editor | null) => {
-    if (!editor) return;
+    if (!editor) {
+      const wasFocusedEditor = focusedEditorSectionIdRef.current === sectionId;
+      if (wasFocusedEditor) focusedEditorSectionIdRef.current = null;
+      setActiveEditor((current) => wasFocusedEditor ? null : current);
+      setActiveEditorSectionId((current) => current === sectionId ? null : current);
+      return;
+    }
+    focusedEditorSectionIdRef.current = sectionId;
     setActiveEditor(editor);
     setActiveEditorSectionId(sectionId);
     setActiveSectionId(sectionId);
@@ -864,7 +893,7 @@ export function DocumentEditorPage() {
   }, []);
 
   const handleCollaborationAuthFailed = useCallback(async ({ sectionId, status, message }: { sectionId: number; status?: number; message: string }) => {
-    if (sectionId !== activeSectionId) return;
+    if (sectionId !== collaborationSectionId) return;
     const failureKey = `${sectionId}:${status ?? 'unknown'}:${message}`;
     if (collaborationAuthFailureRef.current.has(failureKey)) return;
     collaborationAuthFailureRef.current.add(failureKey);
@@ -887,17 +916,19 @@ export function DocumentEditorPage() {
       const fallback = freshSections[Math.max(0, Math.min(currentIndex, freshSections.length - 1))] ?? freshSections[0];
       if (fallback) {
         setActiveSectionId(fallback.id);
+        setCollaborationSectionId(fallback.id);
         setActiveTocId(`section-${fallback.id}`);
         toast.message('That section is no longer available. Moved to the nearest section.');
       } else {
         setActiveSectionId(null);
+        setCollaborationSectionId(null);
         setActiveTocId(null);
         toast.message('That section is no longer available.');
       }
     } catch {
       void queryClient.invalidateQueries({ queryKey: ['document-sections', pid, did] });
     }
-  }, [activeSectionId, did, pid, queryClient, sections]);
+  }, [collaborationSectionId, did, pid, queryClient, sections]);
 
   const handleAiCommand = useCallback((sectionId: number, prompt: string, options?: AiCommandOptions) => {
     setActiveSectionId(sectionId);
@@ -1221,7 +1252,7 @@ export function DocumentEditorPage() {
                     onSectionPointerDown={handleSectionPointerDown}
                     onAiCommand={handleAiCommand}
                     isDocumentApproved={document?.status === 'approved'}
-                    isActive={section.id === activeSectionId}
+                    isCollaborationActive={section.id === collaborationSectionId}
                     backendAppliedContent={backendApplied?.content_md}
                     backendAppliedVersion={backendApplied ? `${backendAppliedSync?.nonce ?? 0}:${backendApplied.version ?? ''}` : undefined}
                     backendAppliedStaleContent={backendApplied?.staleContent}

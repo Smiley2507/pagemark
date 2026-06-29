@@ -235,6 +235,7 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
     const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const lastSnapshotRef = useRef(value)
     const backendAppliedRef = useRef<{ content: string; staleContent?: string } | null>(null)
+    const lastBackendAppliedVersionRef = useRef<string | number | null>(null)
     const canEdit = !readOnly
     const useCollaborationSnapshot = Boolean(collaboration && collaborationExtension && projectId && documentId && sectionId && canEdit)
 
@@ -280,9 +281,12 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
     useEffect(() => {
       if (!editor || !onFocusChange) return
       const handleFocus = () => onFocusChange(editor)
+      const handleBlur = () => onFocusChange(null)
       editor.on('focus', handleFocus)
+      editor.on('blur', handleBlur)
       return () => {
         editor.off('focus', handleFocus)
+        editor.off('blur', handleBlur)
       }
     }, [editor, onFocusChange])
 
@@ -326,6 +330,8 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
 
     useEffect(() => {
       if (!editor || backendAppliedVersion == null || backendAppliedContent == null) return
+      if (lastBackendAppliedVersionRef.current === backendAppliedVersion) return
+      lastBackendAppliedVersionRef.current = backendAppliedVersion
       const current = editor.getMarkdown()
       if (current !== backendAppliedContent) {
         editor.commands.setContent(backendAppliedContent, {

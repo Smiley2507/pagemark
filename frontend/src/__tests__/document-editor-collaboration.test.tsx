@@ -2,17 +2,29 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { forwardRef, useImperativeHandle } from 'react';
+import { forwardRef, useEffect, useImperativeHandle } from 'react';
 
 const mocks = vi.hoisted(() => ({
   getDocument: vi.fn(),
   getSections: vi.fn(),
   getFreshness: vi.fn(),
   getProject: vi.fn(),
+  autosaveCalls: [] as Array<{
+    projectId: number;
+    documentId: number;
+    sectionId: number | null;
+    content: string;
+    enabled: boolean;
+  }>,
+  editorMounts: new Map<number, number>(),
 }));
 
 vi.mock('@/components/editor/MarkdownEditor', () => ({
   MarkdownEditor: forwardRef((props: any, ref) => {
+    useEffect(() => {
+      mocks.editorMounts.set(props.sectionId, (mocks.editorMounts.get(props.sectionId) ?? 0) + 1);
+    }, [props.sectionId]);
+
     useImperativeHandle(ref, () => ({
       focus: vi.fn(),
       insertContent: vi.fn(),
@@ -27,6 +39,13 @@ vi.mock('@/components/editor/MarkdownEditor', () => ({
       <div
         data-testid={`mock-editor-${props.sectionId}`}
         data-collaboration={String(Boolean(props.collaboration))}
+        tabIndex={0}
+        onFocus={() => props.onFocusChange?.({
+          state: {
+            selection: { empty: true, to: 1, from: 1 },
+            doc: { textBetween: vi.fn(() => '') },
+          },
+        })}
       />
     );
   }),
@@ -81,11 +100,20 @@ vi.mock('@/hooks/useSections', async () => {
   return {
     ...actual,
     useDocumentSections: () => ({ data: mocks.getSections(), isLoading: false }),
-    useDocumentAutosave: () => ({
-      isSaving: false,
-      lastSaved: null,
-      markPersisted: vi.fn(),
-    }),
+    useDocumentAutosave: (
+      projectId: number,
+      documentId: number,
+      sectionId: number | null,
+      content: string,
+      enabled: boolean,
+    ) => {
+      mocks.autosaveCalls.push({ projectId, documentId, sectionId, content, enabled });
+      return {
+        isSaving: false,
+        lastSaved: null,
+        markPersisted: vi.fn(),
+      };
+    },
     useUpdateDocumentSection: () => ({ mutate: vi.fn(), isPending: false }),
     useAcceptSectionReview: () => ({ mutate: vi.fn(), isPending: false }),
   };
@@ -127,6 +155,8 @@ describe('Document editor collaboration activation', () => {
   beforeEach(() => {
     vi.stubEnv('VITE_COLLABORATION_ENABLED', 'true');
     vi.clearAllMocks();
+    mocks.autosaveCalls.length = 0;
+    mocks.editorMounts.clear();
     globalThis.IntersectionObserver = vi.fn(() => ({
       observe: vi.fn(),
       unobserve: vi.fn(),
@@ -159,7 +189,7 @@ describe('Document editor collaboration activation', () => {
     });
   });
 
-  it('enables collaboration only for the active section', async () => {
+  it('keeps collaboration on the collaboration section when another section is clicked', async () => {
     renderPage();
 
     await waitFor(() => {
@@ -167,11 +197,29 @@ describe('Document editor collaboration activation', () => {
       expect(screen.getByTestId('mock-editor-102')).toHaveAttribute('data-collaboration', 'false');
     });
 
+    expect(mocks.editorMounts.get(102)).toBe(1);
+
     fireEvent.pointerDown(screen.getByTestId('editor-section-102'));
+    fireEvent.focus(screen.getByTestId('mock-editor-102'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('mock-editor-101')).toHaveAttribute('data-collaboration', 'false');
-      expect(screen.getByTestId('mock-editor-102')).toHaveAttribute('data-collaboration', 'true');
+      expect(screen.getByTestId('mock-editor-101')).toHaveAttribute('data-collaboration', 'true');
+      expect(screen.getByTestId('mock-editor-102')).toHaveAttribute('data-collaboration', 'false');
     });
+    expect(mocks.editorMounts.get(102)).toBe(1);
+  });
+
+  it('uses normal autosave for non-collaborative sections when collaboration is enabled', async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-editor-101')).toHaveAttribute('data-collaboration', 'true');
+      expect(screen.getByTestId('mock-editor-102')).toHaveAttribute('data-collaboration', 'false');
+    });
+
+    expect(mocks.autosaveCalls).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sectionId: 101, enabled: false }),
+      expect.objectContaining({ sectionId: 102, enabled: true }),
+    ]));
   });
 });
