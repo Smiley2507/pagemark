@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from weasyprint import HTML
 
-from app.routers.export import _gather_export_settings
+from app.routers.export import _embed_resource_image_urls, _gather_export_settings
 from app.schemas.export_settings import ExportSettings, PAGE_SIZES, MARGIN_PRESETS
 from app.services.export_service import (
     export_markdown,
@@ -152,6 +152,25 @@ class TestExportRouteSettings:
 
         assert result["include_page_numbers"] is False
 
+    def test_project_resource_image_urls_are_embedded(self):
+        content = (
+            "![image.png](http://localhost:8000/projects/42/resources/9/data)\n"
+            '<img src="/projects/42/resources/10/data" alt="diagram">'
+        )
+
+        result = _embed_resource_image_urls(
+            content,
+            42,
+            {
+                9: "data:image/png;base64,aaa",
+                10: "data:image/jpeg;base64,bbb",
+            },
+        )
+
+        assert "![image.png](data:image/png;base64,aaa)" in result
+        assert '<img src="data:image/jpeg;base64,bbb" alt="diagram">' in result
+        assert "localhost:8000/projects/42/resources/9/data" not in result
+
 
 # ── Markdown Export ────────────────────────────────────────────
 
@@ -294,6 +313,19 @@ class TestHtmlExport:
         result = export_html(sample_sections, "Proj", "Doc")
         assert "<img" in result
 
+    def test_markdown_image_renders_with_fallback_converter(self, monkeypatch):
+        from app.services import export_service
+
+        monkeypatch.setattr(export_service, "_md_lib", None)
+        result = export_html(
+            [{"heading": "Image", "content": "![image.png](data:image/png;base64,abc123)"}],
+            "Proj",
+            "Doc",
+        )
+
+        assert '<img src="data:image/png;base64,abc123" alt="image.png" />' in result
+        assert "![image.png]" not in result
+
     def test_first_page_no_header_footer(self, sample_sections):
         """The cover page should suppress headers/footers (but not logo) via @page :first."""
         result = export_html(sample_sections, "Proj", "Doc")
@@ -364,6 +396,8 @@ class TestHtmlExport:
         assert 'id="page-logo-runner"' in header
         assert 'style="height:48px;"' in header
         assert 'page-header-logo' not in header
+        assert header.index('id="page-logo-runner"') < header.index('<main class="export-document">')
+        assert header.index('id="page-logo-runner"') < header.index('class="cover')
 
         footer = export_html(sample_sections, "Proj", "Doc", {
             "logo_url": "https://example.com/logo.png",
@@ -380,6 +414,14 @@ class TestHtmlExport:
 
         underlined = export_html(sample_sections, "Proj", "Doc", {"h1_underline": True})
         assert "border-bottom:2px solid var(--primary-color);" in underlined
+
+    def test_html_export_has_screen_page_margins(self, sample_sections):
+        result = export_html(sample_sections, "Proj", "Doc")
+
+        assert '<main class="export-document">' in result
+        assert "@media screen" in result
+        assert "body {\n    background:#f3f4f6;\n    padding:32px;" in result
+        assert ".export-document {\n    max-width:920px;" in result
 
 
 # ── PDF Export ────────────────────────────────────────────────

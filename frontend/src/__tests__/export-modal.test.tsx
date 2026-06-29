@@ -106,6 +106,25 @@ describe('ExportModal print profile requests', () => {
     expect(requestedUrl.searchParams.get('margins')).toBe('narrow');
   });
 
+  it('renders PDF preview blobs with an embedded PDF object', async () => {
+    render(
+      <ExportModal
+        projectId={42}
+        documentId={9}
+        projectName="Runtime Guide"
+        open
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(createObjectURLMock).toHaveBeenCalled());
+
+    const preview = screen.getByTitle('Paged PDF preview');
+    expect(preview.tagName).toBe('OBJECT');
+    expect(preview).toHaveAttribute('data', 'blob:preview-pdf');
+    expect(preview).toHaveAttribute('type', 'application/pdf');
+  });
+
   it('shows readiness warnings and exports after acknowledgement', async () => {
     render(
       <ExportModal

@@ -735,12 +735,23 @@ export function ExportModal({
                         <p className="text-body">Preview failed</p>
                         <Button variant="outline" size="sm" onClick={loadPreview}>Retry</Button>
                       </div>
-                    ) : previewUrl || previewHtml ? (
-                      <iframe
-                        src={previewUrl || undefined}
-                        srcDoc={previewUrl ? undefined : previewHtml || undefined}
+                    ) : previewUrl ? (
+                      <object
+                        data={previewUrl}
+                        type="application/pdf"
                         className="h-full w-full border-0 bg-background"
-                        title={selected === 'pdf' ? 'Paged PDF preview' : 'HTML export preview'}
+                        title="Paged PDF preview"
+                      >
+                        <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-text-secondary">
+                          <p className="text-body">PDF preview is not available in this browser.</p>
+                          <Button variant="outline" size="sm" onClick={loadPreview}>Reload preview</Button>
+                        </div>
+                      </object>
+                    ) : previewHtml ? (
+                      <iframe
+                        srcDoc={previewHtml}
+                        className="h-full w-full border-0 bg-background"
+                        title="HTML export preview"
                         sandbox="allow-same-origin"
                       />
                     ) : null}

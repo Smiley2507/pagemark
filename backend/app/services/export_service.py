@@ -55,9 +55,20 @@ def _markdown_to_html(text: str) -> str:
             extensions=["extra", "tables", "fenced_code", "toc", "sane_lists"],
             output_format="html5",
         )
-    escaped = escape(text)
+    image_placeholders: list[str] = []
+
+    def _image_repl(match: re.Match[str]) -> str:
+        alt = escape(match.group(1))
+        src = escape(match.group(2), quote=True)
+        placeholder = f"@@PAGEMARK_IMAGE_{len(image_placeholders)}@@"
+        image_placeholders.append(f'<img src="{src}" alt="{alt}" />')
+        return placeholder
+
+    escaped = escape(re.sub(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)", _image_repl, text))
     escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
     escaped = escaped.replace("\n\n", "</p><p>").replace("\n", "<br/>")
+    for index, img in enumerate(image_placeholders):
+        escaped = escaped.replace(f"@@PAGEMARK_IMAGE_{index}@@", img)
     return f"<p>{escaped}</p>"
 
 
@@ -378,6 +389,37 @@ html, body {{
   background:transparent;
 }}
 
+.export-document {{
+  margin:0;
+}}
+
+@media screen {{
+  html {{
+    background:#f3f4f6;
+  }}
+  body {{
+    background:#f3f4f6;
+    padding:32px;
+  }}
+  .export-document {{
+    max-width:920px;
+    min-height:calc(100vh - 64px);
+    margin:0 auto;
+    padding:48px;
+    background:#fff;
+    box-shadow:0 12px 40px rgba(15, 23, 42, 0.10);
+  }}
+}}
+
+@media screen and (max-width: 720px) {{
+  body {{
+    padding:16px;
+  }}
+  .export-document {{
+    padding:24px;
+  }}
+}}
+
 h1 {{
   font-size:var(--h1-font-size);
   color:var(--h1-color);
@@ -573,6 +615,14 @@ def export_html(
     title = s.get("title") or doc_title
 
     body_parts = []
+    logo_runner = ""
+    logo_url_raw = s.get("logo_url") or s.get("logo_path")
+    logo_pos = _logo_position(s)
+    if logo_url_raw and logo_pos not in ("none", "title-page"):
+        logo_src = _resolve_logo_src(str(logo_url_raw))
+        logo_h = s.get("logo_height", "48px")
+        logo_runner = f'<div id="page-logo-runner"><img src="{escape(logo_src)}" alt="Logo" style="height:{logo_h};" /></div>'
+
     cover = _render_cover(s, org_name, title)
     if cover:
         body_parts.append(cover)
@@ -582,14 +632,6 @@ def export_html(
         body_parts.append(toc)
 
     body_parts.append(_render_sections(sections))
-
-    # ── Running element for logo in margin boxes ──
-    logo_url_raw = s.get("logo_url") or s.get("logo_path")
-    logo_pos = _logo_position(s)
-    if logo_url_raw and logo_pos not in ("none", "title-page"):
-        logo_src = _resolve_logo_src(str(logo_url_raw))
-        logo_h = s.get("logo_height", "48px")
-        body_parts.append(f'<div id="page-logo-runner"><img src="{escape(logo_src)}" alt="Logo" style="height:{logo_h};" /></div>')
 
     css = _build_css(s)
     body = "\n".join(body_parts)
@@ -602,7 +644,10 @@ def export_html(
 <style>{css}</style>
 </head>
 <body>
+{logo_runner}
+<main class="export-document">
 {body}
+</main>
 </body>
 </html>"""
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import io
+import base64
+import mimetypes
 import re
 import zipfile
 from typing import Any, Optional
@@ -15,6 +17,7 @@ from app.database import get_db
 from app.dependencies import get_current_user, verify_project_ownership
 from app.models.document import Document, Section, LifecycleStatus
 from app.models.project import Project
+from app.models.resource import Resource
 from app.services.export_service import (
     export_markdown,
     export_html,
@@ -58,6 +61,75 @@ async def _get_sections(document: Document, db: AsyncSession) -> list[Section]:
         .order_by(Section.order_index)
     )
     return list(result.scalars().all())
+
+
+RESOURCE_IMAGE_RE = re.compile(
+    r"(?P<prefix>!\[[^\]]*\]\(|<img\b[^>]*\bsrc=[\"'])"
+    r"(?P<src>(?:https?://[^)\"]+)?/projects/(?P<project_id>\d+)/resources/(?P<resource_id>\d+)/data)"
+    r"(?P<suffix>\)|[\"'])",
+    re.IGNORECASE,
+)
+
+
+def _resource_data_uri(resource: Resource) -> str | None:
+    if not resource.data:
+        return None
+    mime = resource.mime_type or mimetypes.guess_type(resource.original_name or "")[0] or "application/octet-stream"
+    if not mime.startswith("image/"):
+        return None
+    encoded = base64.b64encode(resource.data).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
+
+
+def _embed_resource_image_urls(
+    content: str,
+    project_id: int,
+    resource_src_by_id: dict[int, str],
+) -> str:
+    def _replace(match: re.Match[str]) -> str:
+        if int(match.group("project_id")) != project_id:
+            return match.group(0)
+        replacement = resource_src_by_id.get(int(match.group("resource_id")))
+        if not replacement:
+            return match.group(0)
+        return f"{match.group('prefix')}{replacement}{match.group('suffix')}"
+
+    return RESOURCE_IMAGE_RE.sub(_replace, content)
+
+
+async def _embed_resource_images(
+    sections: list[Section],
+    project_id: int,
+    db: AsyncSession,
+) -> list[dict[str, Any]]:
+    resource_ids = {
+        int(match.group("resource_id"))
+        for section in sections
+        for match in RESOURCE_IMAGE_RE.finditer(section.content_md or "")
+        if int(match.group("project_id")) == project_id
+    }
+    resource_src_by_id: dict[int, str] = {}
+    if resource_ids:
+        result = await db.execute(
+            select(Resource).where(
+                Resource.project_id == project_id,
+                Resource.id.in_(resource_ids),
+            )
+        )
+        for resource in result.scalars().all():
+            src = _resource_data_uri(resource)
+            if src:
+                resource_src_by_id[resource.id] = src
+
+    embedded_sections: list[dict[str, Any]] = []
+    for section in sections:
+        embedded_sections.append({
+            "id": section.id,
+            "heading": section.heading,
+            "title": section.title,
+            "content_md": _embed_resource_image_urls(section.content_md or "", project_id, resource_src_by_id),
+        })
+    return embedded_sections
 
 
 ALL_OVERRIDE_KEYS = [
@@ -163,6 +235,7 @@ async def export_document(
 ):
     document = await _get_document_or_404(project.id, document_id, db)
     sections = await _get_sections(document, db)
+    export_sections = await _embed_resource_images(sections, project.id, db)
 
     query_params = {k: v for k, v in locals().items() if k in ALL_OVERRIDE_KEYS or k in (
         "organization_name", "title", "subtitle", "include_toc", "include_cover_page",
@@ -184,12 +257,12 @@ async def export_document(
     fmt = format.lower().strip()
 
     if debug:
-        preview_html = export_html(sections, project.name, doc_title, settings)
+        preview_html = export_html(export_sections, project.name, doc_title, settings)
         saved = debug_save_html(preview_html, safe_name)
         print(f"[export] DEBUG: saved HTML to {saved}")
 
     if fmt == "markdown":
-        content = export_markdown(sections, project.name, doc_title, settings).encode("utf-8")
+        content = export_markdown(export_sections, project.name, doc_title, settings).encode("utf-8")
         return Response(
             content=content,
             media_type="text/markdown; charset=utf-8",
@@ -199,7 +272,7 @@ async def export_document(
         )
 
     elif fmt == "html":
-        content = export_html(sections, project.name, doc_title, settings)
+        content = export_html(export_sections, project.name, doc_title, settings)
         return Response(
             content=content,
             media_type="text/html; charset=utf-8",
@@ -210,7 +283,7 @@ async def export_document(
 
     elif fmt == "pdf":
         try:
-            content = export_pdf(sections, project.name, doc_title, settings)
+            content = export_pdf(export_sections, project.name, doc_title, settings)
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
@@ -294,6 +367,7 @@ async def export_project_document(
 
     # Forward to document export
     sections = await _get_sections(document, db)
+    export_sections = await _embed_resource_images(sections, project.id, db)
     query_params = {k: v for k, v in locals().items() if k in ALL_OVERRIDE_KEYS}
     settings = _gather_export_settings(document, query_params, project)
     doc_title = document.title or "Documentation"
@@ -301,14 +375,14 @@ async def export_project_document(
     fmt = format.lower().strip()
 
     if fmt == "markdown":
-        content = export_markdown(sections, project.name, doc_title, settings).encode("utf-8")
+        content = export_markdown(export_sections, project.name, doc_title, settings).encode("utf-8")
         return Response(
             content=content,
             media_type="text/markdown; charset=utf-8",
             headers={"Content-Disposition": f'attachment; filename="{safe_name}.md"'},
         )
     elif fmt == "html":
-        content = export_html(sections, project.name, doc_title, settings)
+        content = export_html(export_sections, project.name, doc_title, settings)
         return Response(
             content=content,
             media_type="text/html; charset=utf-8",
@@ -316,7 +390,7 @@ async def export_project_document(
         )
     elif fmt == "pdf":
         try:
-            content = export_pdf(sections, project.name, doc_title, settings)
+            content = export_pdf(export_sections, project.name, doc_title, settings)
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"PDF generation failed: {exc}")
         return Response(
@@ -385,6 +459,7 @@ async def export_preview_html(
     """Return the generated HTML for preview purposes (no attachment header)."""
     document = await _get_document_or_404(project.id, document_id, db)
     sections = await _get_sections(document, db)
+    export_sections = await _embed_resource_images(sections, project.id, db)
 
     query_params = {k: v for k, v in locals().items() if k in ALL_OVERRIDE_KEYS or k in (
         "organization_name", "title", "subtitle", "include_toc", "include_cover_page",
@@ -403,7 +478,7 @@ async def export_preview_html(
     settings = _gather_export_settings(document, query_params, project)
     doc_title = document.title or "Documentation"
 
-    html = export_html(sections, project.name, doc_title, settings)
+    html = export_html(export_sections, project.name, doc_title, settings)
     return HTMLResponse(content=html, status_code=200)
 
 
@@ -431,8 +506,9 @@ async def batch_export(
                     continue
 
                 sections = await _get_sections(doc, db)
+                export_sections = await _embed_resource_images(sections, project.id, db)
                 settings = _gather_export_settings(doc, {}, project)
-                pdf_bytes = export_pdf(sections, project.name, doc.title or "Documentation", settings)
+                pdf_bytes = export_pdf(export_sections, project.name, doc.title or "Documentation", settings)
                 safe_name = _safe_filename(project.name)
                 zf.writestr(f"{safe_name}.pdf", pdf_bytes)
             except Exception:

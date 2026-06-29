@@ -31,8 +31,6 @@ const LOGO_POSITIONS = [
   { value: 'none', label: 'None' },
 ];
 
-const VISUAL_KEYS = new Set(['h1_color', 'h2_color', 'primary_color', 'font_family', 'logo_url']);
-
 function resolveHexColorVar(variableName: string, fallback: string): string {
   if (typeof window === 'undefined') return fallback;
   const value = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
@@ -47,23 +45,6 @@ function useProject(projectId: number) {
   });
 }
 
-function structuralKey(s: ExportSettings): string {
-  const rest: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(s))
-    if (!VISUAL_KEYS.has(k)) rest[k] = v;
-  return JSON.stringify(rest);
-}
-
-function visualCSS(s: ExportSettings): string {
-  return [
-    s.h1_color && `--h1-color:${s.h1_color}`,
-    s.h2_color && `--h2-color:${s.h2_color}`,
-    s.primary_color && `--primary-color:${s.primary_color}`,
-    s.font_family && `--font-family:${s.font_family}`,
-    s.logo_url && `--logo-url:url(${s.logo_url})`,
-  ].filter(Boolean).join(';');
-}
-
 export function ExportPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const pid = Number(projectId);
@@ -74,13 +55,13 @@ export function ExportPage() {
 
   const [settings, setSettings] = useState<ExportSettings>({});
   const [previewHtml, setPreviewHtml] = useState('');
+  const [previewPdfUrl, setPreviewPdfUrl] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
   const [exportFormat, setExportFormat] = useState<'html' | 'pdf' | 'markdown'>('html');
   const [exporting, setExporting] = useState(false);
   const [saving, setSaving] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const prevSk = useRef('');
 
   const baseURL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
   const defaultHeadingColor = resolveHexColorVar('--text-primary', 'black');
@@ -90,63 +71,63 @@ export function ExportPage() {
     if (savedSettings) setSettings((s) => ({ ...s, ...savedSettings }));
   }, [savedSettings]);
 
+  useEffect(() => () => {
+    if (previewPdfUrl) URL.revokeObjectURL(previewPdfUrl);
+  }, [previewPdfUrl]);
+
   const updateSetting = useCallback(<K extends keyof ExportSettings>(
     key: K, value: ExportSettings[K]
   ) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  // Initial fetch — runs once on mount
-  useEffect(() => {
-    if (!pid) return;
-    setPreviewLoading(true);
-    const params = new URLSearchParams({ format: 'html' });
-    for (const [key, val] of Object.entries(settings)) {
-      if (val !== undefined && val !== null && val !== '')
-        params.set(key, String(val));
+  const loadPreview = useCallback(async () => {
+    if (!pid || exportFormat === 'markdown') {
+      setPreviewHtml('');
+      setPreviewPdfUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return '';
+      });
+      return;
     }
-    fetch(`${baseURL}/projects/${pid}/export?${params}`, { credentials: 'include' })
-      .then((r) => r.text())
-      .then(setPreviewHtml)
-      .catch(() => {})
-      .finally(() => setPreviewLoading(false));
-  }, [pid]);
+    setPreviewLoading(true);
+    try {
+      const params = new URLSearchParams({ format: exportFormat });
+      for (const [key, val] of Object.entries(settings)) {
+        if (val !== undefined && val !== null && val !== '')
+          params.set(key, String(val));
+      }
+      const res = await fetch(`${baseURL}/projects/${pid}/export?${params}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`Preview failed (HTTP ${res.status})`);
+      if (exportFormat === 'pdf') {
+        const blob = await res.blob();
+        const nextUrl = URL.createObjectURL(blob);
+        setPreviewPdfUrl((current) => {
+          if (current) URL.revokeObjectURL(current);
+          return nextUrl;
+        });
+        setPreviewHtml('');
+      } else {
+        setPreviewHtml(await res.text());
+        setPreviewPdfUrl((current) => {
+          if (current) URL.revokeObjectURL(current);
+          return '';
+        });
+      }
+    } catch {
+      setPreviewHtml('');
+      setPreviewPdfUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return '';
+      });
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [baseURL, exportFormat, pid, settings]);
 
-  // Re-fetch on structural changes; inject CSS on visual-only changes
   useEffect(() => {
-    if (!pid) return;
-    const sk = structuralKey(settings);
-    if (sk === prevSk.current && previewHtml) {
-      const ifr = iframeRef.current;
-      try {
-        const doc = ifr?.contentDocument ?? ifr?.contentWindow?.document;
-        if (doc) {
-          let style = doc.getElementById('pm-export-style') as HTMLStyleElement | null;
-          if (!style) {
-            style = doc.createElement('style');
-            style.id = 'pm-export-style';
-            doc.head.appendChild(style);
-          }
-          style.textContent = `:root{${visualCSS(settings)}}`;
-          return;
-        }
-      } catch { /* fall through to re-fetch */ }
-    } else {
-      prevSk.current = sk;
-    }
-    if (!previewHtml) return;
-    setPreviewLoading(true);
-    const params = new URLSearchParams({ format: 'html' });
-    for (const [key, val] of Object.entries(settings)) {
-      if (val !== undefined && val !== null && val !== '')
-        params.set(key, String(val));
-    }
-    fetch(`${baseURL}/projects/${pid}/export?${params}`, { credentials: 'include' })
-      .then((r) => r.text())
-      .then(setPreviewHtml)
-      .catch(() => {})
-      .finally(() => setPreviewLoading(false));
-  }, [pid, settings, previewHtml, baseURL]);
+    loadPreview();
+  }, [loadPreview]);
 
   // Auto-save with debounce
   useEffect(() => {
@@ -303,7 +284,22 @@ export function ExportPage() {
             {previewLoading && <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-text-secondary" />}
           </Surface>
           <Surface variant="workspace" className="flex-1 overflow-auto p-4 rounded-none">
-            {previewHtml ? (
+            {exportFormat === 'markdown' ? (
+              <div className="flex h-full items-center justify-center text-text-secondary text-sm">
+                Markdown exports the source document directly.
+              </div>
+            ) : previewPdfUrl ? (
+              <object
+                data={previewPdfUrl}
+                type="application/pdf"
+                className="mx-auto h-full w-full max-w-4xl border border-separator bg-sidebar"
+                title="PDF export preview"
+              >
+                <div className="flex h-full items-center justify-center text-text-secondary text-sm">
+                  PDF preview is not available in this browser.
+                </div>
+              </object>
+            ) : previewHtml ? (
               <iframe
                 ref={iframeRef}
                 srcDoc={previewHtml}
