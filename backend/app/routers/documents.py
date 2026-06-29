@@ -88,6 +88,7 @@ from app.schemas.template import TemplateResponse
 from app.services import section_service
 from app.services import ai_work_service
 from app.services import ai_credential_service
+from app.services import quality_findings_service
 from app.services.ai_doc_service import ai_service
 from app.services.ai_service import AiServiceError, complete_text
 from app.services import generation_service
@@ -1288,6 +1289,17 @@ async def create_ai_chat_action(
     context_blocks = await _editor_reference_context_blocks(db, project, document, current_user.id, body, analysis_detail)
     if context_blocks:
         user_prompt = f"{user_prompt}\n\n" + "\n\n".join(context_blocks)
+    scoped_quality_context = await quality_findings_service.quality_context(
+        db,
+        document.id,
+        section_id=target_section.id if target_section else body.target_section_id,
+    )
+    if scoped_quality_context["active_section_findings"] or scoped_quality_context["summary"]["unresolved_counts"]:
+        user_prompt = (
+            f"{user_prompt}\n\n"
+            "Attached Quality Context:\n"
+            f"{json.dumps(scoped_quality_context, ensure_ascii=False)}"
+        )
 
     try:
         raw = complete_text(
@@ -1328,6 +1340,7 @@ async def create_ai_chat_action(
                 "selection": body.selection.model_dump(by_alias=True) if body.selection else None,
                 "references": [ref.model_dump() for ref in body.references],
                 "analysis_id": getattr(analysis, "id", None),
+                "quality_context": scoped_quality_context,
             },
             changes=[change],
         ),
@@ -1368,6 +1381,13 @@ async def create_ai_work_run(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if "quality_context" not in body.prompt_context:
+        section_id = next((change.section_id for change in body.changes if change.section_id is not None), None)
+        body.prompt_context["quality_context"] = await quality_findings_service.quality_context(
+            db,
+            document.id,
+            section_id=section_id,
+        )
     run = await ai_work_service.create_work_run(db, document, body, current_user.id)
     return _ai_work_run_to_response(run)
 

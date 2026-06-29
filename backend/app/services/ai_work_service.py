@@ -111,9 +111,10 @@ async def create_work_run(
     body: AIWorkRunCreateRequest,
     user_id: int,
 ) -> AIWorkRun:
+    document_id = document.id
     status = AIWorkRunStatus.PROPOSED if body.changes else AIWorkRunStatus.PENDING
     run = AIWorkRun(
-        document_id=document.id,
+        document_id=document_id,
         provider=body.provider,
         model=body.model,
         prompt_context=body.prompt_context,
@@ -125,20 +126,21 @@ async def create_work_run(
     )
     db.add(run)
     await db.flush()
+    run_id = run.id
     for item in body.changes:
-        db.add(_new_change(run, document, item))
+        db.add(_new_change(run, document_id, item))
     await db.commit()
-    return await _load_run(db, document.id, run.id)
+    return await _load_run(db, document_id, run_id)
 
 
 def _new_change(
     run: AIWorkRun,
-    document: Document,
+    document_id: int,
     item: AIProposedChangeCreate,
 ) -> AIProposedChange:
     return AIProposedChange(
         work_run_id=run.id,
-        document_id=document.id,
+        document_id=document_id,
         section_id=item.section_id,
         change_type=AIProposedChangeType(item.change_type.value),
         status=AIProposedChangeStatus.PROPOSED,
@@ -187,6 +189,7 @@ async def accept_change(
     change: AIProposedChange,
     user_id: int,
 ) -> AIProposedChange:
+    document_id = document.id
     if change.status != AIProposedChangeStatus.PROPOSED:
         raise HTTPException(status_code=409, detail="Only proposed AI changes can be accepted")
     before = await _apply_change(db, document, change)
@@ -194,7 +197,7 @@ async def accept_change(
     change.status = AIProposedChangeStatus.ACCEPTED
     change.accepted_by = user_id
     change.accepted_at = _utcnow()
-    run = await _load_run(db, document.id, change.work_run_id)
+    run = await _load_run(db, document_id, change.work_run_id)
     accepted = sum(
         1
         for item in run.proposed_changes
@@ -221,12 +224,13 @@ async def reject_change(
     change: AIProposedChange,
     user_id: int,
 ) -> AIProposedChange:
+    document_id = document.id
     if change.status != AIProposedChangeStatus.PROPOSED:
         raise HTTPException(status_code=409, detail="Only proposed AI changes can be rejected")
     change.status = AIProposedChangeStatus.REJECTED
     change.rejected_by = user_id
     change.rejected_at = _utcnow()
-    run = await _load_run(db, document.id, change.work_run_id)
+    run = await _load_run(db, document_id, change.work_run_id)
     if all(item.status == AIProposedChangeStatus.REJECTED for item in run.proposed_changes):
         run.status = AIWorkRunStatus.REJECTED
         run.completed_at = _utcnow()
@@ -240,7 +244,8 @@ async def undo_work_run(
     document: Document,
     run_id: int,
 ) -> AIWorkRun:
-    run = await _load_run(db, document.id, run_id)
+    document_id = document.id
+    run = await _load_run(db, document_id, run_id)
     accepted_changes = [
         change
         for change in sorted(run.proposed_changes, key=lambda item: item.id, reverse=True)
@@ -254,8 +259,9 @@ async def undo_work_run(
         change.undone_at = _utcnow()
     run.status = AIWorkRunStatus.UNDONE
     run.completed_at = _utcnow()
+    final_run_id = run.id
     await db.commit()
-    return await _load_run(db, document.id, run.id)
+    return await _load_run(db, document_id, final_run_id)
 
 
 async def _section_for_change(db: AsyncSession, document_id: int, section_id: int | None) -> Section:

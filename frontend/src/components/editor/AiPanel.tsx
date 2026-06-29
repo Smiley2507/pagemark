@@ -545,6 +545,9 @@ export function AiPanel({
     || reviewItems.length > 0
     || issues.length > 0
     || structureSuggestions !== null;
+  const hasQualityContext = reconciledTurns.some((turn) =>
+    Boolean(turn.workRun?.prompt_context?.quality_context),
+  );
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
@@ -654,6 +657,7 @@ export function AiPanel({
         projectId={projectId}
         activeSectionHeading={activeSectionHeading}
         activeSectionStatus={activeSectionStatus}
+        hasQualityContext={hasQualityContext}
       />
 
       {showAttachments && (

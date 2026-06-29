@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { FileText, X, BookOpen, FileCode, Layout, Sparkles, Circle, Highlighter, ExternalLink } from 'lucide-react';
+import { FileText, X, BookOpen, FileCode, Layout, Sparkles, Circle, Highlighter, ExternalLink, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAiStore } from '@/store/aiStore';
@@ -30,12 +30,14 @@ interface AiPanelContextBarProps {
   projectId: number;
   activeSectionHeading: string | null;
   activeSectionStatus?: string;
+  hasQualityContext?: boolean;
 }
 
 export function AiPanelContextBar({
   projectId,
   activeSectionHeading,
   activeSectionStatus,
+  hasQualityContext = false,
 }: AiPanelContextBarProps) {
   const { contextBarOpen, attachments, removeAttachment, clearAttachments } = useAiStore();
   const [previewId, setPreviewId] = useState<string | null>(null);
@@ -71,7 +73,7 @@ export function AiPanelContextBar({
   const frameworkFacts = aiContext?.analysis_summary.frameworks?.slice(0, 2).join(', ');
   const warnings = aiContext?.grounding_warnings?.slice(0, 2) ?? [];
   const hasTemplate = attachments.some((a) => a.type === 'template');
-  const hasContext = activeSectionHeading || attachments.length > 0 || hasProjectBrief || hasAnalysis || hasSourceFacts || warnings.length > 0;
+  const hasContext = activeSectionHeading || attachments.length > 0 || hasProjectBrief || hasAnalysis || hasSourceFacts || warnings.length > 0 || hasQualityContext;
 
   return (
     <div className="shrink-0 border-b border-separator bg-canvas/80 px-3 py-2">
@@ -131,6 +133,14 @@ export function AiPanelContextBar({
               <span className="max-w-[120px] truncate">{warning}</span>
             </span>
           ))}
+
+          {hasQualityContext && (
+            <span className="inline-flex items-center gap-1 rounded bg-status-warning/20 px-1.5 py-0.5 text-[10px] text-status-warning-foreground">
+              <Circle className="h-1.5 w-1.5 fill-current" />
+              <ShieldCheck className="h-3 w-3 shrink-0" />
+              <span>Quality Context</span>
+            </span>
+          )}
 
           {hasTemplate && (
             <span className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary">

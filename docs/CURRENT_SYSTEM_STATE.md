@@ -8,6 +8,7 @@ This document is a developer-facing snapshot of the current implementation. Use 
 - A **Project** is the source-connected workspace. A Project contains multiple **Documents**.
 - A **Document** owns its setup stage, Template or Custom Outline, Sections, generation/review state, export settings, quality reports, sharing, and collaboration surface.
 - A **Section** remains the durable unit for content lifecycle, review state, freshness, evidence, generation tasks, and real-time collaboration.
+- Quality analysis creates durable **Quality Findings** for quality, grammar, terminology, links, readability, and acceptance coverage; AI repair actions use those findings as context and queue proposed changes for review.
 - PostgreSQL is the durable application store. Redis/Celery handle asynchronous analysis, notifications, quality, and generation work.
 
 ## Editor And Collaboration

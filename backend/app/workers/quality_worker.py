@@ -55,6 +55,7 @@ def _score_completeness(sections: list) -> tuple[float, list[dict]]:
         wc = _word_count(s.content_md or "")
         if wc == 0:
             issues.append({
+                "category": "completeness",
                 "severity": "error",
                 "section_ref": s.heading,
                 "message": f'Section "{s.heading}" has no content.',
@@ -62,6 +63,7 @@ def _score_completeness(sections: list) -> tuple[float, list[dict]]:
             })
         elif wc <= 100:
             issues.append({
+                "category": "completeness",
                 "severity": "warning",
                 "section_ref": s.heading,
                 "message": f'Section "{s.heading}" is thin ({wc} words).',
@@ -144,6 +146,7 @@ def _score_acceptance_coverage(sections: list) -> tuple[float, list[dict]]:
                 covered += 1
             else:
                 issues.append({
+                    "category": "acceptance",
                     "severity": "warning",
                     "section_ref": section.heading,
                     "message": f'Acceptance criterion unmet for "{section.heading}": {criterion}',
@@ -164,6 +167,7 @@ def _score_readability(combined: str) -> tuple[float, list[dict]]:
     issues = []
     if score < 30:
         issues.append({
+            "category": "readability",
             "severity": "warning",
             "section_ref": None,
             "message": "Documentation readability is very low (Flesch score: {:.1f}).".format(ease),
@@ -171,6 +175,7 @@ def _score_readability(combined: str) -> tuple[float, list[dict]]:
         })
     elif score < 50:
         issues.append({
+            "category": "readability",
             "severity": "info",
             "section_ref": None,
             "message": "Documentation readability is below average (Flesch score: {:.1f}).".format(ease),
@@ -196,6 +201,7 @@ def _score_consistency(sections: list) -> tuple[float, list[dict]]:
             alternates = present_sorted[1:]
             inconsistencies += len(alternates)
             issues.append({
+                "category": "terminology",
                 "severity": "warning",
                 "section_ref": None,
                 "message": (
@@ -253,6 +259,7 @@ async def _score_accuracy_async(sections: list) -> tuple[float, list[dict], list
                 "section_ref": section_ref,
             })
             issues.append({
+                "category": "links",
                 "severity": "error" if code is None else "warning",
                 "section_ref": section_ref,
                 "message": f"Broken link in section \"{section_ref}\": {url} "
@@ -283,6 +290,10 @@ def score_quality_task(self, document_id: int):
     from app.database import sync_session_factory
     from app.models.document import Document, Section, SectionStatus, SectionContentLifecycle
     from app.models.quality import QualityReport, QualityIssue, BrokenLink, IssueSeverity
+    from app.services.quality_findings_service import (
+        persist_findings_sync,
+        quality_issue_to_finding_payload,
+    )
     from sqlalchemy import or_
 
     logger.info("Quality scoring task %s started for document %s", self.request.id, document_id)
@@ -344,32 +355,41 @@ def score_quality_task(self, document_id: int):
                 + 0.15 * accuracy
             )
 
-            # ── Upsert QualityReport (delete old, create new) ─────────────
+            # ── Upsert QualityReport without deleting durable findings ─────
             existing = (
                 db.query(QualityReport)
                 .filter(QualityReport.document_id == doc.id)
                 .first()
             )
             if existing:
-                db.delete(existing)
-                db.flush()
-
-            report = QualityReport(
-                document_id=doc.id,
-                overall_score=round(overall, 1),
-                completeness=round(completeness, 1),
-                acceptance_coverage=round(acceptance_coverage, 1),
-                readability=round(readability, 1),
-                consistency=round(consistency, 1),
-                accuracy=round(accuracy, 1),
-                generated_at=utcnow(),
-            )
-            db.add(report)
+                db.query(QualityIssue).filter(QualityIssue.report_id == existing.id).delete()
+                db.query(BrokenLink).filter(BrokenLink.report_id == existing.id).delete()
+                report = existing
+                report.overall_score = round(overall, 1)
+                report.completeness = round(completeness, 1)
+                report.acceptance_coverage = round(acceptance_coverage, 1)
+                report.readability = round(readability, 1)
+                report.consistency = round(consistency, 1)
+                report.accuracy = round(accuracy, 1)
+                report.generated_at = utcnow()
+            else:
+                report = QualityReport(
+                    document_id=doc.id,
+                    overall_score=round(overall, 1),
+                    completeness=round(completeness, 1),
+                    acceptance_coverage=round(acceptance_coverage, 1),
+                    readability=round(readability, 1),
+                    consistency=round(consistency, 1),
+                    accuracy=round(accuracy, 1),
+                    generated_at=utcnow(),
+                )
+                db.add(report)
             db.flush()  # get report.id
             report_id = report.id
 
             # ── Persist issues ────────────────────────────────────────────
             all_issues = comp_issues + acceptance_issues + read_issues + cons_issues + acc_issues
+            finding_payloads = []
             for issue_data in all_issues:
                 sev_str = issue_data.get("severity", "info")
                 sev = IssueSeverity[sev_str.upper()]
@@ -380,6 +400,16 @@ def score_quality_task(self, document_id: int):
                     message=issue_data["message"],
                     suggestion=issue_data.get("suggestion"),
                 ))
+                finding_payloads.append(
+                    quality_issue_to_finding_payload(
+                        document_id=doc.id,
+                        report_id=report.id,
+                        issue=issue_data,
+                        sections=sections,
+                    )
+                )
+
+            persist_findings_sync(db, finding_payloads)
 
             # ── Persist broken links ──────────────────────────────────────
             for bl in broken:

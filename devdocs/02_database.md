@@ -567,7 +567,7 @@ Document quality scoring results. One report per document (unique constraint on 
 
 ## Table: `quality_issues`
 
-Individual quality issues found in a quality report.
+Legacy per-report quality issues found in a quality report. Durable user-visible lifecycle lives in `quality_findings`.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -577,6 +577,34 @@ Individual quality issues found in a quality report.
 | `section_ref` | `String` | Nullable | Reference to affected section |
 | `message` | `Text` | NOT NULL | Issue description |
 | `suggestion` | `Text` | Nullable | Fix suggestion |
+
+## Table: `quality_findings`
+
+Durable actionable Document/Section-level quality findings. Findings can come from quality scoring, grammar/spelling, terminology consistency, broken links, readability, or acceptance coverage.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | `Integer` | PK, Indexed | Auto-incrementing ID |
+| `document_id` | `Integer` | NOT NULL, FK→documents.id | Parent document |
+| `report_id` | `Integer` | Nullable, FK→quality_reports.id | Latest related report, if any |
+| `category` | `Enum(QualityFindingCategory)` | NOT NULL | completeness, acceptance, terminology, links, readability, grammar, accuracy |
+| `status` | `Enum(QualityFindingStatus)` | NOT NULL, default OPEN | open, proposed, resolved, dismissed |
+| `severity` | `Enum(IssueSeverity)` | NOT NULL, default INFO | Finding severity |
+| `section_id` | `Integer` | Nullable, FK→sections.id | Affected Section |
+| `section_ref` | `String` | Nullable | Human-readable Section reference |
+| `message` | `Text` | NOT NULL | Finding description |
+| `suggestion` | `Text` | Nullable | Suggested correction or next action |
+| `quote` | `Text` | Nullable | Offending text quote for grammar/range fallback |
+| `offset` | `Integer` | Nullable | Advisory text offset |
+| `length` | `Integer` | Nullable | Advisory text length |
+| `replacements` | `JSON` | Nullable | Provider replacement strings |
+| `rule_id` | `String` | Nullable | Provider rule id |
+| `content_fingerprint` | `String` | NOT NULL | Stable fingerprint used to preserve lifecycle across reruns |
+| `provider` | `String` | Nullable | Source provider, such as LanguageTool |
+| `provider_metadata` | `JSON` | Nullable | Provider-specific metadata |
+| `stale_location` | `Boolean` | NOT NULL, default false | Offset may no longer match current content |
+| `first_seen_at` | `DateTime` | default utcnow | First observation timestamp |
+| `last_seen_at` | `DateTime` | onupdate utcnow | Last observation timestamp |
 
 ## Table: `broken_links`
 

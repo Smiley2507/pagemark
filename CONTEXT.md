@@ -52,6 +52,10 @@ _Avoid_: Final content, completed Section.
 A Section whose current content has been reviewed and accepted by the Project maintainer. It records the supporting Analysis snapshot and relevant source evidence, remains editable, and may later become stale when that evidence changes.
 _Avoid_: Finalized Section (implies no further editing), approved Document (a broader workflow state).
 
+**Quality Finding**:
+A durable, actionable Document- or Section-level issue from quality analysis, grammar/spelling, terminology, broken links, readability, or acceptance coverage. It has lifecycle state (`open`, `proposed`, `resolved`, `dismissed`) and can provide scoped context to AI repair actions without rewriting content automatically.
+_Avoid_: Transient grammar result (not durable), Quality Issue (legacy report row), AI edit (a proposed change may address a finding but is not the finding).
+
 **Potentially Stale Section**:
 A Reviewed Section whose relevant source code has changed since review. The source changes are evidence that review may be needed, not proof that the Section is incorrect.
 _Avoid_: Outdated Section (states an unverified conclusion), invalid Section.
@@ -140,6 +144,9 @@ _Avoid_: Documentation owner (overemphasizes documentation operations), Technica
 - Export settings belong to a Document by default, with optional organization defaults for reuse across Documents.
 - Exports produce one Document at a time by default; Project-level batch export may be added later from the Document library.
 - Quality reports belong to a Document because quality depends on that Document's purpose, Template, Sections, and review state.
+- **Quality Findings** persist beyond any one report run so dismissed/resolved findings remain meaningful when the same content fingerprint is seen again.
+- Grammar and spelling checks create **Quality Findings** with Section location metadata, quote/range hints, replacements, rule id, provider metadata, and a content fingerprint.
+- AI repair actions consume unresolved **Quality Findings** as scoped quality context and create reviewable proposed changes; they never silently rewrite accepted content.
 - Collaboration notes belong to Documents or Sections by default; Project Activity remains workflow history rather than discussion.
 - Project Activity is built from persisted **Activity Events** and may include visual summaries such as a GitHub-style heatmap of meaningful workflow over time.
 - Activity heatmap intensity is based on weighted meaningful events so review, generation completion, source sync, stale updates, and Analysis completion count more than minor workflow events.

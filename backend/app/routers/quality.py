@@ -18,8 +18,29 @@ from app.database import get_db
 from app.dependencies import get_current_user, verify_project_ownership
 from app.models.document import Document
 from app.models.project import Project
-from app.models.quality import QualityReport, QualityIssue, IssueSeverity
-from app.schemas.quality import QualityReportOut, QualityIssueOut, QualityRunResponse, QualityStatusResponse
+from app.models.document import Section
+from app.models.quality import (
+    IssueSeverity,
+    QualityFinding,
+    QualityFindingCategory,
+    QualityFindingStatus,
+    QualityIssue,
+    QualityReport,
+)
+from app.schemas.quality import (
+    QualityAIFixRequest,
+    QualityFindingOut,
+    QualityFindingStatusUpdate,
+    QualityGrammarRunRequest,
+    QualityIssueOut,
+    QualityReportOut,
+    QualityRunResponse,
+    QualityStatusResponse,
+)
+from app.schemas.ai_work import AIWorkRunResponse
+from app.services import quality_findings_service
+from app.services.grammar_service import check_grammar
+from app.services.quality_findings_service import finding_to_response
 from app.workers.celery_app import celery_app
 from app.workers.quality_worker import score_quality_task
 
@@ -140,7 +161,15 @@ async def get_quality_report(
             status_code=404,
             detail="No quality report found. Run POST /quality/run to generate one.",
         )
-    return report
+    findings_result = await db.execute(
+        select(QualityFinding).where(QualityFinding.document_id == document.id)
+    )
+    payload = QualityReportOut.model_validate(report)
+    payload.findings = [
+        QualityFindingOut.model_validate(finding_to_response(finding))
+        for finding in findings_result.scalars().all()
+    ]
+    return payload
 
 
 @router.get("/{project_id}/documents/{document_id}/quality/issues", response_model=list[QualityIssueOut])
@@ -175,3 +204,134 @@ async def get_quality_issues(
     result = await db.execute(query.order_by(QualityIssue.severity))
     issues = result.scalars().all()
     return issues
+
+
+@router.get(
+    "/{project_id}/documents/{document_id}/quality/findings",
+    response_model=list[QualityFindingOut],
+)
+async def list_quality_findings(
+    document_id: int,
+    category: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    section_id: Optional[int] = Query(None),
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    document = await _get_document_or_404(project.id, document_id, db)
+    try:
+        findings = await quality_findings_service.list_findings(
+            db,
+            document.id,
+            section_id=section_id,
+            category=category,
+            status=status,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return [QualityFindingOut.model_validate(finding_to_response(finding)) for finding in findings]
+
+
+@router.patch(
+    "/{project_id}/documents/{document_id}/quality/findings/{finding_id}",
+    response_model=QualityFindingOut,
+)
+async def update_quality_finding_status(
+    document_id: int,
+    finding_id: int,
+    body: QualityFindingStatusUpdate,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    document = await _get_document_or_404(project.id, document_id, db)
+    result = await db.execute(
+        select(QualityFinding).where(
+            QualityFinding.id == finding_id,
+            QualityFinding.document_id == document.id,
+        )
+    )
+    finding = result.scalar_one_or_none()
+    if not finding:
+        raise HTTPException(status_code=404, detail="Quality finding not found")
+    try:
+        finding.status = QualityFindingStatus(body.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid finding status") from exc
+    await db.commit()
+    await db.refresh(finding)
+    return QualityFindingOut.model_validate(finding_to_response(finding))
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/quality/grammar/run",
+    response_model=list[QualityFindingOut],
+)
+async def run_quality_grammar(
+    document_id: int,
+    body: QualityGrammarRunRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    document = await _get_document_or_404(project.id, document_id, db)
+    query = select(Section).where(Section.document_id == document.id)
+    if body.section_id is not None:
+        query = query.where(Section.id == body.section_id)
+    result = await db.execute(query.order_by(Section.order_index))
+    sections = list(result.scalars().all())
+    if body.section_id is not None and not sections:
+        raise HTTPException(status_code=404, detail="Section not found")
+
+    payloads = []
+    for section in sections:
+        text = section.content_md or ""
+        if not text.strip():
+            continue
+        grammar = await check_grammar(text, body.language)
+        for match in grammar.matches:
+            payloads.append(
+                quality_findings_service.grammar_match_to_finding_payload(
+                    document_id=document.id,
+                    section=section,
+                    text=text,
+                    match=match,
+                )
+            )
+
+    findings = await quality_findings_service.persist_findings_async(db, payloads)
+    await db.commit()
+    return [QualityFindingOut.model_validate(finding_to_response(finding)) for finding in findings]
+
+
+@router.post(
+    "/{project_id}/documents/{document_id}/quality/ai-fix",
+    response_model=AIWorkRunResponse,
+)
+async def create_quality_ai_fix(
+    document_id: int,
+    body: QualityAIFixRequest,
+    project: Project = Depends(verify_project_ownership),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    document = await _get_document_or_404(project.id, document_id, db)
+    try:
+        work_run = await quality_findings_service.create_ai_fix_work_run(
+            db,
+            document,
+            user_id=current_user.id,
+            finding_id=body.finding_id,
+            category=body.category,
+            section_id=body.section_id,
+            status=body.status,
+            action=body.action,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if work_run is None:
+        raise HTTPException(status_code=404, detail="No matching findings with section content")
+    from app.services.ai_work_service import run_to_response
+
+    return AIWorkRunResponse.model_validate(run_to_response(work_run))

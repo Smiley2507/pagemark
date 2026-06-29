@@ -1388,6 +1388,7 @@ export function DocumentEditorPage() {
         onClose={() => setQualityModalOpen(false)}
         projectId={pid}
         documentId={did}
+        activeSectionId={activeSection?.id ?? null}
       />
 
       <ExportModal

@@ -20,10 +20,18 @@ export interface GrammarCheckResponse {
 }
 
 export const grammarApi = {
-  async checkGrammar(projectId: number, text: string, language = 'en-US'): Promise<GrammarCheckResponse> {
+  async checkGrammar(
+    projectId: number,
+    text: string,
+    language = 'en-US',
+    documentId?: number,
+    sectionId?: number,
+  ): Promise<GrammarCheckResponse> {
     const { data } = await apiClient.post(`/projects/${projectId}/grammar/check`, {
       text,
       language,
+      document_id: documentId,
+      section_id: sectionId,
     });
     return data;
   },

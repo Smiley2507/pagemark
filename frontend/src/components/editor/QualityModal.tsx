@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { sectionsApi } from '@/api/sections';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,6 +17,7 @@ import {
   BookOpen,
   BarChart3,
   ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -25,13 +26,15 @@ import { Surface } from '@/components/ui/surface';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { qualityApi } from '@/api/quality';
-import type { QualityStatus } from '@/api/quality';
+import type { QualityFinding, QualityFindingCategory, QualityFindingStatus, QualityStatus } from '@/api/quality';
 import type { QualityIssue, BrokenLink } from '@/types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 type TabId = 'overview' | 'issues' | 'links' | 'terminology';
 type SeverityFilter = 'all' | 'error' | 'warning' | 'info';
+type FindingStatusFilter = 'all' | QualityFindingStatus;
+type FindingCategoryFilter = 'all' | QualityFindingCategory;
 
 function scoreColor(score: number): string {
   if (score >= 80) return 'text-status-success-foreground';
@@ -155,11 +158,20 @@ const TABS: { id: TabId; label: string; icon: React.ComponentType<{ className?: 
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projectId: number; documentId?: number }> = ({ open, onClose, projectId, documentId }) => {
+export const QualityModal: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  projectId: number;
+  documentId?: number;
+  activeSectionId?: number | null;
+}> = ({ open, onClose, projectId, documentId, activeSectionId }) => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
+  const [findingStatusFilter, setFindingStatusFilter] = useState<FindingStatusFilter>('open');
+  const [findingCategoryFilter, setFindingCategoryFilter] = useState<FindingCategoryFilter>('all');
   const [progress, setProgress] = useState(0);
   const [runStatus, setRunStatus] = useState<QualityStatus | null>(null);
   const hasDocumentContext = Number.isFinite(documentId) && (documentId ?? 0) > 0;
@@ -256,6 +268,46 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
     onError: () => toast.error(hasDocumentContext ? 'Failed to start quality analysis' : 'Open a Document to run quality analysis'),
   });
 
+  const refreshQualityData = async () => {
+    await Promise.all([
+      refetch(),
+      queryClient.invalidateQueries({ queryKey: ['ai-proposed-changes', projectId, documentId] }),
+    ]);
+  };
+
+  const updateFindingMutation = useMutation({
+    mutationFn: ({ findingId, status }: { findingId: number; status: QualityFindingStatus }) =>
+      qualityApi.updateFindingStatus(projectId, documentId!, findingId, status),
+    onSuccess: () => {
+      toast.success('Finding updated');
+      void refetch();
+    },
+    onError: () => toast.error('Failed to update finding'),
+  });
+
+  const grammarRunMutation = useMutation({
+    mutationFn: (sectionId?: number) =>
+      qualityApi.runGrammarFindings(projectId, documentId!, {
+        section_id: sectionId,
+        language: 'en-US',
+      }),
+    onSuccess: async (findings) => {
+      toast.success(findings.length ? 'Grammar findings updated' : 'No grammar findings found');
+      await refetch();
+    },
+    onError: () => toast.error('Failed to run grammar check'),
+  });
+
+  const aiFixMutation = useMutation({
+    mutationFn: (payload: Parameters<typeof qualityApi.createAiFix>[2]) =>
+      qualityApi.createAiFix(projectId, documentId!, payload),
+    onSuccess: async () => {
+      toast.success('AI fix queued for review');
+      await refreshQualityData();
+    },
+    onError: () => toast.error('Failed to queue AI fix'),
+  });
+
   // Terminology: fetch from dedicated endpoint (must be before early return — hooks rule)
   const { data: terminologies } = useQuery({
     queryKey: ['terminology', projectId],
@@ -268,20 +320,29 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
 
   // ── Derived data ────────────────────────────────────────────────
   const issues = report?.issues ?? [];
+  const findings = report?.findings ?? [];
   const brokenLinks = report?.broken_links ?? [];
 
   const filteredIssues = severityFilter === 'all'
     ? issues
     : issues.filter(i => i.severity === severityFilter);
 
+  const filteredFindings = findings.filter((finding) => (
+    (severityFilter === 'all' || finding.severity === severityFilter)
+    && (findingStatusFilter === 'all' || finding.status === findingStatusFilter)
+    && (findingCategoryFilter === 'all' || finding.category === findingCategoryFilter)
+  ));
+
   // Also extract from quality issues as fallback
   const terminologyIssues = issues.filter(i =>
     i.message.toLowerCase().includes('inconsistent') || i.message.toLowerCase().includes('terminolog')
   );
 
-  const errorCount = issues.filter(i => i.severity === 'error').length;
-  const warningCount = issues.filter(i => i.severity === 'warning').length;
-  const infoCount = issues.filter(i => i.severity === 'info').length;
+  const activeFindings = findings.filter((finding) => finding.status === 'open' || finding.status === 'proposed');
+  const countedItems = findings.length ? activeFindings : issues;
+  const errorCount = countedItems.filter(i => i.severity === 'error').length;
+  const warningCount = countedItems.filter(i => i.severity === 'warning').length;
+  const infoCount = countedItems.filter(i => i.severity === 'info').length;
 
   const isRunning = runMutation.isPending || progress > 0;
   const qualityError = error && !isMissingQualityReport(error) ? error : null;
@@ -342,7 +403,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
   const renderIssues = () => (
     <div className="space-y-4">
       {/* Severity filter tabs */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap items-center">
         {(['all', 'error', 'warning', 'info'] as SeverityFilter[]).map(f => (
           <button
             key={f}
@@ -357,10 +418,144 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
             {f === 'all' ? `All (${issues.length})` : `${f} (${issues.filter(i => i.severity === f).length})`}
           </button>
         ))}
+        {hasDocumentContext && (
+          <>
+            <select
+              value={findingCategoryFilter}
+              onChange={(event) => setFindingCategoryFilter(event.target.value as FindingCategoryFilter)}
+              className="h-8 rounded border border-border bg-panel px-2 text-sm text-text-secondary"
+              aria-label="Filter findings by category"
+            >
+              {(['all', 'completeness', 'acceptance', 'terminology', 'links', 'readability', 'grammar', 'accuracy'] as FindingCategoryFilter[]).map((category) => (
+                <option key={category} value={category}>{category}</option>
+              ))}
+            </select>
+            <select
+              value={findingStatusFilter}
+              onChange={(event) => setFindingStatusFilter(event.target.value as FindingStatusFilter)}
+              className="h-8 rounded border border-border bg-panel px-2 text-sm text-text-secondary"
+              aria-label="Filter findings by status"
+            >
+              {(['all', 'open', 'proposed', 'resolved', 'dismissed'] as FindingStatusFilter[]).map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => grammarRunMutation.mutate(activeSectionId ?? undefined)}
+              disabled={!hasDocumentContext || grammarRunMutation.isPending || !activeSectionId}
+              title="Run grammar check for the active Section"
+            >
+              <RefreshCw className={cn('h-3.5 w-3.5', grammarRunMutation.isPending && 'animate-spin')} />
+              Grammar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => aiFixMutation.mutate({
+                category: 'grammar',
+                section_id: activeSectionId ?? undefined,
+                status: 'open',
+                action: 'fix_all_grammar_in_section',
+              })}
+              disabled={!activeSectionId || aiFixMutation.isPending}
+              title="Queue AI proposed changes for grammar findings in the active Section"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Fix Grammar
+            </Button>
+          </>
+        )}
       </div>
 
       {/* Issues list */}
-      {filteredIssues.length === 0 ? (
+      {findings.length > 0 ? (
+        filteredFindings.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <CheckCircle2 className="h-10 w-10 text-status-success-foreground" />
+            <p className="text-base font-medium text-foreground">No findings match these filters</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredFindings.map((finding: QualityFinding) => (
+              <Surface
+                key={finding.id}
+                variant="panel"
+                padding="default"
+                className="hover:border-primary/30 transition-colors"
+              >
+                <div className="flex items-start gap-3">
+                  <SeverityIcon severity={finding.severity} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <SeverityPill severity={finding.severity} />
+                      <Badge variant={finding.status === 'open' ? 'warning' : finding.status === 'dismissed' ? 'neutral' : 'info'}>
+                        {finding.status}
+                      </Badge>
+                      <Badge variant="neutral">{finding.category}</Badge>
+                      {finding.section_ref && (
+                        <button
+                          onClick={() => navigate(`/projects/${projectId}`)}
+                          className="flex items-center gap-1 text-xs text-primary hover:underline"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          {finding.section_ref}
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-sm text-foreground">{finding.message}</p>
+                    {finding.quote && (
+                      <p className="mt-2 rounded bg-panel-muted px-2 py-1 text-xs text-text-secondary">
+                        "{finding.quote}"
+                      </p>
+                    )}
+                    {finding.suggestion && (
+                      <p className="mt-2 text-xs text-muted-foreground border-l-2 border-primary/30 pl-3 italic">
+                        {finding.suggestion}
+                      </p>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => aiFixMutation.mutate({
+                          finding_id: finding.id,
+                          status: finding.status,
+                          action: 'fix_one_finding',
+                        })}
+                        disabled={aiFixMutation.isPending || finding.status === 'resolved' || finding.status === 'dismissed'}
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Fix with AI
+                      </Button>
+                      {finding.status === 'dismissed' ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateFindingMutation.mutate({ findingId: finding.id, status: 'open' })}
+                          disabled={updateFindingMutation.isPending}
+                        >
+                          Reopen
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateFindingMutation.mutate({ findingId: finding.id, status: 'dismissed' })}
+                          disabled={updateFindingMutation.isPending}
+                        >
+                          Dismiss
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Surface>
+            ))}
+          </div>
+        )
+      ) : filteredIssues.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <CheckCircle2 className="h-10 w-10 text-status-success-foreground" />
           <p className="text-base font-medium text-foreground">No issues found</p>
@@ -395,7 +590,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
                   <p className="text-sm text-foreground">{issue.message}</p>
                   {issue.suggestion && (
                     <p className="mt-2 text-xs text-muted-foreground border-l-2 border-primary/30 pl-3 italic">
-                      💡 {issue.suggestion}
+                      {issue.suggestion}
                     </p>
                   )}
                 </div>
@@ -692,7 +887,7 @@ export const QualityModal: React.FC<{ open: boolean; onClose: () => void; projec
                   const isActive = activeTab === tab.id;
                   // Badge counts
                   let badge: number | null = null;
-                  if (tab.id === 'issues') badge = issues.length;
+                  if (tab.id === 'issues') badge = findings.length || issues.length;
                   if (tab.id === 'links') badge = brokenLinks.length;
                   if (tab.id === 'terminology') badge = terminologyIssues.length;
 

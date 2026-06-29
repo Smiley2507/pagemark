@@ -11,7 +11,13 @@ async_session = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncS
 # Convert postgresql+asyncpg:// to postgresql+psycopg2://
 sync_database_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
 sync_engine = create_engine(sync_database_url, echo=True)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=sync_engine, class_=Session)
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=sync_engine,
+    class_=Session,
+    expire_on_commit=False,
+)
 
 class Base(DeclarativeBase):
     pass

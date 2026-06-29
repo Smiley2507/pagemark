@@ -5,6 +5,8 @@ from typing import Optional
 class GrammarCheckRequest(BaseModel):
     text: str
     language: str = "en-US"
+    document_id: int | None = None
+    section_id: int | None = None
 
 
 class GrammarMatchReplacement(BaseModel):
