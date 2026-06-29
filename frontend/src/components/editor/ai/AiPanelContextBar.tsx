@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { FileText, X, BookOpen, FileCode, Layout, Sparkles, Circle, Highlighter, ExternalLink, ShieldCheck } from 'lucide-react';
+import { FileText, X, BookOpen, FileCode, Layout, Sparkles, Circle, Highlighter, ExternalLink, ShieldCheck, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useAiStore } from '@/store/aiStore';
 import { ResourcePreview } from './ResourcePreview';
 import { projectsApi } from '@/api/projects';
+import { Popover } from '@/components/ui/popover';
 
 const ATTACHMENT_ICONS: Record<string, typeof FileText> = {
   file: FileText,
@@ -74,146 +75,186 @@ export function AiPanelContextBar({
   const warnings = aiContext?.grounding_warnings?.slice(0, 2) ?? [];
   const hasTemplate = attachments.some((a) => a.type === 'template');
   const hasContext = activeSectionHeading || attachments.length > 0 || hasProjectBrief || hasAnalysis || hasSourceFacts || warnings.length > 0 || hasQualityContext;
+  const fileAttachmentCount = attachments.filter((a) => a.type === 'file' || a.type === 'source').length;
+  const contextItemCount = [
+    activeSectionHeading,
+    hasProjectBrief,
+    hasAnalysis,
+    hasSourceFacts,
+    languageFacts || frameworkFacts,
+    hasQualityContext,
+    hasTemplate,
+    ...warnings,
+    ...attachments,
+  ].filter(Boolean).length;
+  const indicators = [
+    activeSectionHeading ? 'Section' : null,
+    fileAttachmentCount > 0
+      ? `Files ${fileAttachmentCount}`
+      : hasSourceFacts
+        ? `Files ${aiContext?.analysis_summary.total_files || 0}`
+        : null,
+    hasQualityContext ? 'Quality' : null,
+    hasProjectBrief ? 'Brief' : null,
+    hasAnalysis ? 'Analysis' : null,
+  ].filter(Boolean).slice(0, 3);
 
   return (
     <div className="shrink-0 border-b border-separator bg-canvas/80 px-3 py-2">
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <Sparkles className="h-3 w-3 shrink-0 text-indigo-500/60" />
         <span className="text-[10px] font-medium uppercase tracking-wider text-text-muted">
           Using context
         </span>
 
-        <div className="ml-1 flex flex-1 flex-wrap gap-1">
-          {activeSectionHeading && (
-            <span className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary">
-              <Circle className="h-1.5 w-1.5 fill-emerald-400 text-emerald-400" />
-              <FileText className="h-3 w-3 shrink-0" />
-              <span className="max-w-[80px] truncate">{activeSectionHeading}</span>
-              {activeSectionStatus && (
-                <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-interaction" />
-              )}
-            </span>
-          )}
-
-          {hasProjectBrief && (
-            <span className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary">
-              <Circle className="h-1.5 w-1.5 fill-amber-400 text-amber-400" />
-              <BookOpen className="h-3 w-3 shrink-0" />
-              <span>Project brief</span>
-            </span>
-          )}
-
-          {hasAnalysis && (
-            <span className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary">
-              <Circle className="h-1.5 w-1.5 fill-cyan-400 text-cyan-400" />
-              <FileCode className="h-3 w-3 shrink-0" />
-              <span>{aiContext?.analysis_summary.is_current ? 'Using latest analysis' : 'Analysis may be stale'}</span>
-            </span>
-          )}
-
-          {hasSourceFacts && (
-            <span className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary">
-              <Circle className="h-1.5 w-1.5 fill-blue-400 text-blue-400" />
-              <FileCode className="h-3 w-3 shrink-0" />
-              <span>{aiContext?.analysis_summary.total_files || 0} files</span>
-            </span>
-          )}
-
-          {(languageFacts || frameworkFacts) && (
-            <span className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary">
-              <Circle className="h-1.5 w-1.5 fill-violet-400 text-violet-400" />
-              <FileCode className="h-3 w-3 shrink-0" />
-              <span className="max-w-[120px] truncate">{[languageFacts, frameworkFacts].filter(Boolean).join(' / ')}</span>
-            </span>
-          )}
-
-          {warnings.map((warning, index) => (
-            <span key={`${warning}-${index}`} className="inline-flex items-center gap-1 rounded bg-status-warning px-1.5 py-0.5 text-[10px] text-status-warning-foreground">
-              <Circle className="h-1.5 w-1.5 fill-current" />
-              <span className="max-w-[120px] truncate">{warning}</span>
-            </span>
-          ))}
-
-          {hasQualityContext && (
-            <span className="inline-flex items-center gap-1 rounded bg-status-warning/20 px-1.5 py-0.5 text-[10px] text-status-warning-foreground">
-              <Circle className="h-1.5 w-1.5 fill-current" />
-              <ShieldCheck className="h-3 w-3 shrink-0" />
-              <span>Quality Context</span>
-            </span>
-          )}
-
-          {hasTemplate && (
-            <span className="inline-flex items-center gap-1 rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-secondary">
-              <Circle className="h-1.5 w-1.5 fill-orange-400 text-orange-400" />
-              <Layout className="h-3 w-3 shrink-0" />
-              <span>Template</span>
-            </span>
-          )}
-
-          {attachments.map((a) => {
-            const Icon = ATTACHMENT_ICONS[a.type];
-            const dotColor = TYPE_DOT_COLORS[a.type] || 'bg-text-muted';
-            const showPreview = previewId === a.id;
-
-            return (
-              <span key={a.id} className="relative inline-flex">
-                <span className="inline-flex items-center rounded bg-panel-muted text-[10px] text-text-secondary transition-colors hover:bg-interaction-muted hover:text-interaction-hover">
-                  <button
-                    type="button"
-                    onClick={() => setPreviewId(showPreview ? null : a.id)}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5"
-                  >
-                    <Circle className={`h-1.5 w-1.5 fill-current ${dotColor.replace('bg-', 'text-')}`} />
-                    <Icon className="h-3 w-3 shrink-0" />
-                    <span className="max-w-[60px] truncate">{a.label}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { removeAttachment(a.id); setPreviewId(null); }}
-                    className="mr-1 rounded-sm text-text-muted hover:text-text-primary"
-                    aria-label={`Remove ${a.label}`}
-                  >
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </span>
-
-                {showPreview && (
-                  <div
-                    ref={previewRef}
-                    className="absolute bottom-full left-0 z-50 mb-1.5"
-                  >
-                    <ResourcePreview
-                      attachment={a}
-                      onRemove={(id) => { removeAttachment(id); setPreviewId(null); }}
-                    />
-                  </div>
-                )}
+        <Popover
+          className="w-[22rem] p-0"
+          trigger={(
+            <span className="inline-flex max-w-full items-center gap-1.5 rounded bg-panel-muted px-2 py-1 text-[10px] text-text-secondary transition-colors hover:bg-interaction-muted hover:text-interaction-hover">
+              <span className="font-medium text-text-primary">
+                {hasContext ? `Using ${contextItemCount} context item${contextItemCount === 1 ? '' : 's'}` : 'No context selected'}
               </span>
-            );
-          })}
-
-          {!hasContext && (
-            <span className="text-[10px] text-text-muted italic">
-              No context selected
+              {indicators.map((indicator) => (
+                <span key={indicator} className="rounded bg-canvas px-1.5 py-0.5 text-[10px] text-text-muted">
+                  {indicator}
+                </span>
+              ))}
+              <ChevronDown className="h-3 w-3 shrink-0" />
             </span>
           )}
-        </div>
-
-        {attachments.length > 0 && (
-          <button
-            onClick={clearAttachments}
-            className="shrink-0 rounded px-1 py-0.5 text-[10px] text-text-muted transition-colors hover:text-text-primary"
-          >
-            Clear
-          </button>
-        )}
-        <Link
-          to={`/projects/${projectId}/source`}
-          className="inline-flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-[10px] text-text-muted transition-colors hover:text-text-primary"
         >
-          AI Context
-          <ExternalLink className="h-2.5 w-2.5" />
-        </Link>
+          <div className="max-h-[28rem] overflow-y-auto p-3">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold text-text-primary">AI context</p>
+                <p className="text-[10px] text-text-muted">
+                  {hasContext ? `${contextItemCount} item${contextItemCount === 1 ? '' : 's'} available to chat` : 'No context selected'}
+                </p>
+              </div>
+              {attachments.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { clearAttachments(); setPreviewId(null); }}
+                  className="rounded px-2 py-1 text-[11px] text-text-muted transition-colors hover:bg-panel-muted hover:text-text-primary"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              {activeSectionHeading && (
+                <div className="flex items-center gap-2 rounded border border-separator bg-panel px-2 py-1.5 text-[11px] text-text-secondary">
+                  <Circle className="h-1.5 w-1.5 fill-emerald-400 text-emerald-400" />
+                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{activeSectionHeading}</span>
+                  {activeSectionStatus && (
+                    <span className="rounded bg-panel-muted px-1.5 py-0.5 text-[10px] text-text-muted">{activeSectionStatus}</span>
+                  )}
+                </div>
+              )}
+
+              {hasProjectBrief && (
+                <div className="flex items-center gap-2 rounded border border-separator bg-panel px-2 py-1.5 text-[11px] text-text-secondary">
+                  <Circle className="h-1.5 w-1.5 fill-amber-400 text-amber-400" />
+                  <BookOpen className="h-3.5 w-3.5 shrink-0" />
+                  <span>Project brief</span>
+                </div>
+              )}
+
+              {hasAnalysis && (
+                <div className="flex items-center gap-2 rounded border border-separator bg-panel px-2 py-1.5 text-[11px] text-text-secondary">
+                  <Circle className="h-1.5 w-1.5 fill-cyan-400 text-cyan-400" />
+                  <FileCode className="h-3.5 w-3.5 shrink-0" />
+                  <span>{aiContext?.analysis_summary.is_current ? 'Latest analysis' : 'Analysis may be stale'}</span>
+                </div>
+              )}
+
+              {hasSourceFacts && (
+                <div className="flex items-center gap-2 rounded border border-separator bg-panel px-2 py-1.5 text-[11px] text-text-secondary">
+                  <Circle className="h-1.5 w-1.5 fill-blue-400 text-blue-400" />
+                  <FileCode className="h-3.5 w-3.5 shrink-0" />
+                  <span>{aiContext?.analysis_summary.total_files || 0} files</span>
+                </div>
+              )}
+
+              {(languageFacts || frameworkFacts) && (
+                <div className="flex items-center gap-2 rounded border border-separator bg-panel px-2 py-1.5 text-[11px] text-text-secondary">
+                  <Circle className="h-1.5 w-1.5 fill-violet-400 text-violet-400" />
+                  <FileCode className="h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{[languageFacts, frameworkFacts].filter(Boolean).join(' / ')}</span>
+                </div>
+              )}
+
+              {warnings.map((warning, index) => (
+                <div key={`${warning}-${index}`} className="flex items-center gap-2 rounded border border-status-warning/30 bg-status-warning/15 px-2 py-1.5 text-[11px] text-status-warning-foreground">
+                  <Circle className="h-1.5 w-1.5 fill-current" />
+                  <span className="min-w-0 flex-1 truncate">{warning}</span>
+                </div>
+              ))}
+
+              {hasQualityContext && (
+                <div className="flex items-center gap-2 rounded border border-status-warning/30 bg-status-warning/15 px-2 py-1.5 text-[11px] text-status-warning-foreground">
+                  <Circle className="h-1.5 w-1.5 fill-current" />
+                  <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
+                  <span>Quality context</span>
+                </div>
+              )}
+
+              {attachments.map((a) => {
+                const Icon = ATTACHMENT_ICONS[a.type];
+                const dotColor = TYPE_DOT_COLORS[a.type] || 'bg-text-muted';
+                const showPreview = previewId === a.id;
+
+                return (
+                  <div key={a.id} className="relative">
+                    <div className="flex items-center rounded border border-separator bg-panel text-[11px] text-text-secondary transition-colors hover:bg-interaction-muted hover:text-interaction-hover">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewId(showPreview ? null : a.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+                      >
+                        <Circle className={`h-1.5 w-1.5 fill-current ${dotColor.replace('bg-', 'text-')}`} />
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{a.label}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { removeAttachment(a.id); setPreviewId(null); }}
+                        className="mr-1 rounded p-1 text-text-muted hover:text-text-primary"
+                        aria-label={`Remove ${a.label}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+
+                    {showPreview && (
+                      <div
+                        ref={previewRef}
+                        className="absolute bottom-full right-0 z-50 mb-1.5"
+                      >
+                        <ResourcePreview
+                          attachment={a}
+                          onRemove={(id) => { removeAttachment(id); setPreviewId(null); }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 border-t border-separator pt-2">
+              <Link
+                to={`/projects/${projectId}/source`}
+                className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] text-text-muted transition-colors hover:text-text-primary"
+              >
+                AI Context
+                <ExternalLink className="h-3 w-3" />
+              </Link>
+            </div>
+          </div>
+        </Popover>
       </div>
     </div>
   );

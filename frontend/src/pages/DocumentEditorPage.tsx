@@ -25,7 +25,7 @@ import {
   Sun,
   Moon,
   Laptop,
-  Clock,
+  GitPullRequestDraft,
   MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -1316,8 +1316,8 @@ export function DocumentEditorPage() {
                         : 'text-text-muted hover:text-text-primary',
                     )}
                   >
-                    <Clock className="h-3.5 w-3.5" />
-                    History
+                    <GitPullRequestDraft className="h-3.5 w-3.5" />
+                    Changes
                   </button>
                 </div>
                 <Button
@@ -1373,10 +1373,10 @@ export function DocumentEditorPage() {
               <button
                 onClick={() => { setRightPanelOpen(true); setRightTab('history'); }}
                 className="rounded p-1.5 text-text-muted transition-colors hover:bg-interaction-muted hover:text-text-primary"
-                aria-label="Open review history"
-                title="Review History"
+                aria-label="Open changes"
+                title="Changes"
               >
-                <Clock className="h-4 w-4" />
+                <GitPullRequestDraft className="h-4 w-4" />
               </button>
             </div>
           )}

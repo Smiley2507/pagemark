@@ -37,20 +37,6 @@ vi.mock('@/components/editor/ai/AiPanelTranscript', () => ({
   ),
 }));
 
-vi.mock('@/components/editor/ai/AiPanelReviewQueue', () => ({
-  AiPanelReviewQueue: ({ items }: { items: { id: number; title: string }[] }) => (
-    <div data-testid="ai-review-queue">
-      {items.length > 0 && (
-        <div data-testid="review-open">
-          {items.map((item: any) => (
-            <div key={item.id} data-testid={`ai-proposed-change-${item.id}`}>{item.title}</div>
-          ))}
-        </div>
-      )}
-    </div>
-  ),
-}));
-
 vi.mock('@/components/editor/ai/AiPanelClarification', () => ({
   AiPanelClarification: ({ issue, onSubmit }: { issue: { message: string }; onSubmit: (a: string) => void }) => (
     <div data-testid="ai-clarification">
@@ -312,5 +298,11 @@ describe('AI panel', () => {
       />,
     );
     expect(screen.getByTestId('ai-empty-state')).toBeInTheDocument();
+  });
+
+  it('does not render the full proposed-change queue in the chat tab', () => {
+    renderPanel();
+
+    expect(screen.queryByTestId('ai-review-queue')).not.toBeInTheDocument();
   });
 });

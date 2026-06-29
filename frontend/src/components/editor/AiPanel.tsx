@@ -23,7 +23,6 @@ import type { AiTranscriptTurn, AiIssue } from '@/lib/ai-panel-types';
 import { AiPanelHeader } from './ai/AiPanelHeader';
 import { AiPanelTarget } from './ai/AiPanelTarget';
 import { AiPanelTranscript } from './ai/AiPanelTranscript';
-import { AiPanelReviewQueue } from './ai/AiPanelReviewQueue';
 import { AiPanelClarification } from './ai/AiPanelClarification';
 import { AiPanelEmptyState } from './ai/AiPanelEmptyState';
 import { AiPanelContextBar } from './ai/AiPanelContextBar';
@@ -120,17 +119,6 @@ export function AiPanel({
     () => buildTarget(activeSectionId, activeSectionHeading, activeSelection ?? null),
     [activeSectionId, activeSectionHeading, activeSelection],
   );
-
-  const reviewItems = proposedChanges
-    .map((change) => ({
-      id: change.id,
-      workRunId: change.work_run_id,
-      changeType: change.change_type,
-      status: change.status,
-      title: change.title,
-      rationale: change.rationale ?? null,
-      change,
-    }));
 
   const reconciledTurns = useMemo(() => {
     if (proposedChanges.length === 0) return turns;
@@ -542,7 +530,6 @@ export function AiPanel({
   // ── Derived display state ──────────────────────────────────────────────
   const activeIssue = sectionClarificationIssue || inlineClarificationIssue;
   const hasPanelActivity = turns.length > 0
-    || reviewItems.length > 0
     || issues.length > 0
     || structureSuggestions !== null;
   const hasQualityContext = reconciledTurns.some((turn) =>
@@ -584,16 +571,6 @@ export function AiPanel({
         <AiPanelTranscript
           turns={reconciledTurns}
           onClear={clearTurns}
-          onAccept={(changeId) => acceptAiChange.mutate(changeId)}
-          onReject={(changeId) => rejectAiChange.mutate(changeId)}
-          onUndo={(runId) => undoAiWorkRun.mutate(runId)}
-          isAccepting={acceptAiChange.isPending}
-          isRejecting={rejectAiChange.isPending}
-          isUndoing={undoAiWorkRun.isPending}
-        />
-
-        <AiPanelReviewQueue
-          items={reviewItems}
           onAccept={(changeId) => acceptAiChange.mutate(changeId)}
           onReject={(changeId) => rejectAiChange.mutate(changeId)}
           onUndo={(runId) => undoAiWorkRun.mutate(runId)}
