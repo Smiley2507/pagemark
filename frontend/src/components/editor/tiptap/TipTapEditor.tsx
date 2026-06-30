@@ -213,8 +213,6 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
     collaboration,
     collaborationExtension,
     readOnly,
-    onSavingChange,
-    onSaved,
     onPolish,
     onAiCommand,
     grammarIssues,
@@ -223,7 +221,6 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
     onSelectionChange,
     backendAppliedContent,
     backendAppliedVersion,
-    backendAppliedStaleContent,
   }, ref) {
     const [contextMenuState, setContextMenuState] = useState<{
       position: { top: number; left: number };
@@ -232,12 +229,8 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
     } | null>(null)
     const projectIdRef = useRef(projectId)
     useEffect(() => { projectIdRef.current = projectId })
-    const snapshotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-    const lastSnapshotRef = useRef(value)
-    const backendAppliedRef = useRef<{ content: string; staleContent?: string } | null>(null)
     const lastBackendAppliedVersionRef = useRef<string | number | null>(null)
     const canEdit = !readOnly
-    const useCollaborationSnapshot = Boolean(collaboration && collaborationExtension && projectId && documentId && sectionId && canEdit)
 
     const editor = useEditor({
       extensions: createExtensions("Type '/' for commands", collaborationExtension),
@@ -306,8 +299,6 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
       },
       setContent: (text: string) => {
         editor?.commands.setContent(text, { contentType: 'markdown' })
-        lastSnapshotRef.current = text
-        backendAppliedRef.current = { content: text }
       },
       setGrammarIssues: (_issues: GrammarIssue[]) => {
         // TODO: port grammar decoration to ProseMirror plugin
@@ -339,46 +330,8 @@ const TipTapEditorInner = forwardRef<TipTapEditorHandle, TipTapEditorInnerProps>
           contentType: 'markdown',
         })
       }
-      lastSnapshotRef.current = backendAppliedContent
-      backendAppliedRef.current = {
-        content: backendAppliedContent,
-        staleContent: backendAppliedStaleContent,
-      }
       onChange(backendAppliedContent)
-    }, [backendAppliedContent, backendAppliedStaleContent, backendAppliedVersion, editor, onChange])
-
-    useEffect(() => {
-      if (!useCollaborationSnapshot || !projectId || !documentId || !sectionId) return
-      if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
-
-      snapshotTimerRef.current = setTimeout(async () => {
-        const markdown = editor?.getMarkdown()
-        if (markdown == null || markdown === lastSnapshotRef.current) return
-        const backendApplied = backendAppliedRef.current
-        if (
-          backendApplied?.staleContent != null &&
-          markdown === backendApplied.staleContent &&
-          backendApplied.content !== backendApplied.staleContent
-        ) {
-          lastSnapshotRef.current = backendApplied.content
-          return
-        }
-        onSavingChange?.(true)
-        try {
-          const res = await collaborationApi.snapshotSection(projectId, documentId, sectionId, markdown)
-          lastSnapshotRef.current = markdown
-          onSaved?.(new Date(res.updated_at))
-        } catch (error) {
-          console.error('Collaboration snapshot failed', error)
-        } finally {
-          onSavingChange?.(false)
-        }
-      }, 3000)
-
-      return () => {
-        if (snapshotTimerRef.current) clearTimeout(snapshotTimerRef.current)
-      }
-    }, [documentId, editor, onSaved, onSavingChange, projectId, sectionId, useCollaborationSnapshot, value])
+    }, [backendAppliedContent, backendAppliedVersion, editor, onChange])
 
     const uploadAndInsertImage = useCallback(async (file: File) => {
       if (!editor || !canEdit) return

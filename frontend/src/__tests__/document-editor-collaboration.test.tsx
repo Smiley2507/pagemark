@@ -209,7 +209,7 @@ describe('Document editor collaboration activation', () => {
     expect(mocks.editorMounts.get(102)).toBe(1);
   });
 
-  it('uses normal autosave for non-collaborative sections when collaboration is enabled', async () => {
+  it('uses normal autosave for every editable section when collaboration is enabled', async () => {
     renderPage();
 
     await waitFor(() => {
@@ -218,7 +218,7 @@ describe('Document editor collaboration activation', () => {
     });
 
     expect(mocks.autosaveCalls).toEqual(expect.arrayContaining([
-      expect.objectContaining({ sectionId: 101, enabled: false }),
+      expect.objectContaining({ sectionId: 101, enabled: true }),
       expect.objectContaining({ sectionId: 102, enabled: true }),
     ]));
   });

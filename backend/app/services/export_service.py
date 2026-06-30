@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import mimetypes
+import subprocess
 from html import escape
 from pathlib import Path
 from typing import Any, Optional, Sequence
@@ -46,9 +47,69 @@ def _section_content(section: Any) -> str:
 
 # ── Markdown → HTML ────────────────────────────────────────────
 
+_MERMAID_FENCE_RE = re.compile(
+    r"(^|\n)(?P<fence>`{3,}|~{3,})[ \t]*mermaid[^\n]*\n(?P<code>.*?)(?:\n(?P=fence)[ \t]*(?=\n|$))",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _frontend_dir() -> Path:
+    return Path(__file__).resolve().parents[3] / "frontend"
+
+
+def _render_mermaid_svg(code: str) -> tuple[str | None, str | None]:
+    script = _frontend_dir() / "scripts" / "render-mermaid.mjs"
+    if not script.exists():
+        return None, "Mermaid renderer script is unavailable."
+    try:
+        result = subprocess.run(
+            ["node", str(script)],
+            input=code,
+            text=True,
+            capture_output=True,
+            cwd=str(_frontend_dir()),
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, str(exc)
+
+    if result.returncode != 0 or not result.stdout.strip():
+        return None, result.stderr.strip() or "Mermaid rendering failed."
+    return result.stdout, None
+
+
+def _mermaid_fallback_html(code: str, error: str | None) -> str:
+    note = escape(error or "Mermaid rendering failed.")
+    return (
+        '<div class="mermaid-export mermaid-export--error">'
+        f'<p class="mermaid-export-error">Mermaid render failed: {note}</p>'
+        f'<pre><code>{escape(code)}</code></pre>'
+        "</div>"
+    )
+
+
+def _render_mermaid_blocks(text: str) -> str:
+    if not text:
+        return text
+
+    def repl(match: re.Match[str]) -> str:
+        leading = match.group(1) or ""
+        code = match.group("code").strip("\n")
+        svg, error = _render_mermaid_svg(code)
+        if svg:
+            html = f'<div class="mermaid-export">{svg}</div>'
+        else:
+            html = _mermaid_fallback_html(code, error)
+        return f"{leading}{html}"
+
+    return _MERMAID_FENCE_RE.sub(repl, text)
+
+
 def _markdown_to_html(text: str) -> str:
     if not text:
         return ""
+    text = _render_mermaid_blocks(text)
     if _md_lib:
         return _md_lib.markdown(
             text,
@@ -486,6 +547,29 @@ pre code {{
   color:inherit;
   padding:0;
   font-size:inherit;
+}}
+
+.mermaid-export {{
+  margin:16px 0;
+  page-break-inside:avoid;
+  break-inside:avoid;
+  text-align:center;
+}}
+.mermaid-export svg {{
+  max-width:100%;
+  height:auto;
+}}
+.mermaid-export--error {{
+  text-align:left;
+  border:1px solid var(--border-color);
+  border-radius:6px;
+  padding:12px;
+  background:#fff7ed;
+}}
+.mermaid-export-error {{
+  margin:0 0 8px 0;
+  color:#9a3412;
+  font-weight:600;
 }}
 
 img {{

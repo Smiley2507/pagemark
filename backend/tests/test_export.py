@@ -309,6 +309,37 @@ class TestHtmlExport:
         result = export_html(sections, "Proj", "Doc")
         assert "<pre" in result
 
+    def test_mermaid_fence_renders_to_svg(self, monkeypatch):
+        from app.services import export_service
+
+        monkeypatch.setattr(
+            export_service,
+            "_render_mermaid_svg",
+            lambda code: ('<svg id="diagram"></svg>', None),
+        )
+
+        sections = [{"heading": "Flow", "content": "```mermaid\ngraph TD\n  A-->B\n```"}]
+        result = export_html(sections, "Proj", "Doc")
+
+        assert '<div class="mermaid-export"><svg id="diagram"></svg></div>' in result
+        assert "```mermaid" not in result
+
+    def test_mermaid_fence_falls_back_to_readable_source(self, monkeypatch):
+        from app.services import export_service
+
+        monkeypatch.setattr(
+            export_service,
+            "_render_mermaid_svg",
+            lambda code: (None, "syntax error"),
+        )
+
+        sections = [{"heading": "Flow", "content": "```mermaid\ngraph TD\n  A-->\n```"}]
+        result = export_html(sections, "Proj", "Doc")
+
+        assert "Mermaid render failed: syntax error" in result
+        assert "graph TD" in result
+        assert "A--&gt;" in result
+
     def test_markdown_image_renders(self, sample_sections):
         result = export_html(sample_sections, "Proj", "Doc")
         assert "<img" in result
@@ -457,6 +488,26 @@ class TestPdfExport:
 
     def test_pdf_empty_sections(self):
         pdf_bytes = export_pdf([], "Proj", "Doc")
+        assert pdf_bytes.startswith(b"%PDF")
+
+    def test_pdf_export_uses_static_mermaid_svg(self, monkeypatch):
+        from app.services import export_service
+
+        calls = []
+
+        def render_mermaid(code: str):
+            calls.append(code)
+            return ('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>', None)
+
+        monkeypatch.setattr(export_service, "_render_mermaid_svg", render_mermaid)
+
+        pdf_bytes = export_pdf(
+            [{"heading": "Flow", "content": "```mermaid\ngraph TD\n  A-->B\n```"}],
+            "Proj",
+            "Doc",
+        )
+
+        assert calls == ["graph TD\n  A-->B"]
         assert pdf_bytes.startswith(b"%PDF")
 
     def test_pdf_with_all_settings(self, sample_sections):

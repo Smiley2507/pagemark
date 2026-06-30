@@ -403,7 +403,6 @@
   padding: 16px;
   background: var(--panel);
   text-align: center;
-  cursor: pointer;
   position: relative;
 }
 .tiptap-editor .ProseMirror .mermaid-diagram:hover {
@@ -420,12 +419,46 @@
 .tiptap-editor .ProseMirror .mermaid-code-hint {
   font-size: 11px;
   color: var(--muted-foreground);
-  margin-top: 8px;
-  opacity: 0;
-  transition: opacity 0.15s;
 }
-.tiptap-editor .ProseMirror .mermaid-diagram:hover .mermaid-code-hint {
-  opacity: 1;
+.tiptap-editor .ProseMirror .mermaid-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.tiptap-editor .ProseMirror .mermaid-edit-button,
+.tiptap-editor .ProseMirror .mermaid-save-button,
+.tiptap-editor .ProseMirror .mermaid-cancel-button {
+  min-height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--foreground);
+  background: var(--background);
+}
+.tiptap-editor .ProseMirror .mermaid-edit-button:hover,
+.tiptap-editor .ProseMirror .mermaid-save-button:hover,
+.tiptap-editor .ProseMirror .mermaid-cancel-button:hover {
+  border-color: var(--interaction);
+}
+.tiptap-editor .ProseMirror .mermaid-edit-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.tiptap-editor .ProseMirror .mermaid-save-button {
+  color: var(--interaction-foreground);
+  border-color: var(--interaction);
+  background: var(--interaction);
+}
+.tiptap-editor .ProseMirror .mermaid-edit-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
 }
 .tiptap-editor .ProseMirror .mermaid-textarea {
   width: 100%;

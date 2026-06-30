@@ -265,7 +265,7 @@ function SectionBlock({
     documentId,
     section.id,
     content,
-    !isCollaborationActive,
+    !isDocumentApproved,
   );
 
   useEffect(() => {
