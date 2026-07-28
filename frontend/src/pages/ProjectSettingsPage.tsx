@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Surface } from '@/components/ui/surface';
 import { projectsApi } from '@/api/projects';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { PROJECT_MANAGE } from '@/lib/authz';
 
 export function ProjectSettingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -19,6 +21,7 @@ export function ProjectSettingsPage() {
     queryFn: () => projectsApi.getProject(Number(projectId)),
     enabled: !!projectId,
   });
+  const canManageProject = useHasCapability(PROJECT_MANAGE, project);
 
   const tags = useMemo(() => project?.tags || [], [project?.tags]);
   const updateProject = useMutation({
@@ -46,18 +49,23 @@ export function ProjectSettingsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {tags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => updateProject.mutate(tags.filter((candidate) => candidate !== tag))}
-              aria-label={`Remove ${tag} tag`}
-            >
-              <Badge variant="neutral" showIcon={false}>{tag}</Badge>
-            </button>
+            canManageProject ? (
+              <button
+                key={tag}
+                type="button"
+                className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => updateProject.mutate(tags.filter((candidate) => candidate !== tag))}
+                aria-label={`Remove ${tag} tag`}
+              >
+                <Badge variant="neutral" showIcon={false}>{tag}</Badge>
+              </button>
+            ) : (
+              <Badge key={tag} variant="neutral" showIcon={false}>{tag}</Badge>
+            )
           ))}
           {tags.length === 0 && <p className="text-body text-text-muted">No Project tags.</p>}
         </div>
+        {canManageProject && (
         <form
           className="flex gap-2"
           onSubmit={(event) => {
@@ -80,6 +88,7 @@ export function ProjectSettingsPage() {
             Add
           </Button>
         </form>
+        )}
       </Surface>
 
       <Surface variant="panel" padding="lg" className="space-y-4">
@@ -103,14 +112,16 @@ export function ProjectSettingsPage() {
             </span>
           </div>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          className="w-fit"
-          onClick={() => navigate(`/projects/${project.id}/source?setup=source`)}
-        >
-          Manage source
-        </Button>
+        {canManageProject && (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-fit"
+            onClick={() => navigate(`/projects/${project.id}/source?setup=source`)}
+          >
+            Manage source
+          </Button>
+        )}
       </Surface>
     </div>
   );

@@ -26,6 +26,8 @@ import {
   pollAnalysisUntilDone,
 } from '@/hooks/useAnalysis';
 import { detectProvider, type GitProvider } from '@/lib/git';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { DOCUMENT_MANAGE, PROJECT_MANAGE } from '@/lib/authz';
 
 function asGitProvider(provider: string | null | undefined): GitProvider | null {
   return provider === 'github' || provider === 'bitbucket' ? provider : null;
@@ -38,6 +40,8 @@ export const Analysis: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
 
   const { data: project, isLoading: projectLoading } = useProject(projectId);
+  const canManageDocuments = useHasCapability(DOCUMENT_MANAGE, project);
+  const canManageProject = useHasCapability(PROJECT_MANAGE, project);
   const { data: analysisStatus, refetch, workerUnavailable } = useAnalysisStatus(
     projectId,
     !syncing
@@ -123,7 +127,7 @@ export const Analysis: React.FC = () => {
           </div>
 
           <div className="flex gap-2">
-            {showGitSync && (
+            {showGitSync && canManageProject && (
               <Button
                 variant="outline"
                 size="sm"
@@ -173,6 +177,7 @@ export const Analysis: React.FC = () => {
               outlineApplied={analysisStatus?.outline_applied}
               onApply={() => applyOutline.mutate()}
               applying={applyOutline.isPending}
+              canApply={canManageDocuments}
             />
           </>
         )}

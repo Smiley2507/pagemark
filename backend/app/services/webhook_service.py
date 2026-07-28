@@ -2,7 +2,7 @@ import hashlib
 import hmac
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.project import Project
+from app.models.project import Project, SourceType
 
 
 def verify_github_signature(payload: bytes, signature: str, secret: str) -> bool:
@@ -20,7 +20,7 @@ async def find_project_by_repo(db: AsyncSession, repo_full_name: str) -> Project
         select(Project).where(
             Project.source_owner == owner,
             Project.source_repository == repo,
-            Project.source_type == "git",
+            Project.source_type == SourceType.GIT,
             Project.deleted_at.is_(None),
         )
     )

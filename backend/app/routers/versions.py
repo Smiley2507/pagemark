@@ -6,9 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, _get_active_member, _document_share_satisfies
 from app.models.document import Document
+from app.models.project import Project
 from app.models.user import User
+from app.authz import CONTENT_WRITE, member_can, require_capability
 from app.models.version import AuthorType, SectionVersion
 from app.schemas.section import SectionResponse
 from app.schemas.version import AuthorTypeEnum, SectionVersionResponse, VersionDiffResponse
@@ -97,6 +99,17 @@ async def restore_version(
     current_content = section.content_md or ""
     restore_content = version.content_md
 
+    doc_result = await db.execute(
+        select(Document).where(Document.id == section.document_id)
+    )
+    document = doc_result.scalar_one()
+    proj_result = await db.execute(select(Project).where(Project.id == document.project_id))
+    project = proj_result.scalar_one()
+    member = await _get_active_member(db, project.org_id, current_user.id)
+    if not member_can(member, CONTENT_WRITE, project=project, user_id=current_user.id):
+        if not await _document_share_satisfies(db, document.id, current_user.id, CONTENT_WRITE):
+            require_capability(member, CONTENT_WRITE, project=project, user_id=current_user.id)
+
     if restore_content != current_content:
         await create_version_snapshot(
             db,
@@ -108,10 +121,6 @@ async def restore_version(
         )
         section.content_md = restore_content
         section.updated_at = utcnow()
-        doc_result = await db.execute(
-            select(Document).where(Document.id == section.document_id)
-        )
-        document = doc_result.scalar_one()
         await section_service.recompute_project_completion(db, document.project_id)
 
     await db.commit()

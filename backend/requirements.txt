@@ -1,5 +1,6 @@
 fastapi
 pytest
+pytest-asyncio
 uvicorn[standard]
 sqlalchemy[asyncio]
 alembic

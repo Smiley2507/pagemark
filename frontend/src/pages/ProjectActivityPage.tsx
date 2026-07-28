@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Surface } from '@/components/ui/surface';
 import { projectsApi, type ActivityEvent, type ActivityChartDay } from '@/api/projects';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { ORG_AUDIT } from '@/lib/authz';
 
 const EVENT_ICONS: Record<string, ElementType> = {
   source_sync: GitCommit,
@@ -54,6 +56,7 @@ export function ProjectActivityPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [selectedDays, setSelectedDays] = useState<number>(14);
   const [selectedEventType, setSelectedEventType] = useState<string>('all');
+  const canViewAudit = useHasCapability(ORG_AUDIT);
 
   const { data: activityData, isLoading: activityLoading } = useQuery({
     queryKey: ['activity', projectId, selectedEventType],
@@ -61,15 +64,23 @@ export function ProjectActivityPage() {
       limit: 80,
       event_type: selectedEventType === 'all' ? undefined : selectedEventType,
     }),
-    enabled: !!projectId,
+    enabled: !!projectId && canViewAudit,
     refetchInterval: 10000,
   });
 
   const { data: chartData = [], isLoading: chartLoading } = useQuery({
     queryKey: ['activity-heatmap', projectId, selectedDays],
     queryFn: () => projectsApi.getActivityHeatmap(Number(projectId), selectedDays),
-    enabled: !!projectId,
+    enabled: !!projectId && canViewAudit,
   });
+
+  if (!canViewAudit) {
+    return (
+      <Surface variant="muted" padding="lg">
+        <p className="text-body text-text-secondary">Your role does not allow viewing project activity.</p>
+      </Surface>
+    );
+  }
 
   if (activityLoading && chartLoading) {
     return (

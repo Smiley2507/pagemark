@@ -26,6 +26,8 @@ import { Surface } from '@/components/ui/surface';
 import { searchApi, type GlobalSearchSort, type GlobalSearchType } from '@/api/search';
 import { projectsApi, type ActivityEvent } from '@/api/projects';
 import { orgApi } from '@/api/org';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { ORG_AUDIT } from '@/lib/authz';
 import type { PendingInvite, SearchResult } from '@/types';
 import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
 
@@ -97,9 +99,12 @@ export function AppHeader() {
     setNotificationReadAt(now);
   }, []);
 
+  const canViewAudit = useHasCapability(ORG_AUDIT);
+
   const { data: notificationData, isLoading: notificationsLoading, refetch: refetchNotifications } = useQuery({
     queryKey: ['recent-activity-notifications'],
     queryFn: () => projectsApi.getRecentActivity({ limit: 12, days: 30 }),
+    enabled: canViewAudit,
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
@@ -130,11 +135,11 @@ export function AppHeader() {
 
   useEffect(() => {
     if (!notifOpen) return;
-    void refetchNotifications();
+    if (canViewAudit) void refetchNotifications();
     if (!latestNotificationAt) return;
     window.localStorage.setItem(NOTIFICATION_READ_AT_KEY, latestNotificationAt);
     setNotificationReadAt(latestNotificationAt);
-  }, [latestNotificationAt, notifOpen, refetchNotifications]);
+  }, [latestNotificationAt, notifOpen, refetchNotifications, canViewAudit]);
 
   useEffect(() => {
     const hasFilters = searchType !== 'all' || tagFilter.trim() || statusFilter.trim();

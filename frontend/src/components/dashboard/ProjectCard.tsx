@@ -23,6 +23,8 @@ import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { projectsApi } from '@/api/projects';
 import { toast } from 'sonner';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { PROJECT_MANAGE } from '@/lib/authz';
 
 interface ProjectCardProps {
   project: Project;
@@ -66,6 +68,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const canManageProject = useHasCapability(PROJECT_MANAGE, project);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const [tags, setTags] = useState<string[]>(project.tags || []);
@@ -174,20 +177,22 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
         onKeyDown={(e) => e.key === 'Enter' && navigate(`/editor/${project.id}`)}
         className="group relative cursor-pointer rounded-lg border border-border bg-card p-5 shadow-sm transition-shadow duration-200 hover:shadow-sm"
       >
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onStar(project.id, !project.starred);
-          }}
-          className={cn(
-            'absolute right-10 top-3 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent',
-            project.starred && 'text-status-draft-foreground'
-          )}
-          aria-label={project.starred ? 'Unstar project' : 'Star project'}
-        >
-          <Star className={cn('h-4 w-4', project.starred && 'fill-status-draft-foreground')} />
-        </button>
+        {canManageProject && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onStar(project.id, !project.starred);
+            }}
+            className={cn(
+              'absolute right-10 top-3 flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent',
+              project.starred && 'text-status-draft-foreground'
+            )}
+            aria-label={project.starred ? 'Unstar project' : 'Star project'}
+          >
+            <Star className={cn('h-4 w-4', project.starred && 'fill-status-draft-foreground')} />
+          </button>
+        )}
 
         <div className="flex items-start justify-between gap-2 pr-16">
           {renaming ? (
@@ -227,14 +232,22 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
                 onClick={(e) => e.stopPropagation()}
               >
                 <MenuItem icon={Edit3} label="Open editor" onClick={() => { setDropdownOpen(false); onOpen(project.id); }} />
-                <MenuItem icon={Pencil} label="Rename" onClick={() => { setDropdownOpen(false); setRenaming(true); }} />
-                <MenuItem icon={FileText} label="Edit description" onClick={() => { setDropdownOpen(false); setDescModalOpen(true); }} />
-                <MenuItem icon={Tags} label="Edit Tags" onClick={() => { setDropdownOpen(false); setTagModalOpen(true); }} />
+                {canManageProject && (
+                  <>
+                    <MenuItem icon={Pencil} label="Rename" onClick={() => { setDropdownOpen(false); setRenaming(true); }} />
+                    <MenuItem icon={FileText} label="Edit description" onClick={() => { setDropdownOpen(false); setDescModalOpen(true); }} />
+                    <MenuItem icon={Tags} label="Edit Tags" onClick={() => { setDropdownOpen(false); setTagModalOpen(true); }} />
+                  </>
+                )}
                 <MenuItem icon={BarChart2} label="Analysis" onClick={() => { setDropdownOpen(false); navigate(`/analysis/${project.id}`); }} />
                 {onQuality && <MenuItem icon={ShieldCheck} label="Quality" onClick={() => { setDropdownOpen(false); onQuality(project.id); }} />}
-                <MenuItem icon={Copy} label="Duplicate" onClick={() => { setDropdownOpen(false); onDuplicate(project.id); }} />
-                <div className="my-1 h-px bg-border" />
-                <MenuItem icon={Trash2} label="Delete" destructive onClick={() => { setDropdownOpen(false); onDelete(project.id); }} />
+                {canManageProject && (
+                  <>
+                    <MenuItem icon={Copy} label="Duplicate" onClick={() => { setDropdownOpen(false); onDuplicate(project.id); }} />
+                    <div className="my-1 h-px bg-border" />
+                    <MenuItem icon={Trash2} label="Delete" destructive onClick={() => { setDropdownOpen(false); onDelete(project.id); }} />
+                  </>
+                )}
               </div>
             )}
           </div>

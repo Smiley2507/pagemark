@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { projectsApi } from '@/api/projects';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { PROJECT_MANAGE } from '@/lib/authz';
 
 interface NewProjectDialogProps {
   open: boolean;
@@ -17,12 +19,13 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ open, onOpen
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const templateId = searchParams.get('template_id');
+  const canCreateProject = useHasCapability(PROJECT_MANAGE);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = name.trim().length > 0 && !submitting;
+  const canSubmit = canCreateProject && name.trim().length > 0 && !submitting;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,6 +70,9 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ open, onOpen
           </DialogDescription>
         </DialogHeader>
 
+        {!canCreateProject ? (
+          <p className="text-body text-text-secondary">Your role does not allow creating projects.</p>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="dlg-project-name">Project name</Label>
@@ -107,6 +113,7 @@ export const NewProjectDialog: React.FC<NewProjectDialogProps> = ({ open, onOpen
             </Button>
           </div>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );

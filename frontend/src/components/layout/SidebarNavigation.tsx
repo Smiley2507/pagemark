@@ -28,6 +28,8 @@ import { orgApi } from '@/api/org';
 import { projectsApi } from '@/api/projects';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { PROJECT_MANAGE } from '@/lib/authz';
 
 export function SidebarNavigation() {
   const location = useLocation();
@@ -35,6 +37,7 @@ export function SidebarNavigation() {
   const user = useAuthStore((state) => state.user);
   const { organizations, activeOrgId, setActiveOrgId, setOrganizations } = useOrgStore();
   const logoutMutation = useLogout();
+  const canManageProjects = useHasCapability(PROJECT_MANAGE);
 
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -131,6 +134,7 @@ export function SidebarNavigation() {
         </div>
 
         <div className="px-3 pb-2 pt-3">
+          {canManageProjects && (
           <Button
             type="button"
             variant="secondary"
@@ -140,6 +144,7 @@ export function SidebarNavigation() {
             <Plus className="h-4 w-4" />
             New Project
           </Button>
+          )}
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3" aria-label="Global navigation">

@@ -6,9 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.database import get_db
-from app.dependencies import get_current_user
-from app.models.document import Document, DocumentStatus, SectionStatus, LifecycleStatus
+from app.dependencies import get_current_user, require_section
+from app.models.document import Document, Section, DocumentStatus, SectionStatus, LifecycleStatus
+from app.models.project import Project
+from app.models.organization import OrganizationMember, OrgMemberStatus
 from app.models.user import User
+from app.authz import DOCUMENT_MANAGE, CONTENT_WRITE, CONTENT_REVIEW, require_capability
 from app.models.version import AuthorType
 from app.schemas.section import (
     SectionAutosaveRequest,
@@ -51,10 +54,10 @@ async def get_section(
 async def autosave_section(
     section_id: int,
     body: SectionAutosaveRequest,
+    section: Section = Depends(require_section(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    section = await section_service.get_section_for_user(db, section_id, current_user.id)
     doc_res = await db.execute(select(Document).where(Document.id == section.document_id))
     document = doc_res.scalar_one()
     if document.status == DocumentStatus.APPROVED:
@@ -78,10 +81,10 @@ async def autosave_section(
 async def update_section(
     section_id: int,
     body: SectionUpdateRequest,
+    section: Section = Depends(require_section(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    section = await section_service.get_section_for_user(db, section_id, current_user.id)
     doc_res = await db.execute(select(Document).where(Document.id == section.document_id))
     document = doc_res.scalar_one()
     if document.status == DocumentStatus.APPROVED:
@@ -130,10 +133,10 @@ async def update_section(
 async def update_section_status(
     section_id: int,
     body: SectionStatusUpdateRequest,
+    section: Section = Depends(require_section(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    section = await section_service.get_section_for_user(db, section_id, current_user.id)
     old_content = section.content_md or ""
     new_status = SectionStatus(body.status.value)
 
@@ -164,10 +167,10 @@ async def update_section_status(
 @router.post("/{section_id}/accept-review", response_model=SectionResponse)
 async def accept_section_review(
     section_id: int,
+    section: Section = Depends(require_section(CONTENT_REVIEW)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    section = await section_service.get_section_for_user(db, section_id, current_user.id)
     section = await generation_service.accept_section_review(
         db,
         section,
@@ -193,9 +196,24 @@ async def reorder_sections(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # We assume the user provides a list of IDs in the new desired order
+    # No section_id path param here, so each section's document.manage capability
+    # is checked individually instead of via the require_section(...) dependency.
     for index, section_id in enumerate(body.section_ids):
         section = await section_service.get_section_for_user(db, section_id, current_user.id)
+        doc_res = await db.execute(select(Document).where(Document.id == section.document_id))
+        document = doc_res.scalar_one()
+        proj_res = await db.execute(select(Project).where(Project.id == document.project_id))
+        project = proj_res.scalar_one()
+        member_res = await db.execute(
+            select(OrganizationMember).where(
+                OrganizationMember.org_id == project.org_id,
+                OrganizationMember.user_id == current_user.id,
+                OrganizationMember.status == OrgMemberStatus.ACTIVE,
+            )
+        )
+        require_capability(
+            member_res.scalar_one_or_none(), DOCUMENT_MANAGE, project=project, user_id=current_user.id
+        )
         section.order_index = index
 
     await db.commit()
@@ -206,10 +224,10 @@ async def reorder_sections(
 async def update_section_title(
     section_id: int,
     body: SectionTitleRequest,
+    section: Section = Depends(require_section(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    section = await section_service.get_section_for_user(db, section_id, current_user.id)
     section.heading = body.title
     section.title = body.title
     section.updated_at = utcnow()
@@ -221,10 +239,10 @@ async def update_section_title(
 @router.delete("/{section_id}")
 async def delete_section(
     section_id: int,
+    section: Section = Depends(require_section(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    section = await section_service.get_section_for_user(db, section_id, current_user.id)
     section.lifecycle_status = LifecycleStatus.DELETED
     await db.commit()
     return {"message": "Section deleted successfully"}

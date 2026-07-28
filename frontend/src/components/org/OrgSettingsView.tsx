@@ -6,9 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Surface } from '@/components/ui/surface';
 import { orgApi } from '@/api/org';
 import { useOrgStore } from '@/store/orgStore';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { ORG_MANAGE } from '@/lib/authz';
 
 export const OrgSettingsView: React.FC = () => {
   const { activeOrgId, getActiveOrg, setOrganizations } = useOrgStore();
+  const canManageOrg = useHasCapability(ORG_MANAGE);
   const [isEditing, setIsEditing] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [orgAvatar, setOrgAvatar] = useState('');
@@ -84,11 +87,13 @@ export const OrgSettingsView: React.FC = () => {
         </div>
 
         {!isEditing ? (
-          <div className="flex justify-end">
-            <Button variant="outline" onClick={() => setIsEditing(true)}>
-              Edit profile
-            </Button>
-          </div>
+          canManageOrg && (
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={() => setIsEditing(true)}>
+                Edit profile
+              </Button>
+            </div>
+          )
         ) : (
           <form onSubmit={handleSave} className="space-y-4">
             <div className="space-y-2">
@@ -132,21 +137,24 @@ export const OrgSettingsView: React.FC = () => {
             max="100"
             value={qualityThreshold}
             onChange={(event) => setQualityThreshold(Number(event.target.value))}
-            className="h-2 flex-1 cursor-pointer accent-primary"
+            disabled={!canManageOrg}
+            className="h-2 flex-1 cursor-pointer accent-primary disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Documentation quality threshold"
           />
           <span className="w-12 text-right text-body font-semibold tabular-nums text-text-primary">
             {qualityThreshold}%
           </span>
         </div>
-        <div className="flex justify-end">
-          <Button
-            onClick={handleQualityThresholdSave}
-            disabled={qualityThreshold === ((activeOrg as any)?.quality_threshold ?? 70)}
-          >
-            Save threshold
-          </Button>
-        </div>
+        {canManageOrg && (
+          <div className="flex justify-end">
+            <Button
+              onClick={handleQualityThresholdSave}
+              disabled={qualityThreshold === ((activeOrg as any)?.quality_threshold ?? 70)}
+            >
+              Save threshold
+            </Button>
+          </div>
+        )}
       </Surface>
     </div>
   );

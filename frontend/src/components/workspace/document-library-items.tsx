@@ -27,12 +27,14 @@ export function DocumentSummaryRow({
   onEdit,
   onDelete,
   onShare,
+  canManage = true,
 }: {
   document: WorkspaceDocumentItem;
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onShare?: () => void;
+  canManage?: boolean;
 }) {
   return (
     <div
@@ -66,7 +68,7 @@ export function DocumentSummaryRow({
 
       <div className="flex items-center justify-between gap-2 lg:justify-end">
         <span className="text-meta text-text-muted">{formatDate(document.lastActivityAt)}</span>
-        <DocumentActions onEdit={onEdit} onDelete={onDelete} onShare={onShare} />
+        <DocumentActions onEdit={onEdit} onDelete={onDelete} onShare={onShare} canManage={canManage} />
       </div>
     </div>
   );
@@ -139,7 +141,17 @@ function DocumentAttentionBadges({ document }: { document: WorkspaceDocumentItem
   );
 }
 
-function DocumentActions({ onEdit, onDelete, onShare }: { onEdit: () => void; onDelete: () => void; onShare?: () => void }) {
+function DocumentActions({
+  onEdit,
+  onDelete,
+  onShare,
+  canManage = true,
+}: {
+  onEdit: () => void;
+  onDelete: () => void;
+  onShare?: () => void;
+  canManage?: boolean;
+}) {
   return (
     <div className="flex shrink-0 items-center gap-1">
       <Tooltip content="Share Document">
@@ -147,16 +159,20 @@ function DocumentActions({ onEdit, onDelete, onShare }: { onEdit: () => void; on
           <Share2 className="h-4 w-4" />
         </Button>
       </Tooltip>
-      <Tooltip content="Edit Document">
-        <Button type="button" variant="ghost" size="icon" onClick={onEdit} aria-label="Edit Document">
-          <Pencil className="h-4 w-4" />
-        </Button>
-      </Tooltip>
-      <Tooltip content="Delete Document">
-        <Button type="button" variant="ghost" size="icon" onClick={onDelete} aria-label="Delete Document">
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </Tooltip>
+      {canManage && (
+        <>
+          <Tooltip content="Edit Document">
+            <Button type="button" variant="ghost" size="icon" onClick={onEdit} aria-label="Edit Document">
+              <Pencil className="h-4 w-4" />
+            </Button>
+          </Tooltip>
+          <Tooltip content="Delete Document">
+            <Button type="button" variant="ghost" size="icon" onClick={onDelete} aria-label="Delete Document">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </Tooltip>
+        </>
+      )}
     </div>
   );
 }

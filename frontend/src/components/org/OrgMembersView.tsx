@@ -2,6 +2,8 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOrgStore } from '@/store/orgStore';
 import { useAuthStore } from '@/store/authStore';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { ORG_MANAGE } from '@/lib/authz';
 import { orgApi } from '@/api/org';
 import type { OrgMemberRole, OrgMemberStatus, OrgMember } from '@/types';
 import {
@@ -70,7 +72,7 @@ function roleBadgeVariant(role: OrgMemberRole): 'neutral' | 'info' | 'success' |
 }
 
 export const OrgMembersView: React.FC = () => {
-  const { activeOrgId, currentRole } = useOrgStore();
+  const { activeOrgId } = useOrgStore();
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
 
@@ -152,8 +154,7 @@ export const OrgMembersView: React.FC = () => {
     onError: (err: any) => toast.error(err.response?.data?.detail || 'Failed to cancel invitation'),
   });
 
-  const isAdmin = currentRole === 'ADMIN';
-  const canManage = currentRole === 'ADMIN' || currentRole === 'PROJECT_MANAGER';
+  const canManageOrg = useHasCapability(ORG_MANAGE);
 
   const clearFilters = useCallback(() => {
     setSearch('');
@@ -187,7 +188,7 @@ export const OrgMembersView: React.FC = () => {
             Manage who has access to this organization
           </p>
         </div>
-        {isAdmin && (
+        {canManageOrg && (
           <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
             <DialogTrigger asChild>
               <Button className="gap-2">
@@ -300,7 +301,7 @@ export const OrgMembersView: React.FC = () => {
                 <th className="px-4 py-3 font-medium">Role</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Joined</th>
-                {canManage && <th className="px-4 py-3 font-medium text-right">Actions</th>}
+                {canManageOrg && <th className="px-4 py-3 font-medium text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -325,7 +326,7 @@ export const OrgMembersView: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    {isAdmin && member.user_id !== user?.id ? (
+                    {canManageOrg && member.user_id !== user?.id ? (
                       <Select
                         value={member.role}
                         onChange={(e) =>
@@ -358,10 +359,10 @@ export const OrgMembersView: React.FC = () => {
                   <td className="px-4 py-3 text-muted-foreground">
                     {new Date(member.joined_at).toLocaleDateString()}
                   </td>
-                  {canManage && (
+                  {canManageOrg && (
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
-                        {member.status === 'INVITED' && isAdmin && (
+                        {member.status === 'INVITED' && canManageOrg && (
                           <>
                             <Button
                               variant="ghost"
@@ -384,7 +385,7 @@ export const OrgMembersView: React.FC = () => {
                             </Button>
                           </>
                         )}
-                        {member.user_id !== user?.id && isAdmin && (
+                        {member.user_id !== user?.id && canManageOrg && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -416,7 +417,7 @@ export const OrgMembersView: React.FC = () => {
               <Button variant="outline" size="sm" onClick={clearFilters}>
                 Clear Filters
               </Button>
-            ) : isAdmin ? (
+            ) : canManageOrg ? (
               <Button size="sm" className="gap-2" onClick={() => setIsInviteOpen(true)}>
                 <UserPlus className="h-4 w-4" />
                 Invite Member

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useOrgStore } from '@/store/orgStore';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { ORG_MANAGE } from '@/lib/authz';
 import { orgApi } from '@/api/org';
 import type { OrgMemberRole, OrgJoinLink } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -43,7 +45,7 @@ const ROLES: { value: OrgMemberRole; label: string }[] = [
 ];
 
 export const OrgJoinLinksView: React.FC = () => {
-  const { activeOrgId, currentRole } = useOrgStore();
+  const { activeOrgId } = useOrgStore();
   const queryClient = useQueryClient();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -53,7 +55,7 @@ export const OrgJoinLinksView: React.FC = () => {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OrgJoinLink | null>(null);
 
-  const isAdmin = currentRole === 'ADMIN';
+  const canManageOrg = useHasCapability(ORG_MANAGE);
 
   const {
     data: links,
@@ -140,7 +142,7 @@ export const OrgJoinLinksView: React.FC = () => {
             Shareable links that let anyone join your organization
           </p>
         </div>
-        {isAdmin && (
+        {canManageOrg && (
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button size="sm" className="gap-2">
@@ -277,7 +279,7 @@ export const OrgJoinLinksView: React.FC = () => {
                             <Copy className="h-4 w-4" />
                           )}
                         </Button>
-                        {isAdmin && (
+                        {canManageOrg && (
                           <>
                             {active && (
                               <Button
@@ -315,7 +317,7 @@ export const OrgJoinLinksView: React.FC = () => {
           title="No join links"
           description="Create a shareable link that lets people join your organization with a single click."
           action={
-            isAdmin ? (
+            canManageOrg ? (
               <Button size="sm" className="gap-2" onClick={() => setIsCreateOpen(true)}>
                 <Plus className="h-4 w-4" />
                 Create Join Link

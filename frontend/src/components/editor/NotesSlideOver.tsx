@@ -10,9 +10,10 @@ interface NotesSlideOverProps {
   initialScope?: 'document' | 'section';
   focusSignal?: number;
   sections?: Array<{ id: number; heading: string; title?: string | null }>;
+  canComment?: boolean;
 }
 
-export function NotesSlideOver({ open, onClose, projectId, documentId, activeSectionId, initialScope, focusSignal, sections }: NotesSlideOverProps) {
+export function NotesSlideOver({ open, onClose, projectId, documentId, activeSectionId, initialScope, focusSignal, sections, canComment = true }: NotesSlideOverProps) {
   if (!open) return null;
 
   return (
@@ -38,6 +39,7 @@ export function NotesSlideOver({ open, onClose, projectId, documentId, activeSec
           initialScope={initialScope}
           focusSignal={focusSignal}
           sections={sections}
+          canComment={canComment}
         />
       </div>
     </div>

@@ -7,6 +7,7 @@ interface StaleSectionBannerProps {
   onAccept: (sectionId: number) => void
   onReject: (sectionId: number) => void
   isProcessing?: boolean
+  canReview?: boolean
 }
 
 export function StaleSectionBanner({
@@ -15,6 +16,7 @@ export function StaleSectionBanner({
   onAccept,
   onReject,
   isProcessing,
+  canReview = true,
 }: StaleSectionBannerProps) {
   return (
     <div className="mx-auto max-w-5xl mb-2 rounded-lg border border-status-warning-foreground/25 bg-status-warning/10 px-4 py-2.5">
@@ -31,28 +33,30 @@ export function StaleSectionBanner({
             Review the section to verify it still reflects the current code. Pagemark will not overwrite reviewed content.
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onAccept(sectionId)}
-            disabled={isProcessing}
-            className="h-7 gap-1 text-xs"
-          >
-            <Check className="h-3 w-3" />
-            Accept
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onReject(sectionId)}
-            disabled={isProcessing}
-            className="h-7 gap-1 text-xs text-muted-foreground"
-          >
-            <X className="h-3 w-3" />
-            Dismiss
-          </Button>
-        </div>
+        {canReview && (
+          <div className="flex shrink-0 items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onAccept(sectionId)}
+              disabled={isProcessing}
+              className="h-7 gap-1 text-xs"
+            >
+              <Check className="h-3 w-3" />
+              Accept
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onReject(sectionId)}
+              disabled={isProcessing}
+              className="h-7 gap-1 text-xs text-muted-foreground"
+            >
+              <X className="h-3 w-3" />
+              Dismiss
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )

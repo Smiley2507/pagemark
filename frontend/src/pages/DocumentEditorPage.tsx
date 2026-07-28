@@ -74,6 +74,8 @@ import { useViewPreferenceStore } from '@/store/viewPreferenceStore';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { DOCUMENT_MANAGE, CONTENT_REVIEW, CONTENT_COMMENT } from '@/lib/authz';
 import type { GenerationQualityWarning, Section } from '@/types';
 
 type FlatSection = Section & { depth: number };
@@ -225,6 +227,9 @@ function SectionBlock({
   backendAppliedVersion,
   backendAppliedStaleContent,
   onCollaborationAuthFailed,
+  canManageDocuments = true,
+  canReview = true,
+  canComment = true,
 }: {
   projectId: number;
   documentId: number;
@@ -256,6 +261,9 @@ function SectionBlock({
   backendAppliedVersion?: string | number;
   backendAppliedStaleContent?: string;
   onCollaborationAuthFailed?: (detail: { sectionId: number; status?: number; message: string }) => void;
+  canManageDocuments?: boolean;
+  canReview?: boolean;
+  canComment?: boolean;
 }) {
   const [content, setContent] = useState(section.content_md);
   const [title, setTitle] = useState(section.title || section.heading || 'Untitled Section');
@@ -328,21 +336,26 @@ function SectionBlock({
               onKeyDown={(event) => {
                 if (event.key === 'Enter') event.currentTarget.blur();
               }}
+              readOnly={!canManageDocuments}
               aria-label={`Heading for ${section.heading}`}
               className="h-auto rounded-none border-0 border-b border-transparent bg-transparent px-0 py-1 text-2xl font-semibold leading-tight text-text-primary shadow-none focus-visible:border-interaction focus-visible:ring-0 focus-visible:ring-offset-0 sm:text-3xl"
             />
           </div>
           <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
             <SectionStatusBadge section={section} compact />
-            <Button type="button" variant="ghost" size="icon" onClick={() => onAdd(section.id, 'above')} aria-label="Add section above" className="text-muted-foreground hover:text-foreground">
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-            <Button type="button" variant="ghost" size="icon" onClick={() => onAdd(section.id, 'below')} aria-label="Add section below" className="text-muted-foreground hover:text-foreground">
-              <Plus className="h-3.5 w-3.5 rotate-180" />
-            </Button>
-            <Button type="button" variant="ghost" size="icon" onClick={() => onDeleteRequest(section)} aria-label="Delete section" className="text-muted-foreground hover:text-status-danger-foreground">
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            {canManageDocuments && (
+              <>
+                <Button type="button" variant="ghost" size="icon" onClick={() => onAdd(section.id, 'above')} aria-label="Add section above" className="text-muted-foreground hover:text-foreground">
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+                <Button type="button" variant="ghost" size="icon" onClick={() => onAdd(section.id, 'below')} aria-label="Add section below" className="text-muted-foreground hover:text-foreground">
+                  <Plus className="h-3.5 w-3.5 rotate-180" />
+                </Button>
+                <Button type="button" variant="ghost" size="icon" onClick={() => onDeleteRequest(section)} aria-label="Delete section" className="text-muted-foreground hover:text-status-danger-foreground">
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="ghost" size="icon" aria-label="More actions" className="text-muted-foreground hover:text-foreground">
@@ -350,16 +363,20 @@ function SectionBlock({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem disabled={index === 0} onClick={() => onMove(section.id, 'up')}>
-                  <ArrowUp className="h-3.5 w-3.5" />
-                  Move Up
-                </DropdownMenuItem>
-                <DropdownMenuItem disabled={index >= total - 1} onClick={() => onMove(section.id, 'down')}>
-                  <ArrowDown className="h-3.5 w-3.5" />
-                  Move Down
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {!isReviewed && onAcceptReview ? (
+                {canManageDocuments && (
+                  <>
+                    <DropdownMenuItem disabled={index === 0} onClick={() => onMove(section.id, 'up')}>
+                      <ArrowUp className="h-3.5 w-3.5" />
+                      Move Up
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={index >= total - 1} onClick={() => onMove(section.id, 'down')}>
+                      <ArrowDown className="h-3.5 w-3.5" />
+                      Move Down
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                {canReview && (!isReviewed && onAcceptReview ? (
                   <DropdownMenuItem onClick={() => onAcceptReview(section.id)}>
                     <CheckCircle2 className="h-3.5 w-3.5 text-review" />
                     Accept Review
@@ -369,8 +386,8 @@ function SectionBlock({
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     Reviewed
                   </DropdownMenuItem>
-                )}
-                {onJumpToSection && (
+                ))}
+                {onJumpToSection && canComment && (
                   <DropdownMenuItem onClick={() => onJumpToSection(section.id)}>
                     <BookOpen className="h-3.5 w-3.5" />
                     Add note
@@ -393,6 +410,7 @@ function SectionBlock({
             onAccept={(id) => onAcceptStaleness?.(id)}
             onReject={(id) => onRejectStaleness?.(id)}
             isProcessing={isStalenessProcessing}
+            canReview={canReview}
           />
         )}
 
@@ -534,6 +552,9 @@ export function DocumentEditorPage() {
     queryFn: () => projectsApi.getProject(pid),
     enabled: pid > 0,
   });
+  const canManageDocuments = useHasCapability(DOCUMENT_MANAGE, project);
+  const canReviewContent = useHasCapability(CONTENT_REVIEW, project);
+  const canCommentContent = useHasCapability(CONTENT_COMMENT, project);
 
   const { data: sectionTree, isLoading: sectionsLoading } = useDocumentSections(pid, did);
   const { data: backendAppliedSync } = useQuery<BackendAppliedSectionSync | null>({
@@ -1177,12 +1198,13 @@ export function DocumentEditorPage() {
             reviewedCount={reviewedCount}
             reviewTotal={reviewTotal}
             qualityData={qualityData}
-            canAcceptAll={canAcceptAll}
+            canAcceptAll={canAcceptAll && canReviewContent}
             onAcceptAll={handleAcceptAllReview}
             onRunQuality={() => runQuality.mutate()}
             onCreateSection={() => createSection.mutate({})}
             onClose={() => setTocOpen(false)}
             onReorderSections={(sectionIds) => reorderSections.mutate(sectionIds)}
+            canManageDocuments={canManageDocuments}
           />
         )}
 
@@ -1257,14 +1279,19 @@ export function DocumentEditorPage() {
                     backendAppliedVersion={backendApplied ? `${backendAppliedSync?.nonce ?? 0}:${backendApplied.version ?? ''}` : undefined}
                     backendAppliedStaleContent={backendApplied?.staleContent}
                     onCollaborationAuthFailed={handleCollaborationAuthFailed}
+                    canManageDocuments={canManageDocuments}
+                    canReview={canReviewContent}
+                    canComment={canCommentContent}
                   />
                 );
               })}
               <div className="mx-auto max-w-4xl py-8">
-                <Button type="button" variant="outline" onClick={() => createSection.mutate({})} disabled={createSection.isPending} className="gap-2">
-                  {createSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                  Add Section
-                </Button>
+                {canManageDocuments && (
+                  <Button type="button" variant="outline" onClick={() => createSection.mutate({})} disabled={createSection.isPending} className="gap-2">
+                    {createSection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Add Section
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -1284,6 +1311,7 @@ export function DocumentEditorPage() {
             }))}
             onClose={() => setNotesOpen(false)}
             open={notesOpen}
+            canComment={canCommentContent}
           />
         )}
 

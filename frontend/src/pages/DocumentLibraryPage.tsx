@@ -19,6 +19,7 @@ import { Select } from '@/components/ui/select';
 import { Surface } from '@/components/ui/surface';
 import { ShareDialog } from '@/components/shared/ShareDialog';
 import { documentsApi } from '@/api/documents';
+import { projectsApi } from '@/api/projects';
 import {
   DocumentSummaryRow,
   mapDocumentStatus,
@@ -26,6 +27,8 @@ import {
   type WorkspaceDocumentItem,
 } from '@/components/workspace/document-library-items';
 import { toast } from 'sonner';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { DOCUMENT_MANAGE } from '@/lib/authz';
 
 type FilterMode = 'all' | 'active' | 'stale';
 
@@ -64,6 +67,13 @@ export function DocumentLibraryPage() {
     queryFn: () => documentsApi.listDocuments(Number(projectId)),
     enabled: !!projectId,
   });
+
+  const { data: project } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => projectsApi.getProject(pid),
+    enabled: !!projectId,
+  });
+  const canManageDocuments = useHasCapability(DOCUMENT_MANAGE, project);
 
   const documents = useMemo<WorkspaceDocumentItem[]>(() => (
     (response?.documents || []).map((document) => {
@@ -218,10 +228,12 @@ export function DocumentLibraryPage() {
         <div className="flex flex-col gap-4 border-b border-separator px-5 py-4">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <h2 className="text-section font-semibold text-text-primary">Documents</h2>
-            <Button type="button" onClick={() => setIsCreateDocOpen(true)} className="gap-2">
-              <FilePlus2 className="h-4 w-4" />
-              New Document
-            </Button>
+            {canManageDocuments && (
+              <Button type="button" onClick={() => setIsCreateDocOpen(true)} className="gap-2">
+                <FilePlus2 className="h-4 w-4" />
+                New Document
+              </Button>
+            )}
           </div>
 
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -278,6 +290,7 @@ export function DocumentLibraryPage() {
                 onEdit={() => openEditDocument(document)}
                 onDelete={() => setDeletingDocument(document)}
                 onShare={() => setSharingDocument(document)}
+                canManage={canManageDocuments}
               />
             ))}
           </div>
@@ -407,7 +420,7 @@ export function DocumentLibraryPage() {
               <Button
                 type="button"
                 onClick={handleCreateDocument}
-                disabled={!newTitle.trim() || isCreating}
+                disabled={!canManageDocuments || !newTitle.trim() || isCreating}
               >
                 {isCreating ? 'Creating...' : 'Create Document'}
               </Button>

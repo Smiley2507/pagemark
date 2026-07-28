@@ -1,15 +1,23 @@
-from typing import List, Callable, Optional
+from typing import Callable, Optional
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.user import User
-from app.models.organization import Organization, OrganizationMember, OrgMemberRole, OrgMemberStatus
+from app.models.organization import OrganizationMember, OrgMemberStatus
 from app.models.project import Project
 from app.models.document import Document, Section
-from app.models.document_share import DocumentShare, DocumentSharePermission
+from app.models.document_share import DocumentShare
 from app.services import auth_service, admin_auth_service
+from app.authz import (
+    PROJECT_READ,
+    CONTENT_COMMENT,
+    CONTENT_WRITE,
+    SHARE_PERMISSION_SATISFIES,
+    member_can,
+    require_capability,
+)
 
 
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
@@ -34,164 +42,104 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
     return user
 
 
-def require_org_role(required_roles: List[str]) -> Callable:
-    """
-    Dependency factory that verifies the current user belongs to the org
-    specified by the `org_id` path parameter and has one of the required roles.
-    Raises 404 (not 403) to prevent IDOR leaks.
-    """
-    role_enums = [OrgMemberRole(r) for r in required_roles]
-
-    async def _check(
-        org_id: int,
-        current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db),
-    ) -> OrganizationMember:
-        res = await db.execute(
-            select(OrganizationMember).where(
-                OrganizationMember.org_id == org_id,
-                OrganizationMember.user_id == current_user.id,
-                OrganizationMember.status == OrgMemberStatus.ACTIVE,
-            )
-        )
-        member = res.scalar_one_or_none()
-        if not member or member.role not in role_enums:
-            raise HTTPException(status_code=404, detail="Organization not found")
-        return member
-
-    return _check
-
-
-async def verify_project_ownership(
-    project_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> Project:
-    """
-    Verifies that current_user belongs to the organization that owns this project.
-    Raises 404 to prevent IDOR leaks.
-    """
-    res = await db.execute(select(Project).where(Project.id == project_id))
-    project = res.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    member_res = await db.execute(
-        select(OrganizationMember).where(
-            OrganizationMember.org_id == project.org_id,
-            OrganizationMember.user_id == current_user.id,
-            OrganizationMember.status == OrgMemberStatus.ACTIVE,
-        )
-    )
-    if not member_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    return project
-
-
-async def verify_section_ownership(
-    section_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> Section:
-    """
-    Joins Section -> Document -> Project -> OrganizationMember to verify access.
-    Raises 404 to prevent IDOR leaks.
-    """
-    sec_res = await db.execute(select(Section).where(Section.id == section_id))
-    section = sec_res.scalar_one_or_none()
-    if not section:
-        raise HTTPException(status_code=404, detail="Section not found")
-
-    doc_res = await db.execute(select(Document).where(Document.id == section.document_id))
-    document = doc_res.scalar_one_or_none()
-    if not document:
-        raise HTTPException(status_code=404, detail="Section not found")
-
-    proj_res = await db.execute(select(Project).where(Project.id == document.project_id))
-    project = proj_res.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Section not found")
-
-    member_res = await db.execute(
-        select(OrganizationMember).where(
-            OrganizationMember.org_id == project.org_id,
-            OrganizationMember.user_id == current_user.id,
-            OrganizationMember.status == OrgMemberStatus.ACTIVE,
-        )
-    )
-    if not member_res.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Section not found")
-
-    return section
-
-
 _PERMISSION_ORDER = {"view": 0, "comment": 1, "edit": 2}
+_CAPABILITY_TO_SHARE_LEVEL = {v: k for k, v in SHARE_PERMISSION_SATISFIES.items()}
 
 
-async def verify_document_access(
-    project_id: int,
-    document_id: int,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> Document:
-    """
-    Verify the current user has at least view-level access to the document.
-    Checks org membership, then org admin/project creator (full access),
-    then DocumentShare (granular access). Raises 404 for IDOR protection.
-    """
-    proj_res = await db.execute(select(Project).where(Project.id == project_id))
-    project = proj_res.scalar_one_or_none()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    member_res = await db.execute(
+async def _get_active_member(db: AsyncSession, org_id: int, user_id: int) -> Optional[OrganizationMember]:
+    res = await db.execute(
         select(OrganizationMember).where(
-            OrganizationMember.org_id == project.org_id,
-            OrganizationMember.user_id == current_user.id,
+            OrganizationMember.org_id == org_id,
+            OrganizationMember.user_id == user_id,
             OrganizationMember.status == OrgMemberStatus.ACTIVE,
         )
     )
-    member = member_res.scalar_one_or_none()
-    if not member:
-        raise HTTPException(status_code=404, detail="Project not found")
+    return res.scalar_one_or_none()
 
-    doc_res = await db.execute(
-        select(Document)
-        .where(Document.id == document_id, Document.project_id == project_id)
-        .options(selectinload(Document.sections), selectinload(Document.template))
-    )
-    document = doc_res.scalar_one_or_none()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
 
-    is_admin = member.role == OrgMemberRole.ADMIN
-    is_project_creator = project.created_by == current_user.id
-    if is_admin or is_project_creator:
-        return document
-
+async def _document_share_satisfies(
+    db: AsyncSession, document_id: int, user_id: int, capability: str
+) -> bool:
+    """DocumentShare's view<comment<edit ladder substitutes for read/comment/write only."""
+    required_level = _CAPABILITY_TO_SHARE_LEVEL.get(capability)
+    if required_level is None:
+        return False
     share_res = await db.execute(
         select(DocumentShare).where(
             DocumentShare.document_id == document_id,
-            DocumentShare.user_id == current_user.id,
+            DocumentShare.user_id == user_id,
             DocumentShare.revoked_at.is_(None),
         )
     )
     share = share_res.scalar_one_or_none()
     if not share:
-        raise HTTPException(status_code=404, detail="Document not found")
+        return False
+    return _PERMISSION_ORDER.get(share.permission.value, -1) >= _PERMISSION_ORDER[required_level]
 
-    return document
+
+def require_project(capability: str = PROJECT_READ) -> Callable:
+    """Dependency factory: resolve Project, verify active org membership, require capability."""
+    async def _check(
+        project_id: int,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> Project:
+        res = await db.execute(select(Project).where(Project.id == project_id))
+        project = res.scalar_one_or_none()
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        member = await _get_active_member(db, project.org_id, current_user.id)
+        if not member:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        require_capability(member, capability, project=project, user_id=current_user.id)
+        return project
+
+    return _check
 
 
-def require_document_permission(required_permission: str) -> Callable:
-    """
-    Dependency factory that requires the current user to have at least
-    `required_permission` level on the document via DocumentShare.
-    Org admins and project creators always pass.
+def require_section(capability: str = PROJECT_READ) -> Callable:
+    """Dependency factory: resolve Section -> Document -> Project, verify membership,
+    require capability, falling back to a DocumentShare on the parent document."""
+    async def _check(
+        section_id: int,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> Section:
+        sec_res = await db.execute(
+            select(Section).where(Section.id == section_id).options(selectinload(Section.document))
+        )
+        section = sec_res.scalar_one_or_none()
+        if not section:
+            raise HTTPException(status_code=404, detail="Section not found")
 
-    Permission hierarchy: view < comment < edit
-    """
+        doc_res = await db.execute(select(Document).where(Document.id == section.document_id))
+        document = doc_res.scalar_one_or_none()
+        if not document:
+            raise HTTPException(status_code=404, detail="Section not found")
+
+        proj_res = await db.execute(select(Project).where(Project.id == document.project_id))
+        project = proj_res.scalar_one_or_none()
+        if not project:
+            raise HTTPException(status_code=404, detail="Section not found")
+
+        member = await _get_active_member(db, project.org_id, current_user.id)
+        if not member:
+            raise HTTPException(status_code=404, detail="Section not found")
+
+        if not member_can(member, capability, project=project, user_id=current_user.id):
+            if not await _document_share_satisfies(db, document.id, current_user.id, capability):
+                require_capability(member, capability, project=project, user_id=current_user.id)
+
+        return section
+
+    return _check
+
+
+def require_document(capability: str = PROJECT_READ) -> Callable:
+    """Dependency factory: resolve Project + Document, verify membership, require
+    capability, falling back to a DocumentShare on this document."""
     async def _check(
         project_id: int,
         document_id: int,
@@ -203,14 +151,7 @@ def require_document_permission(required_permission: str) -> Callable:
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        member_res = await db.execute(
-            select(OrganizationMember).where(
-                OrganizationMember.org_id == project.org_id,
-                OrganizationMember.user_id == current_user.id,
-                OrganizationMember.status == OrgMemberStatus.ACTIVE,
-            )
-        )
-        member = member_res.scalar_one_or_none()
+        member = await _get_active_member(db, project.org_id, current_user.id)
         if not member:
             raise HTTPException(status_code=404, detail="Project not found")
 
@@ -223,31 +164,25 @@ def require_document_permission(required_permission: str) -> Callable:
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        is_admin = member.role == OrgMemberRole.ADMIN
-        is_project_creator = project.created_by == current_user.id
-        if is_admin or is_project_creator:
-            return document
-
-        share_res = await db.execute(
-            select(DocumentShare).where(
-                DocumentShare.document_id == document_id,
-                DocumentShare.user_id == current_user.id,
-                DocumentShare.revoked_at.is_(None),
-            )
-        )
-        share = share_res.scalar_one_or_none()
-        if not share:
-            raise HTTPException(status_code=404, detail="Document not found")
-
-        if _PERMISSION_ORDER.get(share.permission.value, -1) < _PERMISSION_ORDER.get(required_permission, 0):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Insufficient permission. Required: {required_permission}",
-            )
+        if not member_can(member, capability, project=project, user_id=current_user.id):
+            if not await _document_share_satisfies(db, document.id, current_user.id, capability):
+                require_capability(member, capability, project=project, user_id=current_user.id)
 
         return document
 
     return _check
+
+
+# Backwards-compatible wrappers: every endpoint using these four names keeps working.
+verify_project_ownership = require_project(PROJECT_READ)
+verify_section_ownership = require_section(PROJECT_READ)
+verify_document_access = require_document(PROJECT_READ)
+
+
+def require_document_permission(required_permission: str) -> Callable:
+    """Preserves the old view/comment/edit vocabulary on top of require_document."""
+    capability = {"view": PROJECT_READ, "comment": CONTENT_COMMENT, "edit": CONTENT_WRITE}[required_permission]
+    return require_document(capability)
 
 
 async def require_superuser(

@@ -11,7 +11,16 @@ from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db
-from app.dependencies import get_current_user, verify_project_ownership, require_document_permission, verify_document_access
+from app.dependencies import (
+    get_current_user,
+    verify_project_ownership,
+    require_document_permission,
+    verify_document_access,
+    require_project,
+    require_document,
+    require_section,
+)
+from app.authz import DOCUMENT_MANAGE, CONTENT_WRITE, CONTENT_COMMENT, CONTENT_REVIEW, member_can
 from app.models.activity import ActivityEvent
 from app.models.analysis import Analysis, AnalysisStatus
 from app.models.audit import AuditLog
@@ -129,8 +138,10 @@ async def _document_permission_for_user(
     if not member:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if member.role == OrgMemberRole.ADMIN or project.created_by == user_id:
+    if member_can(member, CONTENT_WRITE, project=project, user_id=user_id):
         return "edit"
+    if member_can(member, CONTENT_COMMENT, project=project, user_id=user_id):
+        return "comment"
 
     share_res = await db.execute(
         select(DocumentShare).where(
@@ -499,7 +510,7 @@ async def list_documents(
 @router.post("/{project_id}/documents", status_code=status.HTTP_201_CREATED, response_model=DocumentResponse)
 async def create_document(
     body: DocumentCreateRequest,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -551,7 +562,7 @@ async def get_document(
 @router.patch("/{project_id}/documents/{document_id}", response_model=DocumentResponse)
 async def update_document(
     body: DocumentUpdateRequest,
-    document: Document = Depends(require_document_permission("edit")),
+    document: Document = Depends(require_document(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -598,7 +609,7 @@ async def update_document(
 
 @router.delete("/{project_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_document(
-    document: Document = Depends(require_document_permission("edit")),
+    document: Document = Depends(require_document(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -680,7 +691,7 @@ async def list_template_recommendations(
 async def create_template_recommendations(
     document_id: int,
     body: TemplateRecommendationRequest,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -733,7 +744,7 @@ async def list_outline_proposals(
 async def create_outline_proposal(
     document_id: int,
     body: OutlineProposalCreateRequest,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -775,7 +786,7 @@ async def update_outline_proposal(
     document_id: int,
     proposal_id: int,
     body: OutlineProposalUpdateRequest,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -797,7 +808,7 @@ async def update_outline_proposal(
 async def approve_outline_proposal(
     document_id: int,
     proposal_id: int,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -832,7 +843,7 @@ async def create_outline_clarification_request(
     document_id: int,
     proposal_id: int,
     body: ClarificationRequestCreateRequest,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -856,7 +867,7 @@ async def create_outline_clarification_request(
 async def skip_outline_clarification_request(
     document_id: int,
     request_id: int,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1497,7 +1508,7 @@ async def _load_document_response(
 async def estimate_document_generation(
     document_id: int,
     body: GenerationEstimateRequest,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1541,7 +1552,7 @@ async def list_document_generation_runs(
 async def create_document_generation_run(
     document_id: int,
     body: GenerationRunCreateRequest,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1597,7 +1608,7 @@ async def confirm_document_generation_failover(
     document_id: int,
     run_id: int,
     body: GenerationFailoverConfirmRequest,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1638,7 +1649,7 @@ async def get_document_sections(
 )
 async def create_document_section(
     body: CustomSectionRequest,
-    document: Document = Depends(require_document_permission("edit")),
+    document: Document = Depends(require_document(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1668,14 +1679,12 @@ async def create_document_section(
     response_model=SectionResponse,
 )
 async def update_document_section(
-    document_id: int,
     section_id: int,
     body: SectionUpdateRequest,
-    project: Project = Depends(verify_project_ownership),
+    document: Document = Depends(require_document(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    document = await _get_document_for_project(db, project.id, document_id)
     section = _active_section_for_document(document, section_id)
     if document.status == DocumentStatus.APPROVED:
         raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
@@ -1722,14 +1731,12 @@ async def update_document_section(
     response_model=SectionAutosaveResponse,
 )
 async def autosave_document_section(
-    document_id: int,
     section_id: int,
     body: SectionAutosaveRequest,
-    project: Project = Depends(verify_project_ownership),
+    document: Document = Depends(require_document(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    document = await _get_document_for_project(db, project.id, document_id)
     section = _active_section_for_document(document, section_id)
     if document.status == DocumentStatus.APPROVED:
         raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
@@ -1809,15 +1816,11 @@ async def snapshot_section_collaboration(
     document_id: int,
     section_id: int,
     body: SectionAutosaveRequest,
-    project: Project = Depends(verify_project_ownership),
+    document: Document = Depends(require_document(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    document = await _get_document_for_project(db, project.id, document_id)
     section = _active_section_for_document(document, section_id)
-    permission = await _document_permission_for_user(db, project, document.id, current_user.id)
-    if _PERMISSION_RANK[permission] < _PERMISSION_RANK["edit"]:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Edit permission required")
     if document.status == DocumentStatus.APPROVED:
         raise HTTPException(status_code=403, detail="Cannot edit an APPROVED document")
 
@@ -1851,7 +1854,7 @@ async def update_document_section_title(
     document_id: int,
     section_id: int,
     body: SectionTitleRequest,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1873,7 +1876,7 @@ async def update_document_section_title(
 async def reorder_document_sections(
     document_id: int,
     body: SectionReorderRequest,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1899,7 +1902,7 @@ async def reorder_document_sections(
 async def delete_document_section(
     document_id: int,
     section_id: int,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(DOCUMENT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1938,7 +1941,7 @@ async def get_document_freshness(
 async def accept_freshness_update(
     document_id: int,
     section_id: int,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(CONTENT_REVIEW)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1965,7 +1968,7 @@ async def accept_freshness_update(
 async def reject_freshness_update(
     document_id: int,
     section_id: int,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(CONTENT_REVIEW)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

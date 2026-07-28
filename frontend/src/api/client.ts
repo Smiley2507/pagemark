@@ -46,6 +46,10 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
+    if (error.response?.status === 403 && error.response.data) {
+      error.response.data.detail = "Your role doesn't allow this action";
+    }
+
     if (!error.response || error.response.status !== 401) {
       return Promise.reject(error);
     }

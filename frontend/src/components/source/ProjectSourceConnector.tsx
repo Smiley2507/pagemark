@@ -14,6 +14,8 @@ import { Surface } from '@/components/ui/surface';
 import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { getOAuthAuthorizeUrl, rememberOAuthReturnPath, validateGitUrl } from '@/lib/git';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { PROJECT_MANAGE } from '@/lib/authz';
 import type { GitRepo, Project } from '@/types';
 
 type SourceMode = 'github' | 'url' | 'zip' | 'scratch';
@@ -67,6 +69,7 @@ function getInitialMode(project: Project): SourceMode {
 
 export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps) {
   const queryClient = useQueryClient();
+  const canManageProject = useHasCapability(PROJECT_MANAGE, project);
   const [mode, setMode] = useState<SourceMode>(() => getInitialMode(project));
   const [repoSearch, setRepoSearch] = useState('');
   const [selectedRepo, setSelectedRepo] = useState<GitRepo | null>(null);
@@ -227,16 +230,18 @@ export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps)
             </p>
           </div>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          className="gap-2"
-          onClick={() => syncSource.mutate()}
-          disabled={!hasGitSource || syncSource.isPending}
-        >
-          <Play className="h-4 w-4" />
-          {syncSource.isPending ? 'Starting...' : 'Analyze'}
-        </Button>
+        {canManageProject && (
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            onClick={() => syncSource.mutate()}
+            disabled={!hasGitSource || syncSource.isPending}
+          >
+            <Play className="h-4 w-4" />
+            {syncSource.isPending ? 'Starting...' : 'Analyze'}
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-col gap-2 rounded-xl border border-border bg-panel-muted/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -249,6 +254,10 @@ export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps)
         </Badge>
       </div>
 
+      {!canManageProject ? (
+        <Notice variant="info">Your role does not allow changing the project source.</Notice>
+      ) : (
+      <>
       <SegmentedControl
         label="Source mode"
         value={mode}
@@ -419,6 +428,8 @@ export function ProjectSourceConnector({ project }: ProjectSourceConnectorProps)
 
       {mode === 'scratch' && (
         <Notice variant="info">This project can stay source-free. You can connect GitHub, a Git URL, or a ZIP snapshot later.</Notice>
+      )}
+      </>
       )}
     </Surface>
   );

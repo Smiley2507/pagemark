@@ -13,10 +13,11 @@ from sqlalchemy.future import select
 from pydantic import BaseModel, ConfigDict
 
 from app.database import get_db
-from app.dependencies import get_current_user, verify_project_ownership
+from app.dependencies import get_current_user, verify_project_ownership, require_project
 from app.models.user import User
 from app.models.project import Project
 from app.models.resource import Resource, ResourceType
+from app.authz import CONTENT_WRITE
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,7 @@ def _resource_to_response(r: Resource) -> ResourceResponse:
 @router.post("/{project_id}/resources/upload", response_model=ResourceResponse, status_code=201)
 async def upload_resource(
     file: UploadFile = File(...),
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(CONTENT_WRITE)),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -230,7 +231,7 @@ async def download_resource(
 @router.delete("/{project_id}/resources/{resource_id}", status_code=204)
 async def delete_resource(
     resource_id: int,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(CONTENT_WRITE)),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

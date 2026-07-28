@@ -12,14 +12,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import (
+    get_current_user,
+    require_section,
+    _get_active_member,
+    _document_share_satisfies,
+)
 from app.models.analysis import Analysis, AnalysisStatus
 from app.models.chat import ChatMessage, ChatThread, MessageRole
 from app.models.clarification import ClarificationRequest, ClarificationStatus
-from app.models.document import Document, SectionStatus
+from app.models.document import Document, Section, SectionStatus
 from app.models.project import Project
 from app.models.resource import Resource
 from app.models.user import User
+from app.authz import PROJECT_READ, CONTENT_WRITE, member_can, require_capability
 from app.models.version import AuthorType
 from app.prompts.outline import build_outline_prompt
 from app.schemas.ai import SuggestStructureResponse
@@ -42,18 +48,35 @@ router = APIRouter(tags=["ai"])
 
 # ── Helper ──────────────────────────────────────────────────────
 
-async def _require_project(db: AsyncSession, project_id: int, user_id: int) -> Project:
+async def _require_project(db: AsyncSession, project_id: int, user_id: int, capability: str = PROJECT_READ) -> Project:
     result = await db.execute(
-        select(Project).where(
-            Project.id == project_id,
-            Project.created_by == user_id,
-            Project.deleted_at.is_(None),
-        )
+        select(Project).where(Project.id == project_id, Project.deleted_at.is_(None))
     )
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    member = await _get_active_member(db, project.org_id, user_id)
+    if not member:
+        raise HTTPException(status_code=404, detail="Project not found")
+    require_capability(member, capability, project=project, user_id=user_id)
     return project
+
+
+async def _require_document_capability(
+    db: AsyncSession, document_id: int, user_id: int, capability: str
+) -> Document:
+    """For routes scoped by document_id alone (no project_id in the URL)."""
+    doc_result = await db.execute(select(Document).where(Document.id == document_id))
+    document = doc_result.scalar_one_or_none()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    project = await _require_project(db, document.project_id, user_id, PROJECT_READ)
+    if not member_can(await _get_active_member(db, project.org_id, user_id), capability, project=project, user_id=user_id):
+        if not await _document_share_satisfies(db, document.id, user_id, capability):
+            require_capability(
+                await _get_active_member(db, project.org_id, user_id), capability, project=project, user_id=user_id
+            )
+    return document
 
 
 async def _require_analysis_complete(db: AsyncSession, project_id: int) -> Analysis:
@@ -87,6 +110,7 @@ async def suggest_document_structure(
     current_user: User = Depends(get_current_user),
 ):
     """Suggest structural changes (reorder, rename, add, remove, merge) for a document."""
+    await _require_document_capability(db, document_id, current_user.id, CONTENT_WRITE)
     suggestions = await ai_service.suggest_structure(
         document_id=document_id,
         db=db,
@@ -104,7 +128,7 @@ async def generate_outline(
     current_user: User = Depends(get_current_user),
 ):
     """Generate a documentation outline using the active provider."""
-    project = await _require_project(db, project_id, current_user.id)
+    project = await _require_project(db, project_id, current_user.id, CONTENT_WRITE)
     analysis = await _require_analysis_complete(db, project_id)
 
     cred = await ai_credential_service.get_active_credential(db, current_user.id)
@@ -184,12 +208,11 @@ class GenerateSectionRequest(BaseModel):
 async def generate_section(
     section_id: int,
     body: GenerateSectionRequest | None = None,
+    section: Section = Depends(require_section(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Generate content for a section using Claude, save it, create a version snapshot."""
-    section = await section_service.get_section_for_user(db, section_id, current_user.id)
-
     # Resolve project_id through the document
     doc_result = await db.execute(
         select(Document).where(Document.id == section.document_id)
@@ -260,13 +283,11 @@ class RefineRequest(BaseModel):
 async def refine_section(
     section_id: int,
     body: RefineRequest,
+    section: Section = Depends(require_section(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Refine section content per instruction. Returns diff — does NOT save."""
-    # Verify user owns the section
-    await section_service.get_section_for_user(db, section_id, current_user.id)
-
     result = await ai_service.refine_section(
         section_id=section_id,
         instruction=body.instruction,
@@ -289,11 +310,11 @@ class AcceptRefineRequest(BaseModel):
 async def accept_refined_section(
     section_id: int,
     body: AcceptRefineRequest,
+    section: Section = Depends(require_section(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Accept refined content: save to section and create an AI version snapshot."""
-    section = await section_service.get_section_for_user(db, section_id, current_user.id)
     old_content = section.content_md or ""
 
     section.content_md = body.refined_content
@@ -328,7 +349,7 @@ async def create_chat_thread(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new chat thread for a project."""
-    await _require_project(db, project_id, current_user.id)
+    await _require_project(db, project_id, current_user.id, CONTENT_WRITE)
 
     # Auto-title from first message if no title provided
     title = body.title
@@ -363,7 +384,7 @@ async def list_chat_threads(
     current_user: User = Depends(get_current_user),
 ):
     """List all chat threads for a project."""
-    await _require_project(db, project_id, current_user.id)
+    await _require_project(db, project_id, current_user.id, PROJECT_READ)
 
     result = await db.execute(
         select(ChatThread)
@@ -402,7 +423,7 @@ async def stream_chat_message(
     if not thread:
         raise HTTPException(status_code=404, detail="Chat thread not found")
 
-    await _require_project(db, thread.project_id, current_user.id)
+    await _require_project(db, thread.project_id, current_user.id, CONTENT_WRITE)
 
     # Resolve resource_ids and verify they belong to the project
     resolved_resources: list[Resource] = []
@@ -470,7 +491,7 @@ async def get_chat_messages(
     if not thread:
         raise HTTPException(status_code=404, detail="Chat thread not found")
 
-    await _require_project(db, thread.project_id, current_user.id)
+    await _require_project(db, thread.project_id, current_user.id, PROJECT_READ)
 
     msgs_result = await db.execute(
         select(ChatMessage)
@@ -498,9 +519,9 @@ class PhrasingRequest(BaseModel):
 async def get_phrasing_suggestions(
     section_id: int,
     body: PhrasingRequest,
+    section: Section = Depends(require_section()),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Provide 3 phrasing alternatives for a text fragment."""
-    await section_service.get_section_for_user(db, section_id, current_user.id)
     return await ai_service.phrasing_suggestions(section_id, body.text, db, current_user.id)

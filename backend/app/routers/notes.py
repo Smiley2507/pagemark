@@ -7,12 +7,13 @@ from sqlalchemy.future import select
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.database import get_db
-from app.dependencies import get_current_user, verify_project_ownership
+from app.dependencies import get_current_user, verify_project_ownership, require_project
 from app.models.user import User
 from app.models.document import Document, Section
 from app.models.note import CollaborationNote
 from app.models.project import Project
 from app.models.resource import Resource
+from app.authz import CONTENT_COMMENT
 
 router = APIRouter(prefix="/projects", tags=["notes"])
 
@@ -203,7 +204,7 @@ async def list_notes(
 async def create_note(
     document_id: int,
     body: NoteCreate,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(CONTENT_COMMENT)),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

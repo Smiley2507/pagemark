@@ -9,7 +9,7 @@ import { orgApi } from '@/api/org';
 import { toast } from 'sonner';
 
 export function OrgSwitcher() {
-  const { organizations, activeOrgId, setActiveOrgId, setOrganizations } = useOrgStore();
+  const { organizations, activeOrgId, setActiveOrgId, setOrganizations, switchOrganization } = useOrgStore();
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -108,7 +108,7 @@ export function OrgSwitcher() {
                   role="option"
                   aria-selected={org.id === activeOrgId}
                   onClick={() => {
-                    setActiveOrgId(org.id);
+                    switchOrganization(org.id);
                     setOpen(false);
                   }}
                   className={cn(

@@ -47,4 +47,5 @@ lerna-debug.log*
 # Database/Celery/SQLite
 *.db
 *.sqlite
+*.sql
 celerybeat-schedule

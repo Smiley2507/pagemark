@@ -7,14 +7,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Surface } from '@/components/ui/surface';
 import { projectsApi } from '@/api/projects';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { PROJECT_MANAGE } from '@/lib/authz';
 
 export const NewProject: React.FC = () => {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const canCreateProject = useHasCapability(PROJECT_MANAGE);
 
-  const canSubmit = name.trim().length > 0 && !submitting;
+  const canSubmit = canCreateProject && name.trim().length > 0 && !submitting;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +58,9 @@ export const NewProject: React.FC = () => {
           </button>
         </div>
 
+        {!canCreateProject ? (
+          <p className="text-body text-text-secondary">Your role does not allow creating projects.</p>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="project-name">Project name</Label>
@@ -95,6 +101,7 @@ export const NewProject: React.FC = () => {
             </Button>
           </div>
         </form>
+        )}
       </Surface>
     </div>
   );

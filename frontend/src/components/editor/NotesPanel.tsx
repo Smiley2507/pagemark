@@ -14,9 +14,10 @@ interface NotesPanelProps {
   initialScope?: 'document' | 'section';
   focusSignal?: number;
   sections?: Array<{ id: number; heading: string; title?: string | null }>;
+  canComment?: boolean;
 }
 
-export function NotesPanel({ projectId, documentId, activeSectionId, initialScope = 'document', focusSignal = 0, sections = [] }: NotesPanelProps) {
+export function NotesPanel({ projectId, documentId, activeSectionId, initialScope = 'document', focusSignal = 0, sections = [], canComment = true }: NotesPanelProps) {
   const [scope, setScope] = useState<'document' | 'section'>(initialScope);
   const [newNote, setNewNote] = useState('');
   const [references, setReferences] = useState<NoteReference[]>([]);
@@ -168,6 +169,7 @@ export function NotesPanel({ projectId, documentId, activeSectionId, initialScop
         )}
       </div>
 
+      {canComment && (
       <div className="shrink-0 border-t border-separator px-3 pb-3 pt-3">
         <div className="rounded-lg border border-input bg-canvas focus-within:border-interaction">
           <textarea
@@ -261,6 +263,7 @@ export function NotesPanel({ projectId, documentId, activeSectionId, initialScop
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

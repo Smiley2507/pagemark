@@ -15,7 +15,8 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.dependencies import get_current_user, verify_project_ownership
+from app.dependencies import get_current_user, verify_project_ownership, require_project
+from app.authz import CONTENT_WRITE
 from app.models.document import Document
 from app.models.project import Project
 from app.models.document import Section
@@ -71,7 +72,7 @@ async def _get_document_or_404(
 )
 async def run_quality_analysis(
     document_id: int,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -241,7 +242,7 @@ async def update_quality_finding_status(
     document_id: int,
     finding_id: int,
     body: QualityFindingStatusUpdate,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -271,7 +272,7 @@ async def update_quality_finding_status(
 async def run_quality_grammar(
     document_id: int,
     body: QualityGrammarRunRequest,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
@@ -312,7 +313,7 @@ async def run_quality_grammar(
 async def create_quality_ai_fix(
     document_id: int,
     body: QualityAIFixRequest,
-    project: Project = Depends(verify_project_ownership),
+    project: Project = Depends(require_project(CONTENT_WRITE)),
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):

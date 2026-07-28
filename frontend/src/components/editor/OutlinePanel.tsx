@@ -30,6 +30,7 @@ interface OutlinePanelProps {
   onCreateSection: () => void;
   onClose: () => void;
   onReorderSections?: (sectionIds: number[]) => void;
+  canManageDocuments?: boolean;
 }
 
 function StatDot(className: string) {
@@ -134,6 +135,7 @@ export function OutlinePanel({
   onCreateSection,
   onClose,
   onReorderSections,
+  canManageDocuments = true,
 }: OutlinePanelProps) {
   const [showSubScores, setShowSubScores] = useState(false);
 
@@ -146,6 +148,7 @@ export function OutlinePanel({
   const sectionIds = sectionItems.map(i => i.id);
 
   const handleDragEnd = (event: DragEndEvent) => {
+    if (!canManageDocuments) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -228,7 +231,7 @@ export function OutlinePanel({
             })}
           </SortableContext>
         </DndContext>
-        {tocItems.length === 0 && (
+        {tocItems.length === 0 && canManageDocuments && (
           <Button type="button" size="sm" onClick={onCreateSection} className="w-full gap-2">
             <Plus className="h-4 w-4" />
             Add Section

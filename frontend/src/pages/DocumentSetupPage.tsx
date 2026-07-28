@@ -30,6 +30,8 @@ import type {
   SetupSectionSummary,
   TemplateRecommendation,
 } from '@/types/document-setup';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { DOCUMENT_MANAGE } from '@/lib/authz';
 
 const INITIAL_STATE: DocumentSetupState = {
   stage: 'source',
@@ -61,6 +63,13 @@ export function DocumentSetupPage() {
   });
 
   const hasActiveProvider = credentialList?.has_active ?? false;
+
+  const { data: setupProject } = useQuery({
+    queryKey: ['project', setupState.projectId],
+    queryFn: () => projectsApi.getProject(setupState.projectId!),
+    enabled: !!setupState.projectId,
+  });
+  const canManageDocuments = useHasCapability(DOCUMENT_MANAGE, setupProject);
 
   const { data: templates = [] } = useQuery({
     queryKey: ['templates'],
@@ -580,6 +589,16 @@ export function DocumentSetupPage() {
       <div className="flex min-h-screen items-center justify-center bg-workspace px-4">
         <Surface variant="panel" padding="lg">
           <p className="text-body text-text-secondary">Resuming the first-Document journey…</p>
+        </Surface>
+      </div>
+    );
+  }
+
+  if (setupState.projectId && setupProject && !canManageDocuments) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-workspace px-4">
+        <Surface variant="panel" padding="lg">
+          <p className="text-body text-text-secondary">Your role does not allow setting up documents in this project.</p>
         </Surface>
       </div>
     );

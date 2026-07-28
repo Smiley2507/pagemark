@@ -8,6 +8,8 @@ from sqlalchemy.future import select
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
+from app.models.project import Project
+from app.models.organization import OrganizationMember, OrgMemberStatus
 from app.models.document import Document, Section, SectionStatus
 from app.models.clarification import ClarificationRequest, ClarificationStatus
 from app.workers.analysis_worker import resume_generation_task
@@ -26,7 +28,7 @@ async def verify_section_ownership(section_id: int, current_user: User, db: Asyn
         .where(
             Section.id == section_id,
             OrganizationMember.user_id == current_user.id,
-            OrganizationMember.status == "active",
+            OrganizationMember.status == OrgMemberStatus.ACTIVE,
         )
     )
     section = res.scalar_one_or_none()

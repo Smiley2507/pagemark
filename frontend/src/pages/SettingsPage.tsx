@@ -9,6 +9,8 @@ import { ProfileSection } from '@/components/settings/ProfileSection';
 import { AiProvidersSection } from '@/components/settings/AiProvidersSection';
 import { NotificationPreferencesSection } from '@/components/settings/NotificationPreferencesSection';
 import { OrgApiKeysView, OrgAuditLogView, OrgSettingsView } from '@/components/org';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { ORG_AUDIT } from '@/lib/authz';
 
 const SECTIONS = [
   { id: 'profile', label: 'Profile', icon: User, keywords: ['account', 'identity', 'password', 'avatar'] },
@@ -27,17 +29,22 @@ export function SettingsPage() {
   const [filter, setFilter] = useState('');
   const activeTab = searchParams.get('tab') || 'profile';
 
-  const activeSection = SECTIONS.find((section) => section.id === activeTab) || SECTIONS[0];
+  const canViewAudit = useHasCapability(ORG_AUDIT);
+  const visibleSections = useMemo(
+    () => SECTIONS.filter((section) => section.id !== 'activity' || canViewAudit),
+    [canViewAudit]
+  );
+  const activeSection = visibleSections.find((section) => section.id === activeTab) || visibleSections[0];
   const filteredSections = useMemo(() => {
     const query = filter.trim().toLowerCase();
-    if (!query) return SECTIONS;
-    return SECTIONS.filter((section) => {
+    if (!query) return visibleSections;
+    return visibleSections.filter((section) => {
       return (
         section.label.toLowerCase().includes(query) ||
         section.keywords.some((keyword) => keyword.toLowerCase().includes(query))
       );
     });
-  }, [filter]);
+  }, [filter, visibleSections]);
 
   const setTab = (tab: string) => {
     const next = new URLSearchParams(searchParams);

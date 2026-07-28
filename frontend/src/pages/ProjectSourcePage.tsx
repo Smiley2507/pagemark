@@ -18,6 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useDeleteWebhook, useGenerateWebhookSecret, useGitHubStatus, useRegisterGitHubWebhook } from '@/hooks/useGit';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { PROJECT_MANAGE } from '@/lib/authz';
 
 function Metric({
   label,
@@ -163,6 +165,8 @@ export function ProjectSourcePage() {
   const deleteWebhook = useDeleteWebhook();
   const { data: githubStatus } = useGitHubStatus();
 
+  const canManageProject = useHasCapability(PROJECT_MANAGE, project);
+
   if (!project) {
     return (
       <EmptyState
@@ -271,6 +275,7 @@ export function ProjectSourcePage() {
                 <BookOpenText className="h-5 w-5 text-text-secondary" aria-hidden="true" />
                 <h2 className="text-section font-semibold text-text-primary">Brief</h2>
               </div>
+              {canManageProject && (
               <div className="flex items-center gap-2">
                 {brief && !briefEditing && (
                   <Button type="button" variant="outline" size="sm" onClick={() => setBriefEditing(true)}>
@@ -313,6 +318,7 @@ export function ProjectSourcePage() {
                   </Button>
                 )}
               </div>
+              )}
             </div>
 
             {metrics.length > 0 ? (
@@ -339,11 +345,11 @@ export function ProjectSourcePage() {
               <EmptyState
                 title="No brief saved"
                 description="Add project context to show it here."
-                action={(
+                action={canManageProject ? (
                   <Button type="button" onClick={() => setBriefEditing(true)}>
                     Create brief
                   </Button>
-                )}
+                ) : undefined}
               />
             )}
           </Surface>

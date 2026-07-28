@@ -7,6 +7,7 @@ interface OutlineProposalProps {
   outlineApplied?: boolean;
   onApply: () => void;
   applying?: boolean;
+  canApply?: boolean;
 }
 
 export function OutlineProposal({
@@ -14,6 +15,7 @@ export function OutlineProposal({
   outlineApplied,
   onApply,
   applying,
+  canApply = true,
 }: OutlineProposalProps) {
   if (!diff?.proposed?.length) return null;
 
@@ -36,7 +38,7 @@ export function OutlineProposal({
                 : 'Outline matches your current document.'}
           </p>
         </div>
-        {showApply && (
+        {showApply && canApply && (
           <Button onClick={onApply} disabled={applying}>
             {applying ? 'Applying…' : 'Apply outline'}
           </Button>

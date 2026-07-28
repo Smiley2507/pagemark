@@ -12,10 +12,11 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy import func
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_project
 from app.models.user import User, UserSettings
 from app.models.organization import Organization, OrganizationMember, OrgMemberStatus
 from app.models.project import Project, ProjectSourceExclusion, ProjectStatus, SourceType
+from app.authz import PROJECT_MANAGE, ORG_AUDIT, require_capability
 from app.models.audit import AuditLog
 from app.models.document import Document, Section, SectionStatus
 from typing import List
@@ -412,6 +413,14 @@ async def get_recent_project_activity(
     current_user: User = Depends(get_current_user),
 ):
     org_id = await _resolve_org_id(request, current_user, db)
+    member_res = await db.execute(
+        select(OrganizationMember).where(
+            OrganizationMember.org_id == org_id,
+            OrganizationMember.user_id == current_user.id,
+            OrganizationMember.status == OrgMemberStatus.ACTIVE,
+        )
+    )
+    require_capability(member_res.scalar_one_or_none(), ORG_AUDIT, user_id=current_user.id)
     events = await activity_service.get_recent_for_org(
         db,
         org_id,
@@ -510,6 +519,14 @@ async def create_project(
     current_user: User = Depends(get_current_user),
 ):
     org_id = await _resolve_org_id(request, current_user, db)
+    member_res = await db.execute(
+        select(OrganizationMember).where(
+            OrganizationMember.org_id == org_id,
+            OrganizationMember.user_id == current_user.id,
+            OrganizationMember.status == OrgMemberStatus.ACTIVE,
+        )
+    )
+    require_capability(member_res.scalar_one_or_none(), PROJECT_MANAGE, user_id=current_user.id)
 
     project = Project(
         org_id=org_id,
@@ -576,13 +593,11 @@ async def get_project(
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
 async def update_project(
-    project_id: int,
     body: ProjectUpdateRequest,
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = await _get_project(project_id, current_user, db)
-
     if body.name is not None:
         project.name = body.name
     if body.description is not None:
@@ -636,12 +651,11 @@ async def list_source_exclusions(
     response_model=list[ProjectSourceExclusionResponse],
 )
 async def replace_source_exclusions(
-    project_id: int,
     body: list[ProjectSourceExclusionRequest],
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = await _get_project(project_id, current_user, db)
     existing = await _load_source_exclusions(project.id, db)
     for rule in existing:
         await db.delete(rule)
@@ -669,10 +683,10 @@ async def replace_source_exclusions(
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_project(
     project_id: int,
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = await _get_project(project_id, current_user, db)
     project.deleted_at = utcnow()
     await db.commit()
     db.add(AuditLog(
@@ -694,10 +708,10 @@ class ProjectContextRequest(BaseModel):
 async def update_project_context(
     project_id: int,
     body: "ProjectContextRequest",
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = await _get_project(project_id, current_user, db)
     project.context_md = body.context_md
     project.updated_at = utcnow()
     await db.commit()
@@ -721,12 +735,10 @@ async def update_project_context(
 
 @router.post("/{project_id}/duplicate", status_code=status.HTTP_201_CREATED, response_model=ProjectResponse)
 async def duplicate_project(
-    project_id: int,
+    original: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    original = await _get_project(project_id, current_user, db)
-
     new_project = Project(
         org_id=original.org_id,
         created_by=current_user.id,
@@ -783,13 +795,13 @@ async def upload_zip(
     project_id: int,
     file: UploadFile = File(...),
     ignore_patterns: Optional[str] = Form(None),
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     if not file.filename.endswith('.zip'):
         raise HTTPException(status_code=400, detail="Only ZIP files are supported")
 
-    project = await _get_project(project_id, current_user, db)
     project.source_type = SourceType.ZIP
     project.source_provider = None
 
@@ -832,8 +844,8 @@ async def upload_zip(
 
 @router.post("/{project_id}/git/connect-url", status_code=status.HTTP_202_ACCEPTED)
 async def connect_public_git(
-    project_id: int,
     body: GitConnectUrlRequest,
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -842,7 +854,6 @@ async def connect_public_git(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    project = await _get_project(project_id, current_user, db)
     project.source_type = SourceType.GIT
     project.source_provider = provider
     project.source_owner = owner
@@ -887,8 +898,8 @@ async def connect_public_git(
 
 @router.post("/{project_id}/git/connect-oauth", status_code=status.HTTP_202_ACCEPTED)
 async def connect_oauth_git(
-    project_id: int,
     body: GitConnectOAuthRequest,
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -909,7 +920,6 @@ async def connect_oauth_git(
         body.repo,
     )
 
-    project = await _get_project(project_id, current_user, db)
     project.source_type = SourceType.GIT
     project.source_provider = provider
     project.source_owner = body.owner
@@ -968,11 +978,10 @@ async def connect_oauth_git(
 
 @router.post("/{project_id}/git/sync", status_code=status.HTTP_202_ACCEPTED)
 async def sync_git_repo(
-    project_id: int,
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = await _get_project(project_id, current_user, db)
     repo_url = (project.source_metadata or {}).get("repo_url")
     if project.source_type != SourceType.GIT or not repo_url:
         raise HTTPException(status_code=400, detail="Project is not connected to a Git repository")
@@ -1134,10 +1143,10 @@ async def generate_project_overview(
 @router.post("/{project_id}/brief/generate", response_model=BriefGenerateResponse)
 async def generate_project_brief(
     project_id: int,
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = await _get_project(project_id, current_user, db)
     analysis = await get_latest_analysis(project_id, db)
     if not analysis or analysis.status != AnalysisStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Completed Analysis is required before generating a Project Brief.")
@@ -1214,10 +1223,10 @@ async def get_analysis_outline_diff(
 @router.post("/{project_id}/analysis/apply-outline", response_model=ApplyOutlineResponse)
 async def apply_analysis_outline(
     project_id: int,
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    await _get_project(project_id, current_user, db)
     analysis = await get_latest_analysis(project_id, db)
     outline_json = getattr(analysis, "outline_json", None) if analysis else None
     if not analysis or not outline_json:
@@ -1257,11 +1266,10 @@ class WebhookRegisterResponse(BaseModel):
 
 @router.post("/{project_id}/webhook/generate-secret", response_model=WebhookGenerateSecretResponse)
 async def generate_webhook_secret(
-    project_id: int,
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = await _get_project(project_id, current_user, db)
     project.webhook_secret = secrets.token_hex(32)
     project.updated_at = utcnow()
     await db.commit()
@@ -1274,12 +1282,11 @@ async def generate_webhook_secret(
 
 @router.post("/{project_id}/webhook/register", response_model=WebhookRegisterResponse)
 async def register_github_webhook(
-    project_id: int,
     body: WebhookRegisterRequest,
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = await _get_project(project_id, current_user, db)
     if not project.webhook_secret:
         raise HTTPException(status_code=400, detail="Generate a webhook secret first")
 
@@ -1310,11 +1317,10 @@ async def register_github_webhook(
 
 @router.delete("/{project_id}/webhook", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_github_webhook(
-    project_id: int,
+    project: Project = Depends(require_project(PROJECT_MANAGE)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = await _get_project(project_id, current_user, db)
     if project.webhook_id:
         token_res = await db.execute(
             select(OAuthToken).where(
@@ -1340,15 +1346,14 @@ async def delete_github_webhook(
 
 @router.get("/{project_id}/activity")
 async def get_project_activity(
-    project_id: int,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     event_type: str | None = Query(None),
     days: int | None = Query(None, ge=1, le=365),
+    project: Project = Depends(require_project(ORG_AUDIT)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = await _get_project(project_id, current_user, db)
     events = await activity_service.get_timeline(
         db, project.id,
         limit=limit, offset=offset,
@@ -1359,18 +1364,18 @@ async def get_project_activity(
 
 @router.get("/{project_id}/activity/heatmap")
 async def get_project_activity_heatmap(
-    project_id: int,
     days: int = Query(365, ge=1, le=730),
+    project: Project = Depends(require_project(ORG_AUDIT)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = await _get_project(project_id, current_user, db)
     heatmap = await activity_service.get_heatmap_data(db, project.id, days=days)
     return heatmap
 
 
 @router.get("/{project_id}/activity/event-types")
 async def get_project_activity_event_types(
+    project: Project = Depends(require_project(ORG_AUDIT)),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

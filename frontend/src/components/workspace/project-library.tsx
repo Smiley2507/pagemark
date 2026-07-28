@@ -22,6 +22,8 @@ import type { Project } from '@/types';
 import type { Document as ProjectDocument } from '@/api/documents';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { PROJECT_MANAGE } from '@/lib/authz';
 
 export type ProjectLibraryFilter = 'all' | 'active' | 'stale' | 'resume';
 
@@ -122,6 +124,7 @@ export function ProjectLibrary({
   title?: string;
   headerActions?: React.ReactNode;
 }) {
+  const canManageProjects = useHasCapability(PROJECT_MANAGE);
   return (
     <ProjectLibraryActions>
       <Surface variant="panel" padding="none" className="overflow-hidden">
@@ -134,9 +137,11 @@ export function ProjectLibrary({
           <div className="flex min-h-48 flex-col items-center justify-center px-5 py-10 text-center">
             <h3 className="text-section font-semibold text-text-primary">{emptyTitle}</h3>
             <p className="mt-2 max-w-md text-body text-text-secondary">{emptyDescription}</p>
-            <Button type="button" onClick={onCreateProject} className="mt-4">
-              Create Project
-            </Button>
+            {canManageProjects && (
+              <Button type="button" onClick={onCreateProject} className="mt-4">
+                Create Project
+              </Button>
+            )}
           </div>
         ) : (
           <div className="space-y-2 bg-panel-muted/55 p-3">
@@ -362,7 +367,8 @@ function ProjectActionButtons({
   summary: ProjectWorkspaceSummary;
   actions: ProjectActionContext | null;
 }) {
-  if (!actions) return null;
+  const canManageProject = useHasCapability(PROJECT_MANAGE, summary.project);
+  if (!actions || !canManageProject) return null;
   return (
     <div className="flex shrink-0 items-center gap-1">
       <Tooltip content="Edit Project">

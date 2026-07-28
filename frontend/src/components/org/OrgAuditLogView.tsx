@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useOrgStore } from '@/store/orgStore';
+import { useHasCapability } from '@/hooks/useHasCapability';
+import { ORG_AUDIT } from '@/lib/authz';
 import { orgApi } from '@/api/org';
 import type { AuditLog } from '@/types';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,6 +27,7 @@ function formatAction(action: string): string {
 
 export const OrgAuditLogView: React.FC = () => {
   const { activeOrgId } = useOrgStore();
+  const canViewAudit = useHasCapability(ORG_AUDIT);
   const [search, setSearch] = useState('');
   const [source, setSource] = useState<'all' | 'audit' | 'activity'>('all');
   const [sort, setSort] = useState<'desc' | 'asc'>('desc');
@@ -43,7 +46,7 @@ export const OrgAuditLogView: React.FC = () => {
         sort,
       })
       : Promise.reject('No active org')),
-    enabled: !!activeOrgId,
+    enabled: !!activeOrgId && canViewAudit,
     refetchInterval: 10000,
   });
 
@@ -53,6 +56,10 @@ export const OrgAuditLogView: React.FC = () => {
   );
 
   const chartData = useMemo(() => buildChartData(logs || []), [logs]);
+
+  if (!canViewAudit) {
+    return <div className="p-6 text-muted-foreground">Your role does not allow viewing activity logs.</div>;
+  }
 
   if (!activeOrgId) return <div className="p-6 text-muted-foreground">No organization selected</div>;
   if (isLoading) return (
