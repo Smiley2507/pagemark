@@ -4,6 +4,7 @@ import {
   Building2,
   Check,
   ChevronRight,
+  FileBarChart,
   FolderKanban,
   Hash,
   House,
@@ -29,7 +30,7 @@ import { projectsApi } from '@/api/projects';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { useHasCapability } from '@/hooks/useHasCapability';
-import { PROJECT_MANAGE } from '@/lib/authz';
+import { PROJECT_MANAGE, ORG_AUDIT } from '@/lib/authz';
 
 export function SidebarNavigation() {
   const location = useLocation();
@@ -38,6 +39,7 @@ export function SidebarNavigation() {
   const { organizations, activeOrgId, setActiveOrgId, setOrganizations } = useOrgStore();
   const logoutMutation = useLogout();
   const canManageProjects = useHasCapability(PROJECT_MANAGE);
+  const canViewReports = useHasCapability(ORG_AUDIT);
 
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
@@ -152,6 +154,9 @@ export function SidebarNavigation() {
           <NavLink href="/projects" icon={FolderKanban} label="Projects" isActive={isActive('/projects')} />
           <NavLink href="/templates" icon={LayoutTemplate} label="Templates" isActive={isActive('/templates')} />
           <NavLink href="/members" icon={Users} label="Members" isActive={isActive('/members')} />
+          {canViewReports && (
+            <NavLink href="/reports" icon={FileBarChart} label="Reports" isActive={isActive('/reports')} />
+          )}
           <div className="px-3 pb-1 pt-4 text-meta font-medium uppercase text-sidebar-foreground/50">
             Tags
           </div>

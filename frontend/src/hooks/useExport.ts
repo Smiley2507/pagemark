@@ -43,3 +43,36 @@ export function useExportDocument() {
 
   return { exportDocument, loading };
 }
+
+export function useExportReport() {
+  const [loading, setLoading] = useState(false);
+
+  const exportReport = useCallback(async (orgId: number, days: number, orgName?: string) => {
+    setLoading(true);
+    try {
+      const baseURL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
+      const params = new URLSearchParams({ days: String(days) });
+      const res = await fetch(
+        `${baseURL}/organizations/${orgId}/reports/export?${params}`,
+        { credentials: 'include' },
+      );
+      if (!res.ok) throw new Error(`Report export failed (HTTP ${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${orgName || 'organization'}-activity-report-${days}d.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Report downloaded');
+    } catch (err: any) {
+      toast.error(err.message ?? 'Report export failed');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { exportReport, loading };
+}

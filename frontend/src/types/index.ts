@@ -546,6 +546,24 @@ export interface AuditLog {
   source?: "audit" | "activity";
 }
 
+export interface OrgActivityReport {
+  org_id: number;
+  org_name: string;
+  days: number;
+  range_label: string;
+  generated_at: string;
+  summary: {
+    total_actions: number;
+    active_users: number;
+    most_active_project?: string;
+    top_action?: string;
+  };
+  trend: { date: string; label: string; count: number }[];
+  categories: { category: string; count: number }[];
+  contributors: { user_id: number; name?: string; email: string; count: number }[];
+  events: { action: string; resource?: string; user_name?: string; created_at: string; source: string }[];
+}
+
 export interface APIKey {
   id: number;
   name: string;

@@ -66,9 +66,10 @@ def _render_mermaid_svg(code: str) -> tuple[str | None, str | None]:
             ["node", str(script)],
             input=code,
             text=True,
+            encoding="utf-8",
             capture_output=True,
             cwd=str(_frontend_dir()),
-            timeout=10,
+            timeout=60,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:

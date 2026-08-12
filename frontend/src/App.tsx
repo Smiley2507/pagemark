@@ -41,6 +41,7 @@ const ProjectActivityPage = React.lazy(() => import('./pages/ProjectActivityPage
 const DocumentEditorPage = React.lazy(() => import('./pages/DocumentEditorPage').then((m) => ({ default: m.DocumentEditorPage })));
 const ProjectSettingsPage = React.lazy(() => import('./pages/ProjectSettingsPage').then((m) => ({ default: m.ProjectSettingsPage })));
 const MembersPage = React.lazy(() => import('./pages/MembersPage').then((m) => ({ default: m.MembersPage })));
+const OrgReportsPage = React.lazy(() => import('./pages/OrgReportsPage').then((m) => ({ default: m.OrgReportsPage })));
 const AdminLoginPage = React.lazy(() => import('./pages/admin/AdminLoginPage').then((m) => ({ default: m.AdminLoginPage })));
 const AdminRequestSignupPage = React.lazy(() => import('./pages/admin/AdminRequestSignupPage').then((m) => ({ default: m.AdminRequestSignupPage })));
 const AdminDashboardPage = React.lazy(() => import('./pages/admin/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
@@ -142,6 +143,7 @@ const AppRoutes = () => {
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/templates" element={<TemplatesView />} />
             <Route path="/members" element={<MembersPage />} />
+            <Route path="/reports" element={<OrgReportsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/new-project" element={<Navigate to="/home?new_project=true" replace />} />
             <Route path="/analysis/:id" element={<Analysis />} />

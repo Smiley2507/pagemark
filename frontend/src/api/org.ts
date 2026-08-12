@@ -1,5 +1,5 @@
 import api from './client';
-import type { Organization, OrgMember, OrgJoinLink, AuditLog, OrgMemberRole, PendingInvite } from '../types';
+import type { Organization, OrgMember, OrgJoinLink, AuditLog, OrgMemberRole, PendingInvite, OrgActivityReport } from '../types';
 
 export const orgApi = {
   listOrganizations: () => 
@@ -65,4 +65,7 @@ export const orgApi = {
 
   acceptJoinLink: (code: string) =>
     api.post(`/organizations/join-links/${code}/accept`).then(res => res.data),
+
+  getReportSummary: (orgId: number, days: number) =>
+    api.get<OrgActivityReport>(`/organizations/${orgId}/reports/summary`, { params: { days } }).then(res => res.data),
 };

@@ -16,6 +16,7 @@ from app.routers import ai as ai_router
 from app.routers import quality as quality_router
 from app.routers import export as export_router
 from app.routers import organizations as org_router
+from app.routers import reports as reports_router
 from app.routers import keys as keys_router
 from app.routers import shares as shares_router
 from app.routers import resources as resources_router
@@ -124,6 +125,7 @@ app.include_router(grammar.router)
 app.include_router(quality_router.router)
 app.include_router(export_router.router)
 app.include_router(org_router.router)
+app.include_router(reports_router.router)
 app.include_router(keys_router.router)
 app.include_router(notes_router.router)
 app.include_router(nlp_router.router)

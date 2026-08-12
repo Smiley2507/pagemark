@@ -25,15 +25,22 @@ for (const [key, value] of Object.entries({
   });
 }
 
+// jsdom has no real font metrics, so this estimates glyph width from character
+// count alone. 10.5px/char approximates real average glyph width for the
+// default 16px sans-serif chart font — measured too narrow (e.g. the old 8px)
+// and mermaid reserves too little margin for axis/legend text, which then
+// gets clipped by the real renderer (WeasyPrint) that lays out actual glyphs.
+const CHAR_WIDTH_PX = 10.5;
+
 globalThis.SVGElement.prototype.getBBox ??= function getBBox() {
   const tag = String(this.tagName || '').toLowerCase();
   const isTextNode = tag === 'text' || tag === 'tspan';
-  const width = isTextNode ? Math.max((this.textContent || '').length * 8, 16) : 16;
-  return { x: 0, y: 0, width, height: 16 };
+  const width = isTextNode ? Math.max((this.textContent || '').length * CHAR_WIDTH_PX, 16) : 16;
+  return { x: 0, y: 0, width, height: 18 };
 };
 
 globalThis.SVGElement.prototype.getComputedTextLength ??= function getComputedTextLength() {
-  return Math.max((this.textContent || '').length * 8, 16);
+  return Math.max((this.textContent || '').length * CHAR_WIDTH_PX, 16);
 };
 
 try {
